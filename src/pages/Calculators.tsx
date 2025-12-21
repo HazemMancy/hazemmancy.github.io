@@ -29,7 +29,7 @@ const calculators: CalculatorCard[] = [
     description: "Calculate pressure drop in pipes for single-phase flow using Darcy-Weisbach equation",
     icon: <Gauge className="w-8 h-8" />,
     route: "/calculators/pressure-drop",
-    status: "coming-soon",
+    status: "available",
     category: "Fluid Mechanics"
   },
   {
