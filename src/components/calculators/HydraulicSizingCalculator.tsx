@@ -864,39 +864,17 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 </Select>
               </div>
 
-              {/* Temperature - editable only for "Other" */}
+              {/* Temperature */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Temperature (°C)</Label>
-                {selectedFluid === "Other" ? (
-                  <Input
-                    type="number"
-                    value={fluidTemperature}
-                    onChange={(e) => setFluidTemperature(e.target.value)}
-                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder="25"
-                  />
-                ) : selectedFluid && availableTemperatures.length > 0 ? (
-                  <Select value={fluidTemperature} onValueChange={handleTemperatureChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableTemperatures.map((temp) => (
-                        <SelectItem key={temp} value={temp.toString()}>
-                          {temp}°C
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    type="number"
-                    value={fluidTemperature}
-                    onChange={(e) => setFluidTemperature(e.target.value)}
-                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder="25"
-                  />
-                )}
+                <Input
+                  type="number"
+                  value={fluidTemperature}
+                  onChange={(e) => setFluidTemperature(e.target.value)}
+                  disabled={selectedFluid !== "" && selectedFluid !== "Other"}
+                  className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
+                  placeholder="25"
+                />
               </div>
 
               {/* Flow Rate */}
