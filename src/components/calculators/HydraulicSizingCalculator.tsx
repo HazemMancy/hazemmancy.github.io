@@ -7,6 +7,77 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Gauge, ArrowRight, AlertTriangle, Info, CheckCircle2, Wind, Droplets, Waves } from "lucide-react";
 
+// ENI Gas Line Sizing Criteria (Table 8.1.1.1)
+interface GasSizingCriteria {
+  service: string;
+  pressureRange: string;
+  pressureDropBarKm: number | null; // null = not specified, or "10% Pop" for vacuum
+  velocityMs: number | null; // null = not specified
+  rhoV2: number | null; // kg/m*s² - null = not specified
+  mach: number | null; // null = not specified
+  note?: string;
+}
+
+const gasServiceCriteria: GasSizingCriteria[] = [
+  // Continuous service
+  { service: "Continuous", pressureRange: "Vacuum", pressureDropBarKm: null, velocityMs: 60, rhoV2: null, mach: null, note: "ΔP = 10% Pop" },
+  { service: "Continuous", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.5, velocityMs: 50, rhoV2: null, mach: null, note: "Note 1" },
+  { service: "Continuous", pressureRange: "2 to 7 barg", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2: null, mach: null },
+  { service: "Continuous", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, rhoV2: 15000, mach: null },
+  { service: "Continuous", pressureRange: "35 to 140 barg", pressureDropBarKm: 3, velocityMs: null, rhoV2: 20000, mach: null },
+  { service: "Continuous", pressureRange: "Above 140 barg", pressureDropBarKm: 5, velocityMs: null, rhoV2: 25000, mach: null },
+  
+  // Compressor suction
+  { service: "Compressor Suction", pressureRange: "Vacuum", pressureDropBarKm: 0.05, velocityMs: 35, rhoV2: null, mach: null },
+  { service: "Compressor Suction", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.15, velocityMs: 30, rhoV2: null, mach: null },
+  { service: "Compressor Suction", pressureRange: "2 to 7 barg", pressureDropBarKm: 0.4, velocityMs: 25, rhoV2: null, mach: null },
+  { service: "Compressor Suction", pressureRange: "7 to 35 barg", pressureDropBarKm: 1, velocityMs: null, rhoV2: 6000, mach: null },
+  { service: "Compressor Suction", pressureRange: "Above 35 barg", pressureDropBarKm: 2, velocityMs: null, rhoV2: 15000, mach: null },
+  
+  // Discontinuous service
+  { service: "Discontinuous", pressureRange: "Below 35 barg", pressureDropBarKm: null, velocityMs: 60, rhoV2: 15000, mach: null },
+  { service: "Discontinuous", pressureRange: "35 barg and above", pressureDropBarKm: null, velocityMs: null, rhoV2: 25000, mach: null },
+  
+  // Flare
+  { service: "Flare - Upstream PSV", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2: null, mach: null, note: "ΔP < 3% PRV set" },
+  { service: "Flare - Upstream BDV", pressureRange: "All", pressureDropBarKm: null, velocityMs: 60, rhoV2: 30000, mach: null },
+  { service: "Flare - Tail Pipe", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2: null, mach: 0.7, note: "Note 2" },
+  { service: "Flare - Tail Pipe (downstream BDV)", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2: null, mach: 1.0 },
+  { service: "Flare Header", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2: null, mach: 0.5 },
+  
+  // Steam to users
+  { service: "Steam - Superheated #150", pressureRange: "All", pressureDropBarKm: 2.0, velocityMs: 45, rhoV2: null, mach: null, note: "Note 4" },
+  { service: "Steam - Superheated #300", pressureRange: "All", pressureDropBarKm: 3.0, velocityMs: 60, rhoV2: null, mach: null, note: "Note 4" },
+  { service: "Steam - Superheated #600", pressureRange: "All", pressureDropBarKm: 6.0, velocityMs: 60, rhoV2: null, mach: null, note: "Note 4" },
+  { service: "Steam - Superheated #900+", pressureRange: "All", pressureDropBarKm: 8.0, velocityMs: 70, rhoV2: null, mach: null, note: "Note 4" },
+  { service: "Steam - Saturated #150", pressureRange: "All", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2: null, mach: null, note: "Note 3" },
+  { service: "Steam - Saturated #300", pressureRange: "All", pressureDropBarKm: 3.0, velocityMs: 35, rhoV2: null, mach: null, note: "Note 3" },
+  { service: "Steam - Saturated #600", pressureRange: "All", pressureDropBarKm: 6.0, velocityMs: 30, rhoV2: null, mach: null, note: "Note 3" },
+  
+  // Superheated Steam long headers
+  { service: "Steam Header - #150", pressureRange: "All", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2: null, mach: null, note: "Note 4" },
+  { service: "Steam Header - #300", pressureRange: "All", pressureDropBarKm: 1.5, velocityMs: 45, rhoV2: null, mach: null, note: "Note 4" },
+  { service: "Steam Header - #600", pressureRange: "All", pressureDropBarKm: 2.0, velocityMs: 45, rhoV2: null, mach: null, note: "Note 4" },
+  
+  // Fuel Gas (same as continuous)
+  { service: "Fuel Gas", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.5, velocityMs: 50, rhoV2: null, mach: null },
+  { service: "Fuel Gas", pressureRange: "2 to 7 barg", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2: null, mach: null },
+  { service: "Fuel Gas", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, rhoV2: 15000, mach: null },
+];
+
+// Get unique service types
+const gasServiceTypes = [...new Set(gasServiceCriteria.map(c => c.service))];
+
+// Get pressure ranges for a service type
+const getPressureRangesForService = (service: string): string[] => {
+  return gasServiceCriteria.filter(c => c.service === service).map(c => c.pressureRange);
+};
+
+// Get criteria for a specific service and pressure range
+const getCriteriaForServiceAndPressure = (service: string, pressureRange: string): GasSizingCriteria | undefined => {
+  return gasServiceCriteria.find(c => c.service === service && c.pressureRange === pressureRange);
+};
+
 // Unit conversion factors to SI
 const lengthToMeters: Record<string, number> = {
   m: 1,
@@ -249,6 +320,24 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [pressureUnit, setPressureUnit] = useState<string>("bar");
   const [selectedFluid, setSelectedFluid] = useState<string>("");
   const [fluidTemperature, setFluidTemperature] = useState<string>("25");
+  
+  // Gas service type selection (ENI criteria)
+  const [gasServiceType, setGasServiceType] = useState<string>("Continuous");
+  const [gasPressureRange, setGasPressureRange] = useState<string>("2 to 7 barg");
+
+  // Get available pressure ranges for selected gas service
+  const availableGasPressureRanges = useMemo(() => {
+    return getPressureRangesForService(gasServiceType);
+  }, [gasServiceType]);
+
+  // Reset pressure range when service type changes
+  const handleGasServiceChange = (service: string) => {
+    setGasServiceType(service);
+    const ranges = getPressureRangesForService(service);
+    if (ranges.length > 0 && !ranges.includes(gasPressureRange)) {
+      setGasPressureRange(ranges[0]);
+    }
+  };
 
   // Get fluids filtered by type
   const availableFluids = useMemo(() => {
@@ -408,53 +497,78 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return VeFtS * 0.3048;
   }, [rho]);
 
-  // API 14E Line Sizing Criteria
-  // Gas: Ve (erosional), max 60 ft/s (18.3 m/s), ρv² < 8000 kg/(m·s²)
-  // Liquid: 3-15 ft/s (0.9-4.6 m/s), ρv² < 15000 kg/(m·s²)
+  // Get current ENI gas sizing criteria based on service type and pressure range
+  const currentGasCriteria = useMemo(() => {
+    return getCriteriaForServiceAndPressure(gasServiceType, gasPressureRange);
+  }, [gasServiceType, gasPressureRange]);
+
+  // Line Sizing Criteria based on ENI Table 8.1.1.1 for gas, API 14E for liquid
   const sizingCriteria = useMemo(() => {
-    if (lineType === "gas") {
+    if (lineType === "gas" && currentGasCriteria) {
+      // Convert pressure drop from bar/km to bar/100m
+      const pressureDropBarPer100m = currentGasCriteria.pressureDropBarKm 
+        ? currentGasCriteria.pressureDropBarKm / 10 
+        : null;
+      
       return {
         minVelocity: 0, // No minimum for gas
-        maxVelocity: Math.min(erosionalVelocity, 18.3), // Min of Ve and 60 ft/s
-        maxRhoVSquared: 8000, // kg/(m·s²) - approximately 5000 lb/(ft·s²)
-        maxPressureDropPer100m: 0.5, // bar/100m (0.22 psi/100ft equivalent)
+        maxVelocity: currentGasCriteria.velocityMs, // From ENI table, null if using ρv² instead
+        maxRhoVSquared: currentGasCriteria.rhoV2, // From ENI table
+        maxPressureDropPer100m: pressureDropBarPer100m, // bar/100m
+        maxMach: currentGasCriteria.mach, // For flare applications
+        note: currentGasCriteria.note,
+        service: currentGasCriteria.service,
+        pressureRange: currentGasCriteria.pressureRange,
       };
     } else {
-      // Liquid
+      // Liquid - API 14E criteria
       return {
         minVelocity: 0.9, // 3 ft/s - minimum to prevent silt/solids settling
         maxVelocity: 4.6, // 15 ft/s - maximum to prevent erosion
         maxRhoVSquared: 15000, // kg/(m·s²) - higher limit for liquids
         maxPressureDropPer100m: 1.0, // bar/100m
+        maxMach: null,
+        note: null,
+        service: null,
+        pressureRange: null,
       };
     }
-  }, [lineType, erosionalVelocity]);
+  }, [lineType, currentGasCriteria]);
 
-  // Status check function based on API 14E criteria
+  // Status check function based on ENI/API 14E criteria
   const getStatusIndicator = () => {
-    const pressureDropPer100mBar = (pressureDropPa * 100 / L_m) * 0.00001; // Convert to bar/100m
+    const pressureDropPer100mBar = L_m > 0 ? (pressureDropPa * 100 / L_m) * 0.00001 : 0; // Convert to bar/100m
     
-    // Pressure drop check
-    const pressureDropOk = L_m > 0 && pressureDropPer100mBar <= sizingCriteria.maxPressureDropPer100m;
+    // Pressure drop check - only if limit is specified
+    const pressureDropOk = sizingCriteria.maxPressureDropPer100m === null || 
+      (L_m > 0 && pressureDropPer100mBar <= sizingCriteria.maxPressureDropPer100m);
     
-    // Velocity check
-    const velocityOk = velocity >= sizingCriteria.minVelocity && velocity <= sizingCriteria.maxVelocity;
+    // Velocity check - only if limit is specified
+    const velocityOk = sizingCriteria.maxVelocity === null || 
+      (velocity >= sizingCriteria.minVelocity && velocity <= sizingCriteria.maxVelocity);
     
-    // ρv² check
-    const rhoVSquaredOk = rhoVSquared <= sizingCriteria.maxRhoVSquared;
+    // ρv² check - only if limit is specified
+    const rhoVSquaredOk = sizingCriteria.maxRhoVSquared === null || 
+      rhoVSquared <= sizingCriteria.maxRhoVSquared;
     
     return {
-      pressureDrop: pressureDropOk ? "ok" as const : "warning" as const,
-      velocity: velocityOk ? "ok" as const : "warning" as const,
-      rhoVSquared: rhoVSquaredOk ? "ok" as const : "warning" as const,
+      pressureDrop: sizingCriteria.maxPressureDropPer100m === null ? "na" as const : 
+        (pressureDropOk ? "ok" as const : "warning" as const),
+      velocity: sizingCriteria.maxVelocity === null ? "na" as const : 
+        (velocityOk ? "ok" as const : "warning" as const),
+      rhoVSquared: sizingCriteria.maxRhoVSquared === null ? "na" as const : 
+        (rhoVSquaredOk ? "ok" as const : "warning" as const),
     };
   };
 
   const status = getStatusIndicator();
 
-  const StatusIcon = ({ type }: { type: "ok" | "warning" }) => {
+  const StatusIcon = ({ type }: { type: "ok" | "warning" | "na" }) => {
     if (type === "ok") {
       return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+    }
+    if (type === "na") {
+      return <Info className="w-4 h-4 text-muted-foreground" />;
     }
     return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
   };
@@ -528,6 +642,66 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
             </div>
 
             <div className="space-y-5">
+              {/* Gas Service Type (ENI Criteria) - Only show for gas lines */}
+              {lineType === "gas" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Service Type</Label>
+                    <Select value={gasServiceType} onValueChange={handleGasServiceChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gasServiceTypes.map((service) => (
+                          <SelectItem key={service} value={service}>
+                            {service}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Operating Pressure</Label>
+                    <Select value={gasPressureRange} onValueChange={setGasPressureRange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableGasPressureRanges.map((range) => (
+                          <SelectItem key={range} value={range}>
+                            {range}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Show current criteria from ENI table */}
+                  {currentGasCriteria && (
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
+                      <p className="text-xs font-medium text-primary">ENI Sizing Limits (Table 8.1.1.1)</p>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        {currentGasCriteria.pressureDropBarKm !== null && (
+                          <p>ΔP: ≤ {currentGasCriteria.pressureDropBarKm} bar/km</p>
+                        )}
+                        {currentGasCriteria.velocityMs !== null && (
+                          <p>Velocity: ≤ {currentGasCriteria.velocityMs} m/s</p>
+                        )}
+                        {currentGasCriteria.rhoV2 !== null && (
+                          <p>ρv²: ≤ {currentGasCriteria.rhoV2.toLocaleString()} kg/(m·s²)</p>
+                        )}
+                        {currentGasCriteria.mach !== null && (
+                          <p>Mach: ≤ {currentGasCriteria.mach}</p>
+                        )}
+                        {currentGasCriteria.note && (
+                          <p className="italic">{currentGasCriteria.note}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               {/* Pipe Length */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Pipe Length</Label>
@@ -821,6 +995,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {pressureDropPer100m.toFixed(4)} {pressureUnit}/100m
+                    {sizingCriteria.maxPressureDropPer100m !== null && lineType === "gas" && (
+                      <span className="ml-2">
+                        (Limit: ≤ {(sizingCriteria.maxPressureDropPer100m * 10).toFixed(1)} {pressureUnit}/km)
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -832,9 +1011,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   </div>
                   <p className="text-lg font-mono font-semibold">{velocity.toFixed(3)} m/s</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {lineType === "gas" 
-                      ? `Limit: ≤ ${sizingCriteria.maxVelocity.toFixed(1)} m/s (Ve or 60 ft/s)`
-                      : `Limit: ${sizingCriteria.minVelocity.toFixed(1)} - ${sizingCriteria.maxVelocity.toFixed(1)} m/s (3-15 ft/s)`
+                    {sizingCriteria.maxVelocity !== null 
+                      ? (lineType === "gas" 
+                          ? `Limit: ≤ ${sizingCriteria.maxVelocity} m/s`
+                          : `Limit: ${sizingCriteria.minVelocity} - ${sizingCriteria.maxVelocity} m/s`)
+                      : "N/A - Use ρv² criterion"
                     }
                   </p>
                 </div>
@@ -856,7 +1037,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   </div>
                   <p className="text-lg font-mono font-semibold">{rhoVSquared.toFixed(2)} kg/(m·s²)</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Limit: ≤ {sizingCriteria.maxRhoVSquared.toLocaleString()} kg/(m·s²)
+                    {sizingCriteria.maxRhoVSquared !== null 
+                      ? `Limit: ≤ ${sizingCriteria.maxRhoVSquared.toLocaleString()} kg/(m·s²)`
+                      : "N/A - Use velocity criterion"
+                    }
                   </p>
                 </div>
 
