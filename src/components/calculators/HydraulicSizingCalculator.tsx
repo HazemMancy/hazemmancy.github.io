@@ -89,37 +89,138 @@ const diameterToMeters: Record<string, number> = {
   in: 0.0254,
 };
 
-// Extended pipe schedule data (ID in mm) based on Nominal Diameter and Schedule
+// ASME B36.10M / B36.19M Pipe Schedule Data - Inside Diameter (mm)
+// Schedule types: 5s, 10s, 10, 20, 30, 40s, STD, 40, 60, 80s, XS, 80, 100, 120, 140, 160, XXS
 const pipeScheduleData: Record<string, Record<string, number>> = {
-  "1/2": { "Sch 5S": 18.04, "Sch 10S": 17.12, "Sch 40/STD": 15.80, "Sch 80/XS": 13.87, "Sch 160": 11.74, "XXS": 6.35 },
-  "3/4": { "Sch 5S": 23.37, "Sch 10S": 22.45, "Sch 40/STD": 20.93, "Sch 80/XS": 18.85, "Sch 160": 15.54, "XXS": 11.07 },
-  "1": { "Sch 5S": 29.51, "Sch 10S": 27.86, "Sch 40/STD": 26.64, "Sch 80/XS": 24.31, "Sch 160": 20.70, "XXS": 15.22 },
-  "1-1/4": { "Sch 5S": 38.14, "Sch 10S": 36.63, "Sch 40/STD": 35.05, "Sch 80/XS": 32.46, "Sch 160": 29.46, "XXS": 22.76 },
-  "1-1/2": { "Sch 5S": 44.20, "Sch 10S": 42.72, "Sch 40/STD": 40.89, "Sch 80/XS": 38.10, "Sch 160": 33.98, "XXS": 27.94 },
-  "2": { "Sch 5S": 56.26, "Sch 10S": 54.79, "Sch 40/STD": 52.50, "Sch 80/XS": 49.25, "Sch 160": 42.90, "XXS": 38.16 },
-  "2-1/2": { "Sch 5S": 68.78, "Sch 10S": 66.90, "Sch 40/STD": 62.71, "Sch 80/XS": 59.00, "Sch 160": 53.98, "XXS": 44.96 },
-  "3": { "Sch 5S": 84.68, "Sch 10S": 84.68, "Sch 40/STD": 77.93, "Sch 80/XS": 73.66, "Sch 160": 66.64, "XXS": 58.42 },
-  "4": { "Sch 5S": 110.08, "Sch 10S": 108.20, "Sch 40/STD": 102.26, "Sch 80/XS": 97.18, "Sch 160": 87.32, "XXS": 80.06 },
-  "6": { "Sch 5S": 164.66, "Sch 10S": 162.74, "Sch 40/STD": 154.05, "Sch 80/XS": 146.33, "Sch 160": 131.78, "XXS": 124.38 },
-  "8": { "Sch 5S": 216.66, "Sch 10S": 214.96, "Sch 20": 209.55, "Sch 40/STD": 202.72, "Sch 60": 196.85, "Sch 80/XS": 193.68, "Sch 160": 173.99, "XXS": 174.64 },
-  "10": { "Sch 5S": 271.02, "Sch 10S": 268.92, "Sch 20": 262.76, "Sch 40/STD": 254.51, "Sch 60": 247.65, "Sch 80/XS": 242.87, "Sch 160": 222.25, "XXS": 222.25 },
-  "12": { "Sch 5S": 323.85, "Sch 10S": 320.42, "Sch 20": 314.66, "Sch 40/STD": 303.23, "Sch 60": 295.30, "Sch 80/XS": 288.90, "Sch 160": 264.67, "XXS": 264.67 },
-  "14": { "Sch 5S": 350.50, "Sch 10S": 347.68, "Sch 20": 342.90, "Sch 30": 339.76, "Sch 40": 336.54, "Sch 60": 330.20, "Sch 80": 323.88, "Sch 160": 290.58 },
-  "16": { "Sch 5S": 400.86, "Sch 10S": 398.02, "Sch 20": 393.70, "Sch 30": 387.36, "Sch 40": 381.00, "Sch 60": 374.66, "Sch 80": 363.52, "Sch 160": 333.34 },
-  "18": { "Sch 5S": 451.46, "Sch 10S": 448.62, "Sch 20": 444.30, "Sch 30": 434.72, "Sch 40": 428.66, "Sch 60": 419.10, "Sch 80": 409.58, "Sch 160": 376.94 },
-  "20": { "Sch 5S": 501.80, "Sch 10S": 498.44, "Sch 20": 490.96, "Sch 30": 482.60, "Sch 40": 477.82, "Sch 60": 466.78, "Sch 80": 455.62, "Sch 160": 419.10 },
-  "24": { "Sch 5S": 603.25, "Sch 10S": 598.42, "Sch 20": 590.04, "Sch 30": 581.66, "Sch 40": 574.68, "Sch 60": 560.32, "Sch 80": 547.68, "Sch 160": 498.44 },
-  "30": { "Sch 5S": 755.65, "Sch 10S": 749.30, "Sch 20": 736.60, "Sch 30": 723.90, "STD": 749.30, "XS": 736.60 },
-  "36": { "Sch 5S": 906.65, "Sch 10S": 898.52, "Sch 20": 882.90, "Sch 30": 869.95, "Sch 40": 863.60, "STD": 898.52, "XS": 882.90 },
-  "42": { "Sch 5S": 1057.91, "Sch 10S": 1047.75, "Sch 20": 1031.88, "Sch 30": 1016.00, "STD": 1047.75, "XS": 1031.88 },
-  "48": { "Sch 5S": 1209.17, "Sch 10S": 1196.85, "Sch 20": 1178.56, "Sch 30": 1162.05, "STD": 1196.85, "XS": 1178.56 },
+  // NPS 1/2" (DN 15) - OD: 21.3 mm
+  "1/2": { 
+    "5s": 18.04, "10s": 17.12, "10": 17.12, "40s": 15.80, "STD": 15.80, "40": 15.80, 
+    "80s": 13.87, "XS": 13.87, "80": 13.87, "160": 11.74, "XXS": 6.35 
+  },
+  // NPS 3/4" (DN 20) - OD: 26.7 mm
+  "3/4": { 
+    "5s": 23.37, "10s": 22.45, "10": 22.45, "40s": 20.93, "STD": 20.93, "40": 20.93, 
+    "80s": 18.85, "XS": 18.85, "80": 18.85, "160": 15.54, "XXS": 11.07 
+  },
+  // NPS 1" (DN 25) - OD: 33.4 mm
+  "1": { 
+    "5s": 29.51, "10s": 27.86, "10": 27.86, "40s": 26.64, "STD": 26.64, "40": 26.64, 
+    "80s": 24.31, "XS": 24.31, "80": 24.31, "160": 20.70, "XXS": 15.22 
+  },
+  // NPS 1-1/4" (DN 32) - OD: 42.2 mm
+  "1-1/4": { 
+    "5s": 38.14, "10s": 36.63, "10": 36.63, "40s": 35.05, "STD": 35.05, "40": 35.05, 
+    "80s": 32.46, "XS": 32.46, "80": 32.46, "160": 29.46, "XXS": 22.76 
+  },
+  // NPS 1-1/2" (DN 40) - OD: 48.3 mm
+  "1-1/2": { 
+    "5s": 44.20, "10s": 42.72, "10": 42.72, "40s": 40.89, "STD": 40.89, "40": 40.89, 
+    "80s": 38.10, "XS": 38.10, "80": 38.10, "160": 33.98, "XXS": 27.94 
+  },
+  // NPS 2" (DN 50) - OD: 60.3 mm
+  "2": { 
+    "5s": 56.26, "10s": 54.79, "10": 54.79, "40s": 52.50, "STD": 52.50, "40": 52.50, 
+    "80s": 49.25, "XS": 49.25, "80": 49.25, "160": 42.90, "XXS": 38.16 
+  },
+  // NPS 2-1/2" (DN 65) - OD: 73.0 mm
+  "2-1/2": { 
+    "5s": 68.78, "10s": 66.90, "10": 66.90, "40s": 62.71, "STD": 62.71, "40": 62.71, 
+    "80s": 59.00, "XS": 59.00, "80": 59.00, "160": 53.98, "XXS": 44.96 
+  },
+  // NPS 3" (DN 80) - OD: 88.9 mm
+  "3": { 
+    "5s": 84.68, "10s": 82.80, "10": 82.80, "40s": 77.93, "STD": 77.93, "40": 77.93, 
+    "80s": 73.66, "XS": 73.66, "80": 73.66, "160": 66.64, "XXS": 58.42 
+  },
+  // NPS 4" (DN 100) - OD: 114.3 mm
+  "4": { 
+    "5s": 110.08, "10s": 108.20, "10": 108.20, "40s": 102.26, "STD": 102.26, "40": 102.26, 
+    "80s": 97.18, "XS": 97.18, "80": 97.18, "120": 92.04, "160": 87.32, "XXS": 80.06 
+  },
+  // NPS 6" (DN 150) - OD: 168.3 mm
+  "6": { 
+    "5s": 164.66, "10s": 162.74, "10": 162.74, "40s": 154.05, "STD": 154.05, "40": 154.05, 
+    "80s": 146.33, "XS": 146.33, "80": 146.33, "120": 139.70, "160": 131.78, "XXS": 124.38 
+  },
+  // NPS 8" (DN 200) - OD: 219.1 mm
+  "8": { 
+    "5s": 216.66, "10s": 214.96, "10": 214.96, "20": 209.55, "30": 206.38, 
+    "40s": 205.00, "STD": 202.72, "40": 202.72, "60": 196.85, 
+    "80s": 196.85, "XS": 193.68, "80": 193.68, "100": 186.96, "120": 180.98, "140": 177.80, "160": 173.99, "XXS": 174.64 
+  },
+  // NPS 10" (DN 250) - OD: 273.0 mm
+  "10": { 
+    "5s": 271.02, "10s": 268.92, "10": 268.92, "20": 262.76, "30": 257.48, 
+    "40s": 260.35, "STD": 254.51, "40": 254.51, "60": 247.65, 
+    "80s": 254.51, "XS": 247.65, "80": 242.87, "100": 236.52, "120": 230.18, "140": 225.42, "160": 222.25, "XXS": 222.25 
+  },
+  // NPS 12" (DN 300) - OD: 323.8 mm
+  "12": { 
+    "5s": 323.85, "10s": 320.42, "10": 320.42, "20": 314.66, "30": 307.09, 
+    "40s": 315.88, "STD": 303.23, "40": 303.23, "60": 295.30, 
+    "80s": 311.15, "XS": 298.45, "80": 288.90, "100": 280.92, "120": 273.05, "140": 266.70, "160": 264.67, "XXS": 264.67 
+  },
+  // NPS 14" (DN 350) - OD: 355.6 mm
+  "14": { 
+    "5s": 350.50, "10s": 347.68, "10": 347.68, "20": 342.90, "30": 339.76, 
+    "STD": 347.68, "40": 336.54, "60": 330.20, 
+    "XS": 339.76, "80": 323.88, "100": 317.50, "120": 311.18, "140": 304.80, "160": 290.58 
+  },
+  // NPS 16" (DN 400) - OD: 406.4 mm
+  "16": { 
+    "5s": 400.86, "10s": 398.02, "10": 398.02, "20": 393.70, "30": 387.36, 
+    "STD": 398.02, "40": 381.00, "60": 374.66, 
+    "XS": 387.36, "80": 363.52, "100": 354.08, "120": 344.48, "140": 336.54, "160": 333.34 
+  },
+  // NPS 18" (DN 450) - OD: 457.2 mm
+  "18": { 
+    "5s": 451.46, "10s": 448.62, "10": 448.62, "20": 444.30, "30": 434.72, 
+    "STD": 448.62, "40": 428.66, "60": 419.10, 
+    "XS": 434.72, "80": 409.58, "100": 398.02, "120": 387.36, "140": 381.00, "160": 376.94 
+  },
+  // NPS 20" (DN 500) - OD: 508.0 mm
+  "20": { 
+    "5s": 501.80, "10s": 498.44, "10": 498.44, "20": 490.96, "30": 482.60, 
+    "STD": 498.44, "40": 477.82, "60": 466.78, 
+    "XS": 482.60, "80": 455.62, "100": 444.30, "120": 431.80, "140": 419.10, "160": 419.10 
+  },
+  // NPS 24" (DN 600) - OD: 609.6 mm
+  "24": { 
+    "5s": 603.25, "10s": 598.42, "10": 598.42, "20": 590.04, "30": 581.66, 
+    "STD": 598.42, "40": 574.68, "60": 560.32, 
+    "XS": 581.66, "80": 547.68, "100": 530.10, "120": 514.35, "140": 504.82, "160": 498.44 
+  },
+  // NPS 30" (DN 750) - OD: 762.0 mm
+  "30": { 
+    "5s": 755.65, "10s": 749.30, "10": 749.30, "20": 736.60, "30": 723.90, 
+    "STD": 749.30, "XS": 736.60 
+  },
+  // NPS 36" (DN 900) - OD: 914.4 mm
+  "36": { 
+    "5s": 906.65, "10s": 898.52, "10": 898.52, "20": 882.90, "30": 869.95, 
+    "STD": 898.52, "40": 863.60, "XS": 882.90 
+  },
+  // NPS 42" (DN 1050) - OD: 1066.8 mm
+  "42": { 
+    "5s": 1057.91, "10s": 1047.75, "10": 1047.75, "20": 1031.88, "30": 1016.00, 
+    "STD": 1047.75, "XS": 1031.88 
+  },
+  // NPS 48" (DN 1200) - OD: 1219.2 mm
+  "48": { 
+    "5s": 1209.17, "10s": 1196.85, "10": 1196.85, "20": 1178.56, "30": 1162.05, 
+    "STD": 1196.85, "XS": 1178.56 
+  },
 };
+
+// Schedule order for display (ASME B36.10M / B36.19M)
+const scheduleOrder = ["5s", "10s", "10", "20", "30", "40s", "STD", "40", "60", "80s", "XS", "80", "100", "120", "140", "160", "XXS"];
 
 const nominalDiameters = Object.keys(pipeScheduleData);
 
-// Get available schedules for a nominal diameter
+// Get available schedules for a nominal diameter (sorted by schedule order)
 const getSchedulesForDiameter = (nd: string): string[] => {
-  return Object.keys(pipeScheduleData[nd] || {});
+  const available = Object.keys(pipeScheduleData[nd] || {});
+  return scheduleOrder.filter(sch => available.includes(sch));
 };
 
 // Gas flow rate units
@@ -167,17 +268,25 @@ const pressureFromPa: Record<string, number> = {
   "kg/cm²": 0.0000101972,
 };
 
-// Common pipe roughness values (in mm)
+// Pipe roughness per ASME/ANSI/API standards (in mm)
+// Reference: API 5L, ASME B31.1, Crane TP-410
 const pipeRoughness: Record<string, number> = {
-  "Carbon Steel": 0.045,
-  "Stainless Steel": 0.015,
-  "Cast Iron": 0.26,
-  "Galvanized Steel": 0.15,
-  "PVC/Plastic": 0.0015,
-  "Copper": 0.0015,
-  "Concrete": 1.0,
-  "HDPE": 0.007,
-  "Fiberglass (FRP)": 0.005,
+  "Carbon Steel (New)": 0.0457,        // API 5L / ASME B31.3 - new clean CS
+  "Carbon Steel (Corroded)": 0.15,     // Moderately corroded service
+  "Carbon Steel (Severely Corroded)": 0.9, // Heavy scale/corrosion
+  "Stainless Steel": 0.015,            // ASME B36.19M - SS 304/316
+  "Duplex Stainless Steel": 0.015,     // 2205/2507 duplex
+  "Cast Iron": 0.26,                   // ANSI/AWWA C110
+  "Ductile Iron (Cement Lined)": 0.025, // AWWA C104
+  "Galvanized Steel": 0.15,            // Hot-dip galvanized
+  "Chrome-Moly Steel": 0.0457,         // ASTM A335 (P11, P22, etc.)
+  "Copper/Copper-Nickel": 0.0015,      // ASTM B88 / B111
+  "PVC/CPVC": 0.0015,                  // ASTM D1785 / F441
+  "HDPE": 0.007,                       // ASTM F714
+  "Fiberglass (FRP/GRE)": 0.005,       // API 15HR
+  "Concrete": 1.0,                     // Cast-in-place
+  "Lined Steel (Epoxy)": 0.006,        // Internal epoxy coating
+  "Lined Steel (Rubber)": 0.025,       // Rubber lined
   "Custom": 0,
 };
 
@@ -306,7 +415,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [pipeLength, setPipeLength] = useState<string>("100");
   const [lengthUnit, setLengthUnit] = useState<string>("m");
   const [nominalDiameter, setNominalDiameter] = useState<string>("4");
-  const [schedule, setSchedule] = useState<string>("Sch 40/STD");
+  const [schedule, setSchedule] = useState<string>("STD");
   const [diameterUnit, setDiameterUnit] = useState<string>("mm");
   const [flowRate, setFlowRate] = useState<string>(lineType === "gas" ? "10" : "50");
   const [flowRateUnit, setFlowRateUnit] = useState<string>(lineType === "gas" ? "mmscfd" : "m³/h");
@@ -385,7 +494,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Reset schedule if not available for new diameter
   useMemo(() => {
     if (!availableSchedules.includes(schedule)) {
-      setSchedule(availableSchedules[0] || "Sch 40/STD");
+      setSchedule(availableSchedules[0] || "STD");
     }
   }, [nominalDiameter, availableSchedules]);
 
