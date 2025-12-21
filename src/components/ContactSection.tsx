@@ -23,7 +23,7 @@ const ContactSection = () => {
 
         <div className="max-w-4xl mx-auto">
           {/* Contact Cards Grid */}
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 mb-12">
             {/* Phone */}
             <a
               href="tel:+201096597449"
