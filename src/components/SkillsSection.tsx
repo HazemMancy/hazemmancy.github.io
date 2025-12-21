@@ -4,38 +4,22 @@ const skillCategories = [
   {
     icon: Cpu,
     title: "Process Simulation",
-    skills: [
-      { name: "Aspen HYSYS", level: 95 },
-      { name: "Aspen EDR", level: 85 },
-      { name: "HTRI", level: 85 },
-    ],
+    skills: ["Aspen HYSYS", "Aspen EDR", "HTRI"],
   },
   {
     icon: Database,
     title: "Data Analytics & Programming",
-    skills: [
-      { name: "Python", level: 80 },
-      { name: "SQL", level: 75 },
-      { name: "Power BI", level: 80 },
-      { name: "R", level: 70 },
-      { name: "Tableau", level: 75 },
-    ],
+    skills: ["Python", "SQL", "Power BI", "R", "Tableau"],
   },
   {
     icon: Wrench,
     title: "General Engineering",
-    skills: [
-      { name: "AutoCAD", level: 85 },
-      { name: "MS Office", level: 90 },
-    ],
+    skills: ["AutoCAD", "MS Office"],
   },
   {
     icon: Globe,
     title: "Languages",
-    skills: [
-      { name: "Arabic (Native)", level: 100 },
-      { name: "English (Full Professional)", level: 90 },
-    ],
+    skills: ["Arabic (Native)", "English (Full Professional)"],
   },
 ];
 
@@ -74,7 +58,7 @@ const SkillsSection = () => {
         </div>
 
         {/* Skills Grid */}
-        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+        <div className="grid sm:grid-cols-2 gap-4 sm:gap-8 max-w-5xl mx-auto">
           {skillCategories.map((category, index) => (
             <div
               key={index}
@@ -91,20 +75,14 @@ const SkillsSection = () => {
               </div>
 
               {/* Skills List */}
-              <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
                 {category.skills.map((skill, skillIndex) => (
-                  <div key={skillIndex}>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium text-foreground">{skill.name}</span>
-                      <span className="text-xs text-muted-foreground">{skill.level}%</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-gold rounded-full transition-all duration-1000"
-                        style={{ width: `${skill.level}%` }}
-                      />
-                    </div>
-                  </div>
+                  <span
+                    key={skillIndex}
+                    className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-sm font-medium"
+                  >
+                    {skill}
+                  </span>
                 ))}
               </div>
             </div>

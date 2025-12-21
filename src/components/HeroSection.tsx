@@ -20,13 +20,13 @@ const HeroSection = () => {
           </div>
 
           {/* Name */}
-          <h1 className="font-heading text-5xl md:text-7xl lg:text-8xl font-bold mb-6 animate-slide-up opacity-0 animation-delay-100">
+          <h1 className="font-heading text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bold mb-6 animate-slide-up opacity-0 animation-delay-100">
             <span className="text-foreground">Hazem </span>
             <span className="text-gradient-gold">ElMancy</span>
           </h1>
 
           {/* Tagline */}
-          <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-2xl mx-auto animate-slide-up opacity-0 animation-delay-200">
+          <p className="text-lg sm:text-xl md:text-2xl text-muted-foreground mb-8 max-w-2xl mx-auto px-4 animate-slide-up opacity-0 animation-delay-200">
             Transforming complex petroleum processes into 
             <span className="text-foreground font-medium"> efficient engineering solutions</span>
           </p>
