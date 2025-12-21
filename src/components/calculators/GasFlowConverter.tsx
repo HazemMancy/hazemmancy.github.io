@@ -21,6 +21,9 @@ type FlowUnit = {
   volumeFactor: number; // conversion to ft³/d
 };
 
+// Units with locked conditions (standard units with fixed P/T)
+const lockedUnits = ["Nm3/h", "Sm3/h", "SCFM", "MMSCFD"];
+
 const flowUnits: FlowUnit[] = [
   { id: "Nm3/h", label: "Nm³/h", pressureUnit: "Atm Abs", tempUnit: "°C", standardPressure: 14.696, standardTemp: 491.67, volumeFactor: 847.552 },
   { id: "Sm3/h", label: "Sm³/h", pressureUnit: "Atm Abs", tempUnit: "°C", standardPressure: 14.696, standardTemp: 518.67, volumeFactor: 847.552 },
@@ -30,6 +33,8 @@ const flowUnits: FlowUnit[] = [
   { id: "MMSCFD", label: "MMSCFD", pressureUnit: "PSIA", tempUnit: "°F", standardPressure: 14.696, standardTemp: 519.67, volumeFactor: 1000000 },
   { id: "ACFM", label: "ACFM", pressureUnit: "PSIA", tempUnit: "°F", standardPressure: 14.696, standardTemp: 519.67, volumeFactor: 1440 },
 ];
+
+const isUnitLocked = (unitId: string) => lockedUnits.includes(unitId);
 
 // Temperature conversion helpers
 const celsiusToRankine = (c: number) => (c + 273.15) * 1.8;
@@ -170,7 +175,7 @@ const GasFlowConverter = () => {
                   type="number"
                   value={gasVolume}
                   onChange={(e) => setGasVolume(e.target.value)}
-                  className="bg-background border-input max-w-[150px]"
+                  className="bg-background border-input max-w-[150px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <span className="text-primary font-medium" dangerouslySetInnerHTML={{ __html: getUnitInfo(fromUnit).label.replace("³", "<sup>3</sup>") }} />
               </div>
@@ -203,7 +208,8 @@ const GasFlowConverter = () => {
                       type="number"
                       value={fromPressure}
                       onChange={(e) => setFromPressure(e.target.value)}
-                      className="bg-background border-input max-w-[150px]"
+                      disabled={isUnitLocked(fromUnit)}
+                      className="bg-background border-input max-w-[150px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     <span className="text-primary text-sm">{fromUnitInfo.pressureUnit}</span>
                   </div>
@@ -218,7 +224,8 @@ const GasFlowConverter = () => {
                       type="number"
                       value={fromTemp}
                       onChange={(e) => setFromTemp(e.target.value)}
-                      className="bg-background border-input max-w-[150px]"
+                      disabled={isUnitLocked(fromUnit)}
+                      className="bg-background border-input max-w-[150px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     <span className="text-primary text-sm">{fromUnitInfo.tempUnit}</span>
                   </div>
@@ -232,7 +239,7 @@ const GasFlowConverter = () => {
                     type="number"
                     value={fromZ}
                     onChange={(e) => setFromZ(e.target.value)}
-                    className="bg-muted/50 border-input max-w-[150px]"
+                    className="bg-muted/50 border-input max-w-[150px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
               </div>
@@ -265,7 +272,8 @@ const GasFlowConverter = () => {
                       type="number"
                       value={toPressure}
                       onChange={(e) => setToPressure(e.target.value)}
-                      className="bg-muted/50 border-input max-w-[150px]"
+                      disabled={isUnitLocked(toUnit)}
+                      className="bg-muted/50 border-input max-w-[150px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     <span className="text-primary text-sm">{toUnitInfo.pressureUnit}</span>
                   </div>
@@ -280,7 +288,8 @@ const GasFlowConverter = () => {
                       type="number"
                       value={toTemp}
                       onChange={(e) => setToTemp(e.target.value)}
-                      className="bg-muted/50 border-input max-w-[150px]"
+                      disabled={isUnitLocked(toUnit)}
+                      className="bg-muted/50 border-input max-w-[150px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     <span className="text-primary text-sm">{toUnitInfo.tempUnit}</span>
                   </div>
@@ -294,7 +303,7 @@ const GasFlowConverter = () => {
                     type="number"
                     value={toZ}
                     onChange={(e) => setToZ(e.target.value)}
-                    className="bg-muted/50 border-input max-w-[150px]"
+                    className="bg-muted/50 border-input max-w-[150px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
               </div>
