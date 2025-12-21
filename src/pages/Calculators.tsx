@@ -24,11 +24,11 @@ const calculators: CalculatorCard[] = [
     category: "Flow"
   },
   {
-    id: "pressure-drop",
-    title: "Pressure Drop Calculator",
-    description: "Calculate pressure drop in pipes for single-phase flow using Darcy-Weisbach equation",
+    id: "hydraulic-sizing",
+    title: "Hydraulic Sizing",
+    description: "Size gas, liquid, and mixed-phase lines with pressure drop, velocity, and ρv² calculations",
     icon: <Gauge className="w-8 h-8" />,
-    route: "/calculators/pressure-drop",
+    route: "/calculators/hydraulic-sizing",
     status: "available",
     category: "Fluid Mechanics"
   },

@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Calculators from "./pages/Calculators";
 import GasFlowConverterPage from "./pages/calculators/GasFlowConverterPage";
-import PressureDropPage from "./pages/calculators/PressureDropPage";
+import HydraulicSizingPage from "./pages/calculators/HydraulicSizingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -21,7 +21,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/calculators" element={<Calculators />} />
           <Route path="/calculators/gas-flow-converter" element={<GasFlowConverterPage />} />
-          <Route path="/calculators/pressure-drop" element={<PressureDropPage />} />
+          <Route path="/calculators/hydraulic-sizing" element={<HydraulicSizingPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Gauge, ArrowRight, AlertTriangle, Info } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Gauge, ArrowRight, AlertTriangle, Info, CheckCircle2, Wind, Droplets, Waves } from "lucide-react";
 
 // Unit conversion factors to SI
 const lengthToMeters: Record<string, number> = {
@@ -17,40 +18,56 @@ const diameterToMeters: Record<string, number> = {
   in: 0.0254,
 };
 
-// Standard pipe dimensions (ID in mm) based on Nominal Diameter and Schedule
+// Extended pipe schedule data (ID in mm) based on Nominal Diameter and Schedule
 const pipeScheduleData: Record<string, Record<string, number>> = {
-  "1/2": { "Sch 10": 17.12, "Sch 40": 15.80, "Sch 80": 13.87, "Sch 160": 11.74 },
-  "3/4": { "Sch 10": 22.45, "Sch 40": 20.93, "Sch 80": 18.85, "Sch 160": 15.54 },
-  "1": { "Sch 10": 27.86, "Sch 40": 26.64, "Sch 80": 24.31, "Sch 160": 20.70 },
-  "1-1/4": { "Sch 10": 36.63, "Sch 40": 35.05, "Sch 80": 32.46, "Sch 160": 29.46 },
-  "1-1/2": { "Sch 10": 42.72, "Sch 40": 40.89, "Sch 80": 38.10, "Sch 160": 33.98 },
-  "2": { "Sch 10": 54.79, "Sch 40": 52.50, "Sch 80": 49.25, "Sch 160": 42.90 },
-  "2-1/2": { "Sch 10": 66.90, "Sch 40": 62.71, "Sch 80": 59.00, "Sch 160": 53.98 },
-  "3": { "Sch 10": 84.68, "Sch 40": 77.93, "Sch 80": 73.66, "Sch 160": 66.64 },
-  "4": { "Sch 10": 108.20, "Sch 40": 102.26, "Sch 80": 97.18, "Sch 160": 87.32 },
-  "6": { "Sch 10": 162.74, "Sch 40": 154.05, "Sch 80": 146.33, "Sch 160": 131.78 },
-  "8": { "Sch 10": 214.96, "Sch 40": 202.72, "Sch 80": 193.68, "Sch 160": 173.99 },
-  "10": { "Sch 10": 268.92, "Sch 40": 254.51, "Sch 80": 242.87, "Sch 160": 222.25 },
-  "12": { "Sch 10": 320.42, "Sch 40": 303.23, "Sch 80": 288.90, "Sch 160": 264.67 },
-  "14": { "Sch 10": 347.68, "Sch 40": 333.34, "Sch 80": 317.50, "Sch 160": 290.58 },
-  "16": { "Sch 10": 398.02, "Sch 40": 381.00, "Sch 80": 363.52, "Sch 160": 333.34 },
-  "18": { "Sch 10": 448.62, "Sch 40": 428.66, "Sch 80": 409.58, "Sch 160": 376.94 },
-  "20": { "Sch 10": 498.44, "Sch 40": 477.82, "Sch 80": 455.62, "Sch 160": 419.10 },
-  "24": { "Sch 10": 598.42, "Sch 40": 574.68, "Sch 80": 547.68, "Sch 160": 498.44 },
+  "1/2": { "Sch 5S": 18.04, "Sch 10S": 17.12, "Sch 40/STD": 15.80, "Sch 80/XS": 13.87, "Sch 160": 11.74, "XXS": 6.35 },
+  "3/4": { "Sch 5S": 23.37, "Sch 10S": 22.45, "Sch 40/STD": 20.93, "Sch 80/XS": 18.85, "Sch 160": 15.54, "XXS": 11.07 },
+  "1": { "Sch 5S": 29.51, "Sch 10S": 27.86, "Sch 40/STD": 26.64, "Sch 80/XS": 24.31, "Sch 160": 20.70, "XXS": 15.22 },
+  "1-1/4": { "Sch 5S": 38.14, "Sch 10S": 36.63, "Sch 40/STD": 35.05, "Sch 80/XS": 32.46, "Sch 160": 29.46, "XXS": 22.76 },
+  "1-1/2": { "Sch 5S": 44.20, "Sch 10S": 42.72, "Sch 40/STD": 40.89, "Sch 80/XS": 38.10, "Sch 160": 33.98, "XXS": 27.94 },
+  "2": { "Sch 5S": 56.26, "Sch 10S": 54.79, "Sch 40/STD": 52.50, "Sch 80/XS": 49.25, "Sch 160": 42.90, "XXS": 38.16 },
+  "2-1/2": { "Sch 5S": 68.78, "Sch 10S": 66.90, "Sch 40/STD": 62.71, "Sch 80/XS": 59.00, "Sch 160": 53.98, "XXS": 44.96 },
+  "3": { "Sch 5S": 84.68, "Sch 10S": 84.68, "Sch 40/STD": 77.93, "Sch 80/XS": 73.66, "Sch 160": 66.64, "XXS": 58.42 },
+  "4": { "Sch 5S": 110.08, "Sch 10S": 108.20, "Sch 40/STD": 102.26, "Sch 80/XS": 97.18, "Sch 160": 87.32, "XXS": 80.06 },
+  "6": { "Sch 5S": 164.66, "Sch 10S": 162.74, "Sch 40/STD": 154.05, "Sch 80/XS": 146.33, "Sch 160": 131.78, "XXS": 124.38 },
+  "8": { "Sch 5S": 216.66, "Sch 10S": 214.96, "Sch 20": 209.55, "Sch 40/STD": 202.72, "Sch 60": 196.85, "Sch 80/XS": 193.68, "Sch 160": 173.99, "XXS": 174.64 },
+  "10": { "Sch 5S": 271.02, "Sch 10S": 268.92, "Sch 20": 262.76, "Sch 40/STD": 254.51, "Sch 60": 247.65, "Sch 80/XS": 242.87, "Sch 160": 222.25, "XXS": 222.25 },
+  "12": { "Sch 5S": 323.85, "Sch 10S": 320.42, "Sch 20": 314.66, "Sch 40/STD": 303.23, "Sch 60": 295.30, "Sch 80/XS": 288.90, "Sch 160": 264.67, "XXS": 264.67 },
+  "14": { "Sch 5S": 350.50, "Sch 10S": 347.68, "Sch 20": 342.90, "Sch 30": 339.76, "Sch 40": 336.54, "Sch 60": 330.20, "Sch 80": 323.88, "Sch 160": 290.58 },
+  "16": { "Sch 5S": 400.86, "Sch 10S": 398.02, "Sch 20": 393.70, "Sch 30": 387.36, "Sch 40": 381.00, "Sch 60": 374.66, "Sch 80": 363.52, "Sch 160": 333.34 },
+  "18": { "Sch 5S": 451.46, "Sch 10S": 448.62, "Sch 20": 444.30, "Sch 30": 434.72, "Sch 40": 428.66, "Sch 60": 419.10, "Sch 80": 409.58, "Sch 160": 376.94 },
+  "20": { "Sch 5S": 501.80, "Sch 10S": 498.44, "Sch 20": 490.96, "Sch 30": 482.60, "Sch 40": 477.82, "Sch 60": 466.78, "Sch 80": 455.62, "Sch 160": 419.10 },
+  "24": { "Sch 5S": 603.25, "Sch 10S": 598.42, "Sch 20": 590.04, "Sch 30": 581.66, "Sch 40": 574.68, "Sch 60": 560.32, "Sch 80": 547.68, "Sch 160": 498.44 },
+  "30": { "Sch 5S": 755.65, "Sch 10S": 749.30, "Sch 20": 736.60, "Sch 30": 723.90, "STD": 749.30, "XS": 736.60 },
+  "36": { "Sch 5S": 906.65, "Sch 10S": 898.52, "Sch 20": 882.90, "Sch 30": 869.95, "Sch 40": 863.60, "STD": 898.52, "XS": 882.90 },
+  "42": { "Sch 5S": 1057.91, "Sch 10S": 1047.75, "Sch 20": 1031.88, "Sch 30": 1016.00, "STD": 1047.75, "XS": 1031.88 },
+  "48": { "Sch 5S": 1209.17, "Sch 10S": 1196.85, "Sch 20": 1178.56, "Sch 30": 1162.05, "STD": 1196.85, "XS": 1178.56 },
 };
 
 const nominalDiameters = Object.keys(pipeScheduleData);
-const schedules = ["Sch 10", "Sch 40", "Sch 80", "Sch 160"];
 
-const flowRateToM3s: Record<string, number> = {
+// Get available schedules for a nominal diameter
+const getSchedulesForDiameter = (nd: string): string[] => {
+  return Object.keys(pipeScheduleData[nd] || {});
+};
+
+// Gas flow rate units
+const gasFlowRateToM3s: Record<string, number> = {
+  "mmscfd": 0.327741,
+  "Nm³/h": 1 / 3600,
+  "Sm³/h": 1 / 3600,
+  "m³/h": 1 / 3600,
+  "scfm": 0.000471947,
+};
+
+// Liquid flow rate units
+const liquidFlowRateToM3s: Record<string, number> = {
   "m³/h": 1 / 3600,
   "m³/s": 1,
   "L/min": 1 / 60000,
   "L/s": 0.001,
   "gpm": 0.0000630902,
   "bbl/d": 0.00000184013,
-  "mmscfd": 0.327741, // Million standard cubic feet per day to m³/s (at standard conditions)
-  "Nm³/h": 1 / 3600, // Normal cubic meters per hour to m³/s
 };
 
 const densityToKgM3: Record<string, number> = {
@@ -88,30 +105,196 @@ const pipeRoughness: Record<string, number> = {
   "PVC/Plastic": 0.0015,
   "Copper": 0.0015,
   "Concrete": 1.0,
+  "HDPE": 0.007,
+  "Fiberglass (FRP)": 0.005,
   "Custom": 0,
 };
 
-interface PressureDropCalculatorProps {
-  flowPhase: "single" | "mixed";
+// Common fluids database with temperature-dependent properties
+interface FluidProperties {
+  name: string;
+  type: "gas" | "liquid";
+  temperatures: number[];
+  density: Record<number, number>;
+  viscosity: Record<number, number>;
 }
 
-const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
+const fluidsDatabase: FluidProperties[] = [
+  // Gases
+  { 
+    name: "Natural Gas", type: "gas",
+    temperatures: [15, 25, 50, 100],
+    density: { 15: 0.75, 25: 0.72, 50: 0.65, 100: 0.55 },
+    viscosity: { 15: 0.011, 25: 0.011, 50: 0.012, 100: 0.014 }
+  },
+  { 
+    name: "Air", type: "gas",
+    temperatures: [15, 25, 50, 100, 150],
+    density: { 15: 1.225, 25: 1.184, 50: 1.093, 100: 0.946, 150: 0.834 },
+    viscosity: { 15: 0.0179, 25: 0.0184, 50: 0.0196, 100: 0.0218, 150: 0.0238 }
+  },
+  { 
+    name: "Nitrogen", type: "gas",
+    temperatures: [15, 25, 50, 100],
+    density: { 15: 1.185, 25: 1.145, 50: 1.056, 100: 0.916 },
+    viscosity: { 15: 0.0175, 25: 0.0180, 50: 0.0191, 100: 0.0212 }
+  },
+  { 
+    name: "Carbon Dioxide", type: "gas",
+    temperatures: [15, 25, 50, 100],
+    density: { 15: 1.87, 25: 1.81, 50: 1.67, 100: 1.45 },
+    viscosity: { 15: 0.0145, 25: 0.0150, 50: 0.0165, 100: 0.0190 }
+  },
+  { 
+    name: "Hydrogen", type: "gas",
+    temperatures: [15, 25, 50, 100],
+    density: { 15: 0.085, 25: 0.082, 50: 0.076, 100: 0.066 },
+    viscosity: { 15: 0.0088, 25: 0.0090, 50: 0.0095, 100: 0.0105 }
+  },
+  { 
+    name: "Steam", type: "gas",
+    temperatures: [100, 150, 200, 300],
+    density: { 100: 0.590, 150: 0.517, 200: 0.460, 300: 0.379 },
+    viscosity: { 100: 0.0125, 150: 0.0142, 200: 0.0160, 300: 0.0195 }
+  },
+  // Liquids
+  { 
+    name: "Water", type: "liquid",
+    temperatures: [5, 15, 25, 40, 60, 80, 100],
+    density: { 5: 1000, 15: 999, 25: 997, 40: 992, 60: 983, 80: 972, 100: 958 },
+    viscosity: { 5: 1.52, 15: 1.14, 25: 0.89, 40: 0.65, 60: 0.47, 80: 0.35, 100: 0.28 }
+  },
+  { 
+    name: "Seawater", type: "liquid",
+    temperatures: [5, 15, 25, 40],
+    density: { 5: 1028, 15: 1026, 25: 1023, 40: 1017 },
+    viscosity: { 5: 1.62, 15: 1.20, 25: 0.96, 40: 0.70 }
+  },
+  { 
+    name: "Crude Oil (Light)", type: "liquid",
+    temperatures: [15, 25, 40, 60],
+    density: { 15: 850, 25: 843, 40: 830, 60: 812 },
+    viscosity: { 15: 12, 25: 8, 40: 5, 60: 3 }
+  },
+  { 
+    name: "Crude Oil (Medium)", type: "liquid",
+    temperatures: [15, 25, 40, 60],
+    density: { 15: 900, 25: 893, 40: 880, 60: 862 },
+    viscosity: { 15: 50, 25: 30, 40: 15, 60: 8 }
+  },
+  { 
+    name: "Crude Oil (Heavy)", type: "liquid",
+    temperatures: [15, 25, 40, 60, 80],
+    density: { 15: 950, 25: 943, 40: 930, 60: 912, 80: 895 },
+    viscosity: { 15: 500, 25: 200, 40: 80, 60: 35, 80: 18 }
+  },
+  { 
+    name: "Diesel", type: "liquid",
+    temperatures: [15, 25, 40, 60],
+    density: { 15: 850, 25: 843, 40: 830, 60: 812 },
+    viscosity: { 15: 4.5, 25: 3.2, 40: 2.2, 60: 1.5 }
+  },
+  { 
+    name: "Gasoline", type: "liquid",
+    temperatures: [15, 25, 40],
+    density: { 15: 750, 25: 742, 40: 728 },
+    viscosity: { 15: 0.6, 25: 0.5, 40: 0.4 }
+  },
+  { 
+    name: "Kerosene", type: "liquid",
+    temperatures: [15, 25, 40, 60],
+    density: { 15: 810, 25: 802, 40: 788, 60: 770 },
+    viscosity: { 15: 2.2, 25: 1.7, 40: 1.2, 60: 0.9 }
+  },
+  { 
+    name: "Glycol (MEG)", type: "liquid",
+    temperatures: [15, 25, 40, 60],
+    density: { 15: 1115, 25: 1109, 40: 1098, 60: 1083 },
+    viscosity: { 15: 25, 25: 17, 40: 9, 60: 5 }
+  },
+  { 
+    name: "Methanol", type: "liquid",
+    temperatures: [15, 25, 40],
+    density: { 15: 792, 25: 785, 40: 772 },
+    viscosity: { 15: 0.62, 25: 0.55, 40: 0.45 }
+  },
+  { 
+    name: "Ammonia (Liquid)", type: "liquid",
+    temperatures: [-33, 0, 25],
+    density: { "-33": 682, 0: 639, 25: 602 },
+    viscosity: { "-33": 0.27, 0: 0.16, 25: 0.13 }
+  },
+];
+
+interface HydraulicSizingCalculatorProps {
+  lineType: "gas" | "liquid" | "mixed";
+}
+
+const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps) => {
   // Input states
   const [pipeLength, setPipeLength] = useState<string>("100");
   const [lengthUnit, setLengthUnit] = useState<string>("m");
   const [nominalDiameter, setNominalDiameter] = useState<string>("4");
-  const [schedule, setSchedule] = useState<string>("Sch 40");
+  const [schedule, setSchedule] = useState<string>("Sch 40/STD");
   const [diameterUnit, setDiameterUnit] = useState<string>("mm");
-  const [flowRate, setFlowRate] = useState<string>("50");
-  const [flowRateUnit, setFlowRateUnit] = useState<string>("m³/h");
-  const [density, setDensity] = useState<string>("1000");
+  const [flowRate, setFlowRate] = useState<string>(lineType === "gas" ? "10" : "50");
+  const [flowRateUnit, setFlowRateUnit] = useState<string>(lineType === "gas" ? "mmscfd" : "m³/h");
+  const [density, setDensity] = useState<string>(lineType === "gas" ? "0.75" : "1000");
   const [densityUnit, setDensityUnit] = useState<string>("kg/m³");
-  const [viscosity, setViscosity] = useState<string>("1");
+  const [viscosity, setViscosity] = useState<string>(lineType === "gas" ? "0.011" : "1");
   const [viscosityUnit, setViscosityUnit] = useState<string>("cP");
   const [pipeMaterial, setPipeMaterial] = useState<string>("Carbon Steel");
   const [customRoughness, setCustomRoughness] = useState<string>("0.045");
   const [roughnessUnit, setRoughnessUnit] = useState<string>("mm");
   const [pressureUnit, setPressureUnit] = useState<string>("bar");
+  const [selectedFluid, setSelectedFluid] = useState<string>("");
+  const [fluidTemperature, setFluidTemperature] = useState<string>("25");
+
+  // Get fluids filtered by type
+  const availableFluids = useMemo(() => {
+    return fluidsDatabase.filter(f => f.type === lineType);
+  }, [lineType]);
+
+  // Get available temperatures for selected fluid
+  const availableTemperatures = useMemo(() => {
+    const fluid = fluidsDatabase.find(f => f.name === selectedFluid);
+    return fluid?.temperatures || [];
+  }, [selectedFluid]);
+
+  // Handle fluid selection
+  const handleFluidSelect = (fluidName: string) => {
+    setSelectedFluid(fluidName);
+    const fluid = fluidsDatabase.find(f => f.name === fluidName);
+    if (fluid) {
+      const temp = fluid.temperatures.includes(25) ? 25 : fluid.temperatures[0];
+      setFluidTemperature(temp.toString());
+      setDensity(fluid.density[temp].toString());
+      setViscosity(fluid.viscosity[temp].toString());
+    }
+  };
+
+  // Handle temperature change
+  const handleTemperatureChange = (temp: string) => {
+    setFluidTemperature(temp);
+    const fluid = fluidsDatabase.find(f => f.name === selectedFluid);
+    if (fluid) {
+      const tempNum = parseInt(temp);
+      setDensity(fluid.density[tempNum]?.toString() || density);
+      setViscosity(fluid.viscosity[tempNum]?.toString() || viscosity);
+    }
+  };
+
+  // Get available schedules for current diameter
+  const availableSchedules = useMemo(() => {
+    return getSchedulesForDiameter(nominalDiameter);
+  }, [nominalDiameter]);
+
+  // Reset schedule if not available for new diameter
+  useMemo(() => {
+    if (!availableSchedules.includes(schedule)) {
+      setSchedule(availableSchedules[0] || "Sch 40/STD");
+    }
+  }, [nominalDiameter, availableSchedules]);
 
   // Get inside diameter from nominal diameter and schedule
   const insideDiameterMM = useMemo(() => {
@@ -126,10 +309,13 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
     return insideDiameterMM.toFixed(2);
   }, [insideDiameterMM, diameterUnit]);
 
+  // Get flow rate conversion factor
+  const flowRateConversion = lineType === "gas" ? gasFlowRateToM3s : liquidFlowRateToM3s;
+
   // Convert all inputs to SI units
   const L_m = useMemo(() => parseFloat(pipeLength) * lengthToMeters[lengthUnit] || 0, [pipeLength, lengthUnit]);
-  const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]); // Always in meters
-  const Q_m3s = useMemo(() => parseFloat(flowRate) * flowRateToM3s[flowRateUnit] || 0, [flowRate, flowRateUnit]);
+  const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]);
+  const Q_m3s = useMemo(() => parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0), [flowRate, flowRateUnit, flowRateConversion]);
   const rho = useMemo(() => parseFloat(density) * densityToKgM3[densityUnit] || 0, [density, densityUnit]);
   const mu = useMemo(() => parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0, [viscosity, viscosityUnit]);
   const epsilon_m = useMemo(() => {
@@ -146,6 +332,11 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
     return Q_m3s / area;
   }, [Q_m3s, D_m]);
 
+  // Calculate ρv² (rho v squared)
+  const rhoVSquared = useMemo(() => {
+    return rho * Math.pow(velocity, 2);
+  }, [rho, velocity]);
+
   // Calculate Reynolds number
   const reynoldsNumber = useMemo(() => {
     if (mu <= 0 || D_m <= 0) return 0;
@@ -159,16 +350,14 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
     return "Turbulent";
   }, [reynoldsNumber]);
 
-  // Calculate friction factor using Colebrook-White (iterative) or Haaland approximation
+  // Calculate friction factor using Haaland approximation
   const frictionFactor = useMemo(() => {
     if (reynoldsNumber <= 0 || D_m <= 0) return 0;
     
-    // Laminar flow
     if (reynoldsNumber < 2300) {
       return 64 / reynoldsNumber;
     }
     
-    // Turbulent flow - Haaland equation (explicit approximation of Colebrook-White)
     const relativeRoughness = epsilon_m / D_m;
     const term1 = relativeRoughness / 3.7;
     const term2 = 6.9 / reynoldsNumber;
@@ -180,7 +369,6 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
   // Calculate pressure drop using Darcy-Weisbach
   const pressureDropPa = useMemo(() => {
     if (D_m <= 0 || frictionFactor <= 0) return 0;
-    // ΔP = f * (L/D) * (ρV²/2)
     return frictionFactor * (L_m / D_m) * (rho * Math.pow(velocity, 2) / 2);
   }, [frictionFactor, L_m, D_m, rho, velocity]);
 
@@ -195,22 +383,48 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
     return pressureDropPa / (rho * 9.81);
   }, [pressureDropPa, rho]);
 
+  // Calculate pressure drop per 100m
+  const pressureDropPer100m = useMemo(() => {
+    if (L_m <= 0) return 0;
+    return (pressureDropPa * 100 / L_m) * pressureFromPa[pressureUnit];
+  }, [pressureDropPa, L_m, pressureUnit]);
+
   const isValidInput = L_m > 0 && D_m > 0 && Q_m3s > 0 && rho > 0 && mu > 0;
 
-  if (flowPhase === "mixed") {
+  // Status check function (placeholder - criteria to be provided later)
+  const getStatusIndicator = () => {
+    // Placeholder: will be updated with actual criteria later
+    // For now, just show warning (yellow)
+    return {
+      pressureDrop: "warning" as const,
+      velocity: "warning" as const,
+      rhoVSquared: "warning" as const,
+    };
+  };
+
+  const status = getStatusIndicator();
+
+  const StatusIcon = ({ type }: { type: "ok" | "warning" }) => {
+    if (type === "ok") {
+      return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+    }
+    return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+  };
+
+  if (lineType === "mixed") {
     return (
       <div className="space-y-8">
         <Card className="border-2 border-primary/20 bg-gradient-to-br from-card via-card to-primary/5">
           <CardContent className="p-6 sm:p-8">
             <div className="flex items-center gap-4 mb-4">
               <div className="p-3 rounded-xl bg-primary/10">
-                <Gauge className="w-8 h-8 text-primary" />
+                <Waves className="w-8 h-8 text-primary" />
               </div>
               <div>
                 <h2 className="text-2xl sm:text-3xl font-heading font-bold">
-                  Mixed Phase <span className="text-primary">Pressure Drop</span>
+                  Mixed-Phase <span className="text-primary">Line Sizing</span>
                 </h2>
-                <p className="text-muted-foreground">Two-phase flow correlations</p>
+                <p className="text-muted-foreground">Beggs & Brill equation for two-phase flow</p>
               </div>
             </div>
           </CardContent>
@@ -223,14 +437,17 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
             </div>
             <h3 className="text-xl font-heading font-semibold mb-2">Coming Soon</h3>
             <p className="text-muted-foreground max-w-md">
-              Mixed phase pressure drop calculations using Lockhart-Martinelli, Beggs-Brill, 
-              and other two-phase flow correlations are being developed.
+              Mixed-phase pressure drop calculations using Beggs & Brill correlation 
+              for two-phase flow are being developed.
             </p>
           </CardContent>
         </Card>
       </div>
     );
   }
+
+  const PhaseIcon = lineType === "gas" ? Wind : Droplets;
+  const phaseTitle = lineType === "gas" ? "Gas Line Sizing" : "Liquid Line Sizing";
 
   return (
     <div className="space-y-8">
@@ -239,11 +456,11 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
         <CardContent className="p-6 sm:p-8">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 rounded-xl bg-primary/10">
-              <Gauge className="w-8 h-8 text-primary" />
+              <PhaseIcon className="w-8 h-8 text-primary" />
             </div>
             <div>
               <h2 className="text-2xl sm:text-3xl font-heading font-bold">
-                Single Phase <span className="text-primary">Pressure Drop</span>
+                {lineType === "gas" ? "Gas" : "Liquid"} <span className="text-primary">Line Sizing</span>
               </h2>
               <p className="text-muted-foreground">Darcy-Weisbach equation for single-phase pipe flow</p>
             </div>
@@ -311,7 +528,7 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {schedules.map((sch) => (
+                    {availableSchedules.map((sch) => (
                       <SelectItem key={sch} value={sch}>
                         {sch}
                       </SelectItem>
@@ -406,6 +623,42 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
             </div>
 
             <div className="space-y-5">
+              {/* Fluid Selection */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Fluid Type</Label>
+                <Select value={selectedFluid} onValueChange={handleFluidSelect}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select fluid..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableFluids.map((fluid) => (
+                      <SelectItem key={fluid.name} value={fluid.name}>
+                        {fluid.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Temperature Selection */}
+              {selectedFluid && availableTemperatures.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Temperature (°C)</Label>
+                  <Select value={fluidTemperature} onValueChange={handleTemperatureChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTemperatures.map((temp) => (
+                        <SelectItem key={temp} value={temp.toString()}>
+                          {temp}°C
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Flow Rate */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Volumetric Flow Rate</Label>
@@ -415,21 +668,18 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
                     value={flowRate}
                     onChange={(e) => setFlowRate(e.target.value)}
                     className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder="50"
+                    placeholder={lineType === "gas" ? "10" : "50"}
                   />
                   <Select value={flowRateUnit} onValueChange={setFlowRateUnit}>
                     <SelectTrigger className="w-28">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="m³/h">m³/h</SelectItem>
-                      <SelectItem value="m³/s">m³/s</SelectItem>
-                      <SelectItem value="L/min">L/min</SelectItem>
-                      <SelectItem value="L/s">L/s</SelectItem>
-                      <SelectItem value="gpm">gpm</SelectItem>
-                      <SelectItem value="bbl/d">bbl/d</SelectItem>
-                      <SelectItem value="mmscfd">mmscfd</SelectItem>
-                      <SelectItem value="Nm³/h">Nm³/h</SelectItem>
+                      {Object.keys(flowRateConversion).map((unit) => (
+                        <SelectItem key={unit} value={unit}>
+                          {unit}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -444,7 +694,7 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
                     value={density}
                     onChange={(e) => setDensity(e.target.value)}
                     className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder="1000"
+                    placeholder={lineType === "gas" ? "0.75" : "1000"}
                   />
                   <Select value={densityUnit} onValueChange={setDensityUnit}>
                     <SelectTrigger className="w-24">
@@ -468,7 +718,7 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
                     value={viscosity}
                     onChange={(e) => setViscosity(e.target.value)}
                     className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder="1"
+                    placeholder={lineType === "gas" ? "0.011" : "1"}
                   />
                   <Select value={viscosityUnit} onValueChange={setViscosityUnit}>
                     <SelectTrigger className="w-24">
@@ -480,34 +730,6 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
                       <SelectItem value="mPa·s">mPa·s</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-              </div>
-
-              {/* Quick presets */}
-              <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                <p className="text-xs text-muted-foreground mb-2">Common Fluids (at 20°C):</p>
-                <div className="flex flex-wrap gap-1">
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-primary/10 text-xs"
-                    onClick={() => { setDensity("998"); setViscosity("1"); }}
-                  >
-                    Water
-                  </Badge>
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-primary/10 text-xs"
-                    onClick={() => { setDensity("850"); setViscosity("3"); }}
-                  >
-                    Light Oil
-                  </Badge>
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-primary/10 text-xs"
-                    onClick={() => { setDensity("1.2"); setViscosity("0.018"); }}
-                  >
-                    Air
-                  </Badge>
                 </div>
               </div>
             </div>
@@ -529,7 +751,10 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
                 {/* Pressure Drop - Main Result */}
                 <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Pressure Drop (ΔP)</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Pressure Drop (ΔP)</span>
+                      <StatusIcon type={status.pressureDrop} />
+                    </div>
                     <Select value={pressureUnit} onValueChange={setPressureUnit}>
                       <SelectTrigger className="w-24 h-7 text-xs">
                         <SelectValue />
@@ -546,6 +771,27 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
                   <p className="text-3xl font-mono font-bold text-primary">
                     {pressureDrop.toFixed(4)}
                   </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {pressureDropPer100m.toFixed(4)} {pressureUnit}/100m
+                  </p>
+                </div>
+
+                {/* Velocity */}
+                <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Fluid Velocity</span>
+                    <StatusIcon type={status.velocity} />
+                  </div>
+                  <p className="text-lg font-mono font-semibold">{velocity.toFixed(3)} m/s</p>
+                </div>
+
+                {/* ρv² */}
+                <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">ρv² (Erosional)</span>
+                    <StatusIcon type={status.rhoVSquared} />
+                  </div>
+                  <p className="text-lg font-mono font-semibold">{rhoVSquared.toFixed(2)} kg/(m·s²)</p>
                 </div>
 
                 {/* Head Loss */}
@@ -577,29 +823,15 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
                   
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="p-2 rounded bg-muted/30">
-                      <span className="text-xs text-muted-foreground block">Velocity</span>
-                      <span className="font-mono">{velocity.toFixed(3)} m/s</span>
-                    </div>
-                    <div className="p-2 rounded bg-muted/30">
                       <span className="text-xs text-muted-foreground block">Reynolds (Re)</span>
                       <span className="font-mono">{reynoldsNumber.toFixed(0)}</span>
                     </div>
-                    <div className="p-2 rounded bg-muted/30 col-span-2">
+                    <div className="p-2 rounded bg-muted/30">
                       <span className="text-xs text-muted-foreground block">Friction Factor (f)</span>
                       <span className="font-mono">{frictionFactor.toFixed(6)}</span>
                     </div>
                   </div>
                 </div>
-
-                {/* Velocity Warning */}
-                {velocity > 3 && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                    <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                      High velocity ({velocity.toFixed(2)} m/s). Consider larger pipe diameter to reduce erosion risk.
-                    </p>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
@@ -638,4 +870,4 @@ const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
   );
 };
 
-export default PressureDropCalculator;
+export default HydraulicSizingCalculator;
