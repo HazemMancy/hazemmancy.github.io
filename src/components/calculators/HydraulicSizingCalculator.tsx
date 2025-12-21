@@ -353,6 +353,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Handle fluid selection
   const handleFluidSelect = (fluidName: string) => {
     setSelectedFluid(fluidName);
+    if (fluidName === "Other") {
+      // Allow custom input - keep current values or set defaults
+      return;
+    }
     const fluid = fluidsDatabase.find(f => f.name === fluidName);
     if (fluid) {
       const temp = fluid.temperatures.includes(25) ? 25 : fluid.temperatures[0];
@@ -677,10 +681,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     </Select>
                   </div>
 
-                  {/* Show current criteria from ENI table */}
+                  {/* Show current criteria */}
                   {currentGasCriteria && (
                     <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
-                      <p className="text-xs font-medium text-primary">ENI Sizing Limits (Table 8.1.1.1)</p>
+                      <p className="text-xs font-medium text-primary">Recommended Limits</p>
                       <div className="text-xs text-muted-foreground space-y-0.5">
                         {currentGasCriteria.pressureDropBarKm !== null && (
                           <p>ΔP: ≤ {currentGasCriteria.pressureDropBarKm} bar/km</p>
@@ -693,9 +697,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         )}
                         {currentGasCriteria.mach !== null && (
                           <p>Mach: ≤ {currentGasCriteria.mach}</p>
-                        )}
-                        {currentGasCriteria.note && (
-                          <p className="italic">{currentGasCriteria.note}</p>
                         )}
                       </div>
                     </div>
@@ -858,14 +859,23 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         {fluid.name}
                       </SelectItem>
                     ))}
+                    <SelectItem value="Other">Other (Custom)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Temperature Selection */}
-              {selectedFluid && availableTemperatures.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Temperature (°C)</Label>
+              {/* Temperature - editable only for "Other" */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Temperature (°C)</Label>
+                {selectedFluid === "Other" ? (
+                  <Input
+                    type="number"
+                    value={fluidTemperature}
+                    onChange={(e) => setFluidTemperature(e.target.value)}
+                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="25"
+                  />
+                ) : selectedFluid && availableTemperatures.length > 0 ? (
                   <Select value={fluidTemperature} onValueChange={handleTemperatureChange}>
                     <SelectTrigger>
                       <SelectValue />
@@ -878,8 +888,16 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-              )}
+                ) : (
+                  <Input
+                    type="number"
+                    value={fluidTemperature}
+                    onChange={(e) => setFluidTemperature(e.target.value)}
+                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="25"
+                  />
+                )}
+              </div>
 
               {/* Flow Rate */}
               <div className="space-y-2">
@@ -915,7 +933,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     type="number"
                     value={density}
                     onChange={(e) => setDensity(e.target.value)}
-                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    disabled={selectedFluid !== "" && selectedFluid !== "Other"}
+                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
                     placeholder={lineType === "gas" ? "0.75" : "1000"}
                   />
                   <Select value={densityUnit} onValueChange={setDensityUnit}>
@@ -939,7 +958,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     type="number"
                     value={viscosity}
                     onChange={(e) => setViscosity(e.target.value)}
-                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    disabled={selectedFluid !== "" && selectedFluid !== "Other"}
+                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
                     placeholder={lineType === "gas" ? "0.011" : "1"}
                   />
                   <Select value={viscosityUnit} onValueChange={setViscosityUnit}>
