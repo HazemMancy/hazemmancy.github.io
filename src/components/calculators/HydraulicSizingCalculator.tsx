@@ -1014,7 +1014,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     {pressureDrop.toFixed(4)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {pressureDropPer100m.toFixed(4)} {pressureUnit}/100m
+                    {(pressureDropPer100m * 10).toFixed(4)} {pressureUnit}/km
                     {sizingCriteria.maxPressureDropPer100m !== null && lineType === "gas" && (
                       <span className="ml-2">
                         (Limit: ≤ {(sizingCriteria.maxPressureDropPer100m * 10).toFixed(1)} {pressureUnit}/km)
@@ -1040,14 +1040,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   </p>
                 </div>
 
-                {/* Erosional Velocity (API 14E) */}
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <span className="text-xs text-muted-foreground">Erosional Velocity (Ve)</span>
-                  <p className="text-lg font-mono font-semibold">{erosionalVelocity.toFixed(2)} m/s</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    API 14E: Ve = C/√ρ (C=100)
-                  </p>
-                </div>
 
                 {/* ρv² */}
                 <div className="p-3 rounded-lg bg-muted/50 border border-border">
