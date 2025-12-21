@@ -1,24 +1,46 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Gauge, ArrowRight, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { Gauge, ArrowRight, AlertTriangle, Info } from "lucide-react";
 
 // Unit conversion factors to SI
 const lengthToMeters: Record<string, number> = {
   m: 1,
-  ft: 0.3048,
-  in: 0.0254,
-  mm: 0.001,
+  km: 1000,
 };
 
 const diameterToMeters: Record<string, number> = {
   mm: 0.001,
   in: 0.0254,
-  m: 1,
 };
+
+// Standard pipe dimensions (ID in mm) based on Nominal Diameter and Schedule
+const pipeScheduleData: Record<string, Record<string, number>> = {
+  "1/2": { "Sch 10": 17.12, "Sch 40": 15.80, "Sch 80": 13.87, "Sch 160": 11.74 },
+  "3/4": { "Sch 10": 22.45, "Sch 40": 20.93, "Sch 80": 18.85, "Sch 160": 15.54 },
+  "1": { "Sch 10": 27.86, "Sch 40": 26.64, "Sch 80": 24.31, "Sch 160": 20.70 },
+  "1-1/4": { "Sch 10": 36.63, "Sch 40": 35.05, "Sch 80": 32.46, "Sch 160": 29.46 },
+  "1-1/2": { "Sch 10": 42.72, "Sch 40": 40.89, "Sch 80": 38.10, "Sch 160": 33.98 },
+  "2": { "Sch 10": 54.79, "Sch 40": 52.50, "Sch 80": 49.25, "Sch 160": 42.90 },
+  "2-1/2": { "Sch 10": 66.90, "Sch 40": 62.71, "Sch 80": 59.00, "Sch 160": 53.98 },
+  "3": { "Sch 10": 84.68, "Sch 40": 77.93, "Sch 80": 73.66, "Sch 160": 66.64 },
+  "4": { "Sch 10": 108.20, "Sch 40": 102.26, "Sch 80": 97.18, "Sch 160": 87.32 },
+  "6": { "Sch 10": 162.74, "Sch 40": 154.05, "Sch 80": 146.33, "Sch 160": 131.78 },
+  "8": { "Sch 10": 214.96, "Sch 40": 202.72, "Sch 80": 193.68, "Sch 160": 173.99 },
+  "10": { "Sch 10": 268.92, "Sch 40": 254.51, "Sch 80": 242.87, "Sch 160": 222.25 },
+  "12": { "Sch 10": 320.42, "Sch 40": 303.23, "Sch 80": 288.90, "Sch 160": 264.67 },
+  "14": { "Sch 10": 347.68, "Sch 40": 333.34, "Sch 80": 317.50, "Sch 160": 290.58 },
+  "16": { "Sch 10": 398.02, "Sch 40": 381.00, "Sch 80": 363.52, "Sch 160": 333.34 },
+  "18": { "Sch 10": 448.62, "Sch 40": 428.66, "Sch 80": 409.58, "Sch 160": 376.94 },
+  "20": { "Sch 10": 498.44, "Sch 40": 477.82, "Sch 80": 455.62, "Sch 160": 419.10 },
+  "24": { "Sch 10": 598.42, "Sch 40": 574.68, "Sch 80": 547.68, "Sch 160": 498.44 },
+};
+
+const nominalDiameters = Object.keys(pipeScheduleData);
+const schedules = ["Sch 10", "Sch 40", "Sch 80", "Sch 160"];
 
 const flowRateToM3s: Record<string, number> = {
   "m³/h": 1 / 3600,
@@ -27,6 +49,8 @@ const flowRateToM3s: Record<string, number> = {
   "L/s": 0.001,
   "gpm": 0.0000630902,
   "bbl/d": 0.00000184013,
+  "mmscfd": 0.327741, // Million standard cubic feet per day to m³/s (at standard conditions)
+  "Nm³/h": 1 / 3600, // Normal cubic meters per hour to m³/s
 };
 
 const densityToKgM3: Record<string, number> = {
@@ -57,7 +81,7 @@ const pressureFromPa: Record<string, number> = {
 
 // Common pipe roughness values (in mm)
 const pipeRoughness: Record<string, number> = {
-  "Commercial Steel": 0.045,
+  "Carbon Steel": 0.045,
   "Stainless Steel": 0.015,
   "Cast Iron": 0.26,
   "Galvanized Steel": 0.15,
@@ -67,11 +91,16 @@ const pipeRoughness: Record<string, number> = {
   "Custom": 0,
 };
 
-const PressureDropCalculator = () => {
+interface PressureDropCalculatorProps {
+  flowPhase: "single" | "mixed";
+}
+
+const PressureDropCalculator = ({ flowPhase }: PressureDropCalculatorProps) => {
   // Input states
   const [pipeLength, setPipeLength] = useState<string>("100");
   const [lengthUnit, setLengthUnit] = useState<string>("m");
-  const [pipeDiameter, setPipeDiameter] = useState<string>("100");
+  const [nominalDiameter, setNominalDiameter] = useState<string>("4");
+  const [schedule, setSchedule] = useState<string>("Sch 40");
   const [diameterUnit, setDiameterUnit] = useState<string>("mm");
   const [flowRate, setFlowRate] = useState<string>("50");
   const [flowRateUnit, setFlowRateUnit] = useState<string>("m³/h");
@@ -79,14 +108,27 @@ const PressureDropCalculator = () => {
   const [densityUnit, setDensityUnit] = useState<string>("kg/m³");
   const [viscosity, setViscosity] = useState<string>("1");
   const [viscosityUnit, setViscosityUnit] = useState<string>("cP");
-  const [pipeMaterial, setPipeMaterial] = useState<string>("Commercial Steel");
+  const [pipeMaterial, setPipeMaterial] = useState<string>("Carbon Steel");
   const [customRoughness, setCustomRoughness] = useState<string>("0.045");
   const [roughnessUnit, setRoughnessUnit] = useState<string>("mm");
   const [pressureUnit, setPressureUnit] = useState<string>("bar");
 
+  // Get inside diameter from nominal diameter and schedule
+  const insideDiameterMM = useMemo(() => {
+    return pipeScheduleData[nominalDiameter]?.[schedule] || 0;
+  }, [nominalDiameter, schedule]);
+
+  // Convert inside diameter to selected unit for display
+  const insideDiameterDisplay = useMemo(() => {
+    if (diameterUnit === "in") {
+      return (insideDiameterMM / 25.4).toFixed(3);
+    }
+    return insideDiameterMM.toFixed(2);
+  }, [insideDiameterMM, diameterUnit]);
+
   // Convert all inputs to SI units
   const L_m = useMemo(() => parseFloat(pipeLength) * lengthToMeters[lengthUnit] || 0, [pipeLength, lengthUnit]);
-  const D_m = useMemo(() => parseFloat(pipeDiameter) * diameterToMeters[diameterUnit] || 0, [pipeDiameter, diameterUnit]);
+  const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]); // Always in meters
   const Q_m3s = useMemo(() => parseFloat(flowRate) * flowRateToM3s[flowRateUnit] || 0, [flowRate, flowRateUnit]);
   const rho = useMemo(() => parseFloat(density) * densityToKgM3[densityUnit] || 0, [density, densityUnit]);
   const mu = useMemo(() => parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0, [viscosity, viscosityUnit]);
@@ -155,6 +197,41 @@ const PressureDropCalculator = () => {
 
   const isValidInput = L_m > 0 && D_m > 0 && Q_m3s > 0 && rho > 0 && mu > 0;
 
+  if (flowPhase === "mixed") {
+    return (
+      <div className="space-y-8">
+        <Card className="border-2 border-primary/20 bg-gradient-to-br from-card via-card to-primary/5">
+          <CardContent className="p-6 sm:p-8">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 rounded-xl bg-primary/10">
+                <Gauge className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-heading font-bold">
+                  Mixed Phase <span className="text-primary">Pressure Drop</span>
+                </h2>
+                <p className="text-muted-foreground">Two-phase flow correlations</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-2 border-dashed border-primary/30">
+          <CardContent className="p-12 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <Info className="w-8 h-8 text-primary" />
+            </div>
+            <h3 className="text-xl font-heading font-semibold mb-2">Coming Soon</h3>
+            <p className="text-muted-foreground max-w-md">
+              Mixed phase pressure drop calculations using Lockhart-Martinelli, Beggs-Brill, 
+              and other two-phase flow correlations are being developed.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Title Card */}
@@ -166,7 +243,7 @@ const PressureDropCalculator = () => {
             </div>
             <div>
               <h2 className="text-2xl sm:text-3xl font-heading font-bold">
-                Pressure Drop <span className="text-primary">Calculator</span>
+                Single Phase <span className="text-primary">Pressure Drop</span>
               </h2>
               <p className="text-muted-foreground">Darcy-Weisbach equation for single-phase pipe flow</p>
             </div>
@@ -194,7 +271,7 @@ const PressureDropCalculator = () => {
                     type="number"
                     value={pipeLength}
                     onChange={(e) => setPipeLength(e.target.value)}
-                    className="flex-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="100"
                   />
                   <Select value={lengthUnit} onValueChange={setLengthUnit}>
@@ -203,35 +280,64 @@ const PressureDropCalculator = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="m">m</SelectItem>
-                      <SelectItem value="ft">ft</SelectItem>
-                      <SelectItem value="in">in</SelectItem>
-                      <SelectItem value="mm">mm</SelectItem>
+                      <SelectItem value="km">km</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
-              {/* Inside Diameter */}
+              {/* Nominal Diameter */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Inside Diameter</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    value={pipeDiameter}
-                    onChange={(e) => setPipeDiameter(e.target.value)}
-                    className="flex-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    placeholder="100"
-                  />
+                <Label className="text-sm font-medium">Nominal Diameter (NPS)</Label>
+                <Select value={nominalDiameter} onValueChange={setNominalDiameter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {nominalDiameters.map((nd) => (
+                      <SelectItem key={nd} value={nd}>
+                        {nd}"
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Schedule */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Pipe Schedule</Label>
+                <Select value={schedule} onValueChange={setSchedule}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schedules.map((sch) => (
+                      <SelectItem key={sch} value={sch}>
+                        {sch}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Inside Diameter Display */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Inside Diameter (ID)</Label>
                   <Select value={diameterUnit} onValueChange={setDiameterUnit}>
-                    <SelectTrigger className="w-24">
+                    <SelectTrigger className="w-20 h-7 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="mm">mm</SelectItem>
                       <SelectItem value="in">in</SelectItem>
-                      <SelectItem value="m">m</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-xl font-mono font-bold text-primary">
+                    {insideDiameterDisplay} <span className="text-sm font-normal">{diameterUnit}</span>
+                  </p>
                 </div>
               </div>
 
@@ -261,7 +367,7 @@ const PressureDropCalculator = () => {
                       type="number"
                       value={customRoughness}
                       onChange={(e) => setCustomRoughness(e.target.value)}
-                      className="flex-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="0.045"
                     />
                     <Select value={roughnessUnit} onValueChange={setRoughnessUnit}>
@@ -308,11 +414,11 @@ const PressureDropCalculator = () => {
                     type="number"
                     value={flowRate}
                     onChange={(e) => setFlowRate(e.target.value)}
-                    className="flex-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="50"
                   />
                   <Select value={flowRateUnit} onValueChange={setFlowRateUnit}>
-                    <SelectTrigger className="w-24">
+                    <SelectTrigger className="w-28">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -322,6 +428,8 @@ const PressureDropCalculator = () => {
                       <SelectItem value="L/s">L/s</SelectItem>
                       <SelectItem value="gpm">gpm</SelectItem>
                       <SelectItem value="bbl/d">bbl/d</SelectItem>
+                      <SelectItem value="mmscfd">mmscfd</SelectItem>
+                      <SelectItem value="Nm³/h">Nm³/h</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -335,7 +443,7 @@ const PressureDropCalculator = () => {
                     type="number"
                     value={density}
                     onChange={(e) => setDensity(e.target.value)}
-                    className="flex-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="1000"
                   />
                   <Select value={densityUnit} onValueChange={setDensityUnit}>
@@ -359,7 +467,7 @@ const PressureDropCalculator = () => {
                     type="number"
                     value={viscosity}
                     onChange={(e) => setViscosity(e.target.value)}
-                    className="flex-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="1"
                   />
                   <Select value={viscosityUnit} onValueChange={setViscosityUnit}>
