@@ -391,14 +391,62 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
   const isValidInput = L_m > 0 && D_m > 0 && Q_m3s > 0 && rho > 0 && mu > 0;
 
-  // Status check function (placeholder - criteria to be provided later)
+  // API 14E Erosional Velocity Calculation
+  // Ve = C / sqrt(ρm) where C = 100-150 and ρm is in lb/ft³
+  const erosionalVelocity = useMemo(() => {
+    // Convert density from kg/m³ to lb/ft³
+    const rhoLbFt3 = rho / 16.0185;
+    if (rhoLbFt3 <= 0) return 0;
+    
+    // C = 100 for continuous service (conservative, solid-free fluids)
+    const C = 100;
+    
+    // Ve in ft/s
+    const VeFtS = C / Math.sqrt(rhoLbFt3);
+    
+    // Convert to m/s
+    return VeFtS * 0.3048;
+  }, [rho]);
+
+  // API 14E Line Sizing Criteria
+  // Gas: Ve (erosional), max 60 ft/s (18.3 m/s), ρv² < 8000 kg/(m·s²)
+  // Liquid: 3-15 ft/s (0.9-4.6 m/s), ρv² < 15000 kg/(m·s²)
+  const sizingCriteria = useMemo(() => {
+    if (lineType === "gas") {
+      return {
+        minVelocity: 0, // No minimum for gas
+        maxVelocity: Math.min(erosionalVelocity, 18.3), // Min of Ve and 60 ft/s
+        maxRhoVSquared: 8000, // kg/(m·s²) - approximately 5000 lb/(ft·s²)
+        maxPressureDropPer100m: 0.5, // bar/100m (0.22 psi/100ft equivalent)
+      };
+    } else {
+      // Liquid
+      return {
+        minVelocity: 0.9, // 3 ft/s - minimum to prevent silt/solids settling
+        maxVelocity: 4.6, // 15 ft/s - maximum to prevent erosion
+        maxRhoVSquared: 15000, // kg/(m·s²) - higher limit for liquids
+        maxPressureDropPer100m: 1.0, // bar/100m
+      };
+    }
+  }, [lineType, erosionalVelocity]);
+
+  // Status check function based on API 14E criteria
   const getStatusIndicator = () => {
-    // Placeholder: will be updated with actual criteria later
-    // For now, just show warning (yellow)
+    const pressureDropPer100mBar = (pressureDropPa * 100 / L_m) * 0.00001; // Convert to bar/100m
+    
+    // Pressure drop check
+    const pressureDropOk = L_m > 0 && pressureDropPer100mBar <= sizingCriteria.maxPressureDropPer100m;
+    
+    // Velocity check
+    const velocityOk = velocity >= sizingCriteria.minVelocity && velocity <= sizingCriteria.maxVelocity;
+    
+    // ρv² check
+    const rhoVSquaredOk = rhoVSquared <= sizingCriteria.maxRhoVSquared;
+    
     return {
-      pressureDrop: "warning" as const,
-      velocity: "warning" as const,
-      rhoVSquared: "warning" as const,
+      pressureDrop: pressureDropOk ? "ok" as const : "warning" as const,
+      velocity: velocityOk ? "ok" as const : "warning" as const,
+      rhoVSquared: rhoVSquaredOk ? "ok" as const : "warning" as const,
     };
   };
 
@@ -783,6 +831,21 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     <StatusIcon type={status.velocity} />
                   </div>
                   <p className="text-lg font-mono font-semibold">{velocity.toFixed(3)} m/s</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {lineType === "gas" 
+                      ? `Limit: ≤ ${sizingCriteria.maxVelocity.toFixed(1)} m/s (Ve or 60 ft/s)`
+                      : `Limit: ${sizingCriteria.minVelocity.toFixed(1)} - ${sizingCriteria.maxVelocity.toFixed(1)} m/s (3-15 ft/s)`
+                    }
+                  </p>
+                </div>
+
+                {/* Erosional Velocity (API 14E) */}
+                <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                  <span className="text-xs text-muted-foreground">Erosional Velocity (Ve)</span>
+                  <p className="text-lg font-mono font-semibold">{erosionalVelocity.toFixed(2)} m/s</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    API 14E: Ve = C/√ρ (C=100)
+                  </p>
                 </div>
 
                 {/* ρv² */}
@@ -792,6 +855,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     <StatusIcon type={status.rhoVSquared} />
                   </div>
                   <p className="text-lg font-mono font-semibold">{rhoVSquared.toFixed(2)} kg/(m·s²)</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Limit: ≤ {sizingCriteria.maxRhoVSquared.toLocaleString()} kg/(m·s²)
+                  </p>
                 </div>
 
                 {/* Head Loss */}
