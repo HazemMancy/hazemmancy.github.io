@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Menu, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Menu, X, Calculator } from "lucide-react";
 
 const navLinks = [
   { href: "#home", label: "Home" },
@@ -48,6 +49,15 @@ const Navigation = () => {
                 </a>
               </li>
             ))}
+            <li>
+              <Link
+                to="/calculators"
+                className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors text-sm font-medium uppercase tracking-wider"
+              >
+                <Calculator className="w-4 h-4" />
+                Calculators
+              </Link>
+            </li>
           </ul>
 
           {/* Mobile Menu Button */}
@@ -60,7 +70,7 @@ const Navigation = () => {
           </button>
         </div>
 
-        {/* Mobile Navigation */}
+          {/* Mobile Navigation */}
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-full left-0 right-0 bg-card/95 backdrop-blur-lg border-b border-border">
             <ul className="flex flex-col py-4">
@@ -75,6 +85,16 @@ const Navigation = () => {
                   </a>
                 </li>
               ))}
+              <li>
+                <Link
+                  to="/calculators"
+                  className="flex items-center gap-2 px-6 py-3 text-primary hover:text-primary/80 hover:bg-muted/50 transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <Calculator className="w-4 h-4" />
+                  Calculators
+                </Link>
+              </li>
             </ul>
           </div>
         )}
