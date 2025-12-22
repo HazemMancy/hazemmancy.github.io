@@ -1022,7 +1022,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   {lineType === "gas" ? "Gas" : "Liquid"} <span className="text-primary">Line Sizing</span>
                 </h2>
                 <p className="text-muted-foreground">
-                  Darcy-Weisbach equation for single-phase pipe flow
+                  Single-Phase Pipe Flow
                 </p>
               </div>
             </div>
