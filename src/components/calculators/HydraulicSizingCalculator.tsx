@@ -435,8 +435,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Operating conditions for gas (editable)
   const [inletPressure, setInletPressure] = useState<string>("70"); // bara
   const [compressibilityZ, setCompressibilityZ] = useState<string>("0.9"); // Compressibility factor
+  const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("18.5"); // kg/kmol (typical natural gas ~18-20)
   
-  // Standard/Base conditions (fixed, non-editable)
+  // Standard/Base conditions (fixed, non-editable) - matching HYSYS defaults
   const baseTemperature = "15.56"; // °C (60°F standard)
   const basePressure = "1.01325"; // bara (14.7 psia standard)
   
@@ -528,7 +529,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const L_m = useMemo(() => parseFloat(pipeLength) * lengthToMeters[lengthUnit] || 0, [pipeLength, lengthUnit]);
   const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]);
   const Q_m3s = useMemo(() => parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0), [flowRate, flowRateUnit, flowRateConversion]);
-  const rho = useMemo(() => parseFloat(density) * densityToKgM3[densityUnit] || 0, [density, densityUnit]);
   const mu = useMemo(() => parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0, [viscosity, viscosityUnit]);
   const epsilon_m = useMemo(() => {
     const roughnessValue = pipeMaterial === "Custom" 
@@ -543,6 +543,37 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const T_std_K = useMemo(() => (parseFloat(baseTemperature) || 15.56) + 273.15, [baseTemperature]);
   const P_std_bara = useMemo(() => parseFloat(basePressure) || 1.01325, [basePressure]);
   const Z_factor = useMemo(() => parseFloat(compressibilityZ) || 1.0, [compressibilityZ]);
+  const MW = useMemo(() => parseFloat(gasMolecularWeight) || 18.5, [gasMolecularWeight]);
+
+  // Gas constant R = 8.314 J/(mol·K) = 8.314 kPa·L/(mol·K)
+  const R_gas = 8.314; // J/(mol·K)
+
+  // Calculate gas density at operating conditions (HYSYS method)
+  // ρ = (P × MW) / (Z × R × T)
+  // P in Pa, MW in kg/kmol, R = 8314 J/(kmol·K), T in K → ρ in kg/m³
+  const rhoGasOperating = useMemo(() => {
+    if (lineType !== "gas") return 0;
+    const P_Pa = P_operating_bara * 100000; // bara to Pa
+    const R_kmol = 8314; // J/(kmol·K)
+    return (P_Pa * MW) / (Z_factor * R_kmol * T_operating_K);
+  }, [lineType, P_operating_bara, MW, Z_factor, T_operating_K]);
+
+  // Calculate gas density at standard conditions
+  const rhoGasStandard = useMemo(() => {
+    if (lineType !== "gas") return 0;
+    const P_Pa = P_std_bara * 100000;
+    const R_kmol = 8314;
+    const Z_std = 1.0; // Z ≈ 1 at standard conditions
+    return (P_Pa * MW) / (Z_std * R_kmol * T_std_K);
+  }, [lineType, P_std_bara, MW, T_std_K]);
+
+  // Use calculated density for gas, user input for liquid
+  const rho = useMemo(() => {
+    if (lineType === "gas") {
+      return rhoGasOperating;
+    }
+    return parseFloat(density) * densityToKgM3[densityUnit] || 0;
+  }, [lineType, rhoGasOperating, density, densityUnit]);
 
   // Calculate velocity
   // For gas: v = Q_std × (P_std/P_actual) × (T_actual/T_std) × Z / A (converts to actual conditions)
@@ -580,18 +611,46 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return "Turbulent";
   }, [reynoldsNumber]);
 
-  // Calculate friction factor using Haaland approximation
+  // Calculate friction factor using iterative Colebrook-White (HYSYS method)
+  // 1/√f = -2 × log10(ε/(3.7D) + 2.51/(Re×√f))
   const frictionFactor = useMemo(() => {
     if (reynoldsNumber <= 0 || D_m <= 0) return 0;
     
+    // Laminar flow
     if (reynoldsNumber < 2300) {
       return 64 / reynoldsNumber;
     }
     
     const relativeRoughness = epsilon_m / D_m;
-    const term1 = relativeRoughness / 3.7;
-    const term2 = 6.9 / reynoldsNumber;
-    const f = Math.pow(-1.8 * Math.log10(Math.pow(term1, 1.11) + term2), -2);
+    
+    // Iterative Colebrook-White solution
+    // Start with Swamee-Jain approximation as initial guess
+    let f = 0.25 / Math.pow(Math.log10(relativeRoughness / 3.7 + 5.74 / Math.pow(reynoldsNumber, 0.9)), 2);
+    
+    // Newton-Raphson iteration for Colebrook-White
+    for (let i = 0; i < 20; i++) {
+      const sqrtF = Math.sqrt(f);
+      const lhs = 1 / sqrtF;
+      const rhs = -2 * Math.log10(relativeRoughness / 3.7 + 2.51 / (reynoldsNumber * sqrtF));
+      const residual = lhs - rhs;
+      
+      // Derivative: d(1/√f)/df = -0.5 × f^(-1.5)
+      // d(rhs)/df = -2 × (1/ln(10)) × (2.51/(Re×√f)) × (-0.5×f^(-1.5)) / (ε/3.7D + 2.51/(Re×√f))
+      //           = (2.51 / (ln(10) × Re × f^1.5)) / (ε/3.7D + 2.51/(Re×√f))
+      const term = relativeRoughness / 3.7 + 2.51 / (reynoldsNumber * sqrtF);
+      const dLhs = -0.5 * Math.pow(f, -1.5);
+      const dRhs = (2.51 / (Math.LN10 * reynoldsNumber * Math.pow(f, 1.5))) / term;
+      const derivative = dLhs - dRhs;
+      
+      const fNew = f - residual / derivative;
+      
+      if (Math.abs(fNew - f) < 1e-10) {
+        f = fNew;
+        break;
+      }
+      f = fNew;
+      if (f <= 0) f = 0.001; // Safety check
+    }
     
     return f;
   }, [reynoldsNumber, epsilon_m, D_m]);
@@ -1049,30 +1108,32 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 </div>
               </div>
 
-              {/* Fluid Density */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Fluid Density (ρ)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    value={density}
-                    onChange={(e) => setDensity(e.target.value)}
-                    disabled={selectedFluid !== "" && selectedFluid !== "Other"}
-                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
-                    placeholder={lineType === "gas" ? "0.75" : "1000"}
-                  />
-                  <Select value={densityUnit} onValueChange={setDensityUnit}>
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="kg/m³">kg/m³</SelectItem>
-                      <SelectItem value="lb/ft³">lb/ft³</SelectItem>
-                      <SelectItem value="g/cm³">g/cm³</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* Fluid Density - Only shown for liquid */}
+              {lineType === "liquid" && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Fluid Density (ρ)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      value={density}
+                      onChange={(e) => setDensity(e.target.value)}
+                      disabled={selectedFluid !== "" && selectedFluid !== "Other"}
+                      className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
+                      placeholder="1000"
+                    />
+                    <Select value={densityUnit} onValueChange={setDensityUnit}>
+                      <SelectTrigger className="w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="kg/m³">kg/m³</SelectItem>
+                        <SelectItem value="lb/ft³">lb/ft³</SelectItem>
+                        <SelectItem value="g/cm³">g/cm³</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Dynamic Viscosity */}
               <div className="space-y-2">
@@ -1128,6 +1189,33 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="0.9"
                     />
+                  </div>
+                  
+                  {/* Molecular Weight */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Molecular Weight MW (kg/kmol)</Label>
+                    <Input
+                      type="number"
+                      value={gasMolecularWeight}
+                      onChange={(e) => setGasMolecularWeight(e.target.value)}
+                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      placeholder="18.5"
+                    />
+                  </div>
+                  
+                  {/* Calculated Densities Display */}
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+                    <p className="text-xs font-medium text-primary">Calculated Gas Density</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">ρ @ Std:</span>
+                        <span className="font-mono ml-1">{rhoGasStandard.toFixed(4)} kg/m³</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">ρ @ Op:</span>
+                        <span className="font-mono ml-1 text-primary font-semibold">{rhoGasOperating.toFixed(4)} kg/m³</span>
+                      </div>
+                    </div>
                   </div>
                   
                   {/* Standard/Base Conditions - Locked */}
@@ -1291,7 +1379,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
             <Info className="w-4 h-4 text-muted-foreground" />
             Equations Used
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
             <div className="p-3 rounded-lg bg-muted/30">
               <p className="text-xs text-muted-foreground mb-1">Darcy-Weisbach</p>
               <p className="font-mono text-xs">ΔP = f × (L/D) × (ρV²/2)</p>
@@ -1301,8 +1389,12 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
               <p className="font-mono text-xs">Re = ρVD / μ</p>
             </div>
             <div className="p-3 rounded-lg bg-muted/30">
-              <p className="text-xs text-muted-foreground mb-1">Haaland (Turbulent f)</p>
-              <p className="font-mono text-xs">1/√f = -1.8 log[(ε/3.7D)^1.11 + 6.9/Re]</p>
+              <p className="text-xs text-muted-foreground mb-1">Colebrook-White (Turbulent f)</p>
+              <p className="font-mono text-xs">1/√f = -2 log(ε/3.7D + 2.51/(Re√f))</p>
+            </div>
+            <div className="p-3 rounded-lg bg-muted/30">
+              <p className="text-xs text-muted-foreground mb-1">Gas Density (Ideal Gas + Z)</p>
+              <p className="font-mono text-xs">ρ = (P × MW) / (Z × R × T)</p>
             </div>
           </div>
         </CardContent>
