@@ -572,12 +572,30 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return (roughnessValue || 0) * roughnessToMeters[roughnessUnit];
   }, [pipeMaterial, customRoughness, roughnessUnit]);
 
+  // Parse operating conditions for gas
+  const P_operating_bara = useMemo(() => parseFloat(inletPressure) || 1.01325, [inletPressure]);
+  const T_operating_K = useMemo(() => (parseFloat(fluidTemperature) || 15) + 273.15, [fluidTemperature]);
+  const T_std_K = useMemo(() => (parseFloat(baseTemperature) || 15.56) + 273.15, [baseTemperature]);
+  const P_std_bara = useMemo(() => parseFloat(basePressure) || 1.01325, [basePressure]);
+  const Z_factor = useMemo(() => parseFloat(compressibilityZ) || 1.0, [compressibilityZ]);
+
   // Calculate velocity
+  // For gas: v = Q_std × (P_std/P_actual) × (T_actual/T_std) × Z / A (converts to actual conditions)
+  // For liquid: v = Q / A (incompressible)
   const velocity = useMemo(() => {
     if (D_m <= 0) return 0;
     const area = Math.PI * Math.pow(D_m / 2, 2);
+    
+    if (lineType === "gas") {
+      // Convert standard flow to actual flow using ideal gas law with compressibility
+      // Q_actual = Q_std × (P_std/P_actual) × (T_actual/T_std) × Z
+      const Q_actual = Q_m3s * (P_std_bara / P_operating_bara) * (T_operating_K / T_std_K) * Z_factor;
+      return Q_actual / area;
+    }
+    
+    // Liquid - direct calculation (incompressible)
     return Q_m3s / area;
-  }, [Q_m3s, D_m]);
+  }, [Q_m3s, D_m, lineType, P_std_bara, P_operating_bara, T_operating_K, T_std_K, Z_factor]);
 
   // Calculate ρv² (rho v squared)
   const rhoVSquared = useMemo(() => {
@@ -613,13 +631,13 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return f;
   }, [reynoldsNumber, epsilon_m, D_m]);
 
-  // Parse additional gas transmission inputs
-  const P1_bara = useMemo(() => parseFloat(inletPressure) || 0, [inletPressure]);
-  const Tb_K = useMemo(() => (parseFloat(baseTemperature) || 15.56) + 273.15, [baseTemperature]);
-  const Pb_bara = useMemo(() => parseFloat(basePressure) || 1.01325, [basePressure]);
+  // Additional gas transmission inputs (reuse velocity calculation variables where applicable)
+  const P1_bara = P_operating_bara; // Alias for pressure drop calculations
+  const Tb_K = T_std_K; // Base temperature for transmission equations
+  const Pb_bara = P_std_bara; // Base pressure for transmission equations
   const Sg = useMemo(() => parseFloat(gasGravity) || 0.65, [gasGravity]);
-  const Z = useMemo(() => parseFloat(compressibilityZ) || 0.9, [compressibilityZ]);
-  const T_K = useMemo(() => (parseFloat(fluidTemperature) || 25) + 273.15, [fluidTemperature]);
+  const Z = Z_factor; // Alias for transmission equations
+  const T_K = T_operating_K; // Operating temperature for transmission equations
 
   // Calculate pressure drop based on selected method
   const pressureDropPa = useMemo(() => {
@@ -1240,34 +1258,22 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 </div>
               </div>
               
-              {/* Additional Gas Transmission Inputs - Only for non-Darcy methods */}
-              {lineType === "gas" && calculationMethod !== "darcy-weisbach" && (
+              {/* Operating Conditions - Always shown for Gas */}
+              {lineType === "gas" && (
                 <>
                   <div className="pt-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Transmission Pipeline Inputs</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Operating Conditions (for velocity at actual)</p>
                   </div>
                   
-                  {/* Inlet Pressure */}
+                  {/* Operating Pressure */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Inlet Pressure P₁ (bara)</Label>
+                    <Label className="text-sm font-medium">Operating Pressure P (bara)</Label>
                     <Input
                       type="number"
                       value={inletPressure}
                       onChange={(e) => setInletPressure(e.target.value)}
                       className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="70"
-                    />
-                  </div>
-                  
-                  {/* Gas Specific Gravity */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Gas Specific Gravity (air=1)</Label>
-                    <Input
-                      type="number"
-                      value={gasGravity}
-                      onChange={(e) => setGasGravity(e.target.value)}
-                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      placeholder="0.65"
                     />
                   </div>
                   
@@ -1283,10 +1289,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     />
                   </div>
                   
-                  {/* Base Conditions */}
+                  {/* Standard/Base Conditions */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
-                      <Label className="text-xs font-medium">Base Temp Tb (°C)</Label>
+                      <Label className="text-xs font-medium">Std Temp T_std (°C)</Label>
                       <Input
                         type="number"
                         value={baseTemperature}
@@ -1296,7 +1302,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-xs font-medium">Base Press Pb (bara)</Label>
+                      <Label className="text-xs font-medium">Std Press P_std (bara)</Label>
                       <Input
                         type="number"
                         value={basePressure}
@@ -1306,6 +1312,20 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       />
                     </div>
                   </div>
+                  
+                  {/* Gas Specific Gravity - Only for transmission methods */}
+                  {calculationMethod !== "darcy-weisbach" && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Gas Specific Gravity (air=1)</Label>
+                      <Input
+                        type="number"
+                        value={gasGravity}
+                        onChange={(e) => setGasGravity(e.target.value)}
+                        className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="0.65"
+                      />
+                    </div>
+                  )}
                 </>
               )}
             </div>
