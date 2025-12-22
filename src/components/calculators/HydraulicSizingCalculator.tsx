@@ -227,11 +227,11 @@ const getSchedulesForDiameter = (nd: string): string[] => {
 
 // Gas flow rate units
 const gasFlowRateToM3s: Record<string, number> = {
-  "mmscfd": 0.327741,
+  "MMSCFD": 0.327741,
   "Nm³/h": 1 / 3600,
   "Sm³/h": 1 / 3600,
   "m³/h": 1 / 3600,
-  "scfm": 0.000471947,
+  "SCFM": 0.000471947,
 };
 
 // Liquid flow rate units
@@ -414,13 +414,13 @@ interface HydraulicSizingCalculatorProps {
 
 const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps) => {
   // Input states
-  const [pipeLength, setPipeLength] = useState<string>("100");
-  const [lengthUnit, setLengthUnit] = useState<string>("m");
+  const [pipeLength, setPipeLength] = useState<string>("18");
+  const [lengthUnit, setLengthUnit] = useState<string>("km");
   const [nominalDiameter, setNominalDiameter] = useState<string>("4");
-  const [schedule, setSchedule] = useState<string>("STD");
+  const [schedule, setSchedule] = useState<string>("120");
   const [diameterUnit, setDiameterUnit] = useState<string>("mm");
-  const [flowRate, setFlowRate] = useState<string>(lineType === "gas" ? "10" : "50");
-  const [flowRateUnit, setFlowRateUnit] = useState<string>(lineType === "gas" ? "mmscfd" : "m³/h");
+  const [flowRate, setFlowRate] = useState<string>(lineType === "gas" ? "2" : "50");
+  const [flowRateUnit, setFlowRateUnit] = useState<string>(lineType === "gas" ? "MMSCFD" : "m³/h");
   const [density, setDensity] = useState<string>(lineType === "gas" ? "0.75" : "1000");
   const [densityUnit, setDensityUnit] = useState<string>("kg/m³");
   const [viscosity, setViscosity] = useState<string>(lineType === "gas" ? "0.011" : "1");
@@ -430,15 +430,17 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [roughnessUnit, setRoughnessUnit] = useState<string>("mm");
   const [pressureUnit, setPressureUnit] = useState<string>("bar");
   const [selectedFluid, setSelectedFluid] = useState<string>("");
-  const [fluidTemperature, setFluidTemperature] = useState<string>("25");
+  const [fluidTemperature, setFluidTemperature] = useState<string>("15");
   
   // Operating conditions for gas (editable)
-  const [inletPressure, setInletPressure] = useState<string>("70"); // bara
-  const [compressibilityZ, setCompressibilityZ] = useState<string>("0.9"); // Compressibility factor
-  const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("18.5"); // kg/kmol (typical natural gas ~18-20)
+  const [inletPressure, setInletPressure] = useState<string>("12"); // barg (user enters gauge pressure)
+  const [compressibilityZ, setCompressibilityZ] = useState<string>("1.0"); // Compressibility factor
+  const [gasSpecificGravity, setGasSpecificGravity] = useState<string>("0.701"); // SG relative to air (MW_air = 28.97)
+  const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("20.3"); // kg/kmol derived from SG
+  const [useSGforMW, setUseSGforMW] = useState<boolean>(true); // Use SG to calculate MW
   
   // Standard/Base conditions (editable so you can match your HYSYS/project settings)
-  const [baseTemperature, setBaseTemperature] = useState<string>("15.56"); // °C
+  const [baseTemperature, setBaseTemperature] = useState<string>("15.56"); // °C (60°F for MMSCFD)
   const [basePressure, setBasePressure] = useState<string>("1.01325"); // bara
   const [baseCompressibilityZ, setBaseCompressibilityZ] = useState<string>("1"); // Z at base/std
 
@@ -539,13 +541,22 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   }, [pipeMaterial, customRoughness, roughnessUnit]);
 
   // Parse operating conditions for gas
-  const P_operating_bara = useMemo(() => parseFloat(inletPressure) || 1.01325, [inletPressure]);
+  // Convert inlet pressure from barg to bara (user enters gauge pressure)
+  const P_operating_bara = useMemo(() => (parseFloat(inletPressure) || 0) + 1.01325, [inletPressure]);
   const T_operating_K = useMemo(() => (parseFloat(fluidTemperature) || 15) + 273.15, [fluidTemperature]);
   const T_std_K = useMemo(() => (parseFloat(baseTemperature) || 15.56) + 273.15, [baseTemperature]);
   const P_std_bara = useMemo(() => parseFloat(basePressure) || 1.01325, [basePressure]);
   const Z_factor = useMemo(() => parseFloat(compressibilityZ) || 1.0, [compressibilityZ]);
   const Z_std_factor = useMemo(() => parseFloat(baseCompressibilityZ) || 1.0, [baseCompressibilityZ]);
-  const MW = useMemo(() => parseFloat(gasMolecularWeight) || 18.5, [gasMolecularWeight]);
+  
+  // Calculate MW from specific gravity: MW = SG × 28.97 (MW of air)
+  const MW = useMemo(() => {
+    if (useSGforMW) {
+      const sg = parseFloat(gasSpecificGravity) || 0.7;
+      return sg * 28.97;
+    }
+    return parseFloat(gasMolecularWeight) || 20.3;
+  }, [useSGforMW, gasSpecificGravity, gasMolecularWeight]);
 
   // Gas constant R = 8.314 J/(mol·K) = 8.314 kPa·L/(mol·K)
   const R_gas = 8.314; // J/(mol·K)
@@ -1308,16 +1319,17 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Operating Conditions (for velocity at actual)</p>
                   </div>
                   
-                  {/* Operating Pressure */}
+                  {/* Operating Pressure - in barg */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Operating Pressure P (bara)</Label>
+                    <Label className="text-sm font-medium">Inlet Pressure (barg)</Label>
                     <Input
                       type="number"
                       value={inletPressure}
                       onChange={(e) => setInletPressure(e.target.value)}
                       className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      placeholder="70"
+                      placeholder="12"
                     />
+                    <p className="text-xs text-muted-foreground">= {P_operating_bara.toFixed(4)} bara</p>
                   </div>
                   
                   {/* Compressibility Factor */}
@@ -1328,20 +1340,26 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       value={compressibilityZ}
                       onChange={(e) => setCompressibilityZ(e.target.value)}
                       className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      placeholder="0.9"
+                      placeholder="1.0"
                     />
                   </div>
                   
-                  {/* Molecular Weight */}
+                  {/* Gas Specific Gravity */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Molecular Weight MW (kg/kmol)</Label>
+                    <Label className="text-sm font-medium">Gas Specific Gravity (SG @ 60°F)</Label>
                     <Input
                       type="number"
-                      value={gasMolecularWeight}
-                      onChange={(e) => setGasMolecularWeight(e.target.value)}
+                      value={gasSpecificGravity}
+                      onChange={(e) => {
+                        setGasSpecificGravity(e.target.value);
+                        // Auto-calculate MW from SG
+                        const sg = parseFloat(e.target.value) || 0.7;
+                        setGasMolecularWeight((sg * 28.97).toFixed(2));
+                      }}
                       className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      placeholder="18.5"
+                      placeholder="0.701"
                     />
+                    <p className="text-xs text-muted-foreground">MW = {MW.toFixed(2)} kg/kmol (SG × 28.97)</p>
                   </div>
                   
                   {/* Calculated Densities Display */}
