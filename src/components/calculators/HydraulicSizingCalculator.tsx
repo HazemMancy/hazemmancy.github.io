@@ -7,40 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Gauge, ArrowRight, AlertTriangle, Info, CheckCircle2, Wind, Droplets, Waves } from "lucide-react";
 
-// Calculation Method based on operating conditions
-interface CalculationMethod {
-  id: string;
-  name: string;
-  condition: string;
-  description: string;
-}
-
-const calculationMethods: CalculationMethod[] = [
-  { 
-    id: "darcy-weisbach", 
-    name: "Darcy-Weisbach", 
-    condition: "L/D < ~1000, ΔP < 10% of P₁, Onshore/offshore facility piping",
-    description: "General purpose equation for facility piping with low pressure drop"
-  },
-  { 
-    id: "panhandle-a", 
-    name: "Panhandle A", 
-    condition: "Long transmission pipelines",
-    description: "Empirical equation for long-distance gas transmission"
-  },
-  { 
-    id: "panhandle-b", 
-    name: "Panhandle B", 
-    condition: "High-pressure, large-diameter lines",
-    description: "Modified Panhandle for high-pressure transmission"
-  },
-  { 
-    id: "weymouth", 
-    name: "Weymouth", 
-    condition: "Low-pressure distribution lines",
-    description: "Simplified equation for distribution systems"
-  },
-];
+// Darcy-Weisbach is the only method used - matching HYSYS calculations
 
 // ENI Gas Line Sizing Criteria (Table 8.1.1.1)
 interface GasSizingCriteria {
@@ -465,15 +432,13 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [selectedFluid, setSelectedFluid] = useState<string>("");
   const [fluidTemperature, setFluidTemperature] = useState<string>("25");
   
-  // Calculation method selection
-  const [calculationMethod, setCalculationMethod] = useState<string>("darcy-weisbach");
-  
-  // Additional inputs for gas transmission equations (Panhandle, Weymouth)
+  // Operating conditions for gas (editable)
   const [inletPressure, setInletPressure] = useState<string>("70"); // bara
-  const [baseTemperature, setBaseTemperature] = useState<string>("15.56"); // °C (60°F standard)
-  const [basePressure, setBasePressure] = useState<string>("1.01325"); // bara (14.7 psia standard)
-  const [gasGravity, setGasGravity] = useState<string>("0.65"); // Specific gravity (air = 1)
   const [compressibilityZ, setCompressibilityZ] = useState<string>("0.9"); // Compressibility factor
+  
+  // Standard/Base conditions (fixed, non-editable)
+  const baseTemperature = "15.56"; // °C (60°F standard)
+  const basePressure = "1.01325"; // bara (14.7 psia standard)
   
   // Gas service type selection (ENI criteria)
   const [gasServiceType, setGasServiceType] = useState<string>("Continuous");
@@ -631,107 +596,15 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return f;
   }, [reynoldsNumber, epsilon_m, D_m]);
 
-  // Additional gas transmission inputs (reuse velocity calculation variables where applicable)
-  const P1_bara = P_operating_bara; // Alias for pressure drop calculations
-  const Tb_K = T_std_K; // Base temperature for transmission equations
-  const Pb_bara = P_std_bara; // Base pressure for transmission equations
-  const Sg = useMemo(() => parseFloat(gasGravity) || 0.65, [gasGravity]);
-  const Z = Z_factor; // Alias for transmission equations
-  const T_K = T_operating_K; // Operating temperature for transmission equations
+  // Alias for pressure drop calculations
+  const P1_bara = P_operating_bara;
 
-  // Calculate pressure drop based on selected method
+  // Calculate pressure drop using Darcy-Weisbach (same as HYSYS)
+  // ΔP = f × (L/D) × (ρV²/2)
   const pressureDropPa = useMemo(() => {
-    if (D_m <= 0) return 0;
-    
-    // For liquid lines, always use Darcy-Weisbach
-    if (lineType === "liquid") {
-      if (frictionFactor <= 0) return 0;
-      return frictionFactor * (L_m / D_m) * (rho * Math.pow(velocity, 2) / 2);
-    }
-    
-    // For gas lines, use selected method
-    switch (calculationMethod) {
-      case "darcy-weisbach": {
-        if (frictionFactor <= 0) return 0;
-        return frictionFactor * (L_m / D_m) * (rho * Math.pow(velocity, 2) / 2);
-      }
-      
-      case "panhandle-a": {
-        // Panhandle A equation (AGA form)
-        // Q = 435.87 * (Tb/Pb) * ((P1² - P2²) / (Sg^0.8539 * L * T * Z))^0.5394 * D^2.6182
-        // Rearranged to solve for P2 (outlet pressure)
-        // Units: Q in m³/day, P in bara, L in km, T in K, D in mm
-        if (P1_bara <= 0 || L_m <= 0 || Q_m3s <= 0 || Sg <= 0 || T_K <= 0 || Z <= 0) return 0;
-        
-        const Q_m3day = Q_m3s * 86400; // Convert m³/s to m³/day
-        const L_km = L_m / 1000;
-        const D_mm = D_m * 1000;
-        
-        // Solving: (P1² - P2²) = (Q / (435.87 * (Tb/Pb) * D^2.6182))^(1/0.5394) * Sg^0.8539 * L * T * Z
-        const coefficient = 435.87 * (Tb_K / Pb_bara) * Math.pow(D_mm, 2.6182);
-        if (coefficient <= 0) return 0;
-        
-        const ratio = Q_m3day / coefficient;
-        const P1sqMinusP2sq = Math.pow(ratio, 1/0.5394) * Math.pow(Sg, 0.8539) * L_km * T_K * Z;
-        
-        const P2sq = P1_bara * P1_bara - P1sqMinusP2sq;
-        if (P2sq < 0) return P1_bara * 100000; // Flow is choked
-        
-        const P2_bara = Math.sqrt(P2sq);
-        return (P1_bara - P2_bara) * 100000; // Convert bar to Pa
-      }
-      
-      case "panhandle-b": {
-        // Panhandle B equation
-        // Q = 737 * (Tb/Pb) * ((P1² - P2²) / (Sg^0.961 * L * T * Z))^0.510 * D^2.530
-        // Units: Q in m³/day, P in bara, L in km, T in K, D in mm
-        if (P1_bara <= 0 || L_m <= 0 || Q_m3s <= 0 || Sg <= 0 || T_K <= 0 || Z <= 0) return 0;
-        
-        const Q_m3day = Q_m3s * 86400;
-        const L_km = L_m / 1000;
-        const D_mm = D_m * 1000;
-        
-        const coefficient = 737 * (Tb_K / Pb_bara) * Math.pow(D_mm, 2.530);
-        if (coefficient <= 0) return 0;
-        
-        const ratio = Q_m3day / coefficient;
-        const P1sqMinusP2sq = Math.pow(ratio, 1/0.510) * Math.pow(Sg, 0.961) * L_km * T_K * Z;
-        
-        const P2sq = P1_bara * P1_bara - P1sqMinusP2sq;
-        if (P2sq < 0) return P1_bara * 100000;
-        
-        const P2_bara = Math.sqrt(P2sq);
-        return (P1_bara - P2_bara) * 100000;
-      }
-      
-      case "weymouth": {
-        // Weymouth equation
-        // Q = 137.2 * (Tb/Pb) * ((P1² - P2²) / (Sg * L * T * Z))^0.5 * D^2.667
-        // Units: Q in m³/day, P in bara, L in km, T in K, D in mm
-        if (P1_bara <= 0 || L_m <= 0 || Q_m3s <= 0 || Sg <= 0 || T_K <= 0 || Z <= 0) return 0;
-        
-        const Q_m3day = Q_m3s * 86400;
-        const L_km = L_m / 1000;
-        const D_mm = D_m * 1000;
-        
-        const coefficient = 137.2 * (Tb_K / Pb_bara) * Math.pow(D_mm, 2.667);
-        if (coefficient <= 0) return 0;
-        
-        const ratio = Q_m3day / coefficient;
-        const P1sqMinusP2sq = Math.pow(ratio, 2) * Sg * L_km * T_K * Z;
-        
-        const P2sq = P1_bara * P1_bara - P1sqMinusP2sq;
-        if (P2sq < 0) return P1_bara * 100000;
-        
-        const P2_bara = Math.sqrt(P2sq);
-        return (P1_bara - P2_bara) * 100000;
-      }
-      
-      default:
-        if (frictionFactor <= 0) return 0;
-        return frictionFactor * (L_m / D_m) * (rho * Math.pow(velocity, 2) / 2);
-    }
-  }, [calculationMethod, lineType, frictionFactor, L_m, D_m, rho, velocity, P1_bara, Tb_K, Pb_bara, Sg, Z, T_K, Q_m3s]);
+    if (D_m <= 0 || frictionFactor <= 0) return 0;
+    return frictionFactor * (L_m / D_m) * (rho * Math.pow(velocity, 2) / 2);
+  }, [frictionFactor, L_m, D_m, rho, velocity]);
 
   // Convert to selected unit
   const pressureDrop = useMemo(() => {
@@ -884,8 +757,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const phaseTitle = lineType === "gas" ? "Gas Line Sizing" : "Liquid Line Sizing";
 
   // Get current calculation method details
-  const currentMethod = calculationMethods.find(m => m.id === calculationMethod);
-
   return (
     <div className="space-y-8">
       {/* Title Card */}
@@ -901,41 +772,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   {lineType === "gas" ? "Gas" : "Liquid"} <span className="text-primary">Line Sizing</span>
                 </h2>
                 <p className="text-muted-foreground">
-                  {lineType === "gas" 
-                    ? `${currentMethod?.name || "Darcy-Weisbach"} equation` 
-                    : "Darcy-Weisbach equation for single-phase pipe flow"}
+                  Darcy-Weisbach equation for single-phase pipe flow
                 </p>
               </div>
             </div>
-            
-            {/* Calculation Method Dropdown - Only for Gas */}
-            {lineType === "gas" && (
-              <div className="w-full sm:w-72">
-                <Select value={calculationMethod} onValueChange={setCalculationMethod}>
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Select method..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {calculationMethods.map((method) => (
-                      <SelectItem key={method.id} value={method.id}>
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium">{method.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
-          
-          {/* Method condition hint */}
-          {lineType === "gas" && currentMethod && (
-            <div className="p-3 rounded-lg bg-muted/50 border border-border mt-4">
-              <p className="text-xs font-medium text-muted-foreground mb-1">Recommended for:</p>
-              <p className="text-sm">{currentMethod.condition}</p>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -1289,43 +1130,27 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     />
                   </div>
                   
-                  {/* Standard/Base Conditions */}
+                  {/* Standard/Base Conditions - Locked */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
-                      <Label className="text-xs font-medium">Std Temp T_std (°C)</Label>
+                      <Label className="text-xs font-medium text-muted-foreground">Std Temp T_std (°C)</Label>
                       <Input
                         type="number"
                         value={baseTemperature}
-                        onChange={(e) => setBaseTemperature(e.target.value)}
-                        className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder="15.56"
+                        disabled
+                        className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-muted/50 cursor-not-allowed"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-xs font-medium">Std Press P_std (bara)</Label>
+                      <Label className="text-xs font-medium text-muted-foreground">Std Press P_std (bara)</Label>
                       <Input
                         type="number"
                         value={basePressure}
-                        onChange={(e) => setBasePressure(e.target.value)}
-                        className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder="1.01325"
+                        disabled
+                        className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-muted/50 cursor-not-allowed"
                       />
                     </div>
                   </div>
-                  
-                  {/* Gas Specific Gravity - Only for transmission methods */}
-                  {calculationMethod !== "darcy-weisbach" && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Gas Specific Gravity (air=1)</Label>
-                      <Input
-                        type="number"
-                        value={gasGravity}
-                        onChange={(e) => setGasGravity(e.target.value)}
-                        className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder="0.65"
-                      />
-                    </div>
-                  )}
                 </>
               )}
             </div>
