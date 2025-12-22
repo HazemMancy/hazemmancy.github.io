@@ -225,13 +225,21 @@ const getSchedulesForDiameter = (nd: string): string[] => {
   return scheduleOrder.filter(sch => available.includes(sch));
 };
 
-// Gas flow rate units
-const gasFlowRateToM3s: Record<string, number> = {
+// Gas volumetric flow rate units (standard/base conditions)
+const gasVolumetricFlowRateToM3s: Record<string, number> = {
   "MMSCFD": 0.327741,
   "Nm³/h": 1 / 3600,
   "Sm³/h": 1 / 3600,
   "m³/h": 1 / 3600,
   "SCFM": 0.000471947,
+};
+
+// Gas mass flow rate units (to kg/s)
+const gasMassFlowRateToKgS: Record<string, number> = {
+  "kg/hr": 1 / 3600,
+  "kg/s": 1,
+  "lb/hr": 0.000125998,
+  "t/hr": 1 / 3.6,
 };
 
 // Liquid flow rate units
@@ -428,6 +436,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [diameterUnit, setDiameterUnit] = useState<string>("mm");
   const [flowRate, setFlowRate] = useState<string>(lineType === "gas" ? "2" : "50");
   const [flowRateUnit, setFlowRateUnit] = useState<string>(lineType === "gas" ? "MMSCFD" : "m³/h");
+  const [gasFlowInputType, setGasFlowInputType] = useState<"volumetric" | "mass">("volumetric");
   const [density, setDensity] = useState<string>(lineType === "gas" ? "0.75" : "1000");
   const [densityUnit, setDensityUnit] = useState<string>("kg/m³");
   const [viscosity, setViscosity] = useState<string>(lineType === "gas" ? "0.011" : "1");
@@ -544,12 +553,21 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   }, [insideDiameterMM, diameterUnit]);
 
   // Get flow rate conversion factor
-  const flowRateConversion = lineType === "gas" ? gasFlowRateToM3s : liquidFlowRateToM3s;
+  const flowRateConversion = lineType === "gas" 
+    ? (gasFlowInputType === "volumetric" ? gasVolumetricFlowRateToM3s : gasMassFlowRateToKgS)
+    : liquidFlowRateToM3s;
 
   // Convert all inputs to SI units
   const L_m = useMemo(() => parseFloat(pipeLength) * lengthToMeters[lengthUnit] || 0, [pipeLength, lengthUnit]);
   const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]);
-  const Q_m3s = useMemo(() => parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0), [flowRate, flowRateUnit, flowRateConversion]);
+  // For gas mass flow, we'll compute the volumetric flow later from molar flow
+  const Q_m3s = useMemo(() => {
+    if (lineType === "gas" && gasFlowInputType === "mass") {
+      // For mass flow, Q_m3s is not directly used; we compute molar flow from mass flow
+      return 0; // Placeholder, molar flow calculated separately
+    }
+    return parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0);
+  }, [flowRate, flowRateUnit, flowRateConversion, lineType, gasFlowInputType]);
   const mu = useMemo(() => parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0, [viscosity, viscosityUnit]);
   const epsilon_m = useMemo(() => {
     const roughnessValue = pipeMaterial === "Custom"
@@ -605,22 +623,32 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
   // For gas calculations we convert the entered volumetric flow (standard OR actual) into a molar flow.
   // Convention used here: for gas, "m³/h" is treated as ACTUAL flow at inlet conditions; other units are treated as STANDARD flow at base/std conditions.
-  const isGasActualFlow = lineType === "gas" && flowRateUnit === "m³/h";
+  const isGasActualFlow = lineType === "gas" && gasFlowInputType === "volumetric" && flowRateUnit === "m³/h";
 
   const molarFlowKmolPerS = useMemo(() => {
     if (lineType !== "gas") return 0;
 
     const R_kmol = 8314; // Pa·m³/(kmol·K)
 
+    // Mass flow input: ṅ = ṁ / MW
+    if (gasFlowInputType === "mass") {
+      const massFlowKgS = parseFloat(flowRate) * (gasMassFlowRateToKgS[flowRateUnit] || 0);
+      if (MW <= 0) return 0;
+      return massFlowKgS / MW; // kmol/s
+    }
+
+    // Volumetric flow input
     const P_ref_Pa = (isGasActualFlow ? P_operating_bara : P_std_bara) * 100000;
     const T_ref_K = isGasActualFlow ? T_operating_K : T_std_K;
     const Z_ref = isGasActualFlow ? Z_factor : Z_std_factor;
 
     if (P_ref_Pa <= 0 || T_ref_K <= 0 || Z_ref <= 0) return 0;
 
-    // ṅ = (P·Q) / (Z·R·T)
-    return (P_ref_Pa * Q_m3s) / (Z_ref * R_kmol * T_ref_K);
-  }, [lineType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, Q_m3s]);
+    const Q_vol = parseFloat(flowRate) * (gasVolumetricFlowRateToM3s[flowRateUnit] || 0);
+
+    // ṅ = (P·Q) / (Z·R·T)
+    return (P_ref_Pa * Q_vol) / (Z_ref * R_kmol * T_ref_K);
+  }, [lineType, gasFlowInputType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW]);
 
   // Calculate velocity
   // Gas: velocity is computed from the inlet actual volumetric flow derived from molar flow (HYSYS-style)
@@ -1247,31 +1275,57 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
               {/* Flow Rate */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Volumetric Flow Rate</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Flow Rate</Label>
+                  {lineType === "gas" && (
+                    <Tabs value={gasFlowInputType} onValueChange={(v) => {
+                      setGasFlowInputType(v as "volumetric" | "mass");
+                      // Reset flow rate unit when switching
+                      if (v === "volumetric") {
+                        setFlowRateUnit("MMSCFD");
+                      } else {
+                        setFlowRateUnit("kg/hr");
+                      }
+                    }} className="h-7">
+                      <TabsList className="h-7 p-0.5">
+                        <TabsTrigger value="volumetric" className="text-xs h-6 px-2">Volumetric</TabsTrigger>
+                        <TabsTrigger value="mass" className="text-xs h-6 px-2">Mass</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <Input
                     type="number"
                     value={flowRate}
                     onChange={(e) => setFlowRate(e.target.value)}
                     className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder={lineType === "gas" ? "10" : "50"}
+                    placeholder={lineType === "gas" ? (gasFlowInputType === "volumetric" ? "10" : "1000") : "50"}
                   />
                   <Select value={flowRateUnit} onValueChange={setFlowRateUnit}>
                     <SelectTrigger className="w-28">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.keys(flowRateConversion).map((unit) => (
-                        <SelectItem key={unit} value={unit}>
-                          {unit}
-                        </SelectItem>
-                      ))}
+                      {lineType === "gas" ? (
+                        gasFlowInputType === "volumetric" 
+                          ? Object.keys(gasVolumetricFlowRateToM3s).map((unit) => (
+                              <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                            ))
+                          : Object.keys(gasMassFlowRateToKgS).map((unit) => (
+                              <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                            ))
+                      ) : (
+                        Object.keys(liquidFlowRateToM3s).map((unit) => (
+                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
-                {lineType === "gas" && (
+                {lineType === "gas" && gasFlowInputType === "volumetric" && (
                   <p className="text-xs text-muted-foreground">
-                    For gas, <span className="font-mono">m³/h</span> is treated as actual flow at inlet; other units are treated as standard flow at the base/std conditions below.
+                    <span className="font-mono">m³/h</span> = actual flow at inlet; other units = standard flow.
                   </p>
                 )}
               </div>
@@ -1568,11 +1622,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       </>
                     )}
                   </div>
-                  {lineType === "gas" && (
-                    <p className="text-xs text-muted-foreground mt-2 italic">
-                      * Segmented compressible flow (100 segments) - HYSYS method
-                    </p>
-                  )}
                 </div>
               </div>
             ) : (
