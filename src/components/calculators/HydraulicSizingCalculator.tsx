@@ -658,12 +658,119 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Alias for pressure drop calculations
   const P1_bara = P_operating_bara;
 
-  // Calculate pressure drop using Darcy-Weisbach (same as HYSYS)
-  // ΔP = f × (L/D) × (ρV²/2)
+  // Helper: Calculate friction factor for given Re, epsilon, D
+  const calcFrictionFactor = (Re: number, eps: number, D: number): number => {
+    if (Re <= 0 || D <= 0) return 0;
+    if (Re < 2300) return 64 / Re;
+    
+    const relRough = eps / D;
+    let f = 0.25 / Math.pow(Math.log10(relRough / 3.7 + 5.74 / Math.pow(Re, 0.9)), 2);
+    
+    for (let i = 0; i < 20; i++) {
+      const sqrtF = Math.sqrt(f);
+      const lhs = 1 / sqrtF;
+      const rhs = -2 * Math.log10(relRough / 3.7 + 2.51 / (Re * sqrtF));
+      const residual = lhs - rhs;
+      const term = relRough / 3.7 + 2.51 / (Re * sqrtF);
+      const dLhs = -0.5 * Math.pow(f, -1.5);
+      const dRhs = (2.51 / (Math.LN10 * Re * Math.pow(f, 1.5))) / term;
+      const derivative = dLhs - dRhs;
+      const fNew = f - residual / derivative;
+      if (Math.abs(fNew - f) < 1e-10) { f = fNew; break; }
+      f = Math.max(fNew, 0.001);
+    }
+    return f;
+  };
+
+  // Helper: Calculate gas density at given pressure (bara) and temperature (K)
+  const calcGasDensity = (P_bara: number, T_K: number, Z: number, mw: number): number => {
+    const P_Pa = P_bara * 100000;
+    const R_kmol = 8314;
+    return (P_Pa * mw) / (Z * R_kmol * T_K);
+  };
+
+  // HYSYS-style segmented compressible flow calculation for gas
+  // Divides pipe into segments, recalculates density/velocity as P drops
+  const segmentedResults = useMemo(() => {
+    if (lineType !== "gas" || D_m <= 0 || Q_m3s <= 0 || L_m <= 0 || mu <= 0) {
+      return null;
+    }
+
+    const area = Math.PI * Math.pow(D_m / 2, 2);
+    const numSegments = 100; // More segments = more accuracy
+    const dL = L_m / numSegments;
+    
+    let P_current = P_operating_bara;
+    let totalDeltaP_Pa = 0;
+    let avgVelocity = 0;
+    let avgDensity = 0;
+    let avgRe = 0;
+    let avgFriction = 0;
+
+    for (let i = 0; i < numSegments; i++) {
+      // Density at current pressure
+      const rho_local = calcGasDensity(P_current, T_operating_K, Z_factor, MW);
+      
+      // Actual volumetric flow at current conditions
+      // Q_actual = Q_std × (P_std/P_current) × (T_current/T_std) × Z
+      const Q_actual = Q_m3s * (P_std_bara / P_current) * (T_operating_K / T_std_K) * Z_factor;
+      const v_local = Q_actual / area;
+      
+      // Reynolds number
+      const Re_local = (rho_local * v_local * D_m) / mu;
+      
+      // Friction factor
+      const f_local = calcFrictionFactor(Re_local, epsilon_m, D_m);
+      
+      // Pressure drop for this segment: ΔP = f × (dL/D) × (ρV²/2)
+      const dP_Pa = f_local * (dL / D_m) * (rho_local * Math.pow(v_local, 2) / 2);
+      
+      totalDeltaP_Pa += dP_Pa;
+      
+      // Update pressure for next segment
+      P_current -= dP_Pa / 100000; // Convert Pa to bar
+      
+      // Accumulate for averages
+      avgVelocity += v_local;
+      avgDensity += rho_local;
+      avgRe += Re_local;
+      avgFriction += f_local;
+      
+      // Safety: stop if pressure goes too low
+      if (P_current < 0.1) break;
+    }
+
+    return {
+      totalPressureDropPa: totalDeltaP_Pa,
+      avgVelocity: avgVelocity / numSegments,
+      avgDensity: avgDensity / numSegments,
+      avgReynolds: avgRe / numSegments,
+      avgFriction: avgFriction / numSegments,
+      outletPressure: P_current,
+      inletVelocity: velocity, // Use the already calculated inlet velocity
+      outletVelocity: (() => {
+        const rho_out = calcGasDensity(P_current, T_operating_K, Z_factor, MW);
+        const Q_out = Q_m3s * (P_std_bara / P_current) * (T_operating_K / T_std_K) * Z_factor;
+        return Q_out / area;
+      })(),
+    };
+  }, [lineType, D_m, Q_m3s, L_m, mu, P_operating_bara, T_operating_K, Z_factor, MW, P_std_bara, T_std_K, epsilon_m, velocity]);
+
+  // Calculate pressure drop using Darcy-Weisbach
+  // For gas: use segmented method (HYSYS-style)
+  // For liquid: single calculation (incompressible)
   const pressureDropPa = useMemo(() => {
-    if (D_m <= 0 || frictionFactor <= 0) return 0;
+    if (D_m <= 0) return 0;
+    
+    // For gas, use segmented compressible method
+    if (lineType === "gas" && segmentedResults) {
+      return segmentedResults.totalPressureDropPa;
+    }
+    
+    // For liquid, use standard Darcy-Weisbach
+    if (frictionFactor <= 0) return 0;
     return frictionFactor * (L_m / D_m) * (rho * Math.pow(velocity, 2) / 2);
-  }, [frictionFactor, L_m, D_m, rho, velocity]);
+  }, [lineType, segmentedResults, frictionFactor, L_m, D_m, rho, velocity]);
 
   // Convert to selected unit
   const pressureDrop = useMemo(() => {
@@ -1293,10 +1400,24 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 {/* Velocity */}
                 <div className="p-3 rounded-lg bg-muted/50 border border-border">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Fluid Velocity</span>
+                    <span className="text-xs text-muted-foreground">
+                      {lineType === "gas" ? "Inlet Velocity" : "Fluid Velocity"}
+                    </span>
                     <StatusIcon type={status.velocity} />
                   </div>
                   <p className="text-lg font-mono font-semibold">{velocity.toFixed(3)} m/s</p>
+                  {lineType === "gas" && segmentedResults && (
+                    <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Outlet Velocity:</span>
+                        <span className="font-mono">{segmentedResults.outletVelocity.toFixed(3)} m/s</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Average Velocity:</span>
+                        <span className="font-mono">{segmentedResults.avgVelocity.toFixed(3)} m/s</span>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
                     {sizingCriteria.maxVelocity !== null 
                       ? (lineType === "gas" 
@@ -1352,14 +1473,45 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="p-2 rounded bg-muted/30">
-                      <span className="text-xs text-muted-foreground block">Reynolds (Re)</span>
-                      <span className="font-mono">{reynoldsNumber.toFixed(0)}</span>
+                      <span className="text-xs text-muted-foreground block">
+                        Reynolds (Re) {lineType === "gas" && segmentedResults ? "(Avg)" : ""}
+                      </span>
+                      <span className="font-mono">
+                        {lineType === "gas" && segmentedResults 
+                          ? segmentedResults.avgReynolds.toFixed(0)
+                          : reynoldsNumber.toFixed(0)
+                        }
+                      </span>
                     </div>
                     <div className="p-2 rounded bg-muted/30">
-                      <span className="text-xs text-muted-foreground block">Friction Factor (f)</span>
-                      <span className="font-mono">{frictionFactor.toFixed(6)}</span>
+                      <span className="text-xs text-muted-foreground block">
+                        Friction Factor (f) {lineType === "gas" && segmentedResults ? "(Avg)" : ""}
+                      </span>
+                      <span className="font-mono">
+                        {lineType === "gas" && segmentedResults 
+                          ? segmentedResults.avgFriction.toFixed(6)
+                          : frictionFactor.toFixed(6)
+                        }
+                      </span>
                     </div>
+                    {lineType === "gas" && segmentedResults && (
+                      <>
+                        <div className="p-2 rounded bg-muted/30">
+                          <span className="text-xs text-muted-foreground block">Outlet Pressure</span>
+                          <span className="font-mono">{segmentedResults.outletPressure.toFixed(4)} bara</span>
+                        </div>
+                        <div className="p-2 rounded bg-muted/30">
+                          <span className="text-xs text-muted-foreground block">Avg. Gas Density</span>
+                          <span className="font-mono">{segmentedResults.avgDensity.toFixed(4)} kg/m³</span>
+                        </div>
+                      </>
+                    )}
                   </div>
+                  {lineType === "gas" && (
+                    <p className="text-xs text-muted-foreground mt-2 italic">
+                      * Segmented compressible flow (100 segments) - HYSYS method
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
