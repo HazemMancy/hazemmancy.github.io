@@ -299,45 +299,52 @@ interface FluidProperties {
   temperatures: number[];
   density: Record<number, number>;
   viscosity: Record<number, number>;
+  density60F?: number; // Gas density at 60°F (15.56°C), 1 atm in kg/m³
 }
 
 const fluidsDatabase: FluidProperties[] = [
-  // Gases
+  // Gases - density60F is gas density at 60°F (15.56°C), 1 atm
   { 
     name: "Natural Gas", type: "gas",
     temperatures: [15, 25, 50, 100],
     density: { 15: 0.75, 25: 0.72, 50: 0.65, 100: 0.55 },
-    viscosity: { 15: 0.011, 25: 0.011, 50: 0.012, 100: 0.014 }
+    viscosity: { 15: 0.011, 25: 0.011, 50: 0.012, 100: 0.014 },
+    density60F: 0.856  // SG ~0.701 → ρ = 0.701 × 1.2215 kg/m³
   },
   { 
     name: "Air", type: "gas",
     temperatures: [15, 25, 50, 100, 150],
     density: { 15: 1.225, 25: 1.184, 50: 1.093, 100: 0.946, 150: 0.834 },
-    viscosity: { 15: 0.0179, 25: 0.0184, 50: 0.0196, 100: 0.0218, 150: 0.0238 }
+    viscosity: { 15: 0.0179, 25: 0.0184, 50: 0.0196, 100: 0.0218, 150: 0.0238 },
+    density60F: 1.2215  // Air at 60°F, 1 atm (reference)
   },
   { 
     name: "Nitrogen", type: "gas",
     temperatures: [15, 25, 50, 100],
     density: { 15: 1.185, 25: 1.145, 50: 1.056, 100: 0.916 },
-    viscosity: { 15: 0.0175, 25: 0.0180, 50: 0.0191, 100: 0.0212 }
+    viscosity: { 15: 0.0175, 25: 0.0180, 50: 0.0191, 100: 0.0212 },
+    density60F: 1.181  // MW=28.01 → ρ = 1.181 kg/m³
   },
   { 
     name: "Carbon Dioxide", type: "gas",
     temperatures: [15, 25, 50, 100],
     density: { 15: 1.87, 25: 1.81, 50: 1.67, 100: 1.45 },
-    viscosity: { 15: 0.0145, 25: 0.0150, 50: 0.0165, 100: 0.0190 }
+    viscosity: { 15: 0.0145, 25: 0.0150, 50: 0.0165, 100: 0.0190 },
+    density60F: 1.855  // MW=44.01 → ρ = 1.855 kg/m³
   },
   { 
     name: "Hydrogen", type: "gas",
     temperatures: [15, 25, 50, 100],
     density: { 15: 0.085, 25: 0.082, 50: 0.076, 100: 0.066 },
-    viscosity: { 15: 0.0088, 25: 0.0090, 50: 0.0095, 100: 0.0105 }
+    viscosity: { 15: 0.0088, 25: 0.0090, 50: 0.0095, 100: 0.0105 },
+    density60F: 0.0851  // MW=2.016 → ρ = 0.0851 kg/m³
   },
   { 
     name: "Steam", type: "gas",
     temperatures: [100, 150, 200, 300],
     density: { 100: 0.590, 150: 0.517, 200: 0.460, 300: 0.379 },
-    viscosity: { 100: 0.0125, 150: 0.0142, 200: 0.0160, 300: 0.0195 }
+    viscosity: { 100: 0.0125, 150: 0.0142, 200: 0.0160, 300: 0.0195 },
+    density60F: 0.760  // MW=18.015 → ρ = 0.760 kg/m³
   },
   // Liquids
   { 
@@ -435,9 +442,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Operating conditions for gas (editable)
   const [inletPressure, setInletPressure] = useState<string>("12"); // barg (user enters gauge pressure)
   const [compressibilityZ, setCompressibilityZ] = useState<string>("1.0"); // Compressibility factor
-  const [gasSpecificGravity, setGasSpecificGravity] = useState<string>("0.701"); // SG relative to air (MW_air = 28.97)
-  const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("20.3"); // kg/kmol derived from SG
-  const [useSGforMW, setUseSGforMW] = useState<boolean>(true); // Use SG to calculate MW
+  const [gasDensity60F, setGasDensity60F] = useState<string>("0.856"); // Gas density at 60°F (kg/m³)
+  const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("20.3"); // kg/kmol derived from density
+  const [isGasDensityLocked, setIsGasDensityLocked] = useState<boolean>(false); // Locked when fluid selected
   
   // Standard/Base conditions (editable so you can match your HYSYS/project settings)
   const [baseTemperature, setBaseTemperature] = useState<string>("15.56"); // °C (60°F for MMSCFD)
@@ -477,7 +484,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const handleFluidSelect = (fluidName: string) => {
     setSelectedFluid(fluidName);
     if (fluidName === "Other") {
-      // Allow custom input - keep current values or set defaults
+      // Allow custom input - unlock density field
+      setIsGasDensityLocked(false);
       return;
     }
     const fluid = fluidsDatabase.find(f => f.name === fluidName);
@@ -486,6 +494,16 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       setFluidTemperature(temp.toString());
       setDensity(fluid.density[temp].toString());
       setViscosity(fluid.viscosity[temp].toString());
+      
+      // For gas fluids, set density @ 60°F and lock the field
+      if (fluid.type === "gas" && fluid.density60F) {
+        setGasDensity60F(fluid.density60F.toString());
+        // Calculate MW from density: MW = ρ × R × T / P (at std conditions)
+        // At 60°F (288.71K), 1 atm: MW = ρ × 8314 × 288.71 / 101325 = ρ × 23.69
+        const mw = fluid.density60F * 23.69;
+        setGasMolecularWeight(mw.toFixed(2));
+        setIsGasDensityLocked(true);
+      }
     }
   };
 
@@ -549,14 +567,12 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const Z_factor = useMemo(() => parseFloat(compressibilityZ) || 1.0, [compressibilityZ]);
   const Z_std_factor = useMemo(() => parseFloat(baseCompressibilityZ) || 1.0, [baseCompressibilityZ]);
   
-  // Calculate MW from specific gravity: MW = SG × 28.97 (MW of air)
+  // Calculate MW from gas density at 60°F: MW = ρ × R × T / P
+  // At 60°F (288.71K), 1 atm (101325 Pa): MW = ρ × 8314 × 288.71 / 101325 = ρ × 23.69
   const MW = useMemo(() => {
-    if (useSGforMW) {
-      const sg = parseFloat(gasSpecificGravity) || 0.7;
-      return sg * 28.97;
-    }
-    return parseFloat(gasMolecularWeight) || 20.3;
-  }, [useSGforMW, gasSpecificGravity, gasMolecularWeight]);
+    const rho60F = parseFloat(gasDensity60F) || 0.856;
+    return rho60F * 23.69; // kg/kmol
+  }, [gasDensity60F]);
 
   // Gas constant R = 8.314 J/(mol·K) = 8.314 kPa·L/(mol·K)
   const R_gas = 8.314; // J/(mol·K)
@@ -1344,22 +1360,27 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     />
                   </div>
                   
-                  {/* Gas Specific Gravity */}
+                  {/* Gas Density @ 60°F */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Gas Specific Gravity (SG @ 60°F)</Label>
+                    <Label className="text-sm font-medium">Gas Density @ 60°F (kg/m³)</Label>
                     <Input
                       type="number"
-                      value={gasSpecificGravity}
+                      value={gasDensity60F}
                       onChange={(e) => {
-                        setGasSpecificGravity(e.target.value);
-                        // Auto-calculate MW from SG
-                        const sg = parseFloat(e.target.value) || 0.7;
-                        setGasMolecularWeight((sg * 28.97).toFixed(2));
+                        if (!isGasDensityLocked) {
+                          setGasDensity60F(e.target.value);
+                          // Auto-calculate MW from density
+                          const rho = parseFloat(e.target.value) || 0.856;
+                          setGasMolecularWeight((rho * 23.69).toFixed(2));
+                        }
                       }}
-                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      placeholder="0.701"
+                      disabled={isGasDensityLocked}
+                      className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isGasDensityLocked ? 'bg-muted/50 cursor-not-allowed' : ''}`}
+                      placeholder="0.856"
                     />
-                    <p className="text-xs text-muted-foreground">MW = {MW.toFixed(2)} kg/kmol (SG × 28.97)</p>
+                    <p className="text-xs text-muted-foreground">
+                      MW = {MW.toFixed(2)} kg/kmol {isGasDensityLocked && "(from fluid selection)"}
+                    </p>
                   </div>
                   
                   {/* Calculated Densities Display */}
