@@ -1435,23 +1435,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 <div className="p-3 rounded-lg bg-muted/50 border border-border">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
-                      {lineType === "gas" ? "Inlet Velocity" : "Fluid Velocity"}
+                      {lineType === "gas" ? "Velocity" : "Fluid Velocity"}
                     </span>
                     <StatusIcon type={status.velocity} />
                   </div>
                   <p className="text-lg font-mono font-semibold">{velocity.toFixed(3)} m/s</p>
-                  {lineType === "gas" && segmentedResults && (
-                    <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Outlet Velocity:</span>
-                        <span className="font-mono">{segmentedResults.outletVelocity.toFixed(3)} m/s</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Average Velocity:</span>
-                        <span className="font-mono">{segmentedResults.avgVelocity.toFixed(3)} m/s</span>
-                      </div>
-                    </div>
-                  )}
                   <p className="text-xs text-muted-foreground mt-1">
                     {sizingCriteria.maxVelocity !== null 
                       ? (lineType === "gas" 
