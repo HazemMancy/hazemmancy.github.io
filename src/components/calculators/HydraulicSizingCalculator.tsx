@@ -437,10 +437,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [compressibilityZ, setCompressibilityZ] = useState<string>("0.9"); // Compressibility factor
   const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("18.5"); // kg/kmol (typical natural gas ~18-20)
   
-  // Standard/Base conditions (fixed, non-editable) - matching HYSYS defaults
-  const baseTemperature = "15.56"; // °C (60°F standard)
-  const basePressure = "1.01325"; // bara (14.7 psia standard)
-  
+  // Standard/Base conditions (editable so you can match your HYSYS/project settings)
+  const [baseTemperature, setBaseTemperature] = useState<string>("15.56"); // °C
+  const [basePressure, setBasePressure] = useState<string>("1.01325"); // bara
+  const [baseCompressibilityZ, setBaseCompressibilityZ] = useState<string>("1"); // Z at base/std
+
   // Gas service type selection (ENI criteria)
   const [gasServiceType, setGasServiceType] = useState<string>("Continuous");
   const [gasPressureRange, setGasPressureRange] = useState<string>("2 to 7 barg");
@@ -543,6 +544,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const T_std_K = useMemo(() => (parseFloat(baseTemperature) || 15.56) + 273.15, [baseTemperature]);
   const P_std_bara = useMemo(() => parseFloat(basePressure) || 1.01325, [basePressure]);
   const Z_factor = useMemo(() => parseFloat(compressibilityZ) || 1.0, [compressibilityZ]);
+  const Z_std_factor = useMemo(() => parseFloat(baseCompressibilityZ) || 1.0, [baseCompressibilityZ]);
   const MW = useMemo(() => parseFloat(gasMolecularWeight) || 18.5, [gasMolecularWeight]);
 
   // Gas constant R = 8.314 J/(mol·K) = 8.314 kPa·L/(mol·K)
@@ -563,9 +565,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     if (lineType !== "gas") return 0;
     const P_Pa = P_std_bara * 100000;
     const R_kmol = 8314;
-    const Z_std = 1.0; // Z ≈ 1 at standard conditions
-    return (P_Pa * MW) / (Z_std * R_kmol * T_std_K);
-  }, [lineType, P_std_bara, MW, T_std_K]);
+    return (P_Pa * MW) / (Z_std_factor * R_kmol * T_std_K);
+  }, [lineType, P_std_bara, MW, T_std_K, Z_std_factor]);
 
   // Use calculated density for gas, user input for liquid
   const rho = useMemo(() => {
@@ -575,23 +576,43 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return parseFloat(density) * densityToKgM3[densityUnit] || 0;
   }, [lineType, rhoGasOperating, density, densityUnit]);
 
+  // For gas calculations we convert the entered volumetric flow (standard OR actual) into a molar flow.
+  // Convention used here: for gas, "m³/h" is treated as ACTUAL flow at inlet conditions; other units are treated as STANDARD flow at base/std conditions.
+  const isGasActualFlow = lineType === "gas" && flowRateUnit === "m³/h";
+
+  const molarFlowKmolPerS = useMemo(() => {
+    if (lineType !== "gas") return 0;
+
+    const R_kmol = 8314; // Pa·m³/(kmol·K)
+
+    const P_ref_Pa = (isGasActualFlow ? P_operating_bara : P_std_bara) * 100000;
+    const T_ref_K = isGasActualFlow ? T_operating_K : T_std_K;
+    const Z_ref = isGasActualFlow ? Z_factor : Z_std_factor;
+
+    if (P_ref_Pa <= 0 || T_ref_K <= 0 || Z_ref <= 0) return 0;
+
+    // ṅ = (P·Q) / (Z·R·T)
+    return (P_ref_Pa * Q_m3s) / (Z_ref * R_kmol * T_ref_K);
+  }, [lineType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, Q_m3s]);
+
   // Calculate velocity
-  // For gas: v = Q_std × (P_std/P_actual) × (T_actual/T_std) × Z / A (converts to actual conditions)
-  // For liquid: v = Q / A (incompressible)
+  // Gas: velocity is computed from the inlet actual volumetric flow derived from molar flow (HYSYS-style)
+  // Liquid: v = Q / A (incompressible)
   const velocity = useMemo(() => {
     if (D_m <= 0) return 0;
     const area = Math.PI * Math.pow(D_m / 2, 2);
-    
+
     if (lineType === "gas") {
-      // Convert standard flow to actual flow using ideal gas law with compressibility
-      // Q_actual = Q_std × (P_std/P_actual) × (T_actual/T_std) × Z
-      const Q_actual = Q_m3s * (P_std_bara / P_operating_bara) * (T_operating_K / T_std_K) * Z_factor;
-      return Q_actual / area;
+      const R_kmol = 8314; // Pa·m³/(kmol·K)
+      const P_in_Pa = P_operating_bara * 100000;
+      if (P_in_Pa <= 0) return 0;
+
+      const Q_inlet_actual_m3s = (molarFlowKmolPerS * Z_factor * R_kmol * T_operating_K) / P_in_Pa;
+      return Q_inlet_actual_m3s / area;
     }
-    
-    // Liquid - direct calculation (incompressible)
+
     return Q_m3s / area;
-  }, [Q_m3s, D_m, lineType, P_std_bara, P_operating_bara, T_operating_K, T_std_K, Z_factor]);
+  }, [D_m, lineType, Q_m3s, molarFlowKmolPerS, P_operating_bara, T_operating_K, Z_factor]);
 
   // Calculate ρv² (rho v squared)
   const rhoVSquared = useMemo(() => {
@@ -691,70 +712,78 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
   // HYSYS-style segmented compressible flow calculation for gas
   // Divides pipe into segments, recalculates density/velocity as P drops
+  // Uses molar flow conservation: ṅ = constant, Q = ṅ·Z·R·T / P
   const segmentedResults = useMemo(() => {
-    if (lineType !== "gas" || D_m <= 0 || Q_m3s <= 0 || L_m <= 0 || mu <= 0) {
+    if (lineType !== "gas" || D_m <= 0 || Q_m3s <= 0 || L_m <= 0 || mu <= 0 || molarFlowKmolPerS <= 0) {
       return null;
     }
 
     const area = Math.PI * Math.pow(D_m / 2, 2);
     const numSegments = 100; // More segments = more accuracy
     const dL = L_m / numSegments;
-    
+    const R_kmol = 8314; // Pa·m³/(kmol·K)
+
     let P_current = P_operating_bara;
     let totalDeltaP_Pa = 0;
     let avgVelocity = 0;
     let avgDensity = 0;
     let avgRe = 0;
     let avgFriction = 0;
+    let segmentsRun = 0;
 
     for (let i = 0; i < numSegments; i++) {
       // Density at current pressure
       const rho_local = calcGasDensity(P_current, T_operating_K, Z_factor, MW);
-      
-      // Actual volumetric flow at current conditions
-      // Q_actual = Q_std × (P_std/P_current) × (T_current/T_std) × Z
-      const Q_actual = Q_m3s * (P_std_bara / P_current) * (T_operating_K / T_std_K) * Z_factor;
-      const v_local = Q_actual / area;
-      
+
+      // Actual volumetric flow at current conditions from molar flow
+      const P_local_Pa = P_current * 100000;
+      if (P_local_Pa <= 0) break;
+      const Q_local = (molarFlowKmolPerS * Z_factor * R_kmol * T_operating_K) / P_local_Pa;
+      const v_local = Q_local / area;
+
       // Reynolds number
       const Re_local = (rho_local * v_local * D_m) / mu;
-      
+
       // Friction factor
       const f_local = calcFrictionFactor(Re_local, epsilon_m, D_m);
-      
+
       // Pressure drop for this segment: ΔP = f × (dL/D) × (ρV²/2)
       const dP_Pa = f_local * (dL / D_m) * (rho_local * Math.pow(v_local, 2) / 2);
-      
+
       totalDeltaP_Pa += dP_Pa;
-      
+
       // Update pressure for next segment
       P_current -= dP_Pa / 100000; // Convert Pa to bar
-      
+
       // Accumulate for averages
       avgVelocity += v_local;
       avgDensity += rho_local;
       avgRe += Re_local;
       avgFriction += f_local;
-      
+      segmentsRun += 1;
+
       // Safety: stop if pressure goes too low
       if (P_current < 0.1) break;
     }
 
+    const denom = segmentsRun || 1;
+
     return {
       totalPressureDropPa: totalDeltaP_Pa,
-      avgVelocity: avgVelocity / numSegments,
-      avgDensity: avgDensity / numSegments,
-      avgReynolds: avgRe / numSegments,
-      avgFriction: avgFriction / numSegments,
+      avgVelocity: avgVelocity / denom,
+      avgDensity: avgDensity / denom,
+      avgReynolds: avgRe / denom,
+      avgFriction: avgFriction / denom,
       outletPressure: P_current,
       inletVelocity: velocity, // Use the already calculated inlet velocity
       outletVelocity: (() => {
-        const rho_out = calcGasDensity(P_current, T_operating_K, Z_factor, MW);
-        const Q_out = Q_m3s * (P_std_bara / P_current) * (T_operating_K / T_std_K) * Z_factor;
+        const P_out_Pa = P_current * 100000;
+        if (P_out_Pa <= 0) return 0;
+        const Q_out = (molarFlowKmolPerS * Z_factor * R_kmol * T_operating_K) / P_out_Pa;
         return Q_out / area;
       })(),
     };
-  }, [lineType, D_m, Q_m3s, L_m, mu, P_operating_bara, T_operating_K, Z_factor, MW, P_std_bara, T_std_K, epsilon_m, velocity]);
+  }, [lineType, D_m, Q_m3s, L_m, mu, P_operating_bara, T_operating_K, Z_factor, MW, epsilon_m, velocity, molarFlowKmolPerS]);
 
   // Calculate pressure drop using Darcy-Weisbach
   // For gas: use segmented method (HYSYS-style)
@@ -1213,6 +1242,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     </SelectContent>
                   </Select>
                 </div>
+                {lineType === "gas" && (
+                  <p className="text-xs text-muted-foreground">
+                    For gas, <span className="font-mono">m³/h</span> is treated as actual flow at inlet; other units are treated as standard flow at the base/std conditions below.
+                  </p>
+                )}
               </div>
 
               {/* Fluid Density - Only shown for liquid */}
