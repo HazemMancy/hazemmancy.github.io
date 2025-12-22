@@ -436,7 +436,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [diameterUnit, setDiameterUnit] = useState<string>("mm");
   const [flowRate, setFlowRate] = useState<string>(lineType === "gas" ? "2" : "50");
   const [flowRateUnit, setFlowRateUnit] = useState<string>(lineType === "gas" ? "MMSCFD" : "m³/h");
-  const [gasFlowInputType, setGasFlowInputType] = useState<"volumetric" | "mass">("volumetric");
+  
   const [density, setDensity] = useState<string>(lineType === "gas" ? "0.75" : "1000");
   const [densityUnit, setDensityUnit] = useState<string>("kg/m³");
   const [viscosity, setViscosity] = useState<string>(lineType === "gas" ? "0.011" : "1");
@@ -452,8 +452,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [inletPressure, setInletPressure] = useState<string>("12"); // barg (user enters gauge pressure)
   const [compressibilityZ, setCompressibilityZ] = useState<string>("1.0"); // Compressibility factor
   const [gasDensity60F, setGasDensity60F] = useState<string>("0.856"); // Gas density at 60°F (kg/m³)
-  const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("20.3"); // kg/kmol derived from density
-  const [isGasDensityLocked, setIsGasDensityLocked] = useState<boolean>(false); // Locked when fluid selected
+  const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("20.3"); // kg/kmol - editable for accuracy
+  const [isGasPropsLocked, setIsGasPropsLocked] = useState<boolean>(false); // Locked when fluid selected from dropdown
   
   // Standard/Base conditions (editable so you can match your HYSYS/project settings)
   const [baseTemperature, setBaseTemperature] = useState<string>("15.56"); // °C (60°F for MMSCFD)
@@ -493,25 +493,32 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const handleFluidSelect = (fluidName: string) => {
     setSelectedFluid(fluidName);
     if (fluidName === "Other") {
-      // Allow custom input - unlock density field
-      setIsGasDensityLocked(false);
+      // Allow custom input - unlock all fields
+      setIsGasPropsLocked(false);
       return;
     }
     const fluid = fluidsDatabase.find(f => f.name === fluidName);
     if (fluid) {
+      // Set temperature to 60°F (15.56°C) for gas fluids when selected
+      if (fluid.type === "gas") {
+        setFluidTemperature("15.56"); // 60°F in Celsius
+      } else {
+        const temp = fluid.temperatures.includes(25) ? 25 : fluid.temperatures[0];
+        setFluidTemperature(temp.toString());
+      }
+      
       const temp = fluid.temperatures.includes(25) ? 25 : fluid.temperatures[0];
-      setFluidTemperature(temp.toString());
       setDensity(fluid.density[temp].toString());
       setViscosity(fluid.viscosity[temp].toString());
       
-      // For gas fluids, set density @ 60°F and lock the field
+      // For gas fluids, set density @ 60°F, MW, and lock the fields
       if (fluid.type === "gas" && fluid.density60F) {
         setGasDensity60F(fluid.density60F.toString());
         // Calculate MW from density: MW = ρ × R × T / P (at std conditions)
         // At 60°F (288.71K), 1 atm: MW = ρ × 8314 × 288.71 / 101325 = ρ × 23.69
         const mw = fluid.density60F * 23.69;
         setGasMolecularWeight(mw.toFixed(2));
-        setIsGasDensityLocked(true);
+        setIsGasPropsLocked(true);
       }
     }
   };
@@ -552,22 +559,17 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return insideDiameterMM.toFixed(2);
   }, [insideDiameterMM, diameterUnit]);
 
-  // Get flow rate conversion factor
+  // Get flow rate conversion factor (volumetric only for gas)
   const flowRateConversion = lineType === "gas" 
-    ? (gasFlowInputType === "volumetric" ? gasVolumetricFlowRateToM3s : gasMassFlowRateToKgS)
+    ? gasVolumetricFlowRateToM3s
     : liquidFlowRateToM3s;
 
   // Convert all inputs to SI units
   const L_m = useMemo(() => parseFloat(pipeLength) * lengthToMeters[lengthUnit] || 0, [pipeLength, lengthUnit]);
   const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]);
-  // For gas mass flow, we'll compute the volumetric flow later from molar flow
   const Q_m3s = useMemo(() => {
-    if (lineType === "gas" && gasFlowInputType === "mass") {
-      // For mass flow, Q_m3s is not directly used; we compute molar flow from mass flow
-      return 0; // Placeholder, molar flow calculated separately
-    }
     return parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0);
-  }, [flowRate, flowRateUnit, flowRateConversion, lineType, gasFlowInputType]);
+  }, [flowRate, flowRateUnit, flowRateConversion]);
   const mu = useMemo(() => parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0, [viscosity, viscosityUnit]);
   const epsilon_m = useMemo(() => {
     const roughnessValue = pipeMaterial === "Custom"
@@ -585,12 +587,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const Z_factor = useMemo(() => parseFloat(compressibilityZ) || 1.0, [compressibilityZ]);
   const Z_std_factor = useMemo(() => parseFloat(baseCompressibilityZ) || 1.0, [baseCompressibilityZ]);
   
-  // Calculate MW from gas density at 60°F: MW = ρ × R × T / P
-  // At 60°F (288.71K), 1 atm (101325 Pa): MW = ρ × 8314 × 288.71 / 101325 = ρ × 23.69
+  // Use molecular weight directly from user input (or auto-calculated from density)
   const MW = useMemo(() => {
-    const rho60F = parseFloat(gasDensity60F) || 0.856;
-    return rho60F * 23.69; // kg/kmol
-  }, [gasDensity60F]);
+    return parseFloat(gasMolecularWeight) || 20.3; // kg/kmol
+  }, [gasMolecularWeight]);
 
   // Gas constant R = 8.314 J/(mol·K) = 8.314 kPa·L/(mol·K)
   const R_gas = 8.314; // J/(mol·K)
@@ -623,15 +623,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
   // For gas calculations we convert the entered volumetric flow (standard OR actual) into a molar flow.
   // Convention used here: for gas, "m³/h" is treated as ACTUAL flow at inlet conditions; other units are treated as STANDARD flow at base/std conditions.
-  const isGasActualFlow = lineType === "gas" && gasFlowInputType === "volumetric" && flowRateUnit === "m³/h";
+  const isGasActualFlow = lineType === "gas" && flowRateUnit === "m³/h";
 
-  // Calculate mass flow in kg/s for display (when using volumetric input)
+  // Calculate mass flow in kg/s for display
   const massFlowKgS = useMemo(() => {
     if (lineType !== "gas") return 0;
-    
-    if (gasFlowInputType === "mass") {
-      return parseFloat(flowRate) * (gasMassFlowRateToKgS[flowRateUnit] || 0);
-    }
     
     // From volumetric: first get molar flow, then multiply by MW
     const R_kmol = 8314;
@@ -644,20 +640,14 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     const Q_vol = parseFloat(flowRate) * (gasVolumetricFlowRateToM3s[flowRateUnit] || 0);
     const molarFlow = (P_ref_Pa * Q_vol) / (Z_ref * R_kmol * T_ref_K);
     return molarFlow * MW;
-  }, [lineType, gasFlowInputType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW]);
+  }, [lineType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW]);
 
   const molarFlowKmolPerS = useMemo(() => {
     if (lineType !== "gas") return 0;
 
     const R_kmol = 8314; // Pa·m³/(kmol·K)
 
-    // Mass flow input: ṅ = ṁ / MW
-    if (gasFlowInputType === "mass") {
-      if (MW <= 0) return 0;
-      return massFlowKgS / MW; // kmol/s
-    }
-
-    // Volumetric flow input
+    // Volumetric flow input only
     const P_ref_Pa = (isGasActualFlow ? P_operating_bara : P_std_bara) * 100000;
     const T_ref_K = isGasActualFlow ? T_operating_K : T_std_K;
     const Z_ref = isGasActualFlow ? Z_factor : Z_std_factor;
@@ -668,21 +658,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
     // ṅ = (P·Q) / (Z·R·T)
     return (P_ref_Pa * Q_vol) / (Z_ref * R_kmol * T_ref_K);
-  }, [lineType, gasFlowInputType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW, massFlowKgS]);
-
-  // Calculate equivalent volumetric flow (MMSCFD) for display when using mass flow input
-  const equivalentMMSCFD = useMemo(() => {
-    if (lineType !== "gas" || gasFlowInputType !== "mass") return 0;
-    
-    // From molar flow, calculate standard volumetric flow
-    // Q_std = ṅ × Z_std × R × T_std / P_std
-    const R_kmol = 8314;
-    const P_std_Pa = P_std_bara * 100000;
-    const Q_std_m3s = (molarFlowKmolPerS * Z_std_factor * R_kmol * T_std_K) / P_std_Pa;
-    
-    // Convert m³/s to MMSCFD (divide by conversion factor)
-    return Q_std_m3s / gasVolumetricFlowRateToM3s["MMSCFD"];
-  }, [lineType, gasFlowInputType, molarFlowKmolPerS, P_std_bara, T_std_K, Z_std_factor]);
+  }, [lineType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW, massFlowKgS]);
 
   // Calculate velocity
   // Gas: velocity is computed from the inlet actual volumetric flow derived from molar flow (HYSYS-style)
@@ -1296,45 +1272,32 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
               {/* Temperature */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Temperature (°C)</Label>
+                <Label className="text-sm font-medium">
+                  Temperature {lineType === "gas" && selectedFluid && selectedFluid !== "Other" ? "(60°F)" : "(°C)"}
+                </Label>
                 <Input
                   type="number"
                   value={fluidTemperature}
                   onChange={(e) => setFluidTemperature(e.target.value)}
-                  disabled={selectedFluid !== "" && selectedFluid !== "Other"}
-                  className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
-                  placeholder="25"
+                  disabled={lineType === "gas" ? (selectedFluid !== "" && selectedFluid !== "Other") : (selectedFluid !== "" && selectedFluid !== "Other")}
+                  className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${(selectedFluid !== "" && selectedFluid !== "Other") ? 'bg-muted/50 cursor-not-allowed' : ''}`}
+                  placeholder={lineType === "gas" ? "15.56" : "25"}
                 />
+                {lineType === "gas" && selectedFluid && selectedFluid !== "Other" && (
+                  <p className="text-xs text-muted-foreground">Locked to 60°F (15.56°C) for selected fluid</p>
+                )}
               </div>
 
               {/* Flow Rate */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Flow Rate</Label>
-                  {lineType === "gas" && (
-                    <Tabs value={gasFlowInputType} onValueChange={(v) => {
-                      setGasFlowInputType(v as "volumetric" | "mass");
-                      // Reset flow rate unit when switching
-                      if (v === "volumetric") {
-                        setFlowRateUnit("MMSCFD");
-                      } else {
-                        setFlowRateUnit("kg/hr");
-                      }
-                    }} className="h-7">
-                      <TabsList className="h-7 p-0.5">
-                        <TabsTrigger value="volumetric" className="text-xs h-6 px-2">Volumetric</TabsTrigger>
-                        <TabsTrigger value="mass" className="text-xs h-6 px-2">Mass</TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-                  )}
-                </div>
+                <Label className="text-sm font-medium">Flow Rate</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
                     value={flowRate}
                     onChange={(e) => setFlowRate(e.target.value)}
                     className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder={lineType === "gas" ? (gasFlowInputType === "volumetric" ? "10" : "1000") : "50"}
+                    placeholder={lineType === "gas" ? "10" : "50"}
                   />
                   <Select value={flowRateUnit} onValueChange={setFlowRateUnit}>
                     <SelectTrigger className="w-28">
@@ -1342,13 +1305,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     </SelectTrigger>
                     <SelectContent>
                       {lineType === "gas" ? (
-                        gasFlowInputType === "volumetric" 
-                          ? Object.keys(gasVolumetricFlowRateToM3s).map((unit) => (
-                              <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                            ))
-                          : Object.keys(gasMassFlowRateToKgS).map((unit) => (
-                              <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                            ))
+                        Object.keys(gasVolumetricFlowRateToM3s).map((unit) => (
+                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                        ))
                       ) : (
                         Object.keys(liquidFlowRateToM3s).map((unit) => (
                           <SelectItem key={unit} value={unit}>{unit}</SelectItem>
@@ -1357,14 +1316,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     </SelectContent>
                   </Select>
                 </div>
-                {lineType === "gas" && gasFlowInputType === "volumetric" && (
+                {lineType === "gas" && (
                   <p className="text-xs text-muted-foreground">
                     <span className="font-mono">m³/h</span> = actual flow at inlet; other units = standard flow.
-                  </p>
-                )}
-                {lineType === "gas" && gasFlowInputType === "mass" && equivalentMMSCFD > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    ≈ <span className="font-mono font-medium">{equivalentMMSCFD.toFixed(4)}</span> MMSCFD (at std conditions)
                   </p>
                 )}
               </div>
@@ -1460,20 +1414,37 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       type="number"
                       value={gasDensity60F}
                       onChange={(e) => {
-                        if (!isGasDensityLocked) {
+                        if (!isGasPropsLocked) {
                           setGasDensity60F(e.target.value);
                           // Auto-calculate MW from density
                           const rho = parseFloat(e.target.value) || 0.856;
                           setGasMolecularWeight((rho * 23.69).toFixed(2));
                         }
                       }}
-                      disabled={isGasDensityLocked}
-                      className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isGasDensityLocked ? 'bg-muted/50 cursor-not-allowed' : ''}`}
+                      disabled={isGasPropsLocked}
+                      className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isGasPropsLocked ? 'bg-muted/50 cursor-not-allowed' : ''}`}
                       placeholder="0.856"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      MW = {MW.toFixed(2)} kg/kmol {isGasDensityLocked && "(from fluid selection)"}
-                    </p>
+                  </div>
+                  
+                  {/* Molecular Weight - editable for accuracy */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Molecular Weight (kg/kmol)</Label>
+                    <Input
+                      type="number"
+                      value={gasMolecularWeight}
+                      onChange={(e) => {
+                        if (!isGasPropsLocked) {
+                          setGasMolecularWeight(e.target.value);
+                        }
+                      }}
+                      disabled={isGasPropsLocked}
+                      className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isGasPropsLocked ? 'bg-muted/50 cursor-not-allowed' : ''}`}
+                      placeholder="20.3"
+                    />
+                    {isGasPropsLocked && (
+                      <p className="text-xs text-muted-foreground">(from fluid selection)</p>
+                    )}
                   </div>
                   
                   {/* Calculated Densities Display */}
