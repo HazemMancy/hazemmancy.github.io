@@ -425,8 +425,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [densityUnit, setDensityUnit] = useState<string>("kg/m³");
   const [viscosity, setViscosity] = useState<string>(lineType === "gas" ? "0.011" : "1");
   const [viscosityUnit, setViscosityUnit] = useState<string>("cP");
-  const [pipeMaterial, setPipeMaterial] = useState<string>("Carbon Steel");
-  const [customRoughness, setCustomRoughness] = useState<string>("0.045");
+  const [pipeMaterial, setPipeMaterial] = useState<string>("Carbon Steel (New)");
+  const [customRoughness, setCustomRoughness] = useState<string>("0.0457");
   const [roughnessUnit, setRoughnessUnit] = useState<string>("mm");
   const [pressureUnit, setPressureUnit] = useState<string>("bar");
   const [selectedFluid, setSelectedFluid] = useState<string>("");
@@ -531,9 +531,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const Q_m3s = useMemo(() => parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0), [flowRate, flowRateUnit, flowRateConversion]);
   const mu = useMemo(() => parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0, [viscosity, viscosityUnit]);
   const epsilon_m = useMemo(() => {
-    const roughnessValue = pipeMaterial === "Custom" 
-      ? parseFloat(customRoughness) 
-      : pipeRoughness[pipeMaterial];
+    const roughnessValue = pipeMaterial === "Custom"
+      ? parseFloat(customRoughness)
+      : (pipeRoughness[pipeMaterial] ?? pipeRoughness["Carbon Steel (New)"]); // safe fallback
     return (roughnessValue || 0) * roughnessToMeters[roughnessUnit];
   }, [pipeMaterial, customRoughness, roughnessUnit]);
 
