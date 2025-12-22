@@ -625,6 +625,27 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Convention used here: for gas, "m³/h" is treated as ACTUAL flow at inlet conditions; other units are treated as STANDARD flow at base/std conditions.
   const isGasActualFlow = lineType === "gas" && gasFlowInputType === "volumetric" && flowRateUnit === "m³/h";
 
+  // Calculate mass flow in kg/s for display (when using volumetric input)
+  const massFlowKgS = useMemo(() => {
+    if (lineType !== "gas") return 0;
+    
+    if (gasFlowInputType === "mass") {
+      return parseFloat(flowRate) * (gasMassFlowRateToKgS[flowRateUnit] || 0);
+    }
+    
+    // From volumetric: first get molar flow, then multiply by MW
+    const R_kmol = 8314;
+    const P_ref_Pa = (isGasActualFlow ? P_operating_bara : P_std_bara) * 100000;
+    const T_ref_K = isGasActualFlow ? T_operating_K : T_std_K;
+    const Z_ref = isGasActualFlow ? Z_factor : Z_std_factor;
+    
+    if (P_ref_Pa <= 0 || T_ref_K <= 0 || Z_ref <= 0 || MW <= 0) return 0;
+    
+    const Q_vol = parseFloat(flowRate) * (gasVolumetricFlowRateToM3s[flowRateUnit] || 0);
+    const molarFlow = (P_ref_Pa * Q_vol) / (Z_ref * R_kmol * T_ref_K);
+    return molarFlow * MW;
+  }, [lineType, gasFlowInputType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW]);
+
   const molarFlowKmolPerS = useMemo(() => {
     if (lineType !== "gas") return 0;
 
@@ -632,7 +653,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
     // Mass flow input: ṅ = ṁ / MW
     if (gasFlowInputType === "mass") {
-      const massFlowKgS = parseFloat(flowRate) * (gasMassFlowRateToKgS[flowRateUnit] || 0);
       if (MW <= 0) return 0;
       return massFlowKgS / MW; // kmol/s
     }
@@ -648,7 +668,21 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
     // ṅ = (P·Q) / (Z·R·T)
     return (P_ref_Pa * Q_vol) / (Z_ref * R_kmol * T_ref_K);
-  }, [lineType, gasFlowInputType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW]);
+  }, [lineType, gasFlowInputType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW, massFlowKgS]);
+
+  // Calculate equivalent volumetric flow (MMSCFD) for display when using mass flow input
+  const equivalentMMSCFD = useMemo(() => {
+    if (lineType !== "gas" || gasFlowInputType !== "mass") return 0;
+    
+    // From molar flow, calculate standard volumetric flow
+    // Q_std = ṅ × Z_std × R × T_std / P_std
+    const R_kmol = 8314;
+    const P_std_Pa = P_std_bara * 100000;
+    const Q_std_m3s = (molarFlowKmolPerS * Z_std_factor * R_kmol * T_std_K) / P_std_Pa;
+    
+    // Convert m³/s to MMSCFD (divide by conversion factor)
+    return Q_std_m3s / gasVolumetricFlowRateToM3s["MMSCFD"];
+  }, [lineType, gasFlowInputType, molarFlowKmolPerS, P_std_bara, T_std_K, Z_std_factor]);
 
   // Calculate velocity
   // Gas: velocity is computed from the inlet actual volumetric flow derived from molar flow (HYSYS-style)
@@ -1326,6 +1360,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 {lineType === "gas" && gasFlowInputType === "volumetric" && (
                   <p className="text-xs text-muted-foreground">
                     <span className="font-mono">m³/h</span> = actual flow at inlet; other units = standard flow.
+                  </p>
+                )}
+                {lineType === "gas" && gasFlowInputType === "mass" && equivalentMMSCFD > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    ≈ <span className="font-mono font-medium">{equivalentMMSCFD.toFixed(4)}</span> MMSCFD (at std conditions)
                   </p>
                 )}
               </div>
