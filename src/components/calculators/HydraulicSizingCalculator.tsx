@@ -300,129 +300,6 @@ const pipeRoughness: Record<string, number> = {
   "Custom": 0,
 };
 
-// Common fluids database with temperature-dependent properties
-interface FluidProperties {
-  name: string;
-  type: "gas" | "liquid";
-  temperatures: number[];
-  density: Record<number, number>;
-  viscosity: Record<number, number>;
-  density60F?: number; // Gas density at 60°F (15.56°C), 1 atm in kg/m³
-}
-
-const fluidsDatabase: FluidProperties[] = [
-  // Gases - density60F is gas density at 60°F (15.56°C), 1 atm
-  { 
-    name: "Natural Gas", type: "gas",
-    temperatures: [15, 25, 50, 100],
-    density: { 15: 0.75, 25: 0.72, 50: 0.65, 100: 0.55 },
-    viscosity: { 15: 0.011, 25: 0.011, 50: 0.012, 100: 0.014 },
-    density60F: 0.856  // SG ~0.701 → ρ = 0.701 × 1.2215 kg/m³
-  },
-  { 
-    name: "Air", type: "gas",
-    temperatures: [15, 25, 50, 100, 150],
-    density: { 15: 1.225, 25: 1.184, 50: 1.093, 100: 0.946, 150: 0.834 },
-    viscosity: { 15: 0.0179, 25: 0.0184, 50: 0.0196, 100: 0.0218, 150: 0.0238 },
-    density60F: 1.2215  // Air at 60°F, 1 atm (reference)
-  },
-  { 
-    name: "Nitrogen", type: "gas",
-    temperatures: [15, 25, 50, 100],
-    density: { 15: 1.185, 25: 1.145, 50: 1.056, 100: 0.916 },
-    viscosity: { 15: 0.0175, 25: 0.0180, 50: 0.0191, 100: 0.0212 },
-    density60F: 1.181  // MW=28.01 → ρ = 1.181 kg/m³
-  },
-  { 
-    name: "Carbon Dioxide", type: "gas",
-    temperatures: [15, 25, 50, 100],
-    density: { 15: 1.87, 25: 1.81, 50: 1.67, 100: 1.45 },
-    viscosity: { 15: 0.0145, 25: 0.0150, 50: 0.0165, 100: 0.0190 },
-    density60F: 1.855  // MW=44.01 → ρ = 1.855 kg/m³
-  },
-  { 
-    name: "Hydrogen", type: "gas",
-    temperatures: [15, 25, 50, 100],
-    density: { 15: 0.085, 25: 0.082, 50: 0.076, 100: 0.066 },
-    viscosity: { 15: 0.0088, 25: 0.0090, 50: 0.0095, 100: 0.0105 },
-    density60F: 0.0851  // MW=2.016 → ρ = 0.0851 kg/m³
-  },
-  { 
-    name: "Steam", type: "gas",
-    temperatures: [100, 150, 200, 300],
-    density: { 100: 0.590, 150: 0.517, 200: 0.460, 300: 0.379 },
-    viscosity: { 100: 0.0125, 150: 0.0142, 200: 0.0160, 300: 0.0195 },
-    density60F: 0.760  // MW=18.015 → ρ = 0.760 kg/m³
-  },
-  // Liquids
-  { 
-    name: "Water", type: "liquid",
-    temperatures: [5, 15, 25, 40, 60, 80, 100],
-    density: { 5: 1000, 15: 999, 25: 997, 40: 992, 60: 983, 80: 972, 100: 958 },
-    viscosity: { 5: 1.52, 15: 1.14, 25: 0.89, 40: 0.65, 60: 0.47, 80: 0.35, 100: 0.28 }
-  },
-  { 
-    name: "Seawater", type: "liquid",
-    temperatures: [5, 15, 25, 40],
-    density: { 5: 1028, 15: 1026, 25: 1023, 40: 1017 },
-    viscosity: { 5: 1.62, 15: 1.20, 25: 0.96, 40: 0.70 }
-  },
-  { 
-    name: "Crude Oil (Light)", type: "liquid",
-    temperatures: [15, 25, 40, 60],
-    density: { 15: 850, 25: 843, 40: 830, 60: 812 },
-    viscosity: { 15: 12, 25: 8, 40: 5, 60: 3 }
-  },
-  { 
-    name: "Crude Oil (Medium)", type: "liquid",
-    temperatures: [15, 25, 40, 60],
-    density: { 15: 900, 25: 893, 40: 880, 60: 862 },
-    viscosity: { 15: 50, 25: 30, 40: 15, 60: 8 }
-  },
-  { 
-    name: "Crude Oil (Heavy)", type: "liquid",
-    temperatures: [15, 25, 40, 60, 80],
-    density: { 15: 950, 25: 943, 40: 930, 60: 912, 80: 895 },
-    viscosity: { 15: 500, 25: 200, 40: 80, 60: 35, 80: 18 }
-  },
-  { 
-    name: "Diesel", type: "liquid",
-    temperatures: [15, 25, 40, 60],
-    density: { 15: 850, 25: 843, 40: 830, 60: 812 },
-    viscosity: { 15: 4.5, 25: 3.2, 40: 2.2, 60: 1.5 }
-  },
-  { 
-    name: "Gasoline", type: "liquid",
-    temperatures: [15, 25, 40],
-    density: { 15: 750, 25: 742, 40: 728 },
-    viscosity: { 15: 0.6, 25: 0.5, 40: 0.4 }
-  },
-  { 
-    name: "Kerosene", type: "liquid",
-    temperatures: [15, 25, 40, 60],
-    density: { 15: 810, 25: 802, 40: 788, 60: 770 },
-    viscosity: { 15: 2.2, 25: 1.7, 40: 1.2, 60: 0.9 }
-  },
-  { 
-    name: "Glycol (MEG)", type: "liquid",
-    temperatures: [15, 25, 40, 60],
-    density: { 15: 1115, 25: 1109, 40: 1098, 60: 1083 },
-    viscosity: { 15: 25, 25: 17, 40: 9, 60: 5 }
-  },
-  { 
-    name: "Methanol", type: "liquid",
-    temperatures: [15, 25, 40],
-    density: { 15: 792, 25: 785, 40: 772 },
-    viscosity: { 15: 0.62, 25: 0.55, 40: 0.45 }
-  },
-  { 
-    name: "Ammonia (Liquid)", type: "liquid",
-    temperatures: [-33, 0, 25],
-    density: { "-33": 682, 0: 639, 25: 602 },
-    viscosity: { "-33": 0.27, 0: 0.16, 25: 0.13 }
-  },
-];
-
 interface HydraulicSizingCalculatorProps {
   lineType: "gas" | "liquid" | "mixed";
 }
@@ -445,7 +322,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [customRoughness, setCustomRoughness] = useState<string>("0.0457");
   const [roughnessUnit, setRoughnessUnit] = useState<string>("mm");
   const [pressureUnit, setPressureUnit] = useState<string>("bar");
-  const [selectedFluid, setSelectedFluid] = useState<string>("");
   const [fluidTemperature, setFluidTemperature] = useState<string>("15");
   
   // Operating conditions for gas (editable)
@@ -453,7 +329,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [compressibilityZ, setCompressibilityZ] = useState<string>("1.0"); // Compressibility factor
   const [gasDensity60F, setGasDensity60F] = useState<string>("0.856"); // Gas density at 60°F (kg/m³)
   const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("20.3"); // kg/kmol - editable for accuracy
-  const [isGasPropsLocked, setIsGasPropsLocked] = useState<boolean>(false); // Locked when fluid selected from dropdown
   
   // Standard/Base conditions (editable so you can match your HYSYS/project settings)
   const [baseTemperature, setBaseTemperature] = useState<string>("15.56"); // °C (60°F for MMSCFD)
@@ -475,62 +350,6 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     const ranges = getPressureRangesForService(service);
     if (ranges.length > 0 && !ranges.includes(gasPressureRange)) {
       setGasPressureRange(ranges[0]);
-    }
-  };
-
-  // Get fluids filtered by type
-  const availableFluids = useMemo(() => {
-    return fluidsDatabase.filter(f => f.type === lineType);
-  }, [lineType]);
-
-  // Get available temperatures for selected fluid
-  const availableTemperatures = useMemo(() => {
-    const fluid = fluidsDatabase.find(f => f.name === selectedFluid);
-    return fluid?.temperatures || [];
-  }, [selectedFluid]);
-
-  // Handle fluid selection
-  const handleFluidSelect = (fluidName: string) => {
-    setSelectedFluid(fluidName);
-    if (fluidName === "Other") {
-      // Allow custom input - unlock all fields
-      setIsGasPropsLocked(false);
-      return;
-    }
-    const fluid = fluidsDatabase.find(f => f.name === fluidName);
-    if (fluid) {
-      // Set temperature to 60°F (15.56°C) for gas fluids when selected
-      if (fluid.type === "gas") {
-        setFluidTemperature("15.56"); // 60°F in Celsius
-      } else {
-        const temp = fluid.temperatures.includes(25) ? 25 : fluid.temperatures[0];
-        setFluidTemperature(temp.toString());
-      }
-      
-      const temp = fluid.temperatures.includes(25) ? 25 : fluid.temperatures[0];
-      setDensity(fluid.density[temp].toString());
-      setViscosity(fluid.viscosity[temp].toString());
-      
-      // For gas fluids, set density @ 60°F, MW, and lock the fields
-      if (fluid.type === "gas" && fluid.density60F) {
-        setGasDensity60F(fluid.density60F.toString());
-        // Calculate MW from density: MW = ρ × R × T / P (at std conditions)
-        // At 60°F (288.71K), 1 atm: MW = ρ × 8314 × 288.71 / 101325 = ρ × 23.69
-        const mw = fluid.density60F * 23.69;
-        setGasMolecularWeight(mw.toFixed(2));
-        setIsGasPropsLocked(true);
-      }
-    }
-  };
-
-  // Handle temperature change
-  const handleTemperatureChange = (temp: string) => {
-    setFluidTemperature(temp);
-    const fluid = fluidsDatabase.find(f => f.name === selectedFluid);
-    if (fluid) {
-      const tempNum = parseInt(temp);
-      setDensity(fluid.density[tempNum]?.toString() || density);
-      setViscosity(fluid.viscosity[tempNum]?.toString() || viscosity);
     }
   };
 
@@ -1252,40 +1071,16 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
             </div>
 
             <div className="space-y-5">
-              {/* Fluid Selection */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Fluid Type</Label>
-                <Select value={selectedFluid} onValueChange={handleFluidSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select fluid..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableFluids.map((fluid) => (
-                      <SelectItem key={fluid.name} value={fluid.name}>
-                        {fluid.name}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="Other">Other (Custom)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Temperature */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  Temperature {lineType === "gas" && selectedFluid && selectedFluid !== "Other" ? "(60°F)" : "(°C)"}
-                </Label>
+                <Label className="text-sm font-medium">Temperature (°C)</Label>
                 <Input
                   type="number"
                   value={fluidTemperature}
                   onChange={(e) => setFluidTemperature(e.target.value)}
-                  disabled={lineType === "gas" ? (selectedFluid !== "" && selectedFluid !== "Other") : (selectedFluid !== "" && selectedFluid !== "Other")}
-                  className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${(selectedFluid !== "" && selectedFluid !== "Other") ? 'bg-muted/50 cursor-not-allowed' : ''}`}
+                  className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   placeholder={lineType === "gas" ? "15.56" : "25"}
                 />
-                {lineType === "gas" && selectedFluid && selectedFluid !== "Other" && (
-                  <p className="text-xs text-muted-foreground">Locked to 60°F (15.56°C) for selected fluid</p>
-                )}
               </div>
 
               {/* Flow Rate */}
@@ -1332,8 +1127,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       type="number"
                       value={density}
                       onChange={(e) => setDensity(e.target.value)}
-                      disabled={selectedFluid !== "" && selectedFluid !== "Other"}
-                      className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
+                      className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="1000"
                     />
                     <Select value={densityUnit} onValueChange={setDensityUnit}>
@@ -1358,8 +1152,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     type="number"
                     value={viscosity}
                     onChange={(e) => setViscosity(e.target.value)}
-                    disabled={selectedFluid !== "" && selectedFluid !== "Other"}
-                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder={lineType === "gas" ? "0.011" : "1"}
                   />
                   <Select value={viscosityUnit} onValueChange={setViscosityUnit}>
@@ -1414,15 +1207,12 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       type="number"
                       value={gasDensity60F}
                       onChange={(e) => {
-                        if (!isGasPropsLocked) {
-                          setGasDensity60F(e.target.value);
-                          // Auto-calculate MW from density
-                          const rho = parseFloat(e.target.value) || 0.856;
-                          setGasMolecularWeight((rho * 23.69).toFixed(2));
-                        }
+                        setGasDensity60F(e.target.value);
+                        // Auto-calculate MW from density
+                        const rho = parseFloat(e.target.value) || 0.856;
+                        setGasMolecularWeight((rho * 23.69).toFixed(2));
                       }}
-                      disabled={isGasPropsLocked}
-                      className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isGasPropsLocked ? 'bg-muted/50 cursor-not-allowed' : ''}`}
+                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="0.856"
                     />
                   </div>
@@ -1433,18 +1223,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     <Input
                       type="number"
                       value={gasMolecularWeight}
-                      onChange={(e) => {
-                        if (!isGasPropsLocked) {
-                          setGasMolecularWeight(e.target.value);
-                        }
-                      }}
-                      disabled={isGasPropsLocked}
-                      className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isGasPropsLocked ? 'bg-muted/50 cursor-not-allowed' : ''}`}
+                      onChange={(e) => setGasMolecularWeight(e.target.value)}
+                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="20.3"
                     />
-                    {isGasPropsLocked && (
-                      <p className="text-xs text-muted-foreground">(from fluid selection)</p>
-                    )}
                   </div>
                   
                   {/* Calculated Densities Display */}
