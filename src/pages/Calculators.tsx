@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker } from "lucide-react";
+import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -67,6 +67,15 @@ const calculators: CalculatorCard[] = [
     route: "/calculators/gas-mixing",
     status: "available",
     category: "Thermodynamics"
+  },
+  {
+    id: "api-2000",
+    title: "API 2000 Tank Venting",
+    description: "Calculate tank venting requirements: thermal breathing, emergency fire venting, pump in/out, and P/V valve sizing",
+    icon: <Container className="w-8 h-8" />,
+    route: "/calculators/api-2000",
+    status: "available",
+    category: "Storage Tanks"
   }
 ];
 

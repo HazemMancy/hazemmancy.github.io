@@ -11,6 +11,7 @@ import HeatExchangerPage from "./pages/calculators/HeatExchangerPage";
 import PumpSizingPage from "./pages/calculators/PumpSizingPage";
 import CompressorPowerPage from "./pages/calculators/CompressorPowerPage";
 import GasMixingPage from "./pages/calculators/GasMixingPage";
+import API2000Page from "./pages/calculators/API2000Page";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/calculators/pump-sizing" element={<PumpSizingPage />} />
           <Route path="/calculators/compressor-power" element={<CompressorPowerPage />} />
           <Route path="/calculators/gas-mixing" element={<GasMixingPage />} />
+          <Route path="/calculators/api-2000" element={<API2000Page />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
