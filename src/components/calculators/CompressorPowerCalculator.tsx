@@ -6,8 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { AlertTriangle, CheckCircle, Info, Gauge, Thermometer, Wind, Zap, TrendingUp } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, Gauge, Thermometer, Wind, Zap, TrendingUp, HelpCircle } from 'lucide-react';
 import CompressorPerformanceCurves from './CompressorPerformanceCurves';
+import CompressorSelectionGuide from './CompressorSelectionGuide';
 
 // Gas properties database
 const gasDatabase: Record<string, { name: string; mw: number; k: number; z: number; cp: number }> = {
@@ -291,7 +292,7 @@ const CompressorPowerCalculator: React.FC = () => {
         {/* Input Section */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="gas" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="gas">Gas</TabsTrigger>
               <TabsTrigger value="conditions">Conditions</TabsTrigger>
               <TabsTrigger value="compressor">Compressor</TabsTrigger>
@@ -299,6 +300,10 @@ const CompressorPowerCalculator: React.FC = () => {
               <TabsTrigger value="curves" className="flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
                 Curves
+              </TabsTrigger>
+              <TabsTrigger value="guide" className="flex items-center gap-1">
+                <HelpCircle className="h-3 w-3" />
+                Guide
               </TabsTrigger>
             </TabsList>
 
@@ -626,6 +631,26 @@ const CompressorPowerCalculator: React.FC = () => {
                 <Card>
                   <CardContent className="py-8 text-center text-muted-foreground">
                     Enter operating conditions to generate performance curves
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            {/* Selection Guide Tab */}
+            <TabsContent value="guide" className="space-y-4">
+              {results && (
+                <CompressorSelectionGuide
+                  flowRate={results.actualFlow}
+                  compressionRatio={results.compressionRatio}
+                  molecularWeight={inputs.molecularWeight}
+                  dischargePressure={convertPressure(inputs.dischargePressure, inputs.pressureUnit, 'bara')}
+                  gasType={inputs.gasType}
+                />
+              )}
+              {!results && (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    Enter operating conditions to see selection recommendations
                   </CardContent>
                 </Card>
               )}

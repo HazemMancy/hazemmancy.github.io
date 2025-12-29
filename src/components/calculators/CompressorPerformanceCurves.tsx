@@ -248,6 +248,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                 {/* Operating flow reference line */}
                 <ReferenceLine
                   x={Math.round(operatingFlow)}
+                  yAxisId="head"
                   stroke="hsl(var(--primary))"
                   strokeDasharray="3 3"
                   strokeOpacity={0.5}
@@ -304,6 +305,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis 
+                  yAxisId="power"
                   label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }}
                   tick={{ fontSize: 11 }}
                 />
@@ -316,6 +318,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   formatter={(value: number) => [value.toFixed(1) + ' kW', 'Power']}
                 />
                 <Line
+                  yAxisId="power"
                   type="monotone"
                   dataKey="power"
                   stroke="hsl(var(--chart-3))"
@@ -325,6 +328,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                 />
                 <ReferenceLine
                   x={Math.round(operatingFlow)}
+                  yAxisId="power"
                   stroke="hsl(var(--primary))"
                   strokeDasharray="3 3"
                   label={{ value: 'Operating', position: 'top', fontSize: 10 }}
