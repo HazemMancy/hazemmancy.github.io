@@ -192,101 +192,6 @@ const HeatExchangerSizing = () => {
   const [hotFouling, setHotFouling] = useState("0.00035");
   const [coldFouling, setColdFouling] = useState("0.00018");
 
-  // Auto-update fluid properties when selection or temperature changes
-  const updateFluidFromDatabase = useCallback((fluidKey: string, avgTemp: number, setFluid: (f: FluidInputs) => void, currentFluid: FluidInputs) => {
-    if (fluidKey === "custom") return;
-    const props = getFluidProperties(fluidKey, avgTemp);
-    if (props) {
-      setFluid({
-        ...currentFluid,
-        density: props.density.toFixed(1),
-        specificHeat: props.specificHeat.toFixed(3),
-        viscosity: props.viscosity.toFixed(3),
-        thermalConductivity: props.thermalConductivity.toFixed(4),
-        prandtl: props.prandtl.toFixed(2)
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    const avgTemp = (parseFloat(hotFluid.inletTemp) + parseFloat(hotFluid.outletTemp)) / 2;
-    if (!isNaN(avgTemp)) updateFluidFromDatabase(hotFluidType, avgTemp, setHotFluid, hotFluid);
-  }, [hotFluidType, hotFluid.inletTemp, hotFluid.outletTemp]);
-
-  useEffect(() => {
-    const avgTemp = (parseFloat(coldFluid.inletTemp) + parseFloat(coldFluid.outletTemp)) / 2;
-    if (!isNaN(avgTemp)) updateFluidFromDatabase(coldFluidType, avgTemp, setColdFluid, coldFluid);
-  }, [coldFluidType, coldFluid.inletTemp, coldFluid.outletTemp]);
-
-  // ASME calculation effect
-  useEffect(() => {
-    const P = parseFloat(designPressure);
-    const CA = parseFloat(corrosionAllowance);
-    const E = parseFloat(jointEfficiency);
-    const shellDia = parseFloat(tubeGeometry.shellDiameter);
-    const tubeOD = parseFloat(tubeGeometry.outerDiameter);
-    const pitch = parseFloat(tubeGeometry.tubePitch);
-    const designTemp = Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp));
-    
-    if ([P, CA, E, shellDia, tubeOD, pitch, designTemp].some(isNaN)) return;
-    
-    const result = calculateASMEThickness(shellDia, tubeOD, pitch, P, designTemp, CA, shellMaterial, E);
-    setAsmeResults(result);
-  }, [designPressure, corrosionAllowance, shellMaterial, jointEfficiency, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, hotFluid.inletTemp, coldFluid.inletTemp]);
-
-  // PDF Export handler
-  const handleExportPDF = useCallback(() => {
-    if (!results) {
-      toast({ title: "No results", description: "Calculate results first before exporting", variant: "destructive" });
-      return;
-    }
-    const data: DatasheetData = {
-      projectName: "Heat Exchanger Design",
-      itemNumber: "HX-001",
-      date: new Date().toLocaleDateString(),
-      hotFluid: {
-        name: fluidDatabase[hotFluidType]?.name || "Custom Fluid",
-        inletTemp: parseFloat(hotFluid.inletTemp), outletTemp: parseFloat(hotFluid.outletTemp),
-        flowRate: parseFloat(hotFluid.flowRate), density: parseFloat(hotFluid.density),
-        viscosity: parseFloat(hotFluid.viscosity), specificHeat: parseFloat(hotFluid.specificHeat),
-        thermalConductivity: parseFloat(hotFluid.thermalConductivity), prandtl: parseFloat(hotFluid.prandtl),
-        foulingFactor: parseFloat(hotFouling)
-      },
-      coldFluid: {
-        name: fluidDatabase[coldFluidType]?.name || "Custom Fluid",
-        inletTemp: parseFloat(coldFluid.inletTemp), outletTemp: parseFloat(coldFluid.outletTemp),
-        flowRate: parseFloat(coldFluid.flowRate), density: parseFloat(coldFluid.density),
-        viscosity: parseFloat(coldFluid.viscosity), specificHeat: parseFloat(coldFluid.specificHeat),
-        thermalConductivity: parseFloat(coldFluid.thermalConductivity), prandtl: parseFloat(coldFluid.prandtl),
-        foulingFactor: parseFloat(coldFouling)
-      },
-      heatDuty: results.heatDuty, lmtd: results.lmtd, correctionFactor: results.correctionFactor,
-      effectiveLmtd: results.effectiveLmtd, overallU: parseFloat(overallU), calculatedU: results.calculatedU,
-      requiredArea: results.requiredArea, ntu: results.ntu, effectiveness: results.effectiveness,
-      hi: results.hi, ho: results.ho, tubeNusselt: results.tubeNusselt, shellNusselt: results.shellNusselt,
-      shellDiameter: parseFloat(tubeGeometry.shellDiameter), shellLength: parseFloat(tubeGeometry.tubeLength),
-      tubeOD: parseFloat(tubeGeometry.outerDiameter), tubeWallThickness: parseFloat(tubeGeometry.wallThickness),
-      tubeLength: parseFloat(tubeGeometry.tubeLength), numberOfTubes: parseInt(tubeGeometry.numberOfTubes),
-      tubePitch: parseFloat(tubeGeometry.tubePitch), tubePattern: tubeGeometry.tubePattern,
-      tubePasses: parseInt(tubeGeometry.tubePasses), baffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
-      baffleCut: parseFloat(tubeGeometry.baffleCut), numberOfBaffles: results.numberOfBaffles,
-      tubeMaterial: tubeGeometry.tubeMaterial,
-      tubeSidePressureDrop: results.tubeSidePressureDrop, shellSidePressureDrop: results.shellSidePressureDrop,
-      tubeSideVelocity: results.tubeSideVelocity, shellSideVelocity: results.shellSideVelocity,
-      tubeReynolds: results.tubeReynolds, shellReynolds: results.shellReynolds,
-      naturalFrequency: results.vibration.naturalFrequency, vortexFrequency: results.vibration.vortexSheddingFrequency,
-      criticalVelocity: results.vibration.criticalVelocity, vibrationStatus: results.vibration.isVibrationRisk ? "WARNING" : "OK",
-      shellThickness: asmeResults?.shellRecommended, headThickness: asmeResults?.headThicknessWithCA,
-      tubesheetThickness: asmeResults?.tubesheetThickness, flangeClass: asmeResults?.flangeClass,
-      designPressure: parseFloat(designPressure), designTemperature: Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp)),
-      hydroTestPressure: asmeResults?.hydroTestPressure, shellMaterial: asmeMaterials[shellMaterial]?.name,
-      shellSideMethod: shellSideMethod === "bell-delaware" ? "Bell-Delaware" : "Kern's Method",
-      tempUnit: getTempUnitLabel()
-    };
-    generateDatasheetPDF(data);
-    toast({ title: "PDF Generated", description: "Datasheet downloaded successfully" });
-  }, [results, asmeResults, hotFluid, coldFluid, hotFluidType, coldFluidType, hotFouling, coldFouling, overallU, tubeGeometry, designPressure, shellMaterial, shellSideMethod]);
-
   const [tubeGeometry, setTubeGeometry] = useState<TubeGeometry>({
     outerDiameter: "19.05",
     wallThickness: "2.11",
@@ -1189,6 +1094,105 @@ const HeatExchangerSizing = () => {
     }
   }, [hotFluid, coldFluid, overallU, area, flowArrangement, calculationMode, tempUnit, hotFouling, coldFouling, tubeGeometry, shellSideMethod, toKelvin, fromKelvin, calculateCorrectionFactor, calculateEffectivenessCounter, calculateEffectivenessParallel, calculateTubeSidePressureDrop, calculateBellDelaware, calculateKernShellSide, calculateTubeSideHTC, calculateShellSideHTC, calculateVibrationAnalysis]);
 
+  // Auto-update fluid properties when selection or temperature changes
+  const updateFluidFromDatabase = useCallback((fluidKey: string, avgTemp: number, setFluid: (f: FluidInputs) => void, currentFluid: FluidInputs) => {
+    if (fluidKey === "custom") return;
+    const props = getFluidProperties(fluidKey, avgTemp);
+    if (props) {
+      setFluid({
+        ...currentFluid,
+        density: props.density.toFixed(1),
+        specificHeat: props.specificHeat.toFixed(3),
+        viscosity: props.viscosity.toFixed(3),
+        thermalConductivity: props.thermalConductivity.toFixed(4),
+        prandtl: props.prandtl.toFixed(2)
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const avgTemp = (parseFloat(hotFluid.inletTemp) + parseFloat(hotFluid.outletTemp)) / 2;
+    if (!isNaN(avgTemp) && hotFluidType !== "custom") {
+      updateFluidFromDatabase(hotFluidType, avgTemp, setHotFluid, hotFluid);
+    }
+  }, [hotFluidType]);
+
+  useEffect(() => {
+    const avgTemp = (parseFloat(coldFluid.inletTemp) + parseFloat(coldFluid.outletTemp)) / 2;
+    if (!isNaN(avgTemp) && coldFluidType !== "custom") {
+      updateFluidFromDatabase(coldFluidType, avgTemp, setColdFluid, coldFluid);
+    }
+  }, [coldFluidType]);
+
+  // ASME calculation effect
+  useEffect(() => {
+    const P = parseFloat(designPressure);
+    const CA = parseFloat(corrosionAllowance);
+    const E = parseFloat(jointEfficiency);
+    const shellDia = parseFloat(tubeGeometry.shellDiameter);
+    const tubeOD = parseFloat(tubeGeometry.outerDiameter);
+    const pitch = parseFloat(tubeGeometry.tubePitch);
+    const designTemp = Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp));
+    
+    if ([P, CA, E, shellDia, tubeOD, pitch, designTemp].some(isNaN)) return;
+    
+    const result = calculateASMEThickness(shellDia, tubeOD, pitch, P, designTemp, CA, shellMaterial, E);
+    setAsmeResults(result);
+  }, [designPressure, corrosionAllowance, shellMaterial, jointEfficiency, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, hotFluid.inletTemp, coldFluid.inletTemp]);
+
+  // PDF Export handler
+  const handleExportPDF = useCallback(() => {
+    if (!results) {
+      toast({ title: "No results", description: "Calculate results first before exporting", variant: "destructive" });
+      return;
+    }
+    const data: DatasheetData = {
+      projectName: "Heat Exchanger Design",
+      itemNumber: "HX-001",
+      date: new Date().toLocaleDateString(),
+      hotFluid: {
+        name: fluidDatabase[hotFluidType]?.name || "Custom Fluid",
+        inletTemp: parseFloat(hotFluid.inletTemp), outletTemp: parseFloat(hotFluid.outletTemp),
+        flowRate: parseFloat(hotFluid.flowRate), density: parseFloat(hotFluid.density),
+        viscosity: parseFloat(hotFluid.viscosity), specificHeat: parseFloat(hotFluid.specificHeat),
+        thermalConductivity: parseFloat(hotFluid.thermalConductivity), prandtl: parseFloat(hotFluid.prandtl),
+        foulingFactor: parseFloat(hotFouling)
+      },
+      coldFluid: {
+        name: fluidDatabase[coldFluidType]?.name || "Custom Fluid",
+        inletTemp: parseFloat(coldFluid.inletTemp), outletTemp: parseFloat(coldFluid.outletTemp),
+        flowRate: parseFloat(coldFluid.flowRate), density: parseFloat(coldFluid.density),
+        viscosity: parseFloat(coldFluid.viscosity), specificHeat: parseFloat(coldFluid.specificHeat),
+        thermalConductivity: parseFloat(coldFluid.thermalConductivity), prandtl: parseFloat(coldFluid.prandtl),
+        foulingFactor: parseFloat(coldFouling)
+      },
+      heatDuty: results.heatDuty, lmtd: results.lmtd, correctionFactor: results.correctionFactor,
+      effectiveLmtd: results.effectiveLmtd, overallU: parseFloat(overallU), calculatedU: results.calculatedU,
+      requiredArea: results.requiredArea, ntu: results.ntu, effectiveness: results.effectiveness,
+      hi: results.hi, ho: results.ho, tubeNusselt: results.tubeNusselt, shellNusselt: results.shellNusselt,
+      shellDiameter: parseFloat(tubeGeometry.shellDiameter), shellLength: parseFloat(tubeGeometry.tubeLength),
+      tubeOD: parseFloat(tubeGeometry.outerDiameter), tubeWallThickness: parseFloat(tubeGeometry.wallThickness),
+      tubeLength: parseFloat(tubeGeometry.tubeLength), numberOfTubes: parseInt(tubeGeometry.numberOfTubes),
+      tubePitch: parseFloat(tubeGeometry.tubePitch), tubePattern: tubeGeometry.tubePattern,
+      tubePasses: parseInt(tubeGeometry.tubePasses), baffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
+      baffleCut: parseFloat(tubeGeometry.baffleCut), numberOfBaffles: results.numberOfBaffles,
+      tubeMaterial: tubeGeometry.tubeMaterial,
+      tubeSidePressureDrop: results.tubeSidePressureDrop, shellSidePressureDrop: results.shellSidePressureDrop,
+      tubeSideVelocity: results.tubeSideVelocity, shellSideVelocity: results.shellSideVelocity,
+      tubeReynolds: results.tubeReynolds, shellReynolds: results.shellReynolds,
+      naturalFrequency: results.vibration.naturalFrequency, vortexFrequency: results.vibration.vortexSheddingFrequency,
+      criticalVelocity: results.vibration.criticalVelocity, vibrationStatus: results.vibration.isVibrationRisk ? "WARNING" : "OK",
+      shellThickness: asmeResults?.shellRecommended, headThickness: asmeResults?.headThicknessWithCA,
+      tubesheetThickness: asmeResults?.tubesheetThickness, flangeClass: asmeResults?.flangeClass,
+      designPressure: parseFloat(designPressure), designTemperature: Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp)),
+      hydroTestPressure: asmeResults?.hydroTestPressure, shellMaterial: asmeMaterials[shellMaterial]?.name,
+      shellSideMethod: shellSideMethod === "bell-delaware" ? "Bell-Delaware" : "Kern's Method",
+      tempUnit: getTempUnitLabel()
+    };
+    generateDatasheetPDF(data);
+    toast({ title: "PDF Generated", description: "Datasheet downloaded successfully" });
+  }, [results, asmeResults, hotFluid, coldFluid, hotFluidType, coldFluidType, hotFouling, coldFouling, overallU, tubeGeometry, designPressure, shellMaterial, shellSideMethod]);
+
   const formatNumber = (num: number, decimals: number = 2): string => {
     if (isNaN(num) || !isFinite(num)) return "—";
     return num.toLocaleString(undefined, { 
@@ -1392,6 +1396,69 @@ const HeatExchangerSizing = () => {
                 <SelectItem value="K">Kelvin (K)</SelectItem>
               </SelectContent>
             </Select>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Fluid Selection */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="border-border/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Droplets className="w-4 h-4 text-red-500" />
+              Hot Fluid Selection
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={hotFluidType} onValueChange={setHotFluidType}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Select fluid" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">Custom (Manual Entry)</SelectItem>
+                {Object.entries(getFluidsByCategory()).map(([category, fluids]) => (
+                  <div key={category}>
+                    <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">{category}</div>
+                    {fluids.map(f => (
+                      <SelectItem key={f.key} value={f.key}>{f.name}</SelectItem>
+                    ))}
+                  </div>
+                ))}
+              </SelectContent>
+            </Select>
+            {hotFluidType !== "custom" && (
+              <p className="text-xs text-muted-foreground mt-2">Properties auto-calculated at avg temp</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Droplets className="w-4 h-4 text-blue-500" />
+              Cold Fluid Selection
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={coldFluidType} onValueChange={setColdFluidType}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Select fluid" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">Custom (Manual Entry)</SelectItem>
+                {Object.entries(getFluidsByCategory()).map(([category, fluids]) => (
+                  <div key={category}>
+                    <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">{category}</div>
+                    {fluids.map(f => (
+                      <SelectItem key={f.key} value={f.key}>{f.name}</SelectItem>
+                    ))}
+                  </div>
+                ))}
+              </SelectContent>
+            </Select>
+            {coldFluidType !== "custom" && (
+              <p className="text-xs text-muted-foreground mt-2">Properties auto-calculated at avg temp</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -2034,6 +2101,127 @@ const HeatExchangerSizing = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* ASME Mechanical Design */}
+      <Card className="border-border/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" />
+            Mechanical Design (ASME Section VIII Div.1)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Design Pressure (MPa)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={designPressure}
+                onChange={(e) => setDesignPressure(e.target.value)}
+                className="h-9 no-spinner"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Corrosion Allow. (mm)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                value={corrosionAllowance}
+                onChange={(e) => setCorrosionAllowance(e.target.value)}
+                className="h-9 no-spinner"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Shell Material</Label>
+              <Select value={shellMaterial} onValueChange={setShellMaterial}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {getMaterialOptions().map(m => (
+                    <SelectItem key={m.key} value={m.key}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Joint Efficiency</Label>
+              <Select value={jointEfficiency} onValueChange={setJointEfficiency}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1.0">1.0 (Full RT)</SelectItem>
+                  <SelectItem value="0.85">0.85 (Spot RT)</SelectItem>
+                  <SelectItem value="0.7">0.7 (No RT)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          {asmeResults && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="space-y-1 p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <p className="text-xs text-muted-foreground">Shell Thickness</p>
+                <p className="text-lg font-semibold text-primary">
+                  {asmeResults.shellRecommended} <span className="text-sm font-normal">mm</span>
+                </p>
+              </div>
+              <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                <p className="text-xs text-muted-foreground">Head Thickness</p>
+                <p className="text-lg font-semibold">
+                  {asmeResults.headThicknessWithCA.toFixed(1)} <span className="text-sm font-normal">mm</span>
+                </p>
+              </div>
+              <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                <p className="text-xs text-muted-foreground">Tubesheet Thickness</p>
+                <p className="text-lg font-semibold">
+                  {asmeResults.tubesheetThickness.toFixed(0)} <span className="text-sm font-normal">mm</span>
+                </p>
+              </div>
+              <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                <p className="text-xs text-muted-foreground">Flange Class</p>
+                <p className="text-lg font-semibold">
+                  {asmeResults.flangeClass}
+                </p>
+              </div>
+              <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                <p className="text-xs text-muted-foreground">MAWP</p>
+                <p className="text-lg font-semibold">
+                  {asmeResults.shellMAWP.toFixed(2)} <span className="text-sm font-normal">MPa</span>
+                </p>
+              </div>
+              <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                <p className="text-xs text-muted-foreground">Hydro Test Pressure</p>
+                <p className="text-lg font-semibold">
+                  {asmeResults.hydroTestPressure.toFixed(2)} <span className="text-sm font-normal">MPa</span>
+                </p>
+              </div>
+              <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                <p className="text-xs text-muted-foreground">Allowable Stress</p>
+                <p className="text-lg font-semibold">
+                  {asmeResults.allowableStress.toFixed(0)} <span className="text-sm font-normal">MPa</span>
+                </p>
+              </div>
+              <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                <p className="text-xs text-muted-foreground">Min Tube Thickness</p>
+                <p className="text-lg font-semibold">
+                  {asmeResults.tubeMinThickness.toFixed(2)} <span className="text-sm font-normal">mm</span>
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Export Button */}
+      <div className="flex justify-end">
+        <Button onClick={handleExportPDF} className="gap-2">
+          <Download className="w-4 h-4" />
+          Export PDF Datasheet
+        </Button>
+      </div>
 
       {/* Reference Tables */}
       <Accordion type="single" collapsible className="w-full">
