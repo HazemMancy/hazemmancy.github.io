@@ -162,13 +162,22 @@ const HeatExchangerSizing = () => {
   const [coldFluidType, setColdFluidType] = useState<string>("water");
   
   // ASME inputs
-  const [designPressure, setDesignPressure] = useState("1.0");
+  const [designPressure, setDesignPressure] = useState("10"); // Now in barg
   const [corrosionAllowance, setCorrosionAllowance] = useState("3.0");
   const [shellMaterial, setShellMaterial] = useState("sa-516-70");
   const [jointEfficiency, setJointEfficiency] = useState("1.0");
   const [asmeResults, setAsmeResults] = useState<ASMEResults | null>(null);
   const [savedDesigns, setSavedDesigns] = useState<SavedDesign[]>([]);
   const [showComparison, setShowComparison] = useState(false);
+  
+  // PDF metadata
+  const [companyName, setCompanyName] = useState("Company Name");
+  const [projectName, setProjectName] = useState("Heat Exchanger Design");
+  const [itemNumber, setItemNumber] = useState("HX-001");
+  const [revisionNo, setRevisionNo] = useState("0");
+  
+  // TEMA auto-calculate mode
+  const [autoCalculateGeometry, setAutoCalculateGeometry] = useState(false);
   
   const [hotFluid, setHotFluid] = useState<FluidInputs>({
     inletTemp: "150",
@@ -1141,7 +1150,9 @@ const HeatExchangerSizing = () => {
     
     if ([P, CA, E, shellDia, tubeOD, pitch, designTemp].some(isNaN)) return;
     
-    const result = calculateASMEThickness(shellDia, tubeOD, pitch, P, designTemp, CA, shellMaterial, E);
+    // Convert barg to MPa: barg / 10 = MPa (approximately)
+    const pressureMPa = P / 10;
+    const result = calculateASMEThickness(shellDia, tubeOD, pitch, pressureMPa, designTemp, CA, shellMaterial, E);
     setAsmeResults(result);
   }, [designPressure, corrosionAllowance, shellMaterial, jointEfficiency, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, hotFluid.inletTemp, coldFluid.inletTemp]);
 
@@ -1152,8 +1163,10 @@ const HeatExchangerSizing = () => {
       return;
     }
     const data: DatasheetData = {
-      projectName: "Heat Exchanger Design",
-      itemNumber: "HX-001",
+      companyName,
+      projectName,
+      itemNumber,
+      revisionNo,
       date: new Date().toLocaleDateString(),
       hotFluid: {
         name: fluidDatabase[hotFluidType]?.name || "Custom Fluid",
@@ -1189,14 +1202,84 @@ const HeatExchangerSizing = () => {
       criticalVelocity: results.vibration.criticalVelocity, vibrationStatus: results.vibration.isVibrationRisk ? "WARNING" : "OK",
       shellThickness: asmeResults?.shellRecommended, headThickness: asmeResults?.headThicknessWithCA,
       tubesheetThickness: asmeResults?.tubesheetThickness, flangeClass: asmeResults?.flangeClass,
-      designPressure: parseFloat(designPressure), designTemperature: Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp)),
+      designPressure: parseFloat(designPressure) / 10, // Convert barg to MPa for PDF
+      designTemperature: Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp)),
       hydroTestPressure: asmeResults?.hydroTestPressure, shellMaterial: asmeMaterials[shellMaterial]?.name,
       shellSideMethod: shellSideMethod === "bell-delaware" ? "Bell-Delaware" : "Kern's Method",
       tempUnit: getTempUnitLabel()
     };
     generateDatasheetPDF(data);
     toast({ title: "PDF Generated", description: "Datasheet downloaded successfully" });
-  }, [results, asmeResults, hotFluid, coldFluid, hotFluidType, coldFluidType, hotFouling, coldFouling, overallU, tubeGeometry, designPressure, shellMaterial, shellSideMethod]);
+  }, [results, asmeResults, hotFluid, coldFluid, hotFluidType, coldFluidType, hotFouling, coldFouling, overallU, tubeGeometry, designPressure, shellMaterial, shellSideMethod, companyName, projectName, itemNumber, revisionNo]);
+
+  // Save design handler
+  const handleSaveDesign = useCallback(() => {
+    if (!results) {
+      toast({ title: "No results", description: "Calculate results first", variant: "destructive" });
+      return;
+    }
+    const design: SavedDesign = {
+      id: Date.now().toString(),
+      name: `Design ${savedDesigns.length + 1}`,
+      timestamp: new Date(),
+      shellDiameter: parseFloat(tubeGeometry.shellDiameter),
+      tubeOD: parseFloat(tubeGeometry.outerDiameter),
+      tubeLength: parseFloat(tubeGeometry.tubeLength),
+      numberOfTubes: parseInt(tubeGeometry.numberOfTubes),
+      tubePasses: parseInt(tubeGeometry.tubePasses),
+      tubePitch: parseFloat(tubeGeometry.tubePitch),
+      tubePattern: tubeGeometry.tubePattern,
+      baffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
+      baffleCut: parseFloat(tubeGeometry.baffleCut),
+      heatDuty: results.heatDuty,
+      requiredArea: results.requiredArea,
+      actualArea: results.heatTransferArea,
+      overallU: parseFloat(overallU),
+      calculatedU: results.calculatedU,
+      effectiveness: results.effectiveness,
+      tubeSidePressureDrop: results.tubeSidePressureDrop,
+      shellSidePressureDrop: results.shellSidePressureDrop,
+      tubeSideVelocity: results.tubeSideVelocity,
+      shellSideVelocity: results.shellSideVelocity,
+      hi: results.hi,
+      ho: results.ho,
+      isVibrationRisk: results.vibration.isVibrationRisk,
+      shellThickness: asmeResults?.shellRecommended,
+      shellMaterial: asmeMaterials[shellMaterial]?.name
+    };
+    setSavedDesigns(prev => [...prev, design]);
+    toast({ title: "Design Saved", description: `Saved as ${design.name}` });
+  }, [results, asmeResults, tubeGeometry, overallU, shellMaterial, savedDesigns.length]);
+
+  // TEMA auto-calculate geometry
+  const handleAutoCalculateGeometry = useCallback(() => {
+    const tubeOD = parseFloat(tubeGeometry.outerDiameter);
+    const shellDia = parseFloat(tubeGeometry.shellDiameter);
+    const passes = parseInt(tubeGeometry.tubePasses);
+    const pattern = tubeGeometry.tubePattern as "triangular" | "square" | "rotatedSquare";
+    
+    // Get recommended pitch
+    const pitchResult = getRecommendedPitch(tubeOD, pattern, pattern === "square");
+    
+    // Calculate tube count
+    const tubeCountResult = calculateTubeCount(shellDia, tubeOD, pitchResult.pitch, pattern, passes);
+    
+    // Get recommended baffle spacing
+    const baffleResult = getRecommendedBaffleSpacing(shellDia, parseFloat(tubeGeometry.tubeLength));
+    
+    setTubeGeometry(prev => ({
+      ...prev,
+      tubePitch: pitchResult.pitch.toFixed(2),
+      numberOfTubes: tubeCountResult.count.toString(),
+      baffleSpacing: baffleResult.recommended.toString(),
+      unsupportedSpanLength: baffleResult.recommended.toString()
+    }));
+    
+    toast({ 
+      title: "Geometry Calculated", 
+      description: `${tubeCountResult.count} tubes @ ${pitchResult.pitch.toFixed(1)}mm pitch (${tubeCountResult.method})`
+    });
+  }, [tubeGeometry]);
 
   const formatNumber = (num: number, decimals: number = 2): string => {
     if (isNaN(num) || !isFinite(num)) return "—";
@@ -1541,26 +1624,37 @@ const HeatExchangerSizing = () => {
       {/* Tube Geometry */}
       <Card className="border-border/50">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center justify-between">
+          <CardTitle className="text-base flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Settings className="w-4 h-4 text-primary" />
               Tube Geometry (TEMA Standards)
             </div>
-            {getSuggestedTubeCount && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  TEMA suggests: {getSuggestedTubeCount.count} tubes
-                </span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-7 text-xs"
-                  onClick={applySuggestedTubeCount}
-                >
-                  Apply
-                </Button>
-              </div>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="h-7 text-xs gap-1"
+                onClick={handleAutoCalculateGeometry}
+              >
+                <Grid3X3 className="w-3 h-3" />
+                Auto-Calculate (TEMA)
+              </Button>
+              {getSuggestedTubeCount && (
+                <>
+                  <span className="text-xs text-muted-foreground">
+                    Table: {getSuggestedTubeCount.count} tubes
+                  </span>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 text-xs"
+                    onClick={applySuggestedTubeCount}
+                  >
+                    Apply
+                  </Button>
+                </>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -2118,10 +2212,10 @@ const HeatExchangerSizing = () => {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Design Pressure (MPa)</Label>
+              <Label className="text-xs text-muted-foreground">Design Pressure (barg)</Label>
               <Input
                 type="number"
-                step="0.1"
+                step="1"
                 value={designPressure}
                 onChange={(e) => setDesignPressure(e.target.value)}
                 className="h-9 no-spinner"
@@ -2194,13 +2288,13 @@ const HeatExchangerSizing = () => {
               <div className="space-y-1 p-3 rounded-lg bg-background/50">
                 <p className="text-xs text-muted-foreground">MAWP</p>
                 <p className="text-lg font-semibold">
-                  {asmeResults.shellMAWP.toFixed(2)} <span className="text-sm font-normal">MPa</span>
+                  {(asmeResults.shellMAWP * 10).toFixed(1)} <span className="text-sm font-normal">barg</span>
                 </p>
               </div>
               <div className="space-y-1 p-3 rounded-lg bg-background/50">
                 <p className="text-xs text-muted-foreground">Hydro Test Pressure</p>
                 <p className="text-lg font-semibold">
-                  {asmeResults.hydroTestPressure.toFixed(2)} <span className="text-sm font-normal">MPa</span>
+                  {(asmeResults.hydroTestPressure * 10).toFixed(1)} <span className="text-sm font-normal">barg</span>
                 </p>
               </div>
               <div className="space-y-1 p-3 rounded-lg bg-background/50">
@@ -2220,13 +2314,97 @@ const HeatExchangerSizing = () => {
         </CardContent>
       </Card>
 
-      {/* Export Button */}
-      <div className="flex justify-end">
-        <Button onClick={handleExportPDF} className="gap-2">
-          <Download className="w-4 h-4" />
-          Export PDF Datasheet
-        </Button>
-      </div>
+      {/* PDF Export Settings & Actions */}
+      <Card className="border-border/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Download className="w-4 h-4 text-primary" />
+            Export & Comparison
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Company Name</Label>
+              <Input
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="h-9"
+                placeholder="Company Name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Project Name</Label>
+              <Input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                className="h-9"
+                placeholder="Project Name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Item Number</Label>
+              <Input
+                type="text"
+                value={itemNumber}
+                onChange={(e) => setItemNumber(e.target.value)}
+                className="h-9"
+                placeholder="HX-001"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Revision No.</Label>
+              <Input
+                type="text"
+                value={revisionNo}
+                onChange={(e) => setRevisionNo(e.target.value)}
+                className="h-9"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handleExportPDF} className="gap-2">
+              <Download className="w-4 h-4" />
+              Export PDF Datasheet
+            </Button>
+            <Button onClick={handleSaveDesign} variant="outline" className="gap-2">
+              <Save className="w-4 h-4" />
+              Save Design
+            </Button>
+            <Button 
+              onClick={() => setShowComparison(!showComparison)} 
+              variant={showComparison ? "secondary" : "outline"} 
+              className="gap-2"
+            >
+              <GitCompare className="w-4 h-4" />
+              {showComparison ? "Hide Comparison" : "Compare Designs"} ({savedDesigns.length})
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Design Comparison */}
+      {showComparison && (
+        <DesignComparison 
+          savedDesigns={savedDesigns}
+          onDeleteDesign={(id) => setSavedDesigns(prev => prev.filter(d => d.id !== id))}
+          onClearAll={() => setSavedDesigns([])}
+        />
+      )}
+
+      {/* Tube Bundle Visualization */}
+      <TubeBundleVisualization
+        shellDiameter={parseFloat(tubeGeometry.shellDiameter) || 600}
+        tubeOD={parseFloat(tubeGeometry.outerDiameter) || 19.05}
+        tubePitch={parseFloat(tubeGeometry.tubePitch) || 25.4}
+        numberOfTubes={parseInt(tubeGeometry.numberOfTubes) || 200}
+        tubePattern={tubeGeometry.tubePattern}
+        tubePasses={parseInt(tubeGeometry.tubePasses) || 2}
+        baffleCut={parseFloat(tubeGeometry.baffleCut) || 25}
+      />
 
       {/* Reference Tables */}
       <Accordion type="single" collapsible className="w-full">
