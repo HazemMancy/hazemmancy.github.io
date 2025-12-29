@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer, AlertTriangle } from 'lucide-react';
 
 // API 520 Vapor Relief Sizing - Eq. 3.1
 const calculateVaporArea = (
@@ -644,6 +644,205 @@ const calculateThermalReliefArea = (
   return { requiredArea, Kv, Kw };
 };
 
+// ============================================
+// Control Valve Failure Scenarios
+// Per API 521 Section 5.3
+// ============================================
+
+// Failure scenarios
+const FAILURE_SCENARIOS = [
+  { id: 'cv_fail_open', name: 'Control Valve Fails Open', description: 'Upstream CV fails fully open, max flow to downstream' },
+  { id: 'cv_fail_closed', name: 'Control Valve Fails Closed', description: 'Downstream CV fails closed, blocked outlet' },
+  { id: 'check_valve_fail', name: 'Check Valve Failure', description: 'Check valve fails, reverse flow possible' },
+  { id: 'pump_deadhead', name: 'Pump Deadhead', description: 'Pump running against closed discharge' },
+  { id: 'exchanger_tube_rupture', name: 'Exchanger Tube Rupture', description: 'High pressure side blows into low pressure' },
+  { id: 'regulator_fail', name: 'Pressure Regulator Failure', description: 'Regulator fails open, full upstream pressure' },
+  { id: 'external_fire', name: 'External Fire + Blocked', description: 'Fire case with blocked outlet' },
+] as const;
+
+// Calculate control valve flow at failed position
+const calculateCvFlow = (
+  Cv: number, // Valve Cv
+  P1: number, // Upstream pressure (psig)
+  P2: number, // Downstream pressure (psig) 
+  specificGravity: number,
+  fluidType: 'liquid' | 'gas' | 'vapor',
+  // Gas-specific
+  molecularWeight?: number,
+  temperature?: number, // °F
+  Z?: number, // Compressibility
+  k?: number // Specific heat ratio
+): { flowRate: number; flowUnit: string; isCritical?: boolean } => {
+  const deltaP = P1 - P2;
+  
+  if (fluidType === 'liquid') {
+    // Liquid flow: Q = Cv × sqrt(ΔP / SG)
+    const flowRate = Cv * Math.sqrt(Math.max(deltaP, 0) / specificGravity);
+    return { flowRate, flowUnit: 'gpm' };
+  } else if (molecularWeight && temperature && Z && k) {
+    // Gas flow (with critical flow check)
+    const P1_abs = P1 + 14.7;
+    const P2_abs = P2 + 14.7;
+    const T = temperature + 460;
+    
+    // Critical pressure ratio
+    const Pcrit = P1_abs * Math.pow(2 / (k + 1), k / (k - 1));
+    const isCritical = P2_abs < Pcrit;
+    
+    let flowRate: number;
+    if (isCritical) {
+      // Critical (choked) flow
+      // W = 63.3 × Cv × P1 × sqrt(M / (T × Z))
+      flowRate = 63.3 * Cv * P1_abs * Math.sqrt(molecularWeight / (T * Z));
+    } else {
+      // Subcritical flow
+      // W = 1360 × Cv × sqrt((P1² - P2²) × M / (T × Z))
+      flowRate = 1360 * Cv * Math.sqrt((P1_abs * P1_abs - P2_abs * P2_abs) * molecularWeight / (T * Z));
+    }
+    return { flowRate, flowUnit: 'lb/hr', isCritical };
+  }
+  return { flowRate: 0, flowUnit: 'gpm' };
+};
+
+// Calculate pump deadhead pressure rise
+const calculatePumpDeadhead = (
+  shutoffHead: number, // ft
+  specificGravity: number,
+  motorPower: number, // hp
+  efficiency: number // pump efficiency at deadhead (typically 0-30%)
+): { deadheadPressure: number; heatGeneration: number } => {
+  // Deadhead pressure = shutoff head converted to psi
+  const deadheadPressure = shutoffHead * specificGravity * 0.433; // ft to psi
+  
+  // Heat generation at deadhead (all power goes to heat)
+  // Power in BTU/hr = hp × 2545 BTU/(hp·hr)
+  const heatGeneration = motorPower * 2545 * (1 - efficiency);
+  
+  return { deadheadPressure, heatGeneration };
+};
+
+// Calculate exchanger tube rupture flow
+const calculateTubeRuptureFlow = (
+  tubeID: number, // inches
+  numTubesRuptured: number,
+  highSidePressure: number, // psig
+  lowSidePressure: number, // psig
+  fluidDensity: number, // lb/ft³
+  dischargeCoeff: number // typically 0.6-0.8
+): { massFlow: number; velocity: number } => {
+  // Flow area
+  const areaPerTube = Math.PI * Math.pow(tubeID / 24, 2); // ft² (ID in inches / 2 / 12)
+  const totalArea = areaPerTube * numTubesRuptured;
+  
+  // Pressure differential
+  const deltaP = (highSidePressure - lowSidePressure) * 144; // psf
+  
+  // Velocity from Bernoulli (simplified)
+  // v = Cd × sqrt(2 × ΔP / ρ)
+  const velocity = dischargeCoeff * Math.sqrt(2 * Math.max(deltaP, 0) / fluidDensity);
+  
+  // Mass flow
+  const volumeFlow = velocity * totalArea * 3600; // ft³/hr
+  const massFlow = volumeFlow * fluidDensity; // lb/hr
+  
+  return { massFlow, velocity };
+};
+
+// Water hammer / pressure surge calculation (Joukowsky equation)
+const calculateWaterHammer = (
+  velocity: number, // ft/s
+  pipeLength: number, // ft
+  pipeDiameter: number, // inches
+  pipeWallThickness: number, // inches
+  fluidDensity: number, // lb/ft³
+  fluidBulkModulus: number, // psi (typically 300,000 for water)
+  pipeMaterial: 'steel' | 'stainless' | 'copper' | 'pvc'
+): { pressureSurge: number; waveSpeed: number; closureTime: number } => {
+  // Pipe modulus of elasticity
+  const pipeModulus: Record<string, number> = {
+    steel: 30e6,
+    stainless: 28e6,
+    copper: 17e6,
+    pvc: 0.4e6,
+  };
+  const E = pipeModulus[pipeMaterial];
+  
+  // Wave speed (celerity)
+  // a = sqrt(K/ρ) / sqrt(1 + (K×D)/(E×t))
+  const D = pipeDiameter;
+  const t = pipeWallThickness;
+  const K = fluidBulkModulus;
+  const rho = fluidDensity;
+  
+  const waveSpeed = Math.sqrt(K * 144 / rho) / Math.sqrt(1 + (K * D) / (E * t));
+  
+  // Joukowsky pressure surge: ΔP = ρ × a × ΔV / 144
+  const pressureSurge = (rho * waveSpeed * velocity) / 144; // psi
+  
+  // Critical closure time (round trip)
+  const closureTime = (2 * pipeLength) / waveSpeed;
+  
+  return { pressureSurge, waveSpeed, closureTime };
+};
+
+// Combined failure scenario relief sizing
+const calculateFailureScenarioRelief = (
+  scenario: string,
+  flowType: 'vapor' | 'liquid',
+  flowRate: number, // lb/hr for vapor, gpm for liquid
+  setPresure: number,
+  overpressure: number,
+  backPressure: number,
+  // Vapor params
+  vaporMW?: number,
+  vaporK?: number,
+  temperature?: number,
+  compressibility?: number,
+  // Liquid params
+  specificGravity?: number,
+  viscosity?: number,
+  // Common
+  Kd?: number,
+  Kc?: number
+): { requiredArea: number; relievingPressure: number } => {
+  const P1 = setPresure * (1 + overpressure / 100);
+  
+  if (flowType === 'vapor' && vaporMW && vaporK && temperature && compressibility) {
+    const T_abs = temperature + 459.67;
+    const C = calculateCCoefficient(vaporK);
+    const P1_abs = P1 + 14.7;
+    
+    const requiredArea = calculateVaporArea(
+      flowRate,
+      C,
+      Kd || 0.975,
+      P1_abs,
+      1.0, // Kb
+      Kc || 1.0,
+      T_abs,
+      compressibility,
+      vaporMW
+    );
+    
+    return { requiredArea, relievingPressure: P1 };
+  } else if (flowType === 'liquid' && specificGravity) {
+    const requiredArea = calculateLiquidArea(
+      flowRate,
+      specificGravity,
+      Kd || 0.65,
+      1.0, // Kw
+      Kc || 1.0,
+      1.0, // Kv simplified
+      P1,
+      backPressure
+    );
+    
+    return { requiredArea, relievingPressure: P1 };
+  }
+  
+  return { requiredArea: 0, relievingPressure: P1 };
+};
+
 export default function API520Calculator() {
   // Vapor inputs
   const [vaporInputs, setVaporInputs] = useState({
@@ -779,6 +978,45 @@ export default function API520Calculator() {
     setPresure: 150, // psig
     overpressure: 10, // %
     backPressure: 0, // psig
+    dischargeCoeff: 0.65,
+    ruptureDisk: false,
+  });
+
+  // Control valve failure inputs
+  const [failureInputs, setFailureInputs] = useState({
+    scenario: 'cv_fail_open' as typeof FAILURE_SCENARIOS[number]['id'],
+    fluidType: 'liquid' as 'liquid' | 'vapor',
+    // Control valve data
+    valveCv: 200,
+    upstreamPressure: 300, // psig
+    downstreamPressure: 50, // psig
+    normalFlowRate: 500, // gpm or lb/hr
+    // Fluid properties
+    specificGravity: 0.85,
+    viscosity: 5.0, // cP
+    vaporMW: 44,
+    vaporK: 1.15,
+    temperature: 150, // °F
+    compressibility: 0.9,
+    // Water hammer
+    pipeVelocity: 8, // ft/s
+    pipeLength: 500, // ft
+    pipeDiameter: 8, // inches
+    pipeWallThickness: 0.322, // inches (Sch 40)
+    pipeMaterial: 'steel' as 'steel' | 'stainless' | 'copper' | 'pvc',
+    fluidBulkModulus: 200000, // psi
+    fluidDensity: 53, // lb/ft³
+    // Pump deadhead
+    pumpShutoffHead: 400, // ft
+    motorPower: 100, // hp
+    deadheadEfficiency: 0.1, // 10%
+    // Tube rupture
+    tubeID: 0.75, // inches
+    numTubesRuptured: 1,
+    // Relief settings
+    setPresure: 250, // psig
+    overpressure: 10, // %
+    backPressure: 14.7, // psia
     dischargeCoeff: 0.65,
     ruptureDisk: false,
   });
@@ -1262,6 +1500,115 @@ export default function API520Calculator() {
     };
   }, [thermalInputs]);
 
+  // Control valve failure calculations
+  const failureResults = useMemo(() => {
+    const scenarioInfo = FAILURE_SCENARIOS.find(s => s.id === failureInputs.scenario);
+    
+    // Calculate CV flow at failure
+    const cvFlow = calculateCvFlow(
+      failureInputs.valveCv,
+      failureInputs.upstreamPressure,
+      failureInputs.downstreamPressure,
+      failureInputs.specificGravity,
+      failureInputs.fluidType,
+      failureInputs.vaporMW,
+      failureInputs.temperature,
+      failureInputs.compressibility,
+      failureInputs.vaporK
+    );
+    
+    // Water hammer calculation
+    const waterHammer = calculateWaterHammer(
+      failureInputs.pipeVelocity,
+      failureInputs.pipeLength,
+      failureInputs.pipeDiameter,
+      failureInputs.pipeWallThickness,
+      failureInputs.fluidDensity,
+      failureInputs.fluidBulkModulus,
+      failureInputs.pipeMaterial
+    );
+    
+    // Pump deadhead
+    const pumpDeadhead = calculatePumpDeadhead(
+      failureInputs.pumpShutoffHead,
+      failureInputs.specificGravity,
+      failureInputs.motorPower,
+      failureInputs.deadheadEfficiency
+    );
+    
+    // Tube rupture
+    const tubeRupture = calculateTubeRuptureFlow(
+      failureInputs.tubeID,
+      failureInputs.numTubesRuptured,
+      failureInputs.upstreamPressure,
+      failureInputs.downstreamPressure,
+      failureInputs.fluidDensity,
+      0.62 // Discharge coefficient for orifice
+    );
+    
+    // Determine relief flow based on scenario
+    let reliefFlowRate: number;
+    let reliefFlowUnit: string;
+    
+    switch (failureInputs.scenario) {
+      case 'cv_fail_open':
+        reliefFlowRate = cvFlow.flowRate;
+        reliefFlowUnit = cvFlow.flowUnit;
+        break;
+      case 'pump_deadhead':
+        // Heat generation causes thermal expansion
+        reliefFlowRate = failureInputs.normalFlowRate * 0.1; // Estimate
+        reliefFlowUnit = 'gpm';
+        break;
+      case 'exchanger_tube_rupture':
+        reliefFlowRate = tubeRupture.massFlow;
+        reliefFlowUnit = 'lb/hr';
+        break;
+      default:
+        reliefFlowRate = cvFlow.flowRate;
+        reliefFlowUnit = cvFlow.flowUnit;
+    }
+    
+    // Relief device sizing
+    const Kc = failureInputs.ruptureDisk ? 0.9 : 1.0;
+    const { requiredArea, relievingPressure } = calculateFailureScenarioRelief(
+      failureInputs.scenario,
+      failureInputs.fluidType,
+      reliefFlowRate,
+      failureInputs.setPresure,
+      failureInputs.overpressure,
+      failureInputs.backPressure,
+      failureInputs.vaporMW,
+      failureInputs.vaporK,
+      failureInputs.temperature,
+      failureInputs.compressibility,
+      failureInputs.specificGravity,
+      failureInputs.viscosity,
+      failureInputs.dischargeCoeff,
+      Kc
+    );
+    
+    const selectedOrifice = selectOrifice(requiredArea);
+    
+    // Calculate max pressure with water hammer
+    const maxPressureWithSurge = failureInputs.upstreamPressure + waterHammer.pressureSurge;
+    
+    return {
+      scenarioInfo,
+      cvFlow,
+      waterHammer,
+      pumpDeadhead,
+      tubeRupture,
+      reliefFlowRate,
+      reliefFlowUnit,
+      requiredArea,
+      relievingPressure,
+      selectedOrifice,
+      Kc,
+      maxPressureWithSurge,
+    };
+  }, [failureInputs]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -1271,32 +1618,36 @@ export default function API520Calculator() {
             <Badge variant="outline" className="ml-2">API 520 Part I & II</Badge>
           </CardTitle>
           <CardDescription>
-            Comprehensive pressure relief device sizing per API 520/521/2000 including thermal relief
+            Comprehensive pressure relief device sizing per API 520/521/2000 including failure scenarios
           </CardDescription>
         </CardHeader>
       </Card>
 
       <Tabs defaultValue="vapor" className="space-y-4">
-        <TabsList className="grid grid-cols-8 w-full">
-          <TabsTrigger value="vapor">Vapor</TabsTrigger>
-          <TabsTrigger value="liquid">Liquid</TabsTrigger>
-          <TabsTrigger value="twophase">2-Phase</TabsTrigger>
-          <TabsTrigger value="steam">Steam</TabsTrigger>
-          <TabsTrigger value="firecase" className="flex items-center gap-1">
+        <TabsList className="grid grid-cols-9 w-full">
+          <TabsTrigger value="vapor" className="text-xs">Vapor</TabsTrigger>
+          <TabsTrigger value="liquid" className="text-xs">Liquid</TabsTrigger>
+          <TabsTrigger value="twophase" className="text-xs">2-Phase</TabsTrigger>
+          <TabsTrigger value="steam" className="text-xs">Steam</TabsTrigger>
+          <TabsTrigger value="firecase" className="flex items-center gap-1 text-xs">
             <Flame className="h-3 w-3" />
             Fire
           </TabsTrigger>
-          <TabsTrigger value="rupturedisk" className="flex items-center gap-1">
+          <TabsTrigger value="rupturedisk" className="flex items-center gap-1 text-xs">
             <Disc className="h-3 w-3" />
             RD
           </TabsTrigger>
-          <TabsTrigger value="overfill" className="flex items-center gap-1">
+          <TabsTrigger value="overfill" className="flex items-center gap-1 text-xs">
             <Droplets className="h-3 w-3" />
             Overfill
           </TabsTrigger>
-          <TabsTrigger value="thermal" className="flex items-center gap-1">
+          <TabsTrigger value="thermal" className="flex items-center gap-1 text-xs">
             <Thermometer className="h-3 w-3" />
             Thermal
+          </TabsTrigger>
+          <TabsTrigger value="failure" className="flex items-center gap-1 text-xs">
+            <AlertTriangle className="h-3 w-3" />
+            Failure
           </TabsTrigger>
         </TabsList>
 
@@ -3012,6 +3363,392 @@ export default function API520Calculator() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Control Valve Failure Tab */}
+        <TabsContent value="failure" className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                  Failure Scenario
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Failure Type</Label>
+                  <Select
+                    value={failureInputs.scenario}
+                    onValueChange={(v) => setFailureInputs({ ...failureInputs, scenario: v as any })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FAILURE_SCENARIOS.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{failureResults.scenarioInfo?.description}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Fluid Type</Label>
+                    <Select
+                      value={failureInputs.fluidType}
+                      onValueChange={(v) => setFailureInputs({ ...failureInputs, fluidType: v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="liquid">Liquid</SelectItem>
+                        <SelectItem value="vapor">Vapor/Gas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valve Cv</Label>
+                    <Input
+                      type="number"
+                      value={failureInputs.valveCv}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, valveCv: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Upstream Pressure (psig)</Label>
+                    <Input
+                      type="number"
+                      value={failureInputs.upstreamPressure}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, upstreamPressure: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Downstream Pressure (psig)</Label>
+                    <Input
+                      type="number"
+                      value={failureInputs.downstreamPressure}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, downstreamPressure: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Specific Gravity</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={failureInputs.specificGravity}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, specificGravity: parseFloat(e.target.value) || 1.0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Temperature (°F)</Label>
+                    <Input
+                      type="number"
+                      value={failureInputs.temperature}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, temperature: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                {failureInputs.fluidType === 'vapor' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Vapor MW</Label>
+                      <Input
+                        type="number"
+                        value={failureInputs.vaporMW}
+                        onChange={(e) => setFailureInputs({ ...failureInputs, vaporMW: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Vapor k (Cp/Cv)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={failureInputs.vaporK}
+                        onChange={(e) => setFailureInputs({ ...failureInputs, vaporK: parseFloat(e.target.value) || 1.15 })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Water Hammer / Pressure Surge</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Pipe Velocity (ft/s)</Label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      value={failureInputs.pipeVelocity}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, pipeVelocity: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pipe Length (ft)</Label>
+                    <Input
+                      type="number"
+                      value={failureInputs.pipeLength}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, pipeLength: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pipe Diameter (in)</Label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      value={failureInputs.pipeDiameter}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, pipeDiameter: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Wall Thickness (in)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={failureInputs.pipeWallThickness}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, pipeWallThickness: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pipe Material</Label>
+                    <Select
+                      value={failureInputs.pipeMaterial}
+                      onValueChange={(v) => setFailureInputs({ ...failureInputs, pipeMaterial: v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="steel">Carbon Steel</SelectItem>
+                        <SelectItem value="stainless">Stainless Steel</SelectItem>
+                        <SelectItem value="copper">Copper</SelectItem>
+                        <SelectItem value="pvc">PVC</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fluid Density (lb/ft³)</Label>
+                    <Input
+                      type="number"
+                      value={failureInputs.fluidDensity}
+                      onChange={(e) => setFailureInputs({ ...failureInputs, fluidDensity: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {(failureInputs.scenario === 'pump_deadhead' || failureInputs.scenario === 'exchanger_tube_rupture') && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  {failureInputs.scenario === 'pump_deadhead' ? 'Pump Deadhead Data' : 'Tube Rupture Data'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-4 gap-4">
+                  {failureInputs.scenario === 'pump_deadhead' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Shutoff Head (ft)</Label>
+                        <Input
+                          type="number"
+                          value={failureInputs.pumpShutoffHead}
+                          onChange={(e) => setFailureInputs({ ...failureInputs, pumpShutoffHead: parseFloat(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Motor Power (hp)</Label>
+                        <Input
+                          type="number"
+                          value={failureInputs.motorPower}
+                          onChange={(e) => setFailureInputs({ ...failureInputs, motorPower: parseFloat(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Deadhead Efficiency</Label>
+                        <Input
+                          type="number"
+                          step="0.05"
+                          max="0.5"
+                          value={failureInputs.deadheadEfficiency}
+                          onChange={(e) => setFailureInputs({ ...failureInputs, deadheadEfficiency: parseFloat(e.target.value) || 0 })}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {failureInputs.scenario === 'exchanger_tube_rupture' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Tube ID (in)</Label>
+                        <Input
+                          type="number"
+                          step="0.125"
+                          value={failureInputs.tubeID}
+                          onChange={(e) => setFailureInputs({ ...failureInputs, tubeID: parseFloat(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label># Tubes Ruptured</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={failureInputs.numTubesRuptured}
+                          onChange={(e) => setFailureInputs({ ...failureInputs, numTubesRuptured: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Relief Settings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-5 gap-4">
+                <div className="space-y-2">
+                  <Label>Set Pressure (psig)</Label>
+                  <Input
+                    type="number"
+                    value={failureInputs.setPresure}
+                    onChange={(e) => setFailureInputs({ ...failureInputs, setPresure: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Overpressure (%)</Label>
+                  <Input
+                    type="number"
+                    value={failureInputs.overpressure}
+                    onChange={(e) => setFailureInputs({ ...failureInputs, overpressure: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Back Pressure (psia)</Label>
+                  <Input
+                    type="number"
+                    value={failureInputs.backPressure}
+                    onChange={(e) => setFailureInputs({ ...failureInputs, backPressure: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Kd</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={failureInputs.dischargeCoeff}
+                    onChange={(e) => setFailureInputs({ ...failureInputs, dischargeCoeff: parseFloat(e.target.value) || 0.65 })}
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="failureRuptureDisk"
+                    checked={failureInputs.ruptureDisk}
+                    onChange={(e) => setFailureInputs({ ...failureInputs, ruptureDisk: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="failureRuptureDisk">RD (Kc=0.9)</Label>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                Failure Scenario Results
+                {failureResults.selectedOrifice ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                )}
+              </CardTitle>
+              <CardDescription>Per API 521 Section 5.3 - Failure Contingencies</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-5 gap-4">
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">CV Flow at Failure</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Flow: <span className="font-mono font-medium">{failureResults.cvFlow.flowRate.toFixed(1)} {failureResults.cvFlow.flowUnit}</span></p>
+                    {failureResults.cvFlow.isCritical !== undefined && (
+                      <p className="text-sm">Critical: <Badge variant={failureResults.cvFlow.isCritical ? "default" : "secondary"}>
+                        {failureResults.cvFlow.isCritical ? 'Yes' : 'No'}
+                      </Badge></p>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Water Hammer</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Surge: <span className="font-mono font-medium text-orange-500">{failureResults.waterHammer.pressureSurge.toFixed(0)} psi</span></p>
+                    <p className="text-sm">Wave Speed: <span className="font-mono font-medium">{failureResults.waterHammer.waveSpeed.toFixed(0)} ft/s</span></p>
+                    <p className="text-sm">Closure: <span className="font-mono font-medium">{failureResults.waterHammer.closureTime.toFixed(2)} s</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Max Pressure</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Normal: <span className="font-mono font-medium">{failureInputs.upstreamPressure} psig</span></p>
+                    <p className="text-sm">With Surge: <span className="font-mono font-medium text-red-500">{failureResults.maxPressureWithSurge.toFixed(0)} psig</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Relief Flow</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Rate: <span className="font-mono font-medium">{failureResults.reliefFlowRate.toFixed(1)} {failureResults.reliefFlowUnit}</span></p>
+                    <p className="text-sm">P1: <span className="font-mono font-medium">{failureResults.relievingPressure.toFixed(0)} psig</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Sizing</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Area: <span className="font-mono font-medium">{failureResults.requiredArea.toFixed(4)} in²</span></p>
+                    <p className="text-sm">Orifice: <span className="font-mono font-medium">
+                      {failureResults.selectedOrifice ? `${failureResults.selectedOrifice.designation}` : 'Exceeds T'}
+                    </span></p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">API 521 Failure Scenarios Reference</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-4 gap-4 text-xs">
+                {FAILURE_SCENARIOS.map((s) => (
+                  <div 
+                    key={s.id} 
+                    className={`p-2 rounded ${
+                      failureInputs.scenario === s.id 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted'
+                    }`}
+                  >
+                    <p className="font-medium">{s.name}</p>
+                    <p className="text-[10px] opacity-80">{s.description}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Reference Section */}
@@ -3020,9 +3757,9 @@ export default function API520Calculator() {
           <CardTitle className="text-lg">API 520/521/2000 Reference</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-5 gap-4 text-sm">
+          <div className="grid md:grid-cols-6 gap-4 text-sm">
             <div>
-              <h4 className="font-medium mb-2">Orifice Sizes</h4>
+              <h4 className="font-medium mb-2">Orifices</h4>
               <div className="grid grid-cols-4 gap-1 text-xs">
                 {ORIFICE_SIZES.slice(0, 8).map((o) => (
                   <div key={o.designation} className="flex justify-between bg-muted p-1 rounded">
@@ -3033,35 +3770,40 @@ export default function API520Calculator() {
               </div>
             </div>
             <div>
-              <h4 className="font-medium mb-2">Key Equations</h4>
+              <h4 className="font-medium mb-2">Equations</h4>
               <ul className="space-y-1 text-muted-foreground text-xs">
-                <li>• <strong>Vapor:</strong> A = W√(TZ/M) / (C·Kd·P1·Kb·Kc)</li>
-                <li>• <strong>Liquid:</strong> A = Q√G / (38·Kd·Kw·Kc·Kv·√ΔP)</li>
-                <li>• <strong>Fire:</strong> Q = C·F·A^0.82</li>
+                <li>• Vapor: A = W√(TZ/M) / (C·Kd·P1)</li>
+                <li>• Liquid: A = Q√G / (38·Kd·√ΔP)</li>
+                <li>• Fire: Q = C·F·A^0.82</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-medium mb-2">Environmental Factors</h4>
+              <h4 className="font-medium mb-2">Fire Factors</h4>
               <ul className="space-y-1 text-muted-foreground text-xs">
                 {ENVIRONMENTAL_FACTORS.slice(0, 3).map((ef) => (
-                  <li key={ef.description}>• {ef.description}: F = {ef.F}</li>
+                  <li key={ef.description}>• {ef.description}: {ef.F}</li>
                 ))}
               </ul>
             </div>
             <div>
-              <h4 className="font-medium mb-2">API 2000 Breathing</h4>
+              <h4 className="font-medium mb-2">API 2000</h4>
               <ul className="space-y-1 text-muted-foreground text-xs">
-                <li>• First 1000 bbl: 1.0 CFH/bbl</li>
-                <li>• Above 1000: 0.6 CFH/bbl</li>
-                <li>• Pump: 1:1 displacement</li>
+                <li>• &lt;1000 bbl: 1.0 CFH/bbl</li>
+                <li>• &gt;1000: 0.6 CFH/bbl</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-medium mb-2">Thermal Relief</h4>
+              <h4 className="font-medium mb-2">Thermal</h4>
               <ul className="space-y-1 text-muted-foreground text-xs">
                 <li>• Q = V × α × dT/dt</li>
                 <li>• Solar: ~100 BTU/hr/ft²</li>
-                <li>• Tracing: ~200-300 BTU/hr/ft²</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium mb-2">Water Hammer</h4>
+              <ul className="space-y-1 text-muted-foreground text-xs">
+                <li>• ΔP = ρ × a × ΔV</li>
+                <li>• Joukowsky equation</li>
               </ul>
             </div>
           </div>
