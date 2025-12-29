@@ -60,12 +60,12 @@ const calculators: CalculatorCard[] = [
     category: "Thermodynamics"
   },
   {
-    id: "mixing-rules",
+    id: "gas-mixing",
     title: "Gas Mixing Properties",
-    description: "Calculate mixture properties using various mixing rules for gas compositions",
+    description: "Calculate mixture MW, k, Z, and critical properties from gas compositions using Kay's rules and Peng-Robinson EOS",
     icon: <Beaker className="w-8 h-8" />,
-    route: "/calculators/mixing-rules",
-    status: "coming-soon",
+    route: "/calculators/gas-mixing",
+    status: "available",
     category: "Thermodynamics"
   }
 ];
