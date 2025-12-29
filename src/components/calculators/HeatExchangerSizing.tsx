@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3, AlertTriangle, Activity, Download, Database, Shield, Droplets } from "lucide-react";
+import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3, AlertTriangle, Activity, Download, Database, Shield, Droplets, Save, GitCompare } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Accordion,
@@ -27,7 +27,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fluidDatabase, getFluidProperties, getFluidsByCategory } from "@/lib/fluidProperties";
 import { calculateASMEThickness, asmeMaterials, getMaterialOptions, type ASMEResults } from "@/lib/asmeCalculations";
 import { generateDatasheetPDF, type DatasheetData } from "@/lib/pdfDatasheet";
+import { calculateTubeCount, getRecommendedPitch, getRecommendedBaffleSpacing } from "@/lib/temaGeometry";
 import { toast } from "@/hooks/use-toast";
+import TubeBundleVisualization from "./TubeBundleVisualization";
+import DesignComparison, { type SavedDesign } from "./DesignComparison";
 
 type CalculationMode = "design" | "rating";
 type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "crossflow-unmixed" | "crossflow-mixed";
@@ -164,6 +167,8 @@ const HeatExchangerSizing = () => {
   const [shellMaterial, setShellMaterial] = useState("sa-516-70");
   const [jointEfficiency, setJointEfficiency] = useState("1.0");
   const [asmeResults, setAsmeResults] = useState<ASMEResults | null>(null);
+  const [savedDesigns, setSavedDesigns] = useState<SavedDesign[]>([]);
+  const [showComparison, setShowComparison] = useState(false);
   
   const [hotFluid, setHotFluid] = useState<FluidInputs>({
     inletTemp: "150",
