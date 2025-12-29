@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AlertTriangle, CheckCircle, Info, Gauge, Thermometer, Wind, Zap, TrendingUp, HelpCircle } from 'lucide-react';
@@ -335,6 +336,7 @@ const CompressorPowerCalculator: React.FC = () => {
                       <Input
                         type="number"
                         step="0.01"
+                        className="no-spinner"
                         value={inputs.molecularWeight}
                         onChange={(e) => handleInputChange('molecularWeight', parseFloat(e.target.value) || 0)}
                         disabled={inputs.gasType !== 'custom'}
@@ -345,6 +347,7 @@ const CompressorPowerCalculator: React.FC = () => {
                       <Input
                         type="number"
                         step="0.01"
+                        className="no-spinner"
                         value={inputs.specificHeatRatio}
                         onChange={(e) => handleInputChange('specificHeatRatio', parseFloat(e.target.value) || 0)}
                         disabled={inputs.gasType !== 'custom'}
@@ -355,6 +358,7 @@ const CompressorPowerCalculator: React.FC = () => {
                       <Input
                         type="number"
                         step="0.01"
+                        className="no-spinner"
                         value={inputs.compressibilityFactor}
                         onChange={(e) => handleInputChange('compressibilityFactor', parseFloat(e.target.value) || 0)}
                         disabled={inputs.gasType !== 'custom'}
@@ -440,6 +444,7 @@ const CompressorPowerCalculator: React.FC = () => {
                         <Input
                           type="number"
                           step="0.1"
+                          className="no-spinner"
                           value={inputs.inletPressure}
                           onChange={(e) => handleInputChange('inletPressure', parseFloat(e.target.value) || 0)}
                         />
@@ -449,6 +454,7 @@ const CompressorPowerCalculator: React.FC = () => {
                         <Input
                           type="number"
                           step="1"
+                          className="no-spinner"
                           value={inputs.inletTemperature}
                           onChange={(e) => handleInputChange('inletTemperature', parseFloat(e.target.value) || 0)}
                         />
@@ -461,6 +467,7 @@ const CompressorPowerCalculator: React.FC = () => {
                         <Input
                           type="number"
                           step="0.1"
+                          className="no-spinner"
                           value={inputs.dischargePressure}
                           onChange={(e) => handleInputChange('dischargePressure', parseFloat(e.target.value) || 0)}
                         />
@@ -470,6 +477,7 @@ const CompressorPowerCalculator: React.FC = () => {
                         <Input
                           type="number"
                           step="10"
+                          className="no-spinner"
                           value={inputs.flowRate}
                           onChange={(e) => handleInputChange('flowRate', parseFloat(e.target.value) || 0)}
                         />
@@ -503,40 +511,56 @@ const CompressorPowerCalculator: React.FC = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Isentropic Efficiency (%)</Label>
-                      <Input
-                        type="number"
-                        step="1"
-                        value={inputs.isentropicEfficiency}
-                        onChange={(e) => handleInputChange('isentropicEfficiency', parseFloat(e.target.value) || 0)}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <Label>Isentropic Efficiency</Label>
+                        <span className="text-sm font-medium text-primary">{inputs.isentropicEfficiency}%</span>
+                      </div>
+                      <Slider
+                        value={[inputs.isentropicEfficiency]}
+                        onValueChange={(v) => handleInputChange('isentropicEfficiency', v[0])}
+                        min={50}
+                        max={95}
+                        step={1}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>Polytropic Efficiency (%)</Label>
-                      <Input
-                        type="number"
-                        step="1"
-                        value={inputs.polytropicEfficiency}
-                        onChange={(e) => handleInputChange('polytropicEfficiency', parseFloat(e.target.value) || 0)}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <Label>Polytropic Efficiency</Label>
+                        <span className="text-sm font-medium text-primary">{inputs.polytropicEfficiency}%</span>
+                      </div>
+                      <Slider
+                        value={[inputs.polytropicEfficiency]}
+                        onValueChange={(v) => handleInputChange('polytropicEfficiency', v[0])}
+                        min={50}
+                        max={95}
+                        step={1}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>Mechanical Efficiency (%)</Label>
-                      <Input
-                        type="number"
-                        step="1"
-                        value={inputs.mechanicalEfficiency}
-                        onChange={(e) => handleInputChange('mechanicalEfficiency', parseFloat(e.target.value) || 0)}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <Label>Mechanical Efficiency</Label>
+                        <span className="text-sm font-medium text-primary">{inputs.mechanicalEfficiency}%</span>
+                      </div>
+                      <Slider
+                        value={[inputs.mechanicalEfficiency]}
+                        onValueChange={(v) => handleInputChange('mechanicalEfficiency', v[0])}
+                        min={90}
+                        max={100}
+                        step={1}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>Motor Efficiency (%)</Label>
-                      <Input
-                        type="number"
-                        step="1"
-                        value={inputs.motorEfficiency}
-                        onChange={(e) => handleInputChange('motorEfficiency', parseFloat(e.target.value) || 0)}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <Label>Motor Efficiency</Label>
+                        <span className="text-sm font-medium text-primary">{inputs.motorEfficiency}%</span>
+                      </div>
+                      <Slider
+                        value={[inputs.motorEfficiency]}
+                        onValueChange={(v) => handleInputChange('motorEfficiency', v[0])}
+                        min={85}
+                        max={100}
+                        step={1}
                       />
                     </div>
                   </div>
@@ -584,6 +608,7 @@ const CompressorPowerCalculator: React.FC = () => {
                       <Input
                         type="number"
                         step="1"
+                        className="no-spinner"
                         value={inputs.intercoolerApproach}
                         onChange={(e) => handleInputChange('intercoolerApproach', parseFloat(e.target.value) || 0)}
                         disabled={inputs.numberOfStages === 1}
