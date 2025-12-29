@@ -51,6 +51,16 @@ interface FluidInputs {
   prandtl: string;
 }
 
+type ShellType = "fixed-tubesheet" | "u-tube" | "floating-head" | "kettle";
+
+// Bundle clearances per TEMA (mm) for different shell types
+const shellTypeClearances: Record<ShellType, { name: string; clearance: number; description: string }> = {
+  "fixed-tubesheet": { name: "Fixed Tubesheet (L/M/N)", clearance: 12, description: "Tubes welded to both tubesheets" },
+  "u-tube": { name: "U-Tube (U)", clearance: 25, description: "Tubes bent in U-shape, one tubesheet" },
+  "floating-head": { name: "Floating Head (P/S/T/W)", clearance: 45, description: "One tubesheet floats, allows thermal expansion" },
+  "kettle": { name: "Kettle Reboiler (K)", clearance: 50, description: "Large shell for vapor disengagement" },
+};
+
 interface TubeGeometry {
   outerDiameter: string;
   wallThickness: string;
@@ -243,6 +253,9 @@ const HeatExchangerSizing = () => {
   
   // TEMA table selection
   const [selectedTemaTable, setSelectedTemaTable] = useState("3/4\" OD on 1\" pitch (standard)");
+  
+  // Shell type selector
+  const [shellType, setShellType] = useState<ShellType>("fixed-tubesheet");
   
   // HTRI Rating Summary state
   const [htriEnabled, setHtriEnabled] = useState(false);
@@ -1912,50 +1925,58 @@ const HeatExchangerSizing = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {/* TEMA Table Selector */}
           <div className="mb-4 p-3 rounded-lg bg-muted/30 border border-border/50">
-            <div className="flex items-center gap-4 flex-wrap">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex-1 min-w-[200px]">
                 <Label className="text-xs text-muted-foreground mb-1.5 block">TEMA Tube Count Table</Label>
                 <Select 
                   value={selectedTemaTable} 
                   onValueChange={(value) => {
                     setSelectedTemaTable(value);
-                    // Find the selected table and update tube geometry completely
+                    // Find the selected table and update tube geometry
                     const table = allTubeCountTables.find(t => t.name === value);
                     if (table) {
                       // Find matching wall thickness from standard tube sizes
                       const standardTube = standardTubeSizes.find(t => Math.abs(t.od - table.tubeOD) < 0.5);
                       
-                      // Get current tube count and calculate appropriate shell diameter
-                      const currentTubeCount = parseInt(tubeGeometry.numberOfTubes);
+                      // Get current shell diameter and look up tube count from table
+                      const currentShellDia = parseFloat(tubeGeometry.shellDiameter);
                       const passes = parseInt(tubeGeometry.tubePasses);
                       const pattern = tubeGeometry.tubePattern === "triangular" ? "triangular" : "square";
                       
-                      // Calculate shell diameter for current tube count with new tube OD/pitch
-                      const shellResult = calculateShellDiameter(
-                        currentTubeCount, 
-                        table.tubeOD, 
-                        table.tubePitch, 
-                        pattern as "triangular" | "square" | "rotatedSquare", 
-                        passes
-                      );
+                      // Find closest shell size in the table
+                      const availableShellSizes = Object.keys(table.counts).map(Number).sort((a, b) => a - b);
+                      let closestShell = availableShellSizes[0];
+                      let minDiff = Math.abs(currentShellDia - closestShell);
+                      for (const shellSize of availableShellSizes) {
+                        const diff = Math.abs(currentShellDia - shellSize);
+                        if (diff < minDiff) {
+                          minDiff = diff;
+                          closestShell = shellSize;
+                        }
+                      }
                       
-                      // Get recommended baffle spacing for new shell
-                      const baffleResult = getRecommendedBaffleSpacing(shellResult.shellDiameter, parseFloat(tubeGeometry.tubeLength));
+                      // Look up tube count from table
+                      const shellData = table.counts[closestShell];
+                      const passData = shellData?.[passes] || shellData?.[2] || shellData?.[1];
+                      const tubeCount = passData ? (pattern === "triangular" ? passData.triangular : passData.square) : 200;
+                      
+                      // Get recommended baffle spacing
+                      const baffleResult = getRecommendedBaffleSpacing(closestShell, parseFloat(tubeGeometry.tubeLength));
                       
                       setTubeGeometry(prev => ({
                         ...prev,
                         outerDiameter: table.tubeOD.toString(),
                         tubePitch: table.tubePitch.toString(),
                         wallThickness: standardTube ? standardTube.wall.toString() : prev.wallThickness,
-                        shellDiameter: shellResult.shellDiameter.toFixed(0),
+                        shellDiameter: closestShell.toString(),
+                        numberOfTubes: tubeCount.toString(),
                         baffleSpacing: baffleResult.recommended.toString()
                       }));
                       
                       toast({ 
                         title: "TEMA Table Applied", 
-                        description: `Shell ID: ${shellResult.shellDiameter.toFixed(0)}mm for ${currentTubeCount} tubes @ ${table.tubePitch}mm pitch`
+                        description: `${tubeCount} tubes for Shell ID ${closestShell}mm @ ${table.tubePitch}mm pitch`
                       });
                     }
                   }}
@@ -1972,8 +1993,80 @@ const HeatExchangerSizing = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="text-xs text-muted-foreground">
-                <span className="font-medium">Available sizes:</span> 5/8", 3/4", 1", 1-1/4", 1-1/2" OD
+              
+              <div className="flex-1 min-w-[200px]">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Shell Type (TEMA)</Label>
+                <Select 
+                  value={shellType} 
+                  onValueChange={(value: ShellType) => setShellType(value)}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select shell type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(shellTypeClearances).map(([key, data]) => (
+                      <SelectItem key={key} value={key}>
+                        {data.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Bundle clearance: {shellTypeClearances[shellType].clearance}mm
+                </p>
+              </div>
+              
+              <div className="flex-1 min-w-[200px]">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Shell ID ({getLengthUnit()})</Label>
+                <Select 
+                  value={tubeGeometry.shellDiameter} 
+                  onValueChange={(value) => {
+                    const table = allTubeCountTables.find(t => t.name === selectedTemaTable);
+                    const newShellDia = parseInt(value);
+                    const passes = parseInt(tubeGeometry.tubePasses);
+                    const pattern = tubeGeometry.tubePattern === "triangular" ? "triangular" : "square";
+                    
+                    // Look up tube count from TEMA table
+                    let tubeCount = parseInt(tubeGeometry.numberOfTubes);
+                    if (table) {
+                      const shellData = table.counts[newShellDia];
+                      const passData = shellData?.[passes] || shellData?.[2] || shellData?.[1];
+                      if (passData) {
+                        tubeCount = pattern === "triangular" ? passData.triangular : passData.square;
+                      }
+                    }
+                    
+                    // Get recommended baffle spacing
+                    const baffleResult = getRecommendedBaffleSpacing(newShellDia, parseFloat(tubeGeometry.tubeLength));
+                    
+                    setTubeGeometry(prev => ({
+                      ...prev,
+                      shellDiameter: value,
+                      numberOfTubes: tubeCount.toString(),
+                      baffleSpacing: baffleResult.recommended.toString()
+                    }));
+                    
+                    toast({ 
+                      title: "Shell Size Updated", 
+                      description: `${tubeCount} tubes for Shell ID ${newShellDia}mm`
+                    });
+                  }}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select shell size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const table = allTubeCountTables.find(t => t.name === selectedTemaTable);
+                      const availableShells = table ? Object.keys(table.counts).map(Number).sort((a, b) => a - b) : [];
+                      return availableShells.map(shell => (
+                        <SelectItem key={shell} value={shell.toString()}>
+                          {shell} mm
+                        </SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -2018,7 +2111,8 @@ const HeatExchangerSizing = () => {
                 type="number"
                 value={tubeGeometry.numberOfTubes}
                 onChange={(e) => setTubeGeometry({ ...tubeGeometry, numberOfTubes: e.target.value })}
-                className="h-9 no-spinner"
+                className="h-9 no-spinner bg-muted/50"
+                disabled
               />
             </div>
             <div className="space-y-1.5">
@@ -2059,16 +2153,6 @@ const HeatExchangerSizing = () => {
                   <SelectItem value="rotatedSquare">Rotated Square (45°)</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Shell ID ({getLengthUnit()})</Label>
-              <Input
-                type="number"
-                value={tubeGeometry.shellDiameter}
-                onChange={(e) => setTubeGeometry({ ...tubeGeometry, shellDiameter: e.target.value })}
-                className="h-9 no-spinner bg-muted/50"
-                disabled
-              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Baffle Spacing ({getLengthUnit()})</Label>
