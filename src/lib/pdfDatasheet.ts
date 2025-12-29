@@ -418,12 +418,10 @@ export function generateDatasheetPDF(data: DatasheetData): void {
   addRow('Shell-Side ho (W/m²·K):', data.ho.toFixed(1), 'Shell Nusselt:', data.shellNusselt.toFixed(1));
   y += 3;
 
-  // ===== Construction with Tube Bundle Drawing =====
-  checkPageBreak(100);
+  // ===== Construction =====
+  checkPageBreak(60);
   addHeader('CONSTRUCTION');
   
-  // Left side: Construction data
-  const constructionStartY = y;
   addRow('Shell ID (mm):', data.shellDiameter.toFixed(0), 'Tube OD (mm):', data.tubeOD.toFixed(2));
   addRow('Shell Length (m):', data.shellLength.toFixed(2), 'Tube Wall (mm):', data.tubeWallThickness.toFixed(2));
   addRow('Tube Length (m):', data.tubeLength.toFixed(2), 'Number of Tubes:', data.numberOfTubes.toString());
@@ -431,33 +429,6 @@ export function generateDatasheetPDF(data: DatasheetData): void {
   addRow('Tube Passes:', data.tubePasses.toString(), 'Tube Material:', data.tubeMaterial);
   addRow('Baffle Spacing (mm):', data.baffleSpacing.toFixed(0), 'Number of Baffles:', data.numberOfBaffles.toString());
   addRow('Baffle Cut (%):', data.baffleCut.toFixed(0), '', '');
-  
-  // Right side: Tube bundle cross-section drawing
-  const drawingSize = 55;
-  const drawingX = pageWidth - margin - drawingSize - 5;
-  const drawingY = constructionStartY - 5;
-  
-  // Draw title above the visualization
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TUBE BUNDLE CROSS-SECTION', drawingX + drawingSize / 2, drawingY - 2, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  
-  // Draw tube bundle visualization
-  drawTubeBundleOnPDF(
-    doc,
-    drawingX,
-    drawingY,
-    drawingSize,
-    data.shellDiameter,
-    data.tubeOD,
-    data.tubePitch,
-    data.numberOfTubes,
-    data.tubePattern,
-    data.tubePasses,
-    data.baffleCut
-  );
-  
   y += 3;
 
   // ===== Pressure Drop =====
