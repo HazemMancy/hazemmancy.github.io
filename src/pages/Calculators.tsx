@@ -44,10 +44,10 @@ const calculators: CalculatorCard[] = [
   {
     id: "pump-sizing",
     title: "Pump Sizing Calculator",
-    description: "Calculate pump head, power requirements, and select appropriate pump curves",
+    description: "Calculate TDH, NPSHa, brake power with Darcy-Weisbach friction and K-factor fittings",
     icon: <Droplets className="w-8 h-8" />,
     route: "/calculators/pump-sizing",
-    status: "coming-soon",
+    status: "available",
     category: "Fluid Mechanics"
   },
   {
