@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge } from "lucide-react";
+import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Accordion,
@@ -22,10 +22,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 
 type CalculationMode = "design" | "rating";
 type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "crossflow-unmixed" | "crossflow-mixed";
 type TemperatureUnit = "C" | "F" | "K";
+type ShellSideMethod = "kern" | "bell-delaware";
 
 interface FluidInputs {
   inletTemp: string;
@@ -47,7 +49,38 @@ interface TubeGeometry {
   shellDiameter: string; // mm
   tubePasses: string;
   tubePattern: "triangular" | "square" | "rotatedSquare";
+  shellBaffleLeakage: string; // Shell-to-baffle clearance (mm)
+  tubeBaffleLeakage: string; // Tube-to-baffle clearance (mm)
+  bundleBypass: string; // Bundle bypass fraction
 }
+
+// TEMA Tube Count Tables (per TEMA RCB-4.2)
+// Format: { shellID: { passes: { triangular: count, square: count } } }
+const temaTubeCountTable: Record<number, Record<number, { triangular: number; square: number }>> = {
+  // 3/4" OD tubes on 1" triangular or 1" square pitch
+  // Shell ID in mm
+  205: { 1: { triangular: 32, square: 26 }, 2: { triangular: 30, square: 24 }, 4: { triangular: 24, square: 16 } },
+  257: { 1: { triangular: 56, square: 45 }, 2: { triangular: 52, square: 40 }, 4: { triangular: 40, square: 32 } },
+  307: { 1: { triangular: 81, square: 64 }, 2: { triangular: 76, square: 60 }, 4: { triangular: 68, square: 52 } },
+  337: { 1: { triangular: 106, square: 81 }, 2: { triangular: 98, square: 76 }, 4: { triangular: 90, square: 68 } },
+  387: { 1: { triangular: 138, square: 109 }, 2: { triangular: 130, square: 102 }, 4: { triangular: 118, square: 90 } },
+  438: { 1: { triangular: 177, square: 142 }, 2: { triangular: 166, square: 130 }, 4: { triangular: 150, square: 118 } },
+  489: { 1: { triangular: 224, square: 178 }, 2: { triangular: 212, square: 166 }, 4: { triangular: 196, square: 150 } },
+  540: { 1: { triangular: 277, square: 220 }, 2: { triangular: 262, square: 206 }, 4: { triangular: 242, square: 188 } },
+  591: { 1: { triangular: 334, square: 265 }, 2: { triangular: 316, square: 250 }, 4: { triangular: 294, square: 228 } },
+  635: { 1: { triangular: 394, square: 314 }, 2: { triangular: 374, square: 296 }, 4: { triangular: 346, square: 270 } },
+  686: { 1: { triangular: 460, square: 365 }, 2: { triangular: 436, square: 346 }, 4: { triangular: 406, square: 316 } },
+  737: { 1: { triangular: 532, square: 422 }, 2: { triangular: 506, square: 400 }, 4: { triangular: 470, square: 366 } },
+  787: { 1: { triangular: 608, square: 481 }, 2: { triangular: 578, square: 456 }, 4: { triangular: 538, square: 420 } },
+  838: { 1: { triangular: 692, square: 549 }, 2: { triangular: 658, square: 520 }, 4: { triangular: 614, square: 478 } },
+  889: { 1: { triangular: 774, square: 613 }, 2: { triangular: 738, square: 584 }, 4: { triangular: 688, square: 536 } },
+  940: { 1: { triangular: 866, square: 685 }, 2: { triangular: 826, square: 654 }, 4: { triangular: 770, square: 600 } },
+  991: { 1: { triangular: 962, square: 762 }, 2: { triangular: 916, square: 724 }, 4: { triangular: 856, square: 666 } },
+  1067: { 1: { triangular: 1126, square: 889 }, 2: { triangular: 1072, square: 848 }, 4: { triangular: 1002, square: 778 } },
+  1219: { 1: { triangular: 1500, square: 1182 }, 2: { triangular: 1428, square: 1128 }, 4: { triangular: 1336, square: 1040 } },
+  1372: { 1: { triangular: 1920, square: 1514 }, 2: { triangular: 1830, square: 1446 }, 4: { triangular: 1714, square: 1334 } },
+  1524: { 1: { triangular: 2394, square: 1889 }, 2: { triangular: 2282, square: 1802 }, 4: { triangular: 2138, square: 1662 } },
+};
 
 // U value reference data per TEMA and GPSA standards
 const uValueReference = [
@@ -86,6 +119,7 @@ const HeatExchangerSizing = () => {
   const [calculationMode, setCalculationMode] = useState<CalculationMode>("design");
   const [flowArrangement, setFlowArrangement] = useState<FlowArrangement>("shell-tube-1-2");
   const [tempUnit, setTempUnit] = useState<TemperatureUnit>("C");
+  const [shellSideMethod, setShellSideMethod] = useState<ShellSideMethod>("bell-delaware");
   
   // Hot fluid inputs
   const [hotFluid, setHotFluid] = useState<FluidInputs>({
@@ -128,7 +162,10 @@ const HeatExchangerSizing = () => {
     baffleCut: "25",
     shellDiameter: "600",
     tubePasses: "2",
-    tubePattern: "triangular"
+    tubePattern: "triangular",
+    shellBaffleLeakage: "3.2", // Typical clearance
+    tubeBaffleLeakage: "0.8", // Typical clearance
+    bundleBypass: "0.1" // 10% bypass
   });
   
   // Results
@@ -158,7 +195,59 @@ const HeatExchangerSizing = () => {
     // Fouled U
     cleanU: number;
     fouledU: number;
+    // Bell-Delaware correction factors
+    Jc?: number; // Baffle cut correction
+    Jl?: number; // Leakage correction
+    Jb?: number; // Bypass correction
+    Jr?: number; // Adverse temperature gradient correction
+    Js?: number; // Unequal baffle spacing correction
+    numberOfBaffles: number;
+    equivalentDiameter: number;
   } | null>(null);
+
+  // Get suggested tube count from TEMA table
+  const getSuggestedTubeCount = useMemo(() => {
+    const shellDia = parseFloat(tubeGeometry.shellDiameter);
+    const passes = parseInt(tubeGeometry.tubePasses);
+    const pattern = tubeGeometry.tubePattern === "triangular" ? "triangular" : "square";
+    
+    // Find closest shell size in table
+    const shellSizes = Object.keys(temaTubeCountTable).map(Number).sort((a, b) => a - b);
+    let closestSize = shellSizes[0];
+    let minDiff = Math.abs(shellDia - closestSize);
+    
+    for (const size of shellSizes) {
+      const diff = Math.abs(shellDia - size);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestSize = size;
+      }
+    }
+    
+    const passData = temaTubeCountTable[closestSize];
+    if (!passData) return null;
+    
+    const passKey = passes <= 1 ? 1 : passes <= 2 ? 2 : 4;
+    const tubeData = passData[passKey];
+    if (!tubeData) return null;
+    
+    return {
+      count: tubeData[pattern],
+      shellSize: closestSize,
+      pattern,
+      passes: passKey
+    };
+  }, [tubeGeometry.shellDiameter, tubeGeometry.tubePasses, tubeGeometry.tubePattern]);
+
+  // Apply suggested tube count
+  const applySuggestedTubeCount = () => {
+    if (getSuggestedTubeCount) {
+      setTubeGeometry(prev => ({
+        ...prev,
+        numberOfTubes: getSuggestedTubeCount.count.toString()
+      }));
+    }
+  };
 
   // Temperature conversion functions
   const toKelvin = (temp: number, unit: TemperatureUnit): number => {
@@ -180,13 +269,6 @@ const HeatExchangerSizing = () => {
   /**
    * LMTD Correction Factor (F) for Shell & Tube Heat Exchangers
    * Per TEMA Standards and Kern's Process Heat Transfer
-   * 
-   * For 1-2 and 1-4 shell & tube exchangers:
-   * F = (√(R² + 1) × ln[(1-P)/(1-PR)]) / ((R-1) × ln[(2-P(R+1-√(R²+1)))/(2-P(R+1+√(R²+1)))])
-   * 
-   * Where:
-   * R = (T₁ - T₂)/(t₂ - t₁) = Shell side temperature range / Tube side temperature range
-   * P = (t₂ - t₁)/(T₁ - t₁) = Tube side temperature efficiency
    */
   const calculateCorrectionFactor = (
     R: number, 
@@ -199,9 +281,7 @@ const HeatExchangerSizing = () => {
     
     if (P <= 0 || P >= 1 || R <= 0) return 0.9;
     
-    // For shell & tube 1-2 and crossflow configurations
     if (Math.abs(R - 1) < 0.001) {
-      // Special case when R ≈ 1 (per Kern's method)
       const F = (P * Math.sqrt(2)) / ((1 - P) * Math.log((2 - P * (2 - Math.sqrt(2))) / (2 - P * (2 + Math.sqrt(2)))));
       return Math.min(1, Math.max(0.5, isNaN(F) || !isFinite(F) ? 0.9 : F));
     }
@@ -217,7 +297,6 @@ const HeatExchangerSizing = () => {
 
   /**
    * NTU-Effectiveness Method (per Kays and London)
-   * Counter flow: ε = (1 - exp(-NTU(1-Cr))) / (1 - Cr×exp(-NTU(1-Cr)))
    */
   const calculateEffectivenessCounter = (ntu: number, Cr: number): number => {
     if (Cr === 0) return 1 - Math.exp(-ntu);
@@ -225,25 +304,13 @@ const HeatExchangerSizing = () => {
     return (1 - Math.exp(-ntu * (1 - Cr))) / (1 - Cr * Math.exp(-ntu * (1 - Cr)));
   };
 
-  /**
-   * Parallel flow: ε = (1 - exp(-NTU(1+Cr))) / (1 + Cr)
-   */
   const calculateEffectivenessParallel = (ntu: number, Cr: number): number => {
     if (Cr === 0) return 1 - Math.exp(-ntu);
     return (1 - Math.exp(-ntu * (1 + Cr))) / (1 + Cr);
   };
 
   /**
-   * Tube-side pressure drop per Kern's Method (GPSA Engineering Data Book)
-   * ΔP_tube = (4f × L × N_p × ρ × v²) / (2 × d_i) + (4 × N_p × ρ × v²) / 2
-   * 
-   * Where:
-   * f = Fanning friction factor (from Moody chart or correlations)
-   * L = Tube length (m)
-   * N_p = Number of tube passes
-   * ρ = Fluid density (kg/m³)
-   * v = Tube-side velocity (m/s)
-   * d_i = Tube inner diameter (m)
+   * Tube-side pressure drop per Kern's Method
    */
   const calculateTubeSidePressureDrop = (
     velocity: number,
@@ -255,79 +322,250 @@ const HeatExchangerSizing = () => {
   ): { pressureDrop: number; reynolds: number } => {
     if (velocity <= 0 || innerDiameter <= 0) return { pressureDrop: 0, reynolds: 0 };
     
-    // Reynolds number: Re = ρ × v × d / μ
-    const reynolds = (density * velocity * innerDiameter) / (viscosity / 1000); // viscosity in cP to Pa.s
+    const reynolds = (density * velocity * innerDiameter) / (viscosity / 1000);
     
-    // Friction factor (Blasius correlation for turbulent flow)
-    // f = 0.079 × Re^(-0.25) for 4000 < Re < 10^5
-    // f = 16/Re for laminar flow (Re < 2300)
     let frictionFactor: number;
     if (reynolds < 2300) {
       frictionFactor = 16 / reynolds;
     } else if (reynolds < 100000) {
       frictionFactor = 0.079 * Math.pow(reynolds, -0.25);
     } else {
-      // Karman-Nikuradse for smooth tubes
       frictionFactor = 0.046 * Math.pow(reynolds, -0.2);
     }
     
-    // Straight tube pressure drop
     const straightDrop = (4 * frictionFactor * tubeLength * tubePasses * density * velocity * velocity) / (2 * innerDiameter);
-    
-    // Return loss (4 velocity heads per pass)
     const returnLoss = (4 * tubePasses * density * velocity * velocity) / 2;
-    
-    // Total in Pa, convert to kPa
     const totalPressureDrop = (straightDrop + returnLoss) / 1000;
     
     return { pressureDrop: totalPressureDrop, reynolds };
   };
 
   /**
-   * Shell-side pressure drop per Kern's Method
-   * ΔP_shell = (f × G_s² × D_s × (N_b + 1)) / (2 × ρ × D_e × φ_s)
+   * Bell-Delaware Method for Shell-Side Pressure Drop and Heat Transfer
+   * Per Heat Exchanger Design Handbook (Hewitt, Shires, and Bott)
+   * and Schlünder's VDI Heat Atlas
    * 
-   * Where:
-   * f = Shell-side friction factor
-   * G_s = Shell-side mass velocity (kg/m²·s)
-   * D_s = Shell diameter (m)
-   * N_b = Number of baffles
-   * D_e = Equivalent diameter (m)
-   * φ_s = Viscosity correction factor
+   * The Bell-Delaware method accounts for:
+   * - Jc: Baffle cut correction factor
+   * - Jl: Leakage correction factor (shell-to-baffle and tube-to-baffle)
+   * - Jb: Bundle bypass correction factor
+   * - Jr: Adverse temperature gradient correction (laminar flow)
+   * - Js: Unequal baffle spacing correction
    */
-  const calculateShellSidePressureDrop = (
+  const calculateBellDelaware = (
     massFlowRate: number, // kg/s
     density: number,
-    viscosity: number,
+    viscosity: number, // cP
     shellDiameter: number, // m
     baffleSpacing: number, // m
+    baffleCut: number, // fraction
     tubeOuterDiameter: number, // m
     tubePitch: number, // m
     tubeLength: number, // m
-    tubePattern: string
-  ): { pressureDrop: number; velocity: number; reynolds: number; crossFlowArea: number } => {
+    tubePattern: string,
+    numberOfTubes: number,
+    shellBaffleLeakage: number, // m
+    tubeBaffleLeakage: number, // m
+    bundleBypass: number // fraction
+  ): { 
+    pressureDrop: number; 
+    velocity: number; 
+    reynolds: number; 
+    crossFlowArea: number;
+    Jc: number;
+    Jl: number;
+    Jb: number;
+    Jr: number;
+    Js: number;
+    numberOfBaffles: number;
+    equivalentDiameter: number;
+  } => {
     if (massFlowRate <= 0 || shellDiameter <= 0) {
-      return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0 };
+      return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0, Jc: 1, Jl: 1, Jb: 1, Jr: 1, Js: 1, numberOfBaffles: 0, equivalentDiameter: 0 };
     }
     
-    // Cross-flow area: A_s = D_s × B × C' / P_t
-    // C' = P_t - d_o (clearance between tubes)
+    // Tube pitch ratio
+    const pitchRatio = tubePitch / tubeOuterDiameter;
+    
+    // Cross-flow area at bundle centerline (Sm)
+    // Sm = Lbc × (Ds - Dotl + (Dotl - do)(Pt - do)/Pt)
+    // Simplified: Sm = Ds × Lbc × (Pt - do) / Pt
+    const clearance = tubePitch - tubeOuterDiameter;
+    const Sm = shellDiameter * baffleSpacing * clearance / tubePitch;
+    
+    if (Sm <= 0) {
+      return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0, Jc: 1, Jl: 1, Jb: 1, Jr: 1, Js: 1, numberOfBaffles: 0, equivalentDiameter: 0 };
+    }
+    
+    // Mass velocity
+    const Gs = massFlowRate / Sm;
+    const velocity = Gs / density;
+    
+    // Equivalent diameter for shell side (Bell-Delaware uses tube OD based)
+    let De: number;
+    if (tubePattern === "triangular") {
+      // For triangular pitch: De = 1.1/do × (Pt² - 0.917×do²)
+      De = (1.1 / tubeOuterDiameter) * (tubePitch * tubePitch - 0.917 * tubeOuterDiameter * tubeOuterDiameter);
+    } else {
+      // For square pitch: De = 1.27/do × (Pt² - 0.785×do²)
+      De = (1.27 / tubeOuterDiameter) * (tubePitch * tubePitch - 0.785 * tubeOuterDiameter * tubeOuterDiameter);
+    }
+    De = Math.max(De, 0.001); // Prevent negative values
+    
+    // Shell-side Reynolds number
+    const reynolds = (tubeOuterDiameter * Gs) / (viscosity / 1000);
+    
+    // Number of baffles
+    const Nb = Math.max(1, Math.floor(tubeLength / baffleSpacing) - 1);
+    
+    /**
+     * Jc - Baffle Cut Correction Factor
+     * Accounts for heat transfer in the baffle window
+     * Jc = 0.55 + 0.72 × Fc
+     * Where Fc is fraction of tubes in cross-flow
+     */
+    // Fc = 1 - 2×Fw, where Fw is fraction of tubes in window
+    // For typical 25% baffle cut, Fc ≈ 0.65
+    const Fc = 1 - 2 * baffleCut;
+    const Jc = 0.55 + 0.72 * Math.max(0.3, Math.min(0.9, Fc));
+    
+    /**
+     * Jl - Leakage Correction Factor
+     * Accounts for shell-to-baffle and tube-to-baffle leakage
+     * Jl = 0.44(1 - rs) + (1 - 0.44(1 - rs))×exp(-2.2×rlm)
+     * Typical range: 0.7 - 0.9
+     */
+    // Shell-to-baffle leakage area ratio
+    const Asb = Math.PI * shellDiameter * shellBaffleLeakage; // Shell-baffle leakage area
+    const Atb = numberOfTubes * Math.PI * tubeOuterDiameter * tubeBaffleLeakage; // Tube-baffle leakage area
+    const totalLeakage = Asb + Atb;
+    const rs = Asb / (Asb + Atb + 0.001); // Ratio of shell leakage to total
+    const rlm = totalLeakage / (Sm + 0.001);
+    const Jl = 0.44 * (1 - rs) + (1 - 0.44 * (1 - rs)) * Math.exp(-2.2 * rlm);
+    
+    /**
+     * Jb - Bundle Bypass Correction Factor
+     * Accounts for flow bypassing around the tube bundle
+     * Jb = exp(-Cbp × Fbp × (1 - (2×rss)^(1/3)))
+     * Typical range: 0.7 - 0.9
+     */
+    const Fbp = bundleBypass; // Bypass fraction
+    const Cbp = reynolds >= 100 ? 1.35 : 1.25; // Bypass coefficient
+    const rss = 0.5; // Sealing strip ratio (typical)
+    const Jb = Math.exp(-Cbp * Fbp * (1 - Math.pow(2 * rss, 1/3)));
+    
+    /**
+     * Jr - Adverse Temperature Gradient Correction
+     * For laminar flow (Re < 100), heat transfer reduced in inner rows
+     * Jr = 1 for turbulent flow
+     */
+    let Jr: number;
+    if (reynolds >= 100) {
+      Jr = 1.0;
+    } else if (reynolds >= 20) {
+      // Transition: Jr = (Nc/Ncw)^0.18
+      Jr = 0.9; // Typical value
+    } else {
+      Jr = 0.8; // Low Re penalty
+    }
+    
+    /**
+     * Js - Unequal Baffle Spacing Correction
+     * Accounts for inlet/outlet baffle spacing different from central spacing
+     * Js = (Nb - 1 + Li/Lbc + Lo/Lbc) / (Nb - 1 + (Li/Lbc)^(1-n) + (Lo/Lbc)^(1-n))
+     * For equal spacing, Js = 1
+     */
+    const Js = 1.0; // Assume equal baffle spacing
+    
+    /**
+     * Shell-side friction factor (Bell-Delaware)
+     * For triangular pitch: f = exp(0.576 - 0.19×ln(Re)) for Re > 1000
+     * For square pitch: f = exp(0.576 - 0.18×ln(Re))
+     */
+    let frictionFactor: number;
+    if (reynolds > 1000) {
+      if (tubePattern === "triangular") {
+        frictionFactor = Math.exp(0.576 - 0.19 * Math.log(reynolds));
+      } else {
+        frictionFactor = Math.exp(0.576 - 0.18 * Math.log(reynolds));
+      }
+    } else if (reynolds > 100) {
+      frictionFactor = Math.exp(0.8 - 0.15 * Math.log(reynolds));
+    } else {
+      frictionFactor = 48 / reynolds; // Laminar
+    }
+    
+    /**
+     * Pressure Drop Calculation (Bell-Delaware)
+     * ΔPtotal = ΔPcross + ΔPwindow + ΔPentrance
+     * 
+     * Cross-flow: ΔPc = (Nb × 4f × Gs² × Nc) / (2ρ) × correction factors
+     * Window: ΔPw = (Nb × Nw × (Gs²/(2ρ))) 
+     * Entrance/Exit: ΔPe = 2 × (Gs²/(2ρ))
+     */
+    
+    // Number of tube rows crossed in cross-flow
+    const Nc = Math.floor(shellDiameter * (1 - 2 * baffleCut) / tubePitch);
+    
+    // Cross-flow pressure drop with correction factors
+    const deltaP_cross = (Nb * 4 * frictionFactor * Gs * Gs * Nc) / (2 * density);
+    
+    // Window pressure drop (simplified)
+    const Nw = Math.floor(2 * baffleCut * shellDiameter / tubePitch);
+    const deltaP_window = (Nb + 1) * (2 + 0.6 * Nw) * Gs * Gs / (2 * density);
+    
+    // Entrance/exit pressure drop
+    const deltaP_ends = 2 * Gs * Gs / (2 * density);
+    
+    // Total pressure drop with Bell-Delaware corrections
+    const Rb = Jb; // Bypass correction for pressure
+    const Rl = Math.pow(Jl, 2); // Leakage correction for pressure
+    
+    const totalPressureDrop = ((deltaP_cross * Rb * Rl) + deltaP_window + deltaP_ends) / 1000; // Convert to kPa
+    
+    return { 
+      pressureDrop: Math.max(0, totalPressureDrop), 
+      velocity, 
+      reynolds, 
+      crossFlowArea: Sm,
+      Jc,
+      Jl,
+      Jb,
+      Jr,
+      Js,
+      numberOfBaffles: Nb,
+      equivalentDiameter: De
+    };
+  };
+
+  /**
+   * Shell-side pressure drop per Kern's Method (simplified)
+   */
+  const calculateKernShellSide = (
+    massFlowRate: number,
+    density: number,
+    viscosity: number,
+    shellDiameter: number,
+    baffleSpacing: number,
+    tubeOuterDiameter: number,
+    tubePitch: number,
+    tubeLength: number,
+    tubePattern: string
+  ): { pressureDrop: number; velocity: number; reynolds: number; crossFlowArea: number; numberOfBaffles: number; equivalentDiameter: number } => {
+    if (massFlowRate <= 0 || shellDiameter <= 0) {
+      return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0, numberOfBaffles: 0, equivalentDiameter: 0 };
+    }
+    
     const clearance = tubePitch - tubeOuterDiameter;
     const crossFlowArea = (shellDiameter * baffleSpacing * clearance) / tubePitch;
     
     if (crossFlowArea <= 0) {
-      return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0 };
+      return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0, numberOfBaffles: 0, equivalentDiameter: 0 };
     }
     
-    // Shell-side mass velocity
     const Gs = massFlowRate / crossFlowArea;
-    
-    // Shell-side velocity
     const velocity = Gs / density;
     
-    // Equivalent diameter (hydraulic diameter for shell side)
-    // For triangular pitch: D_e = 4 × (P_t² × √3/4 - π × d_o²/8) / (π × d_o/2)
-    // For square pitch: D_e = 4 × (P_t² - π × d_o²/4) / (π × d_o)
     let De: number;
     if (tubePattern === "triangular") {
       De = (4 * ((tubePitch * tubePitch * Math.sqrt(3) / 4) - (Math.PI * tubeOuterDiameter * tubeOuterDiameter / 8))) / 
@@ -337,11 +575,8 @@ const HeatExchangerSizing = () => {
            (Math.PI * tubeOuterDiameter);
     }
     
-    // Reynolds number
     const reynolds = (De * Gs) / (viscosity / 1000);
     
-    // Friction factor (Kern's correlation)
-    // f = exp(0.576 - 0.19 × ln(Re)) for Re > 500
     let frictionFactor: number;
     if (reynolds > 500) {
       frictionFactor = Math.exp(0.576 - 0.19 * Math.log(reynolds));
@@ -349,14 +584,12 @@ const HeatExchangerSizing = () => {
       frictionFactor = 1.0;
     }
     
-    // Number of baffles
     const numberOfBaffles = Math.floor(tubeLength / baffleSpacing) - 1;
     
-    // Shell-side pressure drop
     const pressureDrop = (frictionFactor * Gs * Gs * shellDiameter * (numberOfBaffles + 1)) / 
-                         (2 * density * De * 1000); // Convert to kPa
+                         (2 * density * De * 1000);
     
-    return { pressureDrop: Math.max(0, pressureDrop), velocity, reynolds, crossFlowArea };
+    return { pressureDrop: Math.max(0, pressureDrop), velocity, reynolds, crossFlowArea, numberOfBaffles, equivalentDiameter: De };
   };
 
   useEffect(() => {
@@ -364,21 +597,20 @@ const HeatExchangerSizing = () => {
     const Tho = parseFloat(hotFluid.outletTemp);
     const Tci = parseFloat(coldFluid.inletTemp);
     const Tco = parseFloat(coldFluid.outletTemp);
-    const mh = parseFloat(hotFluid.flowRate); // kg/hr
-    const mc = parseFloat(coldFluid.flowRate); // kg/hr
-    const Cph = parseFloat(hotFluid.specificHeat); // kJ/kg·K
-    const Cpc = parseFloat(coldFluid.specificHeat); // kJ/kg·K
-    const rhoHot = parseFloat(hotFluid.density); // kg/m³
-    const rhoCold = parseFloat(coldFluid.density); // kg/m³
-    const muHot = parseFloat(hotFluid.viscosity); // cP
-    const muCold = parseFloat(coldFluid.viscosity); // cP
-    const U = parseFloat(overallU); // W/m²·K
-    const A = parseFloat(area); // m²
-    const Rfo = parseFloat(hotFouling); // m²·K/W
-    const Rfi = parseFloat(coldFouling); // m²·K/W
+    const mh = parseFloat(hotFluid.flowRate);
+    const mc = parseFloat(coldFluid.flowRate);
+    const Cph = parseFloat(hotFluid.specificHeat);
+    const Cpc = parseFloat(coldFluid.specificHeat);
+    const rhoHot = parseFloat(hotFluid.density);
+    const rhoCold = parseFloat(coldFluid.density);
+    const muHot = parseFloat(hotFluid.viscosity);
+    const muCold = parseFloat(coldFluid.viscosity);
+    const U = parseFloat(overallU);
+    const A = parseFloat(area);
+    const Rfo = parseFloat(hotFouling);
+    const Rfi = parseFloat(coldFouling);
 
-    // Tube geometry
-    const Do = parseFloat(tubeGeometry.outerDiameter) / 1000; // Convert mm to m
+    const Do = parseFloat(tubeGeometry.outerDiameter) / 1000;
     const wallThickness = parseFloat(tubeGeometry.wallThickness) / 1000;
     const Di = Do - 2 * wallThickness;
     const tubeLength = parseFloat(tubeGeometry.tubeLength);
@@ -386,40 +618,37 @@ const HeatExchangerSizing = () => {
     const tubePasses = parseInt(tubeGeometry.tubePasses);
     const tubePitch = parseFloat(tubeGeometry.tubePitch) / 1000;
     const baffleSpacing = parseFloat(tubeGeometry.baffleSpacing) / 1000;
+    const baffleCut = parseFloat(tubeGeometry.baffleCut) / 100;
     const shellDiameter = parseFloat(tubeGeometry.shellDiameter) / 1000;
+    const shellBaffleLeakage = parseFloat(tubeGeometry.shellBaffleLeakage) / 1000;
+    const tubeBaffleLeakage = parseFloat(tubeGeometry.tubeBaffleLeakage) / 1000;
+    const bundleBypass = parseFloat(tubeGeometry.bundleBypass);
 
     if ([Thi, Tho, Tci, Tco, mh, mc, Cph, Cpc, rhoHot, rhoCold, muHot, muCold].some(isNaN)) {
       setResults(null);
       return;
     }
 
-    // Convert temperatures to Kelvin for calculations
     const ThiK = toKelvin(Thi, tempUnit);
     const ThoK = toKelvin(Tho, tempUnit);
     const TciK = toKelvin(Tci, tempUnit);
     const TcoK = toKelvin(Tco, tempUnit);
 
-    // Heat capacity rates (kW/K)
-    const Ch = (mh / 3600) * Cph; // Convert kg/hr to kg/s
+    const Ch = (mh / 3600) * Cph;
     const Cc = (mc / 3600) * Cpc;
     
     const Cmin = Math.min(Ch, Cc);
     const Cmax = Math.max(Ch, Cc);
-    const Cr = Cmin / Cmax; // Capacity ratio
+    const Cr = Cmin / Cmax;
 
-    // Heat duty from hot side (kW)
-    // Q = ṁ × Cp × ΔT
     const Qh = Ch * (ThiK - ThoK);
     
-    // LMTD calculation per TEMA Standards
-    // LMTD = (ΔT₁ - ΔT₂) / ln(ΔT₁/ΔT₂)
     let deltaT1: number, deltaT2: number;
     
     if (flowArrangement === "parallel") {
       deltaT1 = ThiK - TciK;
       deltaT2 = ThoK - TcoK;
     } else {
-      // Counter flow (and as base for correction factor)
       deltaT1 = ThiK - TcoK;
       deltaT2 = ThoK - TciK;
     }
@@ -436,48 +665,56 @@ const HeatExchangerSizing = () => {
       lmtd = (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
     }
 
-    // Calculate P and R for correction factor (TEMA notation)
-    // P = (t₂ - t₁)/(T₁ - t₁) - Tube side thermal effectiveness
-    // R = (T₁ - T₂)/(t₂ - t₁) - Ratio of heat capacity rates
     const P = (TcoK - TciK) / (ThiK - TciK);
     const R = (ThiK - ThoK) / (TcoK - TciK);
 
-    // LMTD Correction factor (F)
     const F = calculateCorrectionFactor(R, P, flowArrangement);
     const effectiveLmtd = lmtd * F;
 
-    // Calculate heat transfer area from tube geometry
-    // A = N × π × Do × L (outside area)
     const heatTransferArea = numberOfTubes * Math.PI * Do * tubeLength;
-
-    // Flow area per pass
     const flowAreaPerPass = (numberOfTubes / tubePasses) * (Math.PI * Di * Di / 4);
-
-    // Tube-side velocity (cold fluid typically in tubes)
     const tubeSideVelocity = (mc / 3600) / (rhoCold * flowAreaPerPass);
 
-    // Tube-side pressure drop
     const tubeSideCalc = calculateTubeSidePressureDrop(
       tubeSideVelocity, rhoCold, muCold, Di, tubeLength, tubePasses
     );
 
-    // Shell-side pressure drop (hot fluid in shell)
-    const shellSideCalc = calculateShellSidePressureDrop(
-      mh / 3600, rhoHot, muHot, shellDiameter, baffleSpacing, Do, tubePitch, tubeLength, tubeGeometry.tubePattern
-    );
+    // Calculate shell-side based on selected method
+    let shellSideCalc: {
+      pressureDrop: number;
+      velocity: number;
+      reynolds: number;
+      crossFlowArea: number;
+      Jc?: number;
+      Jl?: number;
+      Jb?: number;
+      Jr?: number;
+      Js?: number;
+      numberOfBaffles: number;
+      equivalentDiameter: number;
+    };
 
-    // Clean and fouled U calculation
-    // 1/U_fouled = 1/U_clean + Rfo + Rfi
+    if (shellSideMethod === "bell-delaware") {
+      shellSideCalc = calculateBellDelaware(
+        mh / 3600, rhoHot, muHot, shellDiameter, baffleSpacing, baffleCut,
+        Do, tubePitch, tubeLength, tubeGeometry.tubePattern, numberOfTubes,
+        shellBaffleLeakage, tubeBaffleLeakage, bundleBypass
+      );
+    } else {
+      const kernResult = calculateKernShellSide(
+        mh / 3600, rhoHot, muHot, shellDiameter, baffleSpacing,
+        Do, tubePitch, tubeLength, tubeGeometry.tubePattern
+      );
+      shellSideCalc = { ...kernResult, Jc: undefined, Jl: undefined, Jb: undefined, Jr: undefined, Js: undefined };
+    }
+
     const cleanU = U;
     const fouledU = 1 / (1/U + Rfo + Rfi);
 
-    // NTU and effectiveness
     let ntu: number;
     let effectiveness: number;
     
     if (calculationMode === "design" && !isNaN(U)) {
-      // Design mode: calculate required area
-      // Q = U × A × LMTD × F (per TEMA)
       const requiredArea = (Qh * 1000) / (fouledU * effectiveLmtd);
       ntu = (fouledU * requiredArea) / (Cmin * 1000);
       
@@ -507,10 +744,16 @@ const HeatExchangerSizing = () => {
         flowAreaPerPass,
         crossFlowArea: shellSideCalc.crossFlowArea,
         cleanU,
-        fouledU
+        fouledU,
+        Jc: shellSideCalc.Jc,
+        Jl: shellSideCalc.Jl,
+        Jb: shellSideCalc.Jb,
+        Jr: shellSideCalc.Jr,
+        Js: shellSideCalc.Js,
+        numberOfBaffles: shellSideCalc.numberOfBaffles,
+        equivalentDiameter: shellSideCalc.equivalentDiameter
       });
     } else if (calculationMode === "rating" && !isNaN(A) && !isNaN(U)) {
-      // Rating mode: calculate outlet temperatures using ε-NTU
       ntu = (fouledU * A) / (Cmin * 1000);
       
       if (flowArrangement === "parallel") {
@@ -519,11 +762,9 @@ const HeatExchangerSizing = () => {
         effectiveness = calculateEffectivenessCounter(ntu, Cr);
       }
 
-      // Maximum possible heat transfer
       const Qmax = Cmin * (ThiK - TciK);
       const Qactual = effectiveness * Qmax;
 
-      // Calculate outlet temperatures
       const ThoCalcK = ThiK - Qactual / Ch;
       const TcoCalcK = TciK + Qactual / Cc;
 
@@ -549,10 +790,17 @@ const HeatExchangerSizing = () => {
         flowAreaPerPass,
         crossFlowArea: shellSideCalc.crossFlowArea,
         cleanU,
-        fouledU
+        fouledU,
+        Jc: shellSideCalc.Jc,
+        Jl: shellSideCalc.Jl,
+        Jb: shellSideCalc.Jb,
+        Jr: shellSideCalc.Jr,
+        Js: shellSideCalc.Js,
+        numberOfBaffles: shellSideCalc.numberOfBaffles,
+        equivalentDiameter: shellSideCalc.equivalentDiameter
       });
     }
-  }, [hotFluid, coldFluid, overallU, area, flowArrangement, calculationMode, tempUnit, hotFouling, coldFouling, tubeGeometry]);
+  }, [hotFluid, coldFluid, overallU, area, flowArrangement, calculationMode, tempUnit, hotFouling, coldFouling, tubeGeometry, shellSideMethod]);
 
   const formatNumber = (num: number, decimals: number = 2): string => {
     if (isNaN(num) || !isFinite(num)) return "—";
@@ -670,7 +918,7 @@ const HeatExchangerSizing = () => {
   return (
     <div className="space-y-6">
       {/* Mode and Configuration */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="border-border/50">
           <CardContent className="pt-4 space-y-3">
             <Label className="text-xs text-muted-foreground">Calculation Mode</Label>
@@ -682,8 +930,8 @@ const HeatExchangerSizing = () => {
             </Tabs>
             <p className="text-xs text-muted-foreground">
               {calculationMode === "design" 
-                ? "Calculate required heat transfer area"
-                : "Calculate performance for given area"}
+                ? "Calculate required area"
+                : "Calculate performance"}
             </p>
           </CardContent>
         </Card>
@@ -702,6 +950,21 @@ const HeatExchangerSizing = () => {
                 <SelectItem value="shell-tube-1-4">Shell & Tube (1-4)</SelectItem>
                 <SelectItem value="crossflow-unmixed">Crossflow (Unmixed)</SelectItem>
                 <SelectItem value="crossflow-mixed">Crossflow (Mixed)</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50">
+          <CardContent className="pt-4 space-y-3">
+            <Label className="text-xs text-muted-foreground">Shell-Side Method</Label>
+            <Select value={shellSideMethod} onValueChange={(v) => setShellSideMethod(v as ShellSideMethod)}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bell-delaware">Bell-Delaware</SelectItem>
+                <SelectItem value="kern">Kern's Method</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>
@@ -797,9 +1060,26 @@ const HeatExchangerSizing = () => {
       {/* Tube Geometry */}
       <Card className="border-border/50">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Settings className="w-4 h-4 text-primary" />
-            Tube Geometry (TEMA Standards)
+          <CardTitle className="text-base flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Settings className="w-4 h-4 text-primary" />
+              Tube Geometry (TEMA Standards)
+            </div>
+            {getSuggestedTubeCount && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  TEMA suggests: {getSuggestedTubeCount.count} tubes
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 text-xs"
+                  onClick={applySuggestedTubeCount}
+                >
+                  Apply
+                </Button>
+              </div>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -908,6 +1188,30 @@ const HeatExchangerSizing = () => {
                 className="h-9"
               />
             </div>
+            {shellSideMethod === "bell-delaware" && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Shell-Baffle Clearance (mm)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={tubeGeometry.shellBaffleLeakage}
+                    onChange={(e) => setTubeGeometry({ ...tubeGeometry, shellBaffleLeakage: e.target.value })}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tube-Baffle Clearance (mm)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={tubeGeometry.tubeBaffleLeakage}
+                    onChange={(e) => setTubeGeometry({ ...tubeGeometry, tubeBaffleLeakage: e.target.value })}
+                    className="h-9"
+                  />
+                </div>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -918,8 +1222,11 @@ const HeatExchangerSizing = () => {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               Results
-              <Badge variant="outline" className="ml-auto text-xs font-normal">
+              <Badge variant="outline" className="ml-2 text-xs font-normal">
                 {calculationMode === "design" ? "Design Mode" : "Rating Mode"}
+              </Badge>
+              <Badge variant="outline" className="text-xs font-normal">
+                {shellSideMethod === "bell-delaware" ? "Bell-Delaware" : "Kern"}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -986,7 +1293,7 @@ const HeatExchangerSizing = () => {
 
             <Separator />
 
-            {/* U Values */}
+            {/* U Values and Geometry */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-1 p-3 rounded-lg bg-background/50">
                 <p className="text-xs text-muted-foreground">Clean U</p>
@@ -1001,25 +1308,70 @@ const HeatExchangerSizing = () => {
                 </p>
               </div>
               <div className="space-y-1 p-3 rounded-lg bg-background/50">
-                <p className="text-xs text-muted-foreground">Tube ID</p>
+                <p className="text-xs text-muted-foreground">Number of Baffles</p>
                 <p className="text-lg font-semibold">
-                  {formatNumber(results.tubeInnerDiameter, 2)} <span className="text-sm font-normal">mm</span>
+                  {results.numberOfBaffles}
                 </p>
               </div>
               <div className="space-y-1 p-3 rounded-lg bg-background/50">
-                <p className="text-xs text-muted-foreground">Calculated Area</p>
+                <p className="text-xs text-muted-foreground">Equiv. Diameter</p>
                 <p className="text-lg font-semibold">
-                  {formatNumber(results.heatTransferArea)} <span className="text-sm font-normal">m²</span>
+                  {formatNumber(results.equivalentDiameter * 1000, 2)} <span className="text-sm font-normal">mm</span>
                 </p>
               </div>
             </div>
+
+            {/* Bell-Delaware Correction Factors */}
+            {shellSideMethod === "bell-delaware" && results.Jc !== undefined && (
+              <>
+                <Separator />
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Info className="w-4 h-4 text-primary" />
+                    <p className="text-sm font-medium">Bell-Delaware Correction Factors</p>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                      <p className="text-xs text-muted-foreground">Jc (Baffle Cut)</p>
+                      <p className="text-lg font-semibold">
+                        {formatNumber(results.Jc, 3)}
+                      </p>
+                    </div>
+                    <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                      <p className="text-xs text-muted-foreground">Jl (Leakage)</p>
+                      <p className="text-lg font-semibold">
+                        {formatNumber(results.Jl!, 3)}
+                      </p>
+                    </div>
+                    <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                      <p className="text-xs text-muted-foreground">Jb (Bypass)</p>
+                      <p className="text-lg font-semibold">
+                        {formatNumber(results.Jb!, 3)}
+                      </p>
+                    </div>
+                    <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                      <p className="text-xs text-muted-foreground">Jr (Temp Grad)</p>
+                      <p className="text-lg font-semibold">
+                        {formatNumber(results.Jr!, 3)}
+                      </p>
+                    </div>
+                    <div className="space-y-1 p-3 rounded-lg bg-background/50">
+                      <p className="text-xs text-muted-foreground">Js (Spacing)</p>
+                      <p className="text-lg font-semibold">
+                        {formatNumber(results.Js!, 3)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Pressure Drop Results */}
             <Separator />
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Gauge className="w-4 h-4 text-primary" />
-                <p className="text-sm font-medium">Pressure Drop (Kern's Method)</p>
+                <p className="text-sm font-medium">Pressure Drop ({shellSideMethod === "bell-delaware" ? "Bell-Delaware" : "Kern's"} Method)</p>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="space-y-1 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -1131,6 +1483,45 @@ const HeatExchangerSizing = () => {
 
       {/* Reference Tables */}
       <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="tube-count" className="border-border/50">
+          <AccordionTrigger className="text-sm">
+            <div className="flex items-center gap-2">
+              <Grid3X3 className="w-4 h-4 text-primary" />
+              TEMA Tube Count Tables (3/4" OD on 1" pitch)
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Shell ID (mm)</TableHead>
+                    <TableHead className="text-xs">1-Pass Tri</TableHead>
+                    <TableHead className="text-xs">1-Pass Sq</TableHead>
+                    <TableHead className="text-xs">2-Pass Tri</TableHead>
+                    <TableHead className="text-xs">2-Pass Sq</TableHead>
+                    <TableHead className="text-xs">4-Pass Tri</TableHead>
+                    <TableHead className="text-xs">4-Pass Sq</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(temaTubeCountTable).slice(0, 12).map(([shellId, passes]) => (
+                    <TableRow key={shellId}>
+                      <TableCell className="text-xs font-mono">{shellId}</TableCell>
+                      <TableCell className="text-xs">{passes[1].triangular}</TableCell>
+                      <TableCell className="text-xs">{passes[1].square}</TableCell>
+                      <TableCell className="text-xs">{passes[2].triangular}</TableCell>
+                      <TableCell className="text-xs">{passes[2].square}</TableCell>
+                      <TableCell className="text-xs">{passes[4].triangular}</TableCell>
+                      <TableCell className="text-xs">{passes[4].square}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="u-values" className="border-border/50">
           <AccordionTrigger className="text-sm">
             <div className="flex items-center gap-2">
@@ -1207,19 +1598,16 @@ const HeatExchangerSizing = () => {
               <div className="p-3 rounded-lg bg-muted/30">
                 <p className="font-medium mb-2">Heat Duty (TEMA)</p>
                 <p className="font-mono text-muted-foreground">Q = ṁ × Cp × ΔT</p>
-                <p className="text-muted-foreground mt-1">Where: ṁ = mass flow rate, Cp = specific heat, ΔT = temperature difference</p>
               </div>
               
               <div className="p-3 rounded-lg bg-muted/30">
                 <p className="font-medium mb-2">LMTD (Log Mean Temperature Difference)</p>
                 <p className="font-mono text-muted-foreground">LMTD = (ΔT₁ - ΔT₂) / ln(ΔT₁/ΔT₂)</p>
-                <p className="text-muted-foreground mt-1">Counter flow: ΔT₁ = Th,in - Tc,out, ΔT₂ = Th,out - Tc,in</p>
               </div>
 
               <div className="p-3 rounded-lg bg-muted/30">
-                <p className="font-medium mb-2">LMTD Correction Factor F (Kern's Method)</p>
+                <p className="font-medium mb-2">LMTD Correction Factor F (TEMA/Kern)</p>
                 <p className="font-mono text-muted-foreground text-[10px]">F = [√(R²+1) × ln((1-P)/(1-PR))] / [(R-1) × ln((2-P(R+1-√(R²+1)))/(2-P(R+1+√(R²+1))))]</p>
-                <p className="text-muted-foreground mt-1">P = (tc,out - tc,in)/(th,in - tc,in), R = (th,in - th,out)/(tc,out - tc,in)</p>
               </div>
 
               <div className="p-3 rounded-lg bg-muted/30">
@@ -1228,31 +1616,26 @@ const HeatExchangerSizing = () => {
               </div>
 
               <div className="p-3 rounded-lg bg-muted/30">
-                <p className="font-medium mb-2">Fouled Overall U</p>
-                <p className="font-mono text-muted-foreground">1/U_fouled = 1/U_clean + Rf,o + Rf,i</p>
+                <p className="font-medium mb-2">Bell-Delaware Shell-Side Heat Transfer</p>
+                <p className="font-mono text-muted-foreground">h_shell = h_ideal × Jc × Jl × Jb × Jr × Js</p>
+                <p className="text-muted-foreground mt-1">Where: Jc=baffle cut, Jl=leakage, Jb=bypass, Jr=temp gradient, Js=spacing</p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted/30">
+                <p className="font-medium mb-2">Bell-Delaware Pressure Drop</p>
+                <p className="font-mono text-muted-foreground">ΔP = ΔP_cross × Rb × Rl + ΔP_window + ΔP_ends</p>
+                <p className="text-muted-foreground mt-1">Rb, Rl = bypass and leakage corrections for pressure</p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted/30">
+                <p className="font-medium mb-2">Tube-Side Pressure Drop (Kern)</p>
+                <p className="font-mono text-muted-foreground">ΔP = (4f × L × Np × ρ × v²)/(2 × di) + (4 × Np × ρ × v²)/2</p>
               </div>
 
               <div className="p-3 rounded-lg bg-muted/30">
                 <p className="font-medium mb-2">NTU-Effectiveness (Kays & London)</p>
                 <p className="font-mono text-muted-foreground">NTU = U×A / Cmin</p>
                 <p className="font-mono text-muted-foreground mt-1">ε = (1 - exp(-NTU(1-Cr))) / (1 - Cr×exp(-NTU(1-Cr)))</p>
-              </div>
-
-              <div className="p-3 rounded-lg bg-muted/30">
-                <p className="font-medium mb-2">Tube-Side Pressure Drop (Kern's Method)</p>
-                <p className="font-mono text-muted-foreground">ΔP = (4f × L × Np × ρ × v²)/(2 × di) + (4 × Np × ρ × v²)/2</p>
-                <p className="text-muted-foreground mt-1">Friction factor: f = 0.079 × Re^(-0.25) (Blasius, turbulent)</p>
-              </div>
-
-              <div className="p-3 rounded-lg bg-muted/30">
-                <p className="font-medium mb-2">Shell-Side Pressure Drop (Kern's Method)</p>
-                <p className="font-mono text-muted-foreground">ΔP = (f × Gs² × Ds × (Nb+1)) / (2 × ρ × De)</p>
-                <p className="text-muted-foreground mt-1">De (triangular) = 4×(Pt²×√3/4 - π×do²/8) / (π×do/2)</p>
-              </div>
-
-              <div className="p-3 rounded-lg bg-muted/30">
-                <p className="font-medium mb-2">Reynolds Number</p>
-                <p className="font-mono text-muted-foreground">Re = ρ × v × d / μ</p>
               </div>
             </div>
           </AccordionContent>
