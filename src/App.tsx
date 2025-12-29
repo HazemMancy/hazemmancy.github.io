@@ -9,6 +9,7 @@ import GasFlowConverterPage from "./pages/calculators/GasFlowConverterPage";
 import HydraulicSizingPage from "./pages/calculators/HydraulicSizingPage";
 import HeatExchangerPage from "./pages/calculators/HeatExchangerPage";
 import PumpSizingPage from "./pages/calculators/PumpSizingPage";
+import CompressorPowerPage from "./pages/calculators/CompressorPowerPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/calculators/hydraulic-sizing" element={<HydraulicSizingPage />} />
           <Route path="/calculators/heat-exchanger" element={<HeatExchangerPage />} />
           <Route path="/calculators/pump-sizing" element={<PumpSizingPage />} />
+          <Route path="/calculators/compressor-power" element={<CompressorPowerPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
