@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container } from "lucide-react";
+import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container, Shield } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -76,6 +76,15 @@ const calculators: CalculatorCard[] = [
     route: "/calculators/api-2000",
     status: "available",
     category: "Storage Tanks"
+  },
+  {
+    id: "api-520",
+    title: "API 520/521 Relief Valve",
+    description: "Size pressure relief devices for vapor, liquid, two-phase, and steam service with orifice selection",
+    icon: <Shield className="w-8 h-8" />,
+    route: "/calculators/api-520",
+    status: "available",
+    category: "Pressure Relief"
   }
 ];
 
