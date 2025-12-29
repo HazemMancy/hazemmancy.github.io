@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3, AlertTriangle, Activity } from "lucide-react";
+import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3, AlertTriangle, Activity, Download, Database, Shield, Droplets } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Accordion,
@@ -24,6 +24,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { fluidDatabase, getFluidProperties, getFluidsByCategory } from "@/lib/fluidProperties";
+import { calculateASMEThickness, asmeMaterials, getMaterialOptions, type ASMEResults } from "@/lib/asmeCalculations";
+import { generateDatasheetPDF, type DatasheetData } from "@/lib/pdfDatasheet";
+import { toast } from "@/hooks/use-toast";
 
 type CalculationMode = "design" | "rating";
 type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "crossflow-unmixed" | "crossflow-mixed";
@@ -150,6 +154,17 @@ const HeatExchangerSizing = () => {
   const [tempUnit, setTempUnit] = useState<TemperatureUnit>("C");
   const [shellSideMethod, setShellSideMethod] = useState<ShellSideMethod>("bell-delaware");
   
+  // Fluid selection
+  const [hotFluidType, setHotFluidType] = useState<string>("custom");
+  const [coldFluidType, setColdFluidType] = useState<string>("water");
+  
+  // ASME inputs
+  const [designPressure, setDesignPressure] = useState("1.0");
+  const [corrosionAllowance, setCorrosionAllowance] = useState("3.0");
+  const [shellMaterial, setShellMaterial] = useState("sa-516-70");
+  const [jointEfficiency, setJointEfficiency] = useState("1.0");
+  const [asmeResults, setAsmeResults] = useState<ASMEResults | null>(null);
+  
   const [hotFluid, setHotFluid] = useState<FluidInputs>({
     inletTemp: "150",
     outletTemp: "90",
@@ -176,6 +191,101 @@ const HeatExchangerSizing = () => {
   const [area, setArea] = useState("50");
   const [hotFouling, setHotFouling] = useState("0.00035");
   const [coldFouling, setColdFouling] = useState("0.00018");
+
+  // Auto-update fluid properties when selection or temperature changes
+  const updateFluidFromDatabase = useCallback((fluidKey: string, avgTemp: number, setFluid: (f: FluidInputs) => void, currentFluid: FluidInputs) => {
+    if (fluidKey === "custom") return;
+    const props = getFluidProperties(fluidKey, avgTemp);
+    if (props) {
+      setFluid({
+        ...currentFluid,
+        density: props.density.toFixed(1),
+        specificHeat: props.specificHeat.toFixed(3),
+        viscosity: props.viscosity.toFixed(3),
+        thermalConductivity: props.thermalConductivity.toFixed(4),
+        prandtl: props.prandtl.toFixed(2)
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const avgTemp = (parseFloat(hotFluid.inletTemp) + parseFloat(hotFluid.outletTemp)) / 2;
+    if (!isNaN(avgTemp)) updateFluidFromDatabase(hotFluidType, avgTemp, setHotFluid, hotFluid);
+  }, [hotFluidType, hotFluid.inletTemp, hotFluid.outletTemp]);
+
+  useEffect(() => {
+    const avgTemp = (parseFloat(coldFluid.inletTemp) + parseFloat(coldFluid.outletTemp)) / 2;
+    if (!isNaN(avgTemp)) updateFluidFromDatabase(coldFluidType, avgTemp, setColdFluid, coldFluid);
+  }, [coldFluidType, coldFluid.inletTemp, coldFluid.outletTemp]);
+
+  // ASME calculation effect
+  useEffect(() => {
+    const P = parseFloat(designPressure);
+    const CA = parseFloat(corrosionAllowance);
+    const E = parseFloat(jointEfficiency);
+    const shellDia = parseFloat(tubeGeometry.shellDiameter);
+    const tubeOD = parseFloat(tubeGeometry.outerDiameter);
+    const pitch = parseFloat(tubeGeometry.tubePitch);
+    const designTemp = Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp));
+    
+    if ([P, CA, E, shellDia, tubeOD, pitch, designTemp].some(isNaN)) return;
+    
+    const result = calculateASMEThickness(shellDia, tubeOD, pitch, P, designTemp, CA, shellMaterial, E);
+    setAsmeResults(result);
+  }, [designPressure, corrosionAllowance, shellMaterial, jointEfficiency, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, hotFluid.inletTemp, coldFluid.inletTemp]);
+
+  // PDF Export handler
+  const handleExportPDF = useCallback(() => {
+    if (!results) {
+      toast({ title: "No results", description: "Calculate results first before exporting", variant: "destructive" });
+      return;
+    }
+    const data: DatasheetData = {
+      projectName: "Heat Exchanger Design",
+      itemNumber: "HX-001",
+      date: new Date().toLocaleDateString(),
+      hotFluid: {
+        name: fluidDatabase[hotFluidType]?.name || "Custom Fluid",
+        inletTemp: parseFloat(hotFluid.inletTemp), outletTemp: parseFloat(hotFluid.outletTemp),
+        flowRate: parseFloat(hotFluid.flowRate), density: parseFloat(hotFluid.density),
+        viscosity: parseFloat(hotFluid.viscosity), specificHeat: parseFloat(hotFluid.specificHeat),
+        thermalConductivity: parseFloat(hotFluid.thermalConductivity), prandtl: parseFloat(hotFluid.prandtl),
+        foulingFactor: parseFloat(hotFouling)
+      },
+      coldFluid: {
+        name: fluidDatabase[coldFluidType]?.name || "Custom Fluid",
+        inletTemp: parseFloat(coldFluid.inletTemp), outletTemp: parseFloat(coldFluid.outletTemp),
+        flowRate: parseFloat(coldFluid.flowRate), density: parseFloat(coldFluid.density),
+        viscosity: parseFloat(coldFluid.viscosity), specificHeat: parseFloat(coldFluid.specificHeat),
+        thermalConductivity: parseFloat(coldFluid.thermalConductivity), prandtl: parseFloat(coldFluid.prandtl),
+        foulingFactor: parseFloat(coldFouling)
+      },
+      heatDuty: results.heatDuty, lmtd: results.lmtd, correctionFactor: results.correctionFactor,
+      effectiveLmtd: results.effectiveLmtd, overallU: parseFloat(overallU), calculatedU: results.calculatedU,
+      requiredArea: results.requiredArea, ntu: results.ntu, effectiveness: results.effectiveness,
+      hi: results.hi, ho: results.ho, tubeNusselt: results.tubeNusselt, shellNusselt: results.shellNusselt,
+      shellDiameter: parseFloat(tubeGeometry.shellDiameter), shellLength: parseFloat(tubeGeometry.tubeLength),
+      tubeOD: parseFloat(tubeGeometry.outerDiameter), tubeWallThickness: parseFloat(tubeGeometry.wallThickness),
+      tubeLength: parseFloat(tubeGeometry.tubeLength), numberOfTubes: parseInt(tubeGeometry.numberOfTubes),
+      tubePitch: parseFloat(tubeGeometry.tubePitch), tubePattern: tubeGeometry.tubePattern,
+      tubePasses: parseInt(tubeGeometry.tubePasses), baffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
+      baffleCut: parseFloat(tubeGeometry.baffleCut), numberOfBaffles: results.numberOfBaffles,
+      tubeMaterial: tubeGeometry.tubeMaterial,
+      tubeSidePressureDrop: results.tubeSidePressureDrop, shellSidePressureDrop: results.shellSidePressureDrop,
+      tubeSideVelocity: results.tubeSideVelocity, shellSideVelocity: results.shellSideVelocity,
+      tubeReynolds: results.tubeReynolds, shellReynolds: results.shellReynolds,
+      naturalFrequency: results.vibration.naturalFrequency, vortexFrequency: results.vibration.vortexSheddingFrequency,
+      criticalVelocity: results.vibration.criticalVelocity, vibrationStatus: results.vibration.isVibrationRisk ? "WARNING" : "OK",
+      shellThickness: asmeResults?.shellRecommended, headThickness: asmeResults?.headThicknessWithCA,
+      tubesheetThickness: asmeResults?.tubesheetThickness, flangeClass: asmeResults?.flangeClass,
+      designPressure: parseFloat(designPressure), designTemperature: Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp)),
+      hydroTestPressure: asmeResults?.hydroTestPressure, shellMaterial: asmeMaterials[shellMaterial]?.name,
+      shellSideMethod: shellSideMethod === "bell-delaware" ? "Bell-Delaware" : "Kern's Method",
+      tempUnit: getTempUnitLabel()
+    };
+    generateDatasheetPDF(data);
+    toast({ title: "PDF Generated", description: "Datasheet downloaded successfully" });
+  }, [results, asmeResults, hotFluid, coldFluid, hotFluidType, coldFluidType, hotFouling, coldFouling, overallU, tubeGeometry, designPressure, shellMaterial, shellSideMethod]);
 
   const [tubeGeometry, setTubeGeometry] = useState<TubeGeometry>({
     outerDiameter: "19.05",
