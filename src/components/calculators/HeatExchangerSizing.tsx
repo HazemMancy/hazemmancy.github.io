@@ -27,10 +27,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fluidDatabase, getFluidProperties, getFluidsByCategory } from "@/lib/fluidProperties";
 import { calculateASMEThickness, asmeMaterials, getMaterialOptions, type ASMEResults } from "@/lib/asmeCalculations";
 import { generateDatasheetPDF, type DatasheetData } from "@/lib/pdfDatasheet";
-import { calculateTubeCount, getRecommendedPitch, getRecommendedBaffleSpacing } from "@/lib/temaGeometry";
+import { calculateTubeCount, getRecommendedPitch, getRecommendedBaffleSpacing, getAvailableTubeCountTables } from "@/lib/temaGeometry";
 import { toast } from "@/hooks/use-toast";
 import TubeBundleVisualization from "./TubeBundleVisualization";
 import DesignComparison, { type SavedDesign } from "./DesignComparison";
+import { HTRIRatingSummary, type HTRIRatingData } from "./HTRIRatingSummary";
 
 type CalculationMode = "design" | "rating";
 type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "crossflow-unmixed" | "crossflow-mixed";
