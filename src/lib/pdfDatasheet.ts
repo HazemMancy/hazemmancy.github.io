@@ -7,9 +7,11 @@ import jsPDF from 'jspdf';
 
 export interface DatasheetData {
   // General
+  companyName: string;
   projectName: string;
   itemNumber: string;
   date: string;
+  revisionNo: string;
   
   // Process Data
   hotFluid: {
@@ -168,20 +170,25 @@ export function generateDatasheetPDF(data: DatasheetData): void {
 
   // ===== Title Block =====
   doc.setFillColor(42, 85, 55);
-  doc.rect(margin, y, contentWidth, 20, 'F');
+  doc.rect(margin, y, contentWidth, 25, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('SHELL & TUBE HEAT EXCHANGER DATASHEET', pageWidth / 2, y + 8, { align: 'center' });
-  doc.setFontSize(10);
-  doc.text('API 660 / TEMA Standards', pageWidth / 2, y + 15, { align: 'center' });
+  doc.text(data.companyName || 'Company Name', pageWidth / 2, y + 6, { align: 'center' });
+  doc.setFontSize(14);
+  doc.text('SHELL & TUBE HEAT EXCHANGER DATASHEET', pageWidth / 2, y + 13, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text('API 660 / TEMA Standards', pageWidth / 2, y + 20, { align: 'center' });
   doc.setTextColor(0, 0, 0);
-  y += 25;
+  y += 30;
 
   // Project Info
   addRow('Project:', data.projectName, 'Item No.:', data.itemNumber);
-  addRow('Date:', data.date, 'Shell-Side Method:', data.shellSideMethod);
+  addRow('Date:', data.date, 'Revision:', data.revisionNo || '0');
+  addRow('Shell-Side Method:', data.shellSideMethod, '', '');
   y += 3;
+
 
   // ===== Process Conditions =====
   checkPageBreak(60);
