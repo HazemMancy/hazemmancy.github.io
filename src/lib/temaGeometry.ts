@@ -204,13 +204,97 @@ const tubeCount_32_40: TubeCountTable = {
   }
 };
 
+// 5/8" OD (15.88mm) on 13/16" (20.64mm) pitch - Small tubes
+const tubeCount_16_21: TubeCountTable = {
+  tubeOD: 15.88,
+  tubePitch: 20.64,
+  name: "5/8\" OD on 13/16\" pitch",
+  counts: {
+    205: { 1: { triangular: 55, square: 44 }, 2: { triangular: 50, square: 40 }, 4: { triangular: 40, square: 32 } },
+    257: { 1: { triangular: 94, square: 75 }, 2: { triangular: 86, square: 68 }, 4: { triangular: 72, square: 56 } },
+    307: { 1: { triangular: 140, square: 111 }, 2: { triangular: 128, square: 102 }, 4: { triangular: 112, square: 88 } },
+    337: { 1: { triangular: 172, square: 136 }, 2: { triangular: 158, square: 126 }, 4: { triangular: 140, square: 108 } },
+    387: { 1: { triangular: 228, square: 181 }, 2: { triangular: 210, square: 166 }, 4: { triangular: 186, square: 144 } },
+    438: { 1: { triangular: 296, square: 235 }, 2: { triangular: 272, square: 216 }, 4: { triangular: 242, square: 188 } },
+    489: { 1: { triangular: 372, square: 295 }, 2: { triangular: 342, square: 272 }, 4: { triangular: 304, square: 236 } },
+    540: { 1: { triangular: 458, square: 364 }, 2: { triangular: 422, square: 334 }, 4: { triangular: 376, square: 292 } },
+    591: { 1: { triangular: 552, square: 438 }, 2: { triangular: 508, square: 402 }, 4: { triangular: 454, square: 352 } },
+    635: { 1: { triangular: 648, square: 514 }, 2: { triangular: 598, square: 474 }, 4: { triangular: 534, square: 414 } },
+    686: { 1: { triangular: 758, square: 602 }, 2: { triangular: 698, square: 554 }, 4: { triangular: 624, square: 484 } },
+    787: { 1: { triangular: 1008, square: 800 }, 2: { triangular: 928, square: 736 }, 4: { triangular: 830, square: 644 } },
+    889: { 1: { triangular: 1292, square: 1025 }, 2: { triangular: 1190, square: 944 }, 4: { triangular: 1066, square: 826 } },
+    991: { 1: { triangular: 1608, square: 1276 }, 2: { triangular: 1482, square: 1176 }, 4: { triangular: 1328, square: 1030 } },
+  }
+};
+
+// 5/8" OD (15.88mm) on 7/8" (22.23mm) pitch - wider spacing
+const tubeCount_16_22: TubeCountTable = {
+  tubeOD: 15.88,
+  tubePitch: 22.23,
+  name: "5/8\" OD on 7/8\" pitch",
+  counts: {
+    205: { 1: { triangular: 45, square: 36 }, 2: { triangular: 42, square: 32 }, 4: { triangular: 34, square: 24 } },
+    257: { 1: { triangular: 78, square: 62 }, 2: { triangular: 72, square: 56 }, 4: { triangular: 60, square: 48 } },
+    307: { 1: { triangular: 116, square: 92 }, 2: { triangular: 106, square: 84 }, 4: { triangular: 92, square: 72 } },
+    387: { 1: { triangular: 188, square: 150 }, 2: { triangular: 174, square: 138 }, 4: { triangular: 154, square: 120 } },
+    489: { 1: { triangular: 306, square: 244 }, 2: { triangular: 282, square: 224 }, 4: { triangular: 252, square: 196 } },
+    591: { 1: { triangular: 456, square: 362 }, 2: { triangular: 420, square: 334 }, 4: { triangular: 376, square: 292 } },
+    686: { 1: { triangular: 626, square: 498 }, 2: { triangular: 576, square: 458 }, 4: { triangular: 516, square: 400 } },
+    787: { 1: { triangular: 832, square: 662 }, 2: { triangular: 768, square: 610 }, 4: { triangular: 686, square: 534 } },
+    889: { 1: { triangular: 1068, square: 848 }, 2: { triangular: 984, square: 782 }, 4: { triangular: 882, square: 684 } },
+    991: { 1: { triangular: 1330, square: 1058 }, 2: { triangular: 1228, square: 974 }, 4: { triangular: 1100, square: 854 } },
+  }
+};
+
+// 1-1/2" OD (38.1mm) on 1-7/8" (47.63mm) pitch
+const tubeCount_38_48: TubeCountTable = {
+  tubeOD: 38.1,
+  tubePitch: 47.63,
+  name: "1-1/2\" OD on 1-7/8\" pitch",
+  counts: {
+    489: { 1: { triangular: 55, square: 44 }, 2: { triangular: 50, square: 40 }, 4: { triangular: 44, square: 32 } },
+    591: { 1: { triangular: 82, square: 65 }, 2: { triangular: 76, square: 60 }, 4: { triangular: 66, square: 52 } },
+    686: { 1: { triangular: 114, square: 90 }, 2: { triangular: 106, square: 84 }, 4: { triangular: 94, square: 72 } },
+    787: { 1: { triangular: 152, square: 120 }, 2: { triangular: 140, square: 112 }, 4: { triangular: 126, square: 98 } },
+    889: { 1: { triangular: 194, square: 154 }, 2: { triangular: 180, square: 142 }, 4: { triangular: 160, square: 124 } },
+    991: { 1: { triangular: 242, square: 192 }, 2: { triangular: 224, square: 178 }, 4: { triangular: 200, square: 156 } },
+    1067: { 1: { triangular: 284, square: 225 }, 2: { triangular: 264, square: 208 }, 4: { triangular: 236, square: 184 } },
+    1219: { 1: { triangular: 378, square: 300 }, 2: { triangular: 352, square: 278 }, 4: { triangular: 314, square: 244 } },
+    1372: { 1: { triangular: 486, square: 386 }, 2: { triangular: 452, square: 358 }, 4: { triangular: 404, square: 314 } },
+    1524: { 1: { triangular: 608, square: 482 }, 2: { triangular: 566, square: 448 }, 4: { triangular: 506, square: 394 } },
+  }
+};
+
+// 1-1/2" OD (38.1mm) on 2" (50.8mm) pitch - wider spacing for cleaning
+const tubeCount_38_51: TubeCountTable = {
+  tubeOD: 38.1,
+  tubePitch: 50.8,
+  name: "1-1/2\" OD on 2\" pitch",
+  counts: {
+    489: { 1: { triangular: 48, square: 38 }, 2: { triangular: 44, square: 34 }, 4: { triangular: 38, square: 28 } },
+    591: { 1: { triangular: 72, square: 57 }, 2: { triangular: 66, square: 52 }, 4: { triangular: 58, square: 46 } },
+    686: { 1: { triangular: 100, square: 79 }, 2: { triangular: 92, square: 72 }, 4: { triangular: 82, square: 64 } },
+    787: { 1: { triangular: 134, square: 106 }, 2: { triangular: 124, square: 98 }, 4: { triangular: 110, square: 86 } },
+    889: { 1: { triangular: 170, square: 135 }, 2: { triangular: 158, square: 124 }, 4: { triangular: 140, square: 110 } },
+    991: { 1: { triangular: 212, square: 168 }, 2: { triangular: 198, square: 156 }, 4: { triangular: 176, square: 136 } },
+    1067: { 1: { triangular: 250, square: 198 }, 2: { triangular: 232, square: 184 }, 4: { triangular: 208, square: 162 } },
+    1219: { 1: { triangular: 332, square: 264 }, 2: { triangular: 310, square: 244 }, 4: { triangular: 276, square: 216 } },
+    1372: { 1: { triangular: 428, square: 340 }, 2: { triangular: 398, square: 314 }, 4: { triangular: 356, square: 278 } },
+    1524: { 1: { triangular: 534, square: 424 }, 2: { triangular: 498, square: 394 }, 4: { triangular: 444, square: 346 } },
+  }
+};
+
 // All tube count tables combined
 export const allTubeCountTables: TubeCountTable[] = [
+  tubeCount_16_21,
+  tubeCount_16_22,
   tubeCount_19_24,
   tubeCount_19_25,
   tubeCount_25_32,
   tubeCount_25_33,
   tubeCount_32_40,
+  tubeCount_38_48,
+  tubeCount_38_51,
 ];
 
 /**

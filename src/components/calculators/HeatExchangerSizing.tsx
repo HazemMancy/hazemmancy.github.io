@@ -27,7 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fluidDatabase, getFluidProperties, getFluidsByCategory } from "@/lib/fluidProperties";
 import { calculateASMEThickness, asmeMaterials, getMaterialOptions, type ASMEResults } from "@/lib/asmeCalculations";
 import { generateDatasheetPDF, type DatasheetData } from "@/lib/pdfDatasheet";
-import { calculateTubeCount, getRecommendedPitch, getRecommendedBaffleSpacing, getAvailableTubeCountTables } from "@/lib/temaGeometry";
+import { calculateTubeCount, getRecommendedPitch, getRecommendedBaffleSpacing, getAvailableTubeCountTables, allTubeCountTables, type TubeCountTable } from "@/lib/temaGeometry";
 import { toast } from "@/hooks/use-toast";
 import TubeBundleVisualization from "./TubeBundleVisualization";
 import DesignComparison, { type SavedDesign } from "./DesignComparison";
@@ -176,6 +176,14 @@ const HeatExchangerSizing = () => {
   const [projectName, setProjectName] = useState("Heat Exchanger Design");
   const [itemNumber, setItemNumber] = useState("HX-001");
   const [revisionNo, setRevisionNo] = useState("0");
+  
+  // TEMA table selection
+  const [selectedTemaTable, setSelectedTemaTable] = useState("3/4\" OD on 1\" pitch (standard)");
+  
+  // HTRI Rating Summary state
+  const [htriEnabled, setHtriEnabled] = useState(false);
+  const [allowedDPTube, setAllowedDPTube] = useState("50");
+  const [allowedDPShell, setAllowedDPShell] = useState("50");
   
   // TEMA auto-calculate mode
   const [autoCalculateGeometry, setAutoCalculateGeometry] = useState(false);
@@ -1659,6 +1667,44 @@ const HeatExchangerSizing = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* TEMA Table Selector */}
+          <div className="mb-4 p-3 rounded-lg bg-muted/30 border border-border/50">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[200px]">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">TEMA Tube Count Table</Label>
+                <Select 
+                  value={selectedTemaTable} 
+                  onValueChange={(value) => {
+                    setSelectedTemaTable(value);
+                    // Find the selected table and update tube geometry
+                    const table = allTubeCountTables.find(t => t.name === value);
+                    if (table) {
+                      setTubeGeometry(prev => ({
+                        ...prev,
+                        outerDiameter: table.tubeOD.toString(),
+                        tubePitch: table.tubePitch.toString()
+                      }));
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select tube size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allTubeCountTables.map(table => (
+                      <SelectItem key={table.name} value={table.name}>
+                        {table.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                <span className="font-medium">Available sizes:</span> 5/8", 3/4", 1", 1-1/4", 1-1/2" OD
+              </div>
+            </div>
+          </div>
+          
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Tube OD (mm)</Label>
@@ -2200,6 +2246,58 @@ const HeatExchangerSizing = () => {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* HTRI-Style Rating Summary */}
+      {results && (
+        <HTRIRatingSummary
+          enabled={htriEnabled}
+          onToggle={setHtriEnabled}
+          allowedPressureDropTube={allowedDPTube}
+          allowedPressureDropShell={allowedDPShell}
+          onAllowedDPTubeChange={setAllowedDPTube}
+          onAllowedDPShellChange={setAllowedDPShell}
+          data={{
+            heatDutyRequired: results.heatDuty,
+            heatDutyActual: results.heatDuty * (1 + (results.requiredArea > 0 ? (results.heatTransferArea - results.requiredArea) / results.requiredArea : 0)),
+            overdesign: results.requiredArea > 0 ? ((results.heatTransferArea - results.requiredArea) / results.requiredArea) * 100 : 0,
+            hotInlet: parseFloat(hotFluid.inletTemp),
+            hotOutlet: results.hotOutletCalc ?? parseFloat(hotFluid.outletTemp),
+            coldInlet: parseFloat(coldFluid.inletTemp),
+            coldOutlet: results.coldOutletCalc ?? parseFloat(coldFluid.outletTemp),
+            tempUnit: getTempUnitLabel(),
+            hotApproach: (results.hotOutletCalc ?? parseFloat(hotFluid.outletTemp)) - parseFloat(coldFluid.inletTemp),
+            coldApproach: parseFloat(hotFluid.inletTemp) - (results.coldOutletCalc ?? parseFloat(coldFluid.outletTemp)),
+            lmtd: results.lmtd,
+            correctionFactor: results.correctionFactor,
+            effectiveMTD: results.effectiveLmtd,
+            hi: results.hi,
+            ho: results.ho,
+            Uc: results.cleanU,
+            Uf: results.fouledU,
+            Ur: results.requiredArea > 0 ? results.heatDuty * 1000 / (results.requiredArea * results.effectiveLmtd) : 0,
+            areaRequired: results.requiredArea,
+            areaAvailable: results.heatTransferArea,
+            areaExcess: results.requiredArea > 0 ? ((results.heatTransferArea - results.requiredArea) / results.requiredArea) * 100 : 0,
+            foulingHot: parseFloat(hotFouling),
+            foulingCold: parseFloat(coldFouling),
+            cleanlinessFactorHot: results.cleanU > 0 ? (results.fouledU / results.cleanU) * 100 : 0,
+            cleanlinessFactorCold: results.cleanU > 0 ? (results.fouledU / results.cleanU) * 100 : 0,
+            overallCleanliness: results.cleanU > 0 ? (results.fouledU / results.cleanU) * 100 : 0,
+            tubeSideDPAllowed: parseFloat(allowedDPTube),
+            tubeSideDPCalc: results.tubeSidePressureDrop,
+            shellSideDPAllowed: parseFloat(allowedDPShell),
+            shellSideDPCalc: results.shellSidePressureDrop,
+            tubeSideVelocity: results.tubeSideVelocity,
+            shellSideVelocity: results.shellSideVelocity,
+            tubeReynolds: results.tubeReynolds,
+            shellReynolds: results.shellReynolds,
+            isVibrationRisk: results.vibration.isVibrationRisk,
+            vibrationMessage: results.vibration.vibrationMessage,
+            ntu: results.ntu,
+            effectiveness: results.effectiveness,
+          }}
+        />
       )}
 
       {/* ASME Mechanical Design */}
