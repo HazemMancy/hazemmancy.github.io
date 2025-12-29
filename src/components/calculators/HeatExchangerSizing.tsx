@@ -27,7 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fluidDatabase, getFluidProperties, getFluidsByCategory } from "@/lib/fluidProperties";
 import { calculateASMEThickness, asmeMaterials, getMaterialOptions, type ASMEResults } from "@/lib/asmeCalculations";
 import { generateDatasheetPDF, type DatasheetData } from "@/lib/pdfDatasheet";
-import { calculateTubeCount, getRecommendedPitch, getRecommendedBaffleSpacing, getAvailableTubeCountTables, allTubeCountTables, standardTubeSizes, type TubeCountTable } from "@/lib/temaGeometry";
+import { calculateTubeCount, calculateShellDiameter, getRecommendedPitch, getRecommendedBaffleSpacing, getAvailableTubeCountTables, allTubeCountTables, standardTubeSizes, type TubeCountTable } from "@/lib/temaGeometry";
 import { toast } from "@/hooks/use-toast";
 import TubeBundleVisualization from "./TubeBundleVisualization";
 import DesignComparison, { type SavedDesign } from "./DesignComparison";
@@ -1503,162 +1503,37 @@ const HeatExchangerSizing = () => {
     toast({ title: "Design Saved", description: `Saved as ${design.name}` });
   }, [results, asmeResults, tubeGeometry, overallU, shellMaterial, savedDesigns.length]);
 
-  // TEMA auto-calculate geometry
+  // TEMA auto-calculate geometry - calculates shell diameter from tube count OR tube count from shell diameter
   const handleAutoCalculateGeometry = useCallback(() => {
     const tubeOD = parseFloat(tubeGeometry.outerDiameter);
-    const shellDia = parseFloat(tubeGeometry.shellDiameter);
+    const currentShellDia = parseFloat(tubeGeometry.shellDiameter);
+    const currentTubeCount = parseInt(tubeGeometry.numberOfTubes);
     const passes = parseInt(tubeGeometry.tubePasses);
     const pattern = tubeGeometry.tubePattern as "triangular" | "square" | "rotatedSquare";
     
     // Get recommended pitch
     const pitchResult = getRecommendedPitch(tubeOD, pattern, pattern === "square");
     
-    // Calculate tube count
-    const tubeCountResult = calculateTubeCount(shellDia, tubeOD, pitchResult.pitch, pattern, passes);
+    // Calculate shell diameter from current tube count
+    const shellResult = calculateShellDiameter(currentTubeCount, tubeOD, pitchResult.pitch, pattern, passes);
     
-    // Get recommended baffle spacing
-    const baffleResult = getRecommendedBaffleSpacing(shellDia, parseFloat(tubeGeometry.tubeLength));
+    // Get recommended baffle spacing based on new shell diameter
+    const baffleResult = getRecommendedBaffleSpacing(shellResult.shellDiameter, parseFloat(tubeGeometry.tubeLength));
     
     setTubeGeometry(prev => ({
       ...prev,
       tubePitch: pitchResult.pitch.toFixed(2),
-      numberOfTubes: tubeCountResult.count.toString(),
+      shellDiameter: shellResult.shellDiameter.toFixed(0),
       baffleSpacing: baffleResult.recommended.toString(),
       unsupportedSpanLength: baffleResult.recommended.toString()
     }));
     
     toast({ 
       title: "Geometry Calculated", 
-      description: `${tubeCountResult.count} tubes @ ${pitchResult.pitch.toFixed(1)}mm pitch (${tubeCountResult.method})`
+      description: `Shell ID: ${shellResult.shellDiameter.toFixed(0)}mm for ${currentTubeCount} tubes @ ${pitchResult.pitch.toFixed(1)}mm pitch`
     });
   }, [tubeGeometry]);
 
-  // Tube Size Recommender based on service conditions
-  const getTubeSizeRecommendation = useMemo(() => {
-    const shellViscosity = parseFloat(hotFluid.viscosity);
-    const tubeViscosity = parseFloat(coldFluid.viscosity);
-    const shellDensity = parseFloat(hotFluid.density);
-    const tubeDensity = parseFloat(coldFluid.density);
-    const heatDuty = results?.heatDuty ?? 0;
-    
-    interface TubeRecommendation {
-      tubeOD: number;
-      tubePitch: number;
-      pattern: "triangular" | "square";
-      reason: string;
-      tableName: string;
-      priority: number;
-    }
-    
-    const recommendations: TubeRecommendation[] = [];
-    
-    // Rule 1: High viscosity shell-side fluid (>5 cP) - use larger pitch for cleaning
-    if (shellViscosity > 5) {
-      recommendations.push({
-        tubeOD: 25.4, tubePitch: 33.34, pattern: "square",
-        reason: "High viscosity shell fluid - square pitch for mechanical cleaning",
-        tableName: '1" OD on 1-5/16" pitch',
-        priority: 1
-      });
-    }
-    
-    // Rule 2: Clean, low viscosity service - tight pitch for maximum tubes
-    if (shellViscosity < 1 && tubeViscosity < 1) {
-      recommendations.push({
-        tubeOD: 19.05, tubePitch: 23.81, pattern: "triangular",
-        reason: "Clean service - tight triangular pitch for maximum heat transfer",
-        tableName: '3/4" OD on 15/16" pitch',
-        priority: 2
-      });
-    }
-    
-    // Rule 3: High pressure tube side - thicker wall tubes
-    if (parseFloat(coldFluid.density) > 800) {
-      recommendations.push({
-        tubeOD: 25.4, tubePitch: 31.75, pattern: "triangular",
-        reason: "Dense tube fluid - 1\" OD for structural integrity",
-        tableName: '1" OD on 1-1/4" pitch',
-        priority: 3
-      });
-    }
-    
-    // Rule 4: Large heat duty - larger tubes for flow capacity
-    if (heatDuty > 1000) {
-      recommendations.push({
-        tubeOD: 31.75, tubePitch: 39.69, pattern: "triangular",
-        reason: "High heat duty - larger tubes for increased flow capacity",
-        tableName: '1-1/4" OD on 1-9/16" pitch',
-        priority: 4
-      });
-    }
-    
-    // Rule 5: Fouling service - square pitch for cleaning access
-    if (parseFloat(hotFouling) > 0.0003 || parseFloat(coldFouling) > 0.0003) {
-      recommendations.push({
-        tubeOD: 25.4, tubePitch: 31.75, pattern: "square",
-        reason: "Fouling service - square pitch for cleaning access",
-        tableName: '1" OD on 1-1/4" pitch',
-        priority: 2
-      });
-    }
-    
-    // Rule 6: Condensing/vaporizing - larger tubes
-    if (shellViscosity < 0.1 || tubeViscosity < 0.1) {
-      recommendations.push({
-        tubeOD: 19.05, tubePitch: 25.4, pattern: "triangular",
-        reason: "Two-phase service - standard 3/4\" tubes",
-        tableName: '3/4" OD on 1" pitch (standard)',
-        priority: 3
-      });
-    }
-    
-    // Default: Standard 3/4" on 1" pitch
-    if (recommendations.length === 0) {
-      recommendations.push({
-        tubeOD: 19.05, tubePitch: 25.4, pattern: "triangular",
-        reason: "Standard configuration - most common and economical",
-        tableName: '3/4" OD on 1" pitch (standard)',
-        priority: 5
-      });
-    }
-    
-    // Sort by priority and return top 3
-    return recommendations.sort((a, b) => a.priority - b.priority).slice(0, 3);
-  }, [hotFluid.viscosity, coldFluid.viscosity, hotFluid.density, coldFluid.density, hotFouling, coldFouling, results?.heatDuty]);
-
-  // Apply tube size recommendation
-  const applyTubeRecommendation = useCallback((rec: { tubeOD: number; tubePitch: number; pattern: "triangular" | "square"; tableName: string }) => {
-    const standardTube = standardTubeSizes.find(t => Math.abs(t.od - rec.tubeOD) < 0.5);
-    
-    setSelectedTemaTable(rec.tableName);
-    setTubeGeometry(prev => ({
-      ...prev,
-      outerDiameter: rec.tubeOD.toString(),
-      tubePitch: rec.tubePitch.toString(),
-      tubePattern: rec.pattern,
-      wallThickness: standardTube ? standardTube.wall.toString() : prev.wallThickness
-    }));
-    
-    // Trigger auto-calculate after applying
-    setTimeout(() => {
-      const shellDia = parseFloat(tubeGeometry.shellDiameter);
-      const passes = parseInt(tubeGeometry.tubePasses);
-      const tubeCountResult = calculateTubeCount(shellDia, rec.tubeOD, rec.tubePitch, rec.pattern, passes);
-      const baffleResult = getRecommendedBaffleSpacing(shellDia, parseFloat(tubeGeometry.tubeLength));
-      
-      setTubeGeometry(prev => ({
-        ...prev,
-        numberOfTubes: tubeCountResult.count.toString(),
-        baffleSpacing: baffleResult.recommended.toString(),
-        unsupportedSpanLength: baffleResult.recommended.toString()
-      }));
-    }, 50);
-    
-    toast({ 
-      title: "Tube Size Applied", 
-      description: `${rec.tableName} - ${rec.pattern} pattern`
-    });
-  }, [tubeGeometry.shellDiameter, tubeGeometry.tubePasses, tubeGeometry.tubeLength]);
 
   const formatNumber = (num: number, decimals: number = 2): string => {
     if (isNaN(num) || !isFinite(num)) return "—";
@@ -2065,33 +1940,36 @@ const HeatExchangerSizing = () => {
                       // Find matching wall thickness from standard tube sizes
                       const standardTube = standardTubeSizes.find(t => Math.abs(t.od - table.tubeOD) < 0.5);
                       
-                      // Get tube count for current shell/passes from new table
-                      const shellDia = parseFloat(tubeGeometry.shellDiameter);
+                      // Get current tube count and calculate appropriate shell diameter
+                      const currentTubeCount = parseInt(tubeGeometry.numberOfTubes);
                       const passes = parseInt(tubeGeometry.tubePasses);
                       const pattern = tubeGeometry.tubePattern === "triangular" ? "triangular" : "square";
                       
-                      const shellSizes = Object.keys(table.counts).map(Number).sort((a, b) => a - b);
-                      let closestSize = shellSizes[0];
-                      let minDiff = Math.abs(shellDia - closestSize);
-                      for (const size of shellSizes) {
-                        const diff = Math.abs(shellDia - size);
-                        if (diff < minDiff) {
-                          minDiff = diff;
-                          closestSize = size;
-                        }
-                      }
+                      // Calculate shell diameter for current tube count with new tube OD/pitch
+                      const shellResult = calculateShellDiameter(
+                        currentTubeCount, 
+                        table.tubeOD, 
+                        table.tubePitch, 
+                        pattern as "triangular" | "square" | "rotatedSquare", 
+                        passes
+                      );
                       
-                      const passKey = passes <= 1 ? 1 : passes <= 2 ? 2 : 4;
-                      const passData = table.counts[closestSize];
-                      const tubeCount = passData?.[passKey]?.[pattern] ?? parseInt(tubeGeometry.numberOfTubes);
+                      // Get recommended baffle spacing for new shell
+                      const baffleResult = getRecommendedBaffleSpacing(shellResult.shellDiameter, parseFloat(tubeGeometry.tubeLength));
                       
                       setTubeGeometry(prev => ({
                         ...prev,
                         outerDiameter: table.tubeOD.toString(),
                         tubePitch: table.tubePitch.toString(),
                         wallThickness: standardTube ? standardTube.wall.toString() : prev.wallThickness,
-                        numberOfTubes: tubeCount.toString()
+                        shellDiameter: shellResult.shellDiameter.toFixed(0),
+                        baffleSpacing: baffleResult.recommended.toString()
                       }));
+                      
+                      toast({ 
+                        title: "TEMA Table Applied", 
+                        description: `Shell ID: ${shellResult.shellDiameter.toFixed(0)}mm for ${currentTubeCount} tubes @ ${table.tubePitch}mm pitch`
+                      });
                     }
                   }}
                 >
@@ -2113,33 +1991,6 @@ const HeatExchangerSizing = () => {
             </div>
           </div>
           
-          {/* Tube Size Recommender */}
-          {getTubeSizeRecommendation.length > 0 && (
-            <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <div className="flex items-center gap-2 mb-2">
-                <Gauge className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">Tube Size Recommendations</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                {getTubeSizeRecommendation.map((rec, idx) => (
-                  <div
-                    key={idx}
-                    className="p-2 rounded bg-background/50 border border-border/50 cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => applyTubeRecommendation(rec)}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <Badge variant="secondary" className="text-xs">
-                        {rec.tubeOD}mm OD
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">{rec.pattern}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{rec.reason}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">Click a recommendation to apply</p>
-            </div>
-          )}
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
