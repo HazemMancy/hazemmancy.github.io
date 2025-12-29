@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle2, Flame, Disc, Droplets } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer } from 'lucide-react';
 
 // API 520 Vapor Relief Sizing - Eq. 3.1
 const calculateVaporArea = (
@@ -489,6 +489,161 @@ const calculateAPI2000NormalVenting = (
   };
 };
 
+// ============================================
+// Blocked Outlet / Thermal Relief Calculations
+// Per API 521 Section 5.6
+// ============================================
+
+// Common liquid thermal expansion coefficients (1/°F)
+const LIQUID_EXPANSION_COEFFICIENTS: Record<string, { alpha: number; name: string; specificGravity: number }> = {
+  water: { alpha: 0.00012, name: 'Water', specificGravity: 1.0 },
+  crude_oil: { alpha: 0.00040, name: 'Crude Oil', specificGravity: 0.85 },
+  gasoline: { alpha: 0.00060, name: 'Gasoline', specificGravity: 0.74 },
+  diesel: { alpha: 0.00045, name: 'Diesel', specificGravity: 0.85 },
+  kerosene: { alpha: 0.00055, name: 'Kerosene', specificGravity: 0.80 },
+  lube_oil: { alpha: 0.00038, name: 'Lube Oil', specificGravity: 0.90 },
+  lpg: { alpha: 0.00120, name: 'LPG (Liquid)', specificGravity: 0.55 },
+  propane: { alpha: 0.00150, name: 'Propane', specificGravity: 0.50 },
+  butane: { alpha: 0.00110, name: 'Butane', specificGravity: 0.58 },
+  ammonia: { alpha: 0.00130, name: 'Ammonia', specificGravity: 0.68 },
+  methanol: { alpha: 0.00070, name: 'Methanol', specificGravity: 0.79 },
+  ethanol: { alpha: 0.00062, name: 'Ethanol', specificGravity: 0.79 },
+  benzene: { alpha: 0.00068, name: 'Benzene', specificGravity: 0.88 },
+  toluene: { alpha: 0.00058, name: 'Toluene', specificGravity: 0.87 },
+  custom: { alpha: 0.0005, name: 'Custom', specificGravity: 1.0 },
+};
+
+// Calculate thermal expansion flow rate
+// Q = V × α × ΔT/Δt (volume expansion rate)
+const calculateThermalExpansionRate = (
+  liquidVolume: number, // gallons
+  expansionCoeff: number, // 1/°F
+  heatingRate: number // °F/hr
+): { volumeRate: number; massRate: number } => {
+  // Volume rate in gpm
+  const volumeRateGPH = liquidVolume * expansionCoeff * heatingRate;
+  const volumeRate = volumeRateGPH / 60; // Convert to gpm
+  
+  // Mass rate (assuming water density 8.34 lb/gal)
+  const massRate = volumeRateGPH * 8.34; // lb/hr
+  
+  return { volumeRate, massRate };
+};
+
+// Calculate heating rate from heat input
+const calculateHeatingRate = (
+  heatInput: number, // BTU/hr
+  liquidVolume: number, // gallons
+  specificGravity: number,
+  specificHeat: number // BTU/(lb·°F)
+): number => {
+  // Mass of liquid
+  const liquidMass = liquidVolume * 8.34 * specificGravity; // lb
+  
+  // Temperature rise rate = Q / (m × Cp)
+  const heatingRate = heatInput / (liquidMass * specificHeat); // °F/hr
+  
+  return heatingRate;
+};
+
+// Common heat input sources
+const HEAT_SOURCES = [
+  { name: 'Solar radiation (bare vessel)', heatFlux: 100 }, // BTU/hr/ft²
+  { name: 'Solar radiation (insulated)', heatFlux: 20 },
+  { name: 'Steam tracing', heatFlux: 300 },
+  { name: 'Electric heat tracing', heatFlux: 200 },
+  { name: 'Hot oil tracing', heatFlux: 250 },
+  { name: 'Adjacent hot equipment', heatFlux: 150 },
+  { name: 'Fire exposure', heatFlux: 10000 }, // Use fire case instead
+];
+
+// Calculate pipe/vessel surface area
+const calculateSurfaceArea = (
+  geometry: 'pipe' | 'vessel' | 'tank',
+  diameter: number, // inches for pipe, ft for vessel/tank
+  length: number // ft
+): number => {
+  if (geometry === 'pipe') {
+    // Pipe: πDL (D in ft)
+    const diameterFt = diameter / 12;
+    return Math.PI * diameterFt * length;
+  } else {
+    // Vessel/tank: πDL + 2 × πD²/4 (approximation including heads)
+    return Math.PI * diameter * length + Math.PI * diameter * diameter / 2;
+  }
+};
+
+// Calculate liquid volume from geometry
+const calculateLiquidVolume = (
+  geometry: 'pipe' | 'vessel' | 'tank',
+  diameter: number, // inches for pipe, ft for vessel/tank
+  length: number // ft
+): { volumeGal: number; volumeFt3: number } => {
+  let volumeFt3: number;
+  
+  if (geometry === 'pipe') {
+    // Pipe volume
+    const diameterFt = diameter / 12;
+    volumeFt3 = Math.PI * Math.pow(diameterFt / 2, 2) * length;
+  } else {
+    // Vessel/tank volume (cylindrical)
+    volumeFt3 = Math.PI * Math.pow(diameter / 2, 2) * length;
+  }
+  
+  const volumeGal = volumeFt3 * 7.481;
+  return { volumeGal, volumeFt3 };
+};
+
+// Thermal relief sizing (liquid)
+const calculateThermalReliefArea = (
+  flowRate: number, // gpm
+  specificGravity: number,
+  viscosity: number, // cP
+  setPresure: number, // psig
+  overpressure: number, // %
+  backPressure: number, // psig
+  Kd: number,
+  Kc: number
+): { requiredArea: number; Kv: number; Kw: number } => {
+  const P1 = setPresure * (1 + overpressure / 100);
+  const P2 = backPressure;
+  
+  // Assume conventional valve for thermal relief
+  const Kw = 1.0;
+  
+  // Preliminary area for Reynolds calculation
+  const prelimArea = calculateLiquidArea(
+    flowRate,
+    specificGravity,
+    Kd,
+    Kw,
+    Kc,
+    1.0, // Preliminary Kv
+    P1,
+    P2
+  );
+  
+  // Calculate Reynolds number
+  const Re = (2800 * flowRate * Math.sqrt(Math.max(prelimArea, 0.001))) / 
+             (viscosity * Math.sqrt(specificGravity));
+  
+  const Kv = calculateKv(Math.max(Math.abs(Re), 1));
+  
+  // Final area calculation
+  const requiredArea = calculateLiquidArea(
+    flowRate,
+    specificGravity,
+    Kd,
+    Kw,
+    Kc,
+    Kv,
+    P1,
+    P2
+  );
+  
+  return { requiredArea, Kv, Kw };
+};
+
 export default function API520Calculator() {
   // Vapor inputs
   const [vaporInputs, setVaporInputs] = useState({
@@ -606,6 +761,26 @@ export default function API520Calculator() {
     ruptureDisk: false,
     latitude: 'temperate' as 'tropical' | 'temperate' | 'arctic',
     maxPumpOutRate: 800, // bbl/hr
+  });
+
+  // Thermal relief inputs (blocked outlet)
+  const [thermalInputs, setThermalInputs] = useState({
+    geometry: 'pipe' as 'pipe' | 'vessel' | 'tank',
+    diameter: 8, // inches for pipe, ft for vessel/tank
+    length: 500, // ft
+    liquidType: 'crude_oil' as keyof typeof LIQUID_EXPANSION_COEFFICIENTS,
+    customExpansionCoeff: 0.0005, // 1/°F
+    specificGravity: 0.85,
+    viscosity: 5.0, // cP
+    specificHeat: 0.5, // BTU/(lb·°F)
+    heatSource: 'solar' as 'solar' | 'tracing' | 'ambient' | 'custom',
+    heatFlux: 100, // BTU/hr/ft² for solar, total BTU/hr for custom
+    ambientTempRise: 50, // °F/hr for ambient heating case
+    setPresure: 150, // psig
+    overpressure: 10, // %
+    backPressure: 0, // psig
+    dischargeCoeff: 0.65,
+    ruptureDisk: false,
   });
 
   const vaporResults = useMemo(() => {
@@ -990,6 +1165,103 @@ export default function API520Calculator() {
     };
   }, [overfillInputs]);
 
+  // Thermal relief calculations (blocked outlet)
+  const thermalResults = useMemo(() => {
+    // Get liquid properties
+    const liquidProps = LIQUID_EXPANSION_COEFFICIENTS[thermalInputs.liquidType];
+    const expansionCoeff = thermalInputs.liquidType === 'custom' 
+      ? thermalInputs.customExpansionCoeff 
+      : liquidProps.alpha;
+    
+    // Calculate geometry
+    const { volumeGal, volumeFt3 } = calculateLiquidVolume(
+      thermalInputs.geometry,
+      thermalInputs.diameter,
+      thermalInputs.length
+    );
+    
+    const surfaceArea = calculateSurfaceArea(
+      thermalInputs.geometry,
+      thermalInputs.diameter,
+      thermalInputs.length
+    );
+    
+    // Calculate heat input
+    let totalHeatInput: number;
+    let heatingRate: number;
+    
+    if (thermalInputs.heatSource === 'solar' || thermalInputs.heatSource === 'tracing') {
+      totalHeatInput = thermalInputs.heatFlux * surfaceArea;
+      heatingRate = calculateHeatingRate(
+        totalHeatInput,
+        volumeGal,
+        thermalInputs.specificGravity,
+        thermalInputs.specificHeat
+      );
+    } else if (thermalInputs.heatSource === 'ambient') {
+      heatingRate = thermalInputs.ambientTempRise;
+      const liquidMass = volumeGal * 8.34 * thermalInputs.specificGravity;
+      totalHeatInput = liquidMass * thermalInputs.specificHeat * heatingRate;
+    } else {
+      totalHeatInput = thermalInputs.heatFlux; // Custom: direct heat input in BTU/hr
+      heatingRate = calculateHeatingRate(
+        totalHeatInput,
+        volumeGal,
+        thermalInputs.specificGravity,
+        thermalInputs.specificHeat
+      );
+    }
+    
+    // Calculate thermal expansion flow
+    const { volumeRate, massRate } = calculateThermalExpansionRate(
+      volumeGal,
+      expansionCoeff,
+      heatingRate
+    );
+    
+    // Relief device sizing
+    const Kc = thermalInputs.ruptureDisk ? 0.9 : 1.0;
+    const { requiredArea, Kv, Kw } = calculateThermalReliefArea(
+      volumeRate,
+      thermalInputs.specificGravity,
+      thermalInputs.viscosity,
+      thermalInputs.setPresure,
+      thermalInputs.overpressure,
+      thermalInputs.backPressure,
+      thermalInputs.dischargeCoeff,
+      Kc
+    );
+    
+    const selectedOrifice = selectOrifice(requiredArea);
+    const relievingPressure = thermalInputs.setPresure * (1 + thermalInputs.overpressure / 100);
+    
+    // Time to dangerous overpressure (rough estimate)
+    // Assuming bulk modulus of ~200,000 psi for liquids
+    const bulkModulus = 200000; // psi
+    const pressureRiseRate = (expansionCoeff * heatingRate * bulkModulus); // psi/hr
+    const timeToDangerousPressure = thermalInputs.setPresure / pressureRiseRate; // hours
+    
+    return {
+      volumeGal,
+      volumeFt3,
+      surfaceArea,
+      expansionCoeff,
+      heatingRate,
+      totalHeatInput,
+      volumeRate,
+      massRate,
+      requiredArea,
+      Kv,
+      Kw,
+      Kc,
+      selectedOrifice,
+      relievingPressure,
+      pressureRiseRate,
+      timeToDangerousPressure,
+      liquidName: liquidProps.name,
+    };
+  }, [thermalInputs]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -999,16 +1271,16 @@ export default function API520Calculator() {
             <Badge variant="outline" className="ml-2">API 520 Part I & II</Badge>
           </CardTitle>
           <CardDescription>
-            Pressure relief device sizing for vapor, liquid, two-phase, steam, fire case, rupture disk, and overfill protection per API 520/521/2000
+            Comprehensive pressure relief device sizing per API 520/521/2000 including thermal relief
           </CardDescription>
         </CardHeader>
       </Card>
 
       <Tabs defaultValue="vapor" className="space-y-4">
-        <TabsList className="grid grid-cols-7 w-full">
+        <TabsList className="grid grid-cols-8 w-full">
           <TabsTrigger value="vapor">Vapor</TabsTrigger>
           <TabsTrigger value="liquid">Liquid</TabsTrigger>
-          <TabsTrigger value="twophase">Two-Phase</TabsTrigger>
+          <TabsTrigger value="twophase">2-Phase</TabsTrigger>
           <TabsTrigger value="steam">Steam</TabsTrigger>
           <TabsTrigger value="firecase" className="flex items-center gap-1">
             <Flame className="h-3 w-3" />
@@ -1021,6 +1293,10 @@ export default function API520Calculator() {
           <TabsTrigger value="overfill" className="flex items-center gap-1">
             <Droplets className="h-3 w-3" />
             Overfill
+          </TabsTrigger>
+          <TabsTrigger value="thermal" className="flex items-center gap-1">
+            <Thermometer className="h-3 w-3" />
+            Thermal
           </TabsTrigger>
         </TabsList>
 
@@ -2450,6 +2726,292 @@ export default function API520Calculator() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Thermal Relief Tab (Blocked Outlet) */}
+        <TabsContent value="thermal" className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Thermometer className="h-4 w-4 text-red-500" />
+                  System Geometry
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Geometry Type</Label>
+                    <Select
+                      value={thermalInputs.geometry}
+                      onValueChange={(v) => setThermalInputs({ ...thermalInputs, geometry: v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pipe">Blocked Pipeline</SelectItem>
+                        <SelectItem value="vessel">Pressure Vessel</SelectItem>
+                        <SelectItem value="tank">Storage Tank</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Diameter ({thermalInputs.geometry === 'pipe' ? 'in' : 'ft'})</Label>
+                    <Input
+                      type="number"
+                      step={thermalInputs.geometry === 'pipe' ? '0.5' : '1'}
+                      value={thermalInputs.diameter}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, diameter: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Length (ft)</Label>
+                    <Input
+                      type="number"
+                      value={thermalInputs.length}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, length: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Liquid Type</Label>
+                    <Select
+                      value={thermalInputs.liquidType}
+                      onValueChange={(v) => setThermalInputs({ ...thermalInputs, liquidType: v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(LIQUID_EXPANSION_COEFFICIENTS).map(([key, val]) => (
+                          <SelectItem key={key} value={key}>
+                            {val.name} (α = {val.alpha.toExponential(2)})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {thermalInputs.liquidType === 'custom' && (
+                    <div className="space-y-2">
+                      <Label>Custom α (1/°F)</Label>
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        value={thermalInputs.customExpansionCoeff}
+                        onChange={(e) => setThermalInputs({ ...thermalInputs, customExpansionCoeff: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label>Specific Gravity</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={thermalInputs.specificGravity}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, specificGravity: parseFloat(e.target.value) || 1.0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Viscosity (cP)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={thermalInputs.viscosity}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, viscosity: parseFloat(e.target.value) || 1.0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Specific Heat (BTU/lb·°F)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={thermalInputs.specificHeat}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, specificHeat: parseFloat(e.target.value) || 0.5 })}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Heat Source & Relief Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Heat Source</Label>
+                    <Select
+                      value={thermalInputs.heatSource}
+                      onValueChange={(v) => setThermalInputs({ ...thermalInputs, heatSource: v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="solar">Solar Radiation</SelectItem>
+                        <SelectItem value="tracing">Heat Tracing</SelectItem>
+                        <SelectItem value="ambient">Ambient Temp Rise</SelectItem>
+                        <SelectItem value="custom">Custom Heat Input</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(thermalInputs.heatSource === 'solar' || thermalInputs.heatSource === 'tracing') && (
+                    <div className="space-y-2">
+                      <Label>Heat Flux (BTU/hr/ft²)</Label>
+                      <Input
+                        type="number"
+                        value={thermalInputs.heatFlux}
+                        onChange={(e) => setThermalInputs({ ...thermalInputs, heatFlux: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  )}
+                  {thermalInputs.heatSource === 'ambient' && (
+                    <div className="space-y-2">
+                      <Label>Temp Rise Rate (°F/hr)</Label>
+                      <Input
+                        type="number"
+                        value={thermalInputs.ambientTempRise}
+                        onChange={(e) => setThermalInputs({ ...thermalInputs, ambientTempRise: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  )}
+                  {thermalInputs.heatSource === 'custom' && (
+                    <div className="space-y-2">
+                      <Label>Total Heat Input (BTU/hr)</Label>
+                      <Input
+                        type="number"
+                        value={thermalInputs.heatFlux}
+                        onChange={(e) => setThermalInputs({ ...thermalInputs, heatFlux: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label>Set Pressure (psig)</Label>
+                    <Input
+                      type="number"
+                      value={thermalInputs.setPresure}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, setPresure: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Overpressure (%)</Label>
+                    <Input
+                      type="number"
+                      value={thermalInputs.overpressure}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, overpressure: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Back Pressure (psig)</Label>
+                    <Input
+                      type="number"
+                      value={thermalInputs.backPressure}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, backPressure: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Discharge Coefficient (Kd)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={thermalInputs.dischargeCoeff}
+                      onChange={(e) => setThermalInputs({ ...thermalInputs, dischargeCoeff: parseFloat(e.target.value) || 0.65 })}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="thermalRuptureDisk"
+                    checked={thermalInputs.ruptureDisk}
+                    onChange={(e) => setThermalInputs({ ...thermalInputs, ruptureDisk: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="thermalRuptureDisk">Rupture Disk Upstream (Kc = 0.9)</Label>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                Thermal Relief Sizing Results
+                {thermalResults.selectedOrifice ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                )}
+              </CardTitle>
+              <CardDescription>Per API 521 Section 5.6 - Blocked Outlet / Thermal Expansion</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-5 gap-4">
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">System Volume</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Volume: <span className="font-mono font-medium">{thermalResults.volumeGal.toFixed(0)} gal</span></p>
+                    <p className="text-sm">Surface Area: <span className="font-mono font-medium">{thermalResults.surfaceArea.toFixed(1)} ft²</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Thermal Expansion</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">α: <span className="font-mono font-medium">{thermalResults.expansionCoeff.toExponential(2)} /°F</span></p>
+                    <p className="text-sm">Heating: <span className="font-mono font-medium">{thermalResults.heatingRate.toFixed(2)} °F/hr</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Relief Flow</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Volume: <span className="font-mono font-medium">{thermalResults.volumeRate.toFixed(4)} gpm</span></p>
+                    <p className="text-sm">Heat In: <span className="font-mono font-medium">{(thermalResults.totalHeatInput / 1000).toFixed(1)} kBTU/hr</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Correction Factors</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Kv: <span className="font-mono font-medium">{thermalResults.Kv.toFixed(3)}</span></p>
+                    <p className="text-sm">Kc: <span className="font-mono font-medium">{thermalResults.Kc.toFixed(2)}</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Sizing Results</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Required: <span className="font-mono font-medium">{thermalResults.requiredArea.toFixed(4)} in²</span></p>
+                    <p className="text-sm">Selected: <span className="font-mono font-medium">
+                      {thermalResults.selectedOrifice ? `${thermalResults.selectedOrifice.designation} (${thermalResults.selectedOrifice.area} in²)` : 'Exceeds T'}
+                    </span></p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Liquid Thermal Expansion Coefficients Reference</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-5 gap-2 text-xs">
+                {Object.entries(LIQUID_EXPANSION_COEFFICIENTS).filter(([k]) => k !== 'custom').map(([key, val]) => (
+                  <div 
+                    key={key} 
+                    className={`flex flex-col p-2 rounded ${
+                      thermalInputs.liquidType === key 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted'
+                    }`}
+                  >
+                    <span className="font-medium">{val.name}</span>
+                    <span className="font-mono text-[10px]">α = {val.alpha.toExponential(2)}</span>
+                    <span className="text-[10px]">SG = {val.specificGravity}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Reference Section */}
@@ -2458,11 +3020,11 @@ export default function API520Calculator() {
           <CardTitle className="text-lg">API 520/521/2000 Reference</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-4 gap-6 text-sm">
+          <div className="grid md:grid-cols-5 gap-4 text-sm">
             <div>
-              <h4 className="font-medium mb-2">Standard Orifice Designations</h4>
+              <h4 className="font-medium mb-2">Orifice Sizes</h4>
               <div className="grid grid-cols-4 gap-1 text-xs">
-                {ORIFICE_SIZES.map((o) => (
+                {ORIFICE_SIZES.slice(0, 8).map((o) => (
                   <div key={o.designation} className="flex justify-between bg-muted p-1 rounded">
                     <span className="font-mono font-medium">{o.designation}</span>
                     <span>{o.area}</span>
@@ -2475,26 +3037,31 @@ export default function API520Calculator() {
               <ul className="space-y-1 text-muted-foreground text-xs">
                 <li>• <strong>Vapor:</strong> A = W√(TZ/M) / (C·Kd·P1·Kb·Kc)</li>
                 <li>• <strong>Liquid:</strong> A = Q√G / (38·Kd·Kw·Kc·Kv·√ΔP)</li>
-                <li>• <strong>Steam:</strong> A = W / (51.5·P1·Kd·Kb·Kc·Kn·Ksh)</li>
-                <li>• <strong>Fire:</strong> Q = C·F·A^0.82 per API 521</li>
-                <li>• <strong>RD:</strong> Knet = Kd / √(1+Kr)</li>
+                <li>• <strong>Fire:</strong> Q = C·F·A^0.82</li>
               </ul>
             </div>
             <div>
               <h4 className="font-medium mb-2">Environmental Factors</h4>
               <ul className="space-y-1 text-muted-foreground text-xs">
-                {ENVIRONMENTAL_FACTORS.slice(0, 4).map((ef) => (
+                {ENVIRONMENTAL_FACTORS.slice(0, 3).map((ef) => (
                   <li key={ef.description}>• {ef.description}: F = {ef.F}</li>
                 ))}
               </ul>
             </div>
             <div>
-              <h4 className="font-medium mb-2">API 2000 Thermal Breathing</h4>
+              <h4 className="font-medium mb-2">API 2000 Breathing</h4>
               <ul className="space-y-1 text-muted-foreground text-xs">
                 <li>• First 1000 bbl: 1.0 CFH/bbl</li>
-                <li>• Above 1000 bbl: 0.6 CFH/bbl</li>
-                <li>• Outbreathing: 60% of inbreathing</li>
-                <li>• Pump in/out: 1:1 displacement</li>
+                <li>• Above 1000: 0.6 CFH/bbl</li>
+                <li>• Pump: 1:1 displacement</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium mb-2">Thermal Relief</h4>
+              <ul className="space-y-1 text-muted-foreground text-xs">
+                <li>• Q = V × α × dT/dt</li>
+                <li>• Solar: ~100 BTU/hr/ft²</li>
+                <li>• Tracing: ~200-300 BTU/hr/ft²</li>
               </ul>
             </div>
           </div>
