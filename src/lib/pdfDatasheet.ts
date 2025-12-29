@@ -1,6 +1,6 @@
 /**
  * Heat Exchanger Datasheet PDF Generator
- * Generates professional API/TEMA style datasheets
+ * Generates professional API/TEMA style datasheets with tube bundle visualization
  */
 
 import jsPDF from 'jspdf';
@@ -98,6 +98,180 @@ export interface DatasheetData {
   // Method
   shellSideMethod: string;
   tempUnit: string;
+}
+
+// Generate tube bundle drawing for PDF
+function drawTubeBundleOnPDF(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  size: number,
+  shellDiameter: number,
+  tubeOD: number,
+  tubePitch: number,
+  numberOfTubes: number,
+  tubePattern: string,
+  tubePasses: number,
+  baffleCut: number
+): void {
+  const centerX = x + size / 2;
+  const centerY = y + size / 2;
+  const radius = size / 2 - 5;
+  const shellRadius = shellDiameter / 2;
+  const scale = radius / shellRadius;
+  
+  // Draw shell outline
+  doc.setDrawColor(60, 60, 60);
+  doc.setLineWidth(0.8);
+  doc.circle(centerX, centerY, radius);
+  
+  // Draw baffle cut indication (using a line instead of arc since jsPDF doesn't have arc)
+  doc.setDrawColor(100, 150, 100);
+  doc.setLineWidth(1.5);
+  const baffleY = radius * (1 - 2 * baffleCut / 100);
+  doc.line(centerX - radius + 2, centerY - baffleY, centerX - radius + 2, centerY + baffleY);
+  
+  // Draw pass dividers
+  doc.setDrawColor(150, 150, 150);
+  doc.setLineWidth(0.3);
+  doc.setLineDashPattern([2, 1], 0);
+  if (tubePasses >= 2) {
+    doc.line(centerX - radius + 2, centerY, centerX + radius - 2, centerY);
+  }
+  if (tubePasses >= 4) {
+    doc.line(centerX, centerY - radius + 2, centerX, centerY + radius - 2);
+  }
+  doc.setLineDashPattern([], 0);
+  
+  // Generate tube positions
+  const positions: { x: number; y: number; pass: number }[] = [];
+  const maxTubes = Math.min(numberOfTubes, 300);
+  
+  if (tubePattern.toLowerCase().includes("triangular")) {
+    const rowSpacing = tubePitch * Math.sqrt(3) / 2;
+    let tubeCount = 0;
+    let row = 0;
+    
+    while (tubeCount < maxTubes && row < 50) {
+      const yOffset = row * rowSpacing;
+      const xOffset = (row % 2) * (tubePitch / 2);
+      
+      if (yOffset > shellRadius - tubeOD / 2) break;
+      
+      const chordHalf = Math.sqrt(Math.max(0, Math.pow(shellRadius - tubeOD / 2 - 5, 2) - yOffset * yOffset));
+      const tubesInRow = Math.floor((2 * chordHalf) / tubePitch);
+      
+      for (let i = 0; i <= tubesInRow && tubeCount < maxTubes; i++) {
+        const tx = (i - tubesInRow / 2) * tubePitch + xOffset;
+        const ty = yOffset;
+        const dist = Math.sqrt(tx * tx + ty * ty);
+        if (dist <= shellRadius - tubeOD / 2 - 3) {
+          let pass = 1;
+          if (tubePasses === 2) pass = ty >= 0 ? 1 : 2;
+          else if (tubePasses >= 4) {
+            if (tx >= 0 && ty >= 0) pass = 1;
+            else if (tx < 0 && ty >= 0) pass = 2;
+            else if (tx < 0 && ty < 0) pass = 3;
+            else pass = 4;
+          }
+          positions.push({ x: tx, y: ty, pass });
+          tubeCount++;
+        }
+      }
+      
+      if (row > 0) {
+        for (let i = 0; i <= tubesInRow && tubeCount < maxTubes; i++) {
+          const tx = (i - tubesInRow / 2) * tubePitch + xOffset;
+          const ty = -yOffset;
+          const dist = Math.sqrt(tx * tx + ty * ty);
+          if (dist <= shellRadius - tubeOD / 2 - 3) {
+            let pass = 1;
+            if (tubePasses === 2) pass = ty >= 0 ? 1 : 2;
+            else if (tubePasses >= 4) {
+              if (tx >= 0 && ty >= 0) pass = 1;
+              else if (tx < 0 && ty >= 0) pass = 2;
+              else if (tx < 0 && ty < 0) pass = 3;
+              else pass = 4;
+            }
+            positions.push({ x: tx, y: ty, pass });
+            tubeCount++;
+          }
+        }
+      }
+      row++;
+    }
+  } else {
+    // Square pattern
+    let tubeCount = 0;
+    const halfRows = Math.ceil(shellRadius / tubePitch);
+    
+    for (let i = -halfRows; i <= halfRows && tubeCount < maxTubes; i++) {
+      for (let j = -halfRows; j <= halfRows && tubeCount < maxTubes; j++) {
+        const tx = i * tubePitch;
+        const ty = j * tubePitch;
+        const dist = Math.sqrt(tx * tx + ty * ty);
+        if (dist <= shellRadius - tubeOD / 2 - 3) {
+          let pass = 1;
+          if (tubePasses === 2) pass = ty >= 0 ? 1 : 2;
+          else if (tubePasses >= 4) {
+            if (tx >= 0 && ty >= 0) pass = 1;
+            else if (tx < 0 && ty >= 0) pass = 2;
+            else if (tx < 0 && ty < 0) pass = 3;
+            else pass = 4;
+          }
+          positions.push({ x: tx, y: ty, pass });
+          tubeCount++;
+        }
+      }
+    }
+  }
+  
+  // Draw tubes
+  const tubeRadius = Math.max(0.5, (tubeOD / 2) * scale * 0.9);
+  const passColors = [
+    [59, 130, 246], // blue
+    [239, 68, 68],  // red
+    [34, 197, 94],  // green
+    [245, 158, 11]  // amber
+  ];
+  
+  positions.slice(0, numberOfTubes).forEach(pos => {
+    const px = centerX + pos.x * scale;
+    const py = centerY + pos.y * scale;
+    const color = passColors[pos.pass - 1];
+    doc.setFillColor(color[0], color[1], color[2]);
+    doc.circle(px, py, tubeRadius, 'F');
+  });
+  
+  // Draw center mark
+  doc.setFillColor(100, 100, 100);
+  doc.circle(centerX, centerY, 1, 'F');
+  
+  // Add legend below
+  const legendY = y + size + 5;
+  doc.setFontSize(6);
+  doc.setTextColor(80, 80, 80);
+  
+  if (tubePasses >= 1) {
+    doc.setFillColor(passColors[0][0], passColors[0][1], passColors[0][2]);
+    doc.circle(x + 5, legendY, 1.5, 'F');
+    doc.text('Pass 1', x + 8, legendY + 1);
+  }
+  if (tubePasses >= 2) {
+    doc.setFillColor(passColors[1][0], passColors[1][1], passColors[1][2]);
+    doc.circle(x + 25, legendY, 1.5, 'F');
+    doc.text('Pass 2', x + 28, legendY + 1);
+  }
+  if (tubePasses >= 4) {
+    doc.setFillColor(passColors[2][0], passColors[2][1], passColors[2][2]);
+    doc.circle(x + 45, legendY, 1.5, 'F');
+    doc.text('Pass 3', x + 48, legendY + 1);
+    doc.setFillColor(passColors[3][0], passColors[3][1], passColors[3][2]);
+    doc.circle(x + 65, legendY, 1.5, 'F');
+    doc.text('Pass 4', x + 68, legendY + 1);
+  }
+  
+  doc.setTextColor(0, 0, 0);
 }
 
 export function generateDatasheetPDF(data: DatasheetData): void {
@@ -244,10 +418,12 @@ export function generateDatasheetPDF(data: DatasheetData): void {
   addRow('Shell-Side ho (W/m²·K):', data.ho.toFixed(1), 'Shell Nusselt:', data.shellNusselt.toFixed(1));
   y += 3;
 
-  // ===== Construction =====
-  checkPageBreak(60);
+  // ===== Construction with Tube Bundle Drawing =====
+  checkPageBreak(100);
   addHeader('CONSTRUCTION');
   
+  // Left side: Construction data
+  const constructionStartY = y;
   addRow('Shell ID (mm):', data.shellDiameter.toFixed(0), 'Tube OD (mm):', data.tubeOD.toFixed(2));
   addRow('Shell Length (m):', data.shellLength.toFixed(2), 'Tube Wall (mm):', data.tubeWallThickness.toFixed(2));
   addRow('Tube Length (m):', data.tubeLength.toFixed(2), 'Number of Tubes:', data.numberOfTubes.toString());
@@ -255,6 +431,33 @@ export function generateDatasheetPDF(data: DatasheetData): void {
   addRow('Tube Passes:', data.tubePasses.toString(), 'Tube Material:', data.tubeMaterial);
   addRow('Baffle Spacing (mm):', data.baffleSpacing.toFixed(0), 'Number of Baffles:', data.numberOfBaffles.toString());
   addRow('Baffle Cut (%):', data.baffleCut.toFixed(0), '', '');
+  
+  // Right side: Tube bundle cross-section drawing
+  const drawingSize = 55;
+  const drawingX = pageWidth - margin - drawingSize - 5;
+  const drawingY = constructionStartY - 5;
+  
+  // Draw title above the visualization
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TUBE BUNDLE CROSS-SECTION', drawingX + drawingSize / 2, drawingY - 2, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  
+  // Draw tube bundle visualization
+  drawTubeBundleOnPDF(
+    doc,
+    drawingX,
+    drawingY,
+    drawingSize,
+    data.shellDiameter,
+    data.tubeOD,
+    data.tubePitch,
+    data.numberOfTubes,
+    data.tubePattern,
+    data.tubePasses,
+    data.baffleCut
+  );
+  
   y += 3;
 
   // ===== Pressure Drop =====
