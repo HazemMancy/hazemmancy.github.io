@@ -1,11 +1,31 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer, AlertTriangle, BarChart3, Plus, Trash2 } from 'lucide-react';
+
+// Scenario comparison types
+interface SavedScenario {
+  id: string;
+  name: string;
+  type: 'vapor' | 'liquid' | 'twophase' | 'steam' | 'fire' | 'rupturedisk' | 'overfill' | 'thermal' | 'failure';
+  timestamp: Date;
+  inputs: Record<string, any>;
+  results: {
+    requiredArea: number;
+    selectedOrifice: { designation: string; area: number } | null;
+    relievingPressure: number;
+    massFlow?: number;
+    flowRate?: number;
+    flowUnit?: string;
+    correctionFactors: Record<string, number>;
+  };
+}
 
 // API 520 Vapor Relief Sizing - Eq. 3.1
 const calculateVaporArea = (
@@ -1021,6 +1041,58 @@ export default function API520Calculator() {
     ruptureDisk: false,
   });
 
+  // Scenario comparison state
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
+  const [scenarioName, setScenarioName] = useState('');
+
+  // Generate unique ID
+  const generateId = () => Math.random().toString(36).substr(2, 9);
+
+  // Get scenario type label
+  const getScenarioTypeLabel = (type: SavedScenario['type']) => {
+    const labels: Record<SavedScenario['type'], string> = {
+      vapor: 'Vapor',
+      liquid: 'Liquid',
+      twophase: 'Two-Phase',
+      steam: 'Steam',
+      fire: 'Fire Case',
+      rupturedisk: 'Rupture Disk',
+      overfill: 'Overfill',
+      thermal: 'Thermal',
+      failure: 'Failure',
+    };
+    return labels[type];
+  };
+
+  // Save current scenario to comparison
+  const saveScenario = useCallback((
+    type: SavedScenario['type'],
+    inputs: Record<string, any>,
+    results: SavedScenario['results']
+  ) => {
+    const name = scenarioName.trim() || `${getScenarioTypeLabel(type)} ${savedScenarios.length + 1}`;
+    const newScenario: SavedScenario = {
+      id: generateId(),
+      name,
+      type,
+      timestamp: new Date(),
+      inputs,
+      results,
+    };
+    setSavedScenarios(prev => [...prev, newScenario]);
+    setScenarioName('');
+  }, [scenarioName, savedScenarios.length]);
+
+  // Remove scenario from comparison
+  const removeScenario = useCallback((id: string) => {
+    setSavedScenarios(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  // Clear all scenarios
+  const clearAllScenarios = useCallback(() => {
+    setSavedScenarios([]);
+  }, []);
+
   const vaporResults = useMemo(() => {
     const P1_abs = vaporInputs.setPresure + 14.7; // Convert to psia
     const P1_relieving = P1_abs * (1 + vaporInputs.overpressure / 100); // Relieving pressure
@@ -1624,7 +1696,7 @@ export default function API520Calculator() {
       </Card>
 
       <Tabs defaultValue="vapor" className="space-y-4">
-        <TabsList className="grid grid-cols-9 w-full">
+        <TabsList className="grid grid-cols-10 w-full">
           <TabsTrigger value="vapor" className="text-xs">Vapor</TabsTrigger>
           <TabsTrigger value="liquid" className="text-xs">Liquid</TabsTrigger>
           <TabsTrigger value="twophase" className="text-xs">2-Phase</TabsTrigger>
@@ -1648,6 +1720,10 @@ export default function API520Calculator() {
           <TabsTrigger value="failure" className="flex items-center gap-1 text-xs">
             <AlertTriangle className="h-3 w-3" />
             Failure
+          </TabsTrigger>
+          <TabsTrigger value="compare" className="flex items-center gap-1 text-xs">
+            <BarChart3 className="h-3 w-3" />
+            Compare
           </TabsTrigger>
         </TabsList>
 
@@ -1776,15 +1852,33 @@ export default function API520Calculator() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Vapor Relief Sizing Results
-                {vaporResults.selectedOrifice ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-              <CardDescription>Per API 520 Part I, Eq. 3.1</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Vapor Relief Sizing Results
+                    {vaporResults.selectedOrifice ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-destructive" />
+                    )}
+                  </CardTitle>
+                  <CardDescription>Per API 520 Part I, Eq. 3.1</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('vapor', vaporInputs, {
+                    requiredArea: vaporResults.requiredArea,
+                    selectedOrifice: vaporResults.selectedOrifice,
+                    relievingPressure: vaporResults.relievingPressure,
+                    massFlow: vaporInputs.massFlow,
+                    correctionFactors: { Kd: vaporInputs.dischargeCoeff, Kb: vaporResults.Kb, Kc: vaporResults.Kc }
+                  })}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add to Compare
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-3 gap-4">
@@ -1929,15 +2023,34 @@ export default function API520Calculator() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Liquid Relief Sizing Results
-                {liquidResults.selectedOrifice ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-              <CardDescription>Per API 520 Part I, Eq. 3.5</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Liquid Relief Sizing Results
+                    {liquidResults.selectedOrifice ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-destructive" />
+                    )}
+                  </CardTitle>
+                  <CardDescription>Per API 520 Part I, Eq. 3.5</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('liquid', liquidInputs, {
+                    requiredArea: liquidResults.requiredArea,
+                    selectedOrifice: liquidResults.selectedOrifice,
+                    relievingPressure: liquidResults.relievingPressure,
+                    flowRate: liquidInputs.flowRate,
+                    flowUnit: 'gpm',
+                    correctionFactors: { Kd: liquidInputs.dischargeCoeff, Kw: liquidResults.Kw, Kc: liquidResults.Kc, Kv: liquidResults.Kv }
+                  })}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add to Compare
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-3 gap-4">
@@ -2083,15 +2196,33 @@ export default function API520Calculator() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Two-Phase Relief Sizing Results (Omega Method)
-                {twoPhaseResults.selectedOrifice ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-              <CardDescription>Per API 520 Appendix D - Omega Parameter Method</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Two-Phase Relief Sizing Results (Omega Method)
+                    {twoPhaseResults.selectedOrifice ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-destructive" />
+                    )}
+                  </CardTitle>
+                  <CardDescription>Per API 520 Appendix D - Omega Parameter Method</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('twophase', twoPhaseInputs, {
+                    requiredArea: twoPhaseResults.requiredArea,
+                    selectedOrifice: twoPhaseResults.selectedOrifice,
+                    relievingPressure: twoPhaseResults.relievingPressure,
+                    massFlow: twoPhaseInputs.totalMassFlow,
+                    correctionFactors: { Kd: twoPhaseInputs.dischargeCoeff, Kc: twoPhaseResults.Kc }
+                  })}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add to Compare
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-3 gap-4">
@@ -3745,6 +3876,323 @@ export default function API520Calculator() {
                     <p className="text-[10px] opacity-80">{s.description}</p>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Compare Tab */}
+        <TabsContent value="compare" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Scenario Comparison
+              </CardTitle>
+              <CardDescription>
+                Compare multiple relief scenarios side-by-side. Save scenarios from other tabs to add them here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {savedScenarios.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">No Scenarios Saved</p>
+                  <p className="text-sm">Go to other tabs and click "Add to Comparison" to save scenarios for comparison.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">{savedScenarios.length} scenario(s) saved</p>
+                    <Button variant="outline" size="sm" onClick={clearAllScenarios} className="text-destructive">
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Clear All
+                    </Button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="min-w-[150px]">Scenario</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead className="text-right">Required Area (in²)</TableHead>
+                          <TableHead className="text-right">Orifice</TableHead>
+                          <TableHead className="text-right">Relieving P (psia)</TableHead>
+                          <TableHead className="text-right">Flow Rate</TableHead>
+                          <TableHead>Kd</TableHead>
+                          <TableHead>Kb</TableHead>
+                          <TableHead>Kc</TableHead>
+                          <TableHead>Kv/Kw</TableHead>
+                          <TableHead className="w-[50px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {savedScenarios.map((scenario) => (
+                          <TableRow key={scenario.id}>
+                            <TableCell className="font-medium">
+                              <div>
+                                <p>{scenario.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {scenario.timestamp.toLocaleTimeString()}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{getScenarioTypeLabel(scenario.type)}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {scenario.results.requiredArea.toFixed(4)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {scenario.results.selectedOrifice?.designation || 'Exceeds T'}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {scenario.results.relievingPressure.toFixed(1)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs">
+                              {scenario.results.massFlow 
+                                ? `${scenario.results.massFlow.toFixed(0)} lb/hr`
+                                : scenario.results.flowRate 
+                                  ? `${scenario.results.flowRate.toFixed(1)} ${scenario.results.flowUnit || 'gpm'}`
+                                  : '-'}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {scenario.results.correctionFactors.Kd?.toFixed(3) || '-'}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {scenario.results.correctionFactors.Kb?.toFixed(3) || '-'}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {scenario.results.correctionFactors.Kc?.toFixed(2) || '-'}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {scenario.results.correctionFactors.Kv?.toFixed(3) || 
+                               scenario.results.correctionFactors.Kw?.toFixed(3) || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => removeScenario(scenario.id)}
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Governing Case Analysis */}
+                  {savedScenarios.length >= 2 && (
+                    <Card className="border-primary/50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">Governing Case Analysis</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid md:grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Largest Required Area</p>
+                            {(() => {
+                              const max = savedScenarios.reduce((a, b) => 
+                                a.results.requiredArea > b.results.requiredArea ? a : b
+                              );
+                              return (
+                                <div>
+                                  <p className="font-mono font-medium text-lg">{max.results.requiredArea.toFixed(4)} in²</p>
+                                  <p className="text-sm text-primary">{max.name}</p>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Recommended Orifice</p>
+                            {(() => {
+                              const maxArea = Math.max(...savedScenarios.map(s => s.results.requiredArea));
+                              const governingOrifice = ORIFICE_SIZES.find(o => o.area >= maxArea);
+                              return (
+                                <div>
+                                  <p className="font-mono font-medium text-lg">
+                                    {governingOrifice?.designation || 'Exceeds T'}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {governingOrifice ? `${governingOrifice.area} in²` : 'Multiple valves needed'}
+                                  </p>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Area Range</p>
+                            <div>
+                              <p className="font-mono font-medium">
+                                {Math.min(...savedScenarios.map(s => s.results.requiredArea)).toFixed(4)} - {' '}
+                                {Math.max(...savedScenarios.map(s => s.results.requiredArea)).toFixed(4)} in²
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                Δ = {(Math.max(...savedScenarios.map(s => s.results.requiredArea)) - 
+                                     Math.min(...savedScenarios.map(s => s.results.requiredArea))).toFixed(4)} in²
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Add from Current Results */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Quick Add Current Calculations</CardTitle>
+              <CardDescription>Add the current calculation from any tab to the comparison</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex-1">
+                  <Label className="text-sm text-muted-foreground">Scenario Name (optional)</Label>
+                  <Input
+                    placeholder="Enter a name for this scenario..."
+                    value={scenarioName}
+                    onChange={(e) => setScenarioName(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('vapor', vaporInputs, {
+                    requiredArea: vaporResults.requiredArea,
+                    selectedOrifice: vaporResults.selectedOrifice,
+                    relievingPressure: vaporResults.relievingPressure,
+                    massFlow: vaporInputs.massFlow,
+                    correctionFactors: { Kd: vaporInputs.dischargeCoeff, Kb: vaporResults.Kb, Kc: vaporResults.Kc }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Vapor
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('liquid', liquidInputs, {
+                    requiredArea: liquidResults.requiredArea,
+                    selectedOrifice: liquidResults.selectedOrifice,
+                    relievingPressure: liquidResults.relievingPressure,
+                    flowRate: liquidInputs.flowRate,
+                    flowUnit: 'gpm',
+                    correctionFactors: { Kd: liquidInputs.dischargeCoeff, Kw: liquidResults.Kw, Kc: liquidResults.Kc, Kv: liquidResults.Kv }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Liquid
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('twophase', twoPhaseInputs, {
+                    requiredArea: twoPhaseResults.requiredArea,
+                    selectedOrifice: twoPhaseResults.selectedOrifice,
+                    relievingPressure: twoPhaseResults.relievingPressure,
+                    massFlow: twoPhaseInputs.totalMassFlow,
+                    correctionFactors: { Kd: twoPhaseInputs.dischargeCoeff, Kc: twoPhaseResults.Kc }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  2-Phase
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('steam', steamInputs, {
+                    requiredArea: steamResults.requiredArea,
+                    selectedOrifice: steamResults.selectedOrifice,
+                    relievingPressure: steamResults.relievingPressure,
+                    massFlow: steamInputs.massFlow,
+                    correctionFactors: { Kd: steamInputs.dischargeCoeff, Kb: steamResults.Kb, Kc: steamResults.Kc }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Steam
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('fire', fireCaseInputs, {
+                    requiredArea: fireCaseResults.requiredArea,
+                    selectedOrifice: fireCaseResults.selectedOrifice,
+                    relievingPressure: fireCaseResults.relievingPressure,
+                    massFlow: fireCaseResults.massFlow,
+                    correctionFactors: { Kd: fireCaseInputs.dischargeCoeff, Kc: fireCaseResults.Kc }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Fire
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('rupturedisk', ruptureDiskInputs, {
+                    requiredArea: ruptureDiskResults.requiredArea,
+                    selectedOrifice: null,
+                    relievingPressure: ruptureDiskResults.relievingPressure,
+                    correctionFactors: { Kd: ruptureDiskInputs.dischargeCoeff }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  RD
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('overfill', overfillInputs, {
+                    requiredArea: overfillResults.requiredArea,
+                    selectedOrifice: overfillResults.selectedOrifice,
+                    relievingPressure: overfillResults.relievingPressure,
+                    massFlow: overfillResults.massVentRate,
+                    correctionFactors: { Kd: overfillInputs.dischargeCoeff, Kc: overfillResults.Kc }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Overfill
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('thermal', thermalInputs, {
+                    requiredArea: thermalResults.requiredArea,
+                    selectedOrifice: thermalResults.selectedOrifice,
+                    relievingPressure: thermalResults.relievingPressure,
+                    flowRate: thermalResults.volumeRate,
+                    flowUnit: 'gpm',
+                    correctionFactors: { Kd: thermalInputs.dischargeCoeff, Kc: thermalResults.Kc, Kv: thermalResults.Kv }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Thermal
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => saveScenario('failure', failureInputs, {
+                    requiredArea: failureResults.requiredArea,
+                    selectedOrifice: failureResults.selectedOrifice,
+                    relievingPressure: failureResults.relievingPressure,
+                    flowRate: failureResults.reliefFlowRate,
+                    flowUnit: failureResults.reliefFlowUnit,
+                    correctionFactors: { Kd: failureInputs.dischargeCoeff, Kc: failureResults.Kc }
+                  })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Failure
+                </Button>
               </div>
             </CardContent>
           </Card>
