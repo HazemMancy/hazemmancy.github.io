@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer, AlertTriangle, BarChart3, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer, AlertTriangle, BarChart3, Plus, Trash2, TrendingUp } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 // Scenario comparison types
 interface SavedScenario {
@@ -1093,6 +1094,144 @@ export default function API520Calculator() {
     setSavedScenarios([]);
   }, []);
 
+  // Sensitivity analysis state
+  const [sensitivityInputs, setSensitivityInputs] = useState({
+    analysisType: 'vapor' as 'vapor' | 'liquid',
+    variableType: 'flow' as 'flow' | 'pressure',
+    rangeMin: 50, // % of base value
+    rangeMax: 150, // % of base value
+    steps: 11,
+  });
+
+  // Sensitivity analysis calculation
+  const sensitivityResults = useMemo(() => {
+    const { analysisType, variableType, rangeMin, rangeMax, steps } = sensitivityInputs;
+    const dataPoints: Array<{
+      variableValue: number;
+      variablePercent: number;
+      requiredArea: number;
+      orifice: string;
+      orificeArea: number;
+    }> = [];
+
+    if (analysisType === 'vapor') {
+      const baseValue = variableType === 'flow' ? vaporInputs.massFlow : vaporInputs.setPresure;
+      
+      for (let i = 0; i < steps; i++) {
+        const percent = rangeMin + (rangeMax - rangeMin) * (i / (steps - 1));
+        const value = baseValue * (percent / 100);
+        
+        // Calculate with varied parameter
+        const massFlow = variableType === 'flow' ? value : vaporInputs.massFlow;
+        const setPresure = variableType === 'pressure' ? value : vaporInputs.setPresure;
+        
+        const P1_abs = setPresure + 14.7;
+        const P1_relieving = P1_abs * (1 + vaporInputs.overpressure / 100);
+        const T_abs = vaporInputs.temperature + 459.67;
+        const C = calculateCCoefficient(vaporInputs.specificHeatRatio);
+        const criticalRatio = calculateCriticalRatio(vaporInputs.specificHeatRatio);
+        const backPressureRatio = vaporInputs.backPressure / P1_relieving;
+        
+        let Kb = 1.0;
+        if (vaporInputs.valveType === 'conventional') {
+          Kb = backPressureRatio > criticalRatio ? 0.9 : 1.0;
+        } else if (vaporInputs.valveType === 'balanced') {
+          if (backPressureRatio <= criticalRatio) {
+            Kb = 1.0;
+          } else {
+            Kb = Math.sqrt(1 - Math.pow((backPressureRatio - criticalRatio) / (1 - criticalRatio), 2));
+          }
+        }
+        
+        const Kc = vaporInputs.ruptureDisk ? 0.9 : 1.0;
+        const requiredArea = calculateVaporArea(
+          massFlow, C, vaporInputs.dischargeCoeff, P1_relieving,
+          Kb, Kc, T_abs, vaporInputs.compressibility, vaporInputs.molecularWeight
+        );
+        
+        const selected = selectOrifice(requiredArea);
+        dataPoints.push({
+          variableValue: value,
+          variablePercent: percent,
+          requiredArea,
+          orifice: selected?.designation || 'Exceeds T',
+          orificeArea: selected?.area || 0,
+        });
+      }
+    } else {
+      // Liquid analysis
+      const baseValue = variableType === 'flow' ? liquidInputs.flowRate : liquidInputs.setPresure;
+      
+      for (let i = 0; i < steps; i++) {
+        const percent = rangeMin + (rangeMax - rangeMin) * (i / (steps - 1));
+        const value = baseValue * (percent / 100);
+        
+        const flowRate = variableType === 'flow' ? value : liquidInputs.flowRate;
+        const setPresure = variableType === 'pressure' ? value : liquidInputs.setPresure;
+        
+        const P1 = setPresure * (1 + liquidInputs.overpressure / 100);
+        const P2 = liquidInputs.backPressure;
+        
+        let Kw = 1.0;
+        if (liquidInputs.valveType === 'balanced') {
+          const ratio = P2 / P1;
+          Kw = ratio <= 0.5 ? 1.0 : 1.0 - 0.3 * (ratio - 0.5);
+        }
+        
+        const Kc = liquidInputs.ruptureDisk ? 0.9 : 1.0;
+        const prelimArea = calculateLiquidArea(flowRate, liquidInputs.specificGravity, 
+          liquidInputs.dischargeCoeff, Kw, Kc, 1.0, P1, P2);
+        const Re = (2800 * flowRate * Math.sqrt(Math.max(prelimArea, 0.001))) / 
+                   (liquidInputs.viscosity * Math.sqrt(liquidInputs.specificGravity));
+        const Kv = calculateKv(Math.max(Math.abs(Re), 1));
+        
+        const requiredArea = calculateLiquidArea(flowRate, liquidInputs.specificGravity,
+          liquidInputs.dischargeCoeff, Kw, Kc, Kv, P1, P2);
+        
+        const selected = selectOrifice(requiredArea);
+        dataPoints.push({
+          variableValue: value,
+          variablePercent: percent,
+          requiredArea,
+          orifice: selected?.designation || 'Exceeds T',
+          orificeArea: selected?.area || 0,
+        });
+      }
+    }
+
+    // Find orifice change points
+    const orificeChanges: Array<{ from: string; to: string; atPercent: number; atValue: number }> = [];
+    for (let i = 1; i < dataPoints.length; i++) {
+      if (dataPoints[i].orifice !== dataPoints[i - 1].orifice) {
+        orificeChanges.push({
+          from: dataPoints[i - 1].orifice,
+          to: dataPoints[i].orifice,
+          atPercent: dataPoints[i].variablePercent,
+          atValue: dataPoints[i].variableValue,
+        });
+      }
+    }
+
+    // Calculate sensitivity gradient (% change in area per % change in variable)
+    const baseIndex = Math.floor(steps / 2);
+    const baseArea = dataPoints[baseIndex]?.requiredArea || 0;
+    const sensitivity = baseArea > 0 ? 
+      ((dataPoints[steps - 1]?.requiredArea || 0) - (dataPoints[0]?.requiredArea || 0)) / 
+      (baseArea * (rangeMax - rangeMin) / 100) : 0;
+
+    return {
+      dataPoints,
+      orificeChanges,
+      sensitivity,
+      baseValue: sensitivityInputs.analysisType === 'vapor' 
+        ? (variableType === 'flow' ? vaporInputs.massFlow : vaporInputs.setPresure)
+        : (variableType === 'flow' ? liquidInputs.flowRate : liquidInputs.setPresure),
+      unit: sensitivityInputs.analysisType === 'vapor'
+        ? (variableType === 'flow' ? 'lb/hr' : 'psig')
+        : (variableType === 'flow' ? 'gpm' : 'psig'),
+    };
+  }, [sensitivityInputs, vaporInputs, liquidInputs]);
+
   const vaporResults = useMemo(() => {
     const P1_abs = vaporInputs.setPresure + 14.7; // Convert to psia
     const P1_relieving = P1_abs * (1 + vaporInputs.overpressure / 100); // Relieving pressure
@@ -1696,7 +1835,7 @@ export default function API520Calculator() {
       </Card>
 
       <Tabs defaultValue="vapor" className="space-y-4">
-        <TabsList className="grid grid-cols-10 w-full">
+        <TabsList className="grid grid-cols-11 w-full">
           <TabsTrigger value="vapor" className="text-xs">Vapor</TabsTrigger>
           <TabsTrigger value="liquid" className="text-xs">Liquid</TabsTrigger>
           <TabsTrigger value="twophase" className="text-xs">2-Phase</TabsTrigger>
@@ -1720,6 +1859,10 @@ export default function API520Calculator() {
           <TabsTrigger value="failure" className="flex items-center gap-1 text-xs">
             <AlertTriangle className="h-3 w-3" />
             Failure
+          </TabsTrigger>
+          <TabsTrigger value="sensitivity" className="flex items-center gap-1 text-xs">
+            <TrendingUp className="h-3 w-3" />
+            Sensitivity
           </TabsTrigger>
           <TabsTrigger value="compare" className="flex items-center gap-1 text-xs">
             <BarChart3 className="h-3 w-3" />
@@ -3876,6 +4019,304 @@ export default function API520Calculator() {
                     <p className="text-[10px] opacity-80">{s.description}</p>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Sensitivity Analysis Tab */}
+        <TabsContent value="sensitivity" className="space-y-4">
+          <div className="grid md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Analysis Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Analysis Type</Label>
+                  <Select
+                    value={sensitivityInputs.analysisType}
+                    onValueChange={(v) => setSensitivityInputs({ ...sensitivityInputs, analysisType: v as any })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vapor">Vapor Relief</SelectItem>
+                      <SelectItem value="liquid">Liquid Relief</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Variable to Analyze</Label>
+                  <Select
+                    value={sensitivityInputs.variableType}
+                    onValueChange={(v) => setSensitivityInputs({ ...sensitivityInputs, variableType: v as any })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="flow">Flow Rate</SelectItem>
+                      <SelectItem value="pressure">Set Pressure</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Range Min (%)</Label>
+                    <Input
+                      type="number"
+                      value={sensitivityInputs.rangeMin}
+                      onChange={(e) => setSensitivityInputs({ ...sensitivityInputs, rangeMin: parseFloat(e.target.value) || 50 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Range Max (%)</Label>
+                    <Input
+                      type="number"
+                      value={sensitivityInputs.rangeMax}
+                      onChange={(e) => setSensitivityInputs({ ...sensitivityInputs, rangeMax: parseFloat(e.target.value) || 150 })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Data Points</Label>
+                  <Input
+                    type="number"
+                    min="3"
+                    max="21"
+                    value={sensitivityInputs.steps}
+                    onChange={(e) => setSensitivityInputs({ ...sensitivityInputs, steps: Math.min(21, Math.max(3, parseInt(e.target.value) || 11)) })}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-lg">Base Values</CardTitle>
+                <CardDescription>
+                  Using current {sensitivityInputs.analysisType === 'vapor' ? 'Vapor' : 'Liquid'} tab inputs
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-4 gap-4">
+                  {sensitivityInputs.analysisType === 'vapor' ? (
+                    <>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Mass Flow</p>
+                        <p className="font-mono font-medium">{vaporInputs.massFlow.toLocaleString()} lb/hr</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Set Pressure</p>
+                        <p className="font-mono font-medium">{vaporInputs.setPresure} psig</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Temperature</p>
+                        <p className="font-mono font-medium">{vaporInputs.temperature} °F</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Current Orifice</p>
+                        <p className="font-mono font-medium">{vaporResults.selectedOrifice?.designation || 'Exceeds T'}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Flow Rate</p>
+                        <p className="font-mono font-medium">{liquidInputs.flowRate.toLocaleString()} gpm</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Set Pressure</p>
+                        <p className="font-mono font-medium">{liquidInputs.setPresure} psig</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Specific Gravity</p>
+                        <p className="font-mono font-medium">{liquidInputs.specificGravity}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Current Orifice</p>
+                        <p className="font-mono font-medium">{liquidResults.selectedOrifice?.designation || 'Exceeds T'}</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Required Area vs {sensitivityInputs.variableType === 'flow' ? 'Flow Rate' : 'Set Pressure'}</CardTitle>
+              <CardDescription>
+                Showing how orifice sizing changes across {sensitivityInputs.rangeMin}% - {sensitivityInputs.rangeMax}% of base {sensitivityInputs.variableType === 'flow' ? 'flow' : 'pressure'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[350px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={sensitivityResults.dataPoints} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="variableValue" 
+                      tickFormatter={(val) => val.toLocaleString()}
+                      label={{ value: `${sensitivityInputs.variableType === 'flow' ? 'Flow Rate' : 'Set Pressure'} (${sensitivityResults.unit})`, position: 'bottom', offset: 0 }}
+                      className="text-xs"
+                    />
+                    <YAxis 
+                      label={{ value: 'Required Area (in²)', angle: -90, position: 'insideLeft' }}
+                      tickFormatter={(val) => val.toFixed(3)}
+                      className="text-xs"
+                    />
+                    <Tooltip 
+                      formatter={(value: number, name: string) => [
+                        name === 'requiredArea' ? `${value.toFixed(4)} in²` : value,
+                        name === 'requiredArea' ? 'Required Area' : name
+                      ]}
+                      labelFormatter={(val) => `${sensitivityInputs.variableType === 'flow' ? 'Flow' : 'Pressure'}: ${Number(val).toLocaleString()} ${sensitivityResults.unit}`}
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                    />
+                    <Legend />
+                    <Line 
+                      type="monotone" 
+                      dataKey="requiredArea" 
+                      name="Required Area"
+                      stroke="hsl(var(--primary))" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(var(--primary))', r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <ReferenceLine 
+                      x={sensitivityResults.baseValue} 
+                      stroke="hsl(var(--destructive))" 
+                      strokeDasharray="5 5"
+                      label={{ value: 'Base', position: 'top', fill: 'hsl(var(--destructive))' }}
+                    />
+                    {/* Show orifice area thresholds */}
+                    {ORIFICE_SIZES.slice(0, 8).map((orifice) => (
+                      <ReferenceLine 
+                        key={orifice.designation}
+                        y={orifice.area} 
+                        stroke="hsl(var(--muted-foreground))" 
+                        strokeDasharray="2 4"
+                        strokeOpacity={0.5}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Sensitivity Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Sensitivity Factor</p>
+                    <p className="font-mono font-medium text-lg">
+                      {(sensitivityResults.sensitivity * 100).toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      % change in area per % change in {sensitivityInputs.variableType}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Area Range</p>
+                    <p className="font-mono font-medium">
+                      {sensitivityResults.dataPoints[0]?.requiredArea.toFixed(4)} - {sensitivityResults.dataPoints[sensitivityResults.dataPoints.length - 1]?.requiredArea.toFixed(4)} in²
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Min Orifice</p>
+                    <p className="font-mono font-medium">{sensitivityResults.dataPoints[0]?.orifice}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Max Orifice</p>
+                    <p className="font-mono font-medium">{sensitivityResults.dataPoints[sensitivityResults.dataPoints.length - 1]?.orifice}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Orifice Change Points</CardTitle>
+                <CardDescription>Values where orifice size selection changes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {sensitivityResults.orificeChanges.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No orifice changes in this range. Orifice remains constant.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {sensitivityResults.orificeChanges.map((change, i) => (
+                      <div key={i} className="flex items-center justify-between p-2 bg-muted rounded">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">{change.from}</Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="default">{change.to}</Badge>
+                        </div>
+                        <div className="text-right text-sm">
+                          <p className="font-mono">{change.atValue.toLocaleString()} {sensitivityResults.unit}</p>
+                          <p className="text-xs text-muted-foreground">{change.atPercent.toFixed(0)}% of base</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Detailed Results Table</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>% of Base</TableHead>
+                      <TableHead className="text-right">{sensitivityInputs.variableType === 'flow' ? 'Flow Rate' : 'Set Pressure'}</TableHead>
+                      <TableHead className="text-right">Required Area (in²)</TableHead>
+                      <TableHead>Orifice</TableHead>
+                      <TableHead className="text-right">Orifice Area (in²)</TableHead>
+                      <TableHead className="text-right">Margin (%)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sensitivityResults.dataPoints.map((point, i) => {
+                      const margin = point.orificeArea > 0 ? ((point.orificeArea - point.requiredArea) / point.requiredArea) * 100 : 0;
+                      const isBase = Math.abs(point.variablePercent - 100) < 1;
+                      return (
+                        <TableRow key={i} className={isBase ? 'bg-primary/10' : ''}>
+                          <TableCell className="font-mono">{point.variablePercent.toFixed(0)}%</TableCell>
+                          <TableCell className="text-right font-mono">{point.variableValue.toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">{point.requiredArea.toFixed(4)}</TableCell>
+                          <TableCell>
+                            <Badge variant={point.orifice === 'Exceeds T' ? 'destructive' : 'outline'}>
+                              {point.orifice}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {point.orificeArea > 0 ? point.orificeArea.toFixed(3) : '-'}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {point.orificeArea > 0 ? `+${margin.toFixed(1)}%` : '-'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
