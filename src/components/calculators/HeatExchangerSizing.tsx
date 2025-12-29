@@ -1906,22 +1906,9 @@ const HeatExchangerSizing = () => {
       {/* Tube Geometry */}
       <Card className="border-border/50">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <Settings className="w-4 h-4 text-primary" />
-              Tube Geometry (TEMA Standards)
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                className="h-7 text-xs gap-1"
-                onClick={handleAutoCalculateGeometry}
-              >
-                <Grid3X3 className="w-3 h-3" />
-                Auto-Calculate (TEMA)
-              </Button>
-            </div>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Settings className="w-4 h-4 text-primary" />
+            Tube Geometry (TEMA Standards)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -2000,7 +1987,8 @@ const HeatExchangerSizing = () => {
                 step="0.01"
                 value={tubeGeometry.outerDiameter}
                 onChange={(e) => setTubeGeometry({ ...tubeGeometry, outerDiameter: e.target.value })}
-                className="h-9 no-spinner"
+                className="h-9 no-spinner bg-muted/50"
+                disabled
               />
             </div>
             <div className="space-y-1.5">
@@ -2010,7 +1998,8 @@ const HeatExchangerSizing = () => {
                 step="0.01"
                 value={tubeGeometry.wallThickness}
                 onChange={(e) => setTubeGeometry({ ...tubeGeometry, wallThickness: e.target.value })}
-                className="h-9 no-spinner"
+                className="h-9 no-spinner bg-muted/50"
+                disabled
               />
             </div>
             <div className="space-y-1.5">
@@ -2039,7 +2028,8 @@ const HeatExchangerSizing = () => {
                 step="0.1"
                 value={tubeGeometry.tubePitch}
                 onChange={(e) => setTubeGeometry({ ...tubeGeometry, tubePitch: e.target.value })}
-                className="h-9 no-spinner"
+                className="h-9 no-spinner bg-muted/50"
+                disabled
               />
             </div>
             <div className="space-y-1.5">
@@ -2076,7 +2066,8 @@ const HeatExchangerSizing = () => {
                 type="number"
                 value={tubeGeometry.shellDiameter}
                 onChange={(e) => setTubeGeometry({ ...tubeGeometry, shellDiameter: e.target.value })}
-                className="h-9 no-spinner"
+                className="h-9 no-spinner bg-muted/50"
+                disabled
               />
             </div>
             <div className="space-y-1.5">
@@ -2085,7 +2076,8 @@ const HeatExchangerSizing = () => {
                 type="number"
                 value={tubeGeometry.baffleSpacing}
                 onChange={(e) => setTubeGeometry({ ...tubeGeometry, baffleSpacing: e.target.value })}
-                className="h-9 no-spinner"
+                className="h-9 no-spinner bg-muted/50"
+                disabled
               />
             </div>
             <div className="space-y-1.5">
