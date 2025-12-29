@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3, AlertTriangle, Activity, Download, Database, Shield, Droplets, Save, GitCompare } from "lucide-react";
+import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3, AlertTriangle, Activity, Download, Database, Shield, Droplets, Save, GitCompare, FileSpreadsheet } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Accordion,
@@ -32,11 +32,13 @@ import { toast } from "@/hooks/use-toast";
 import TubeBundleVisualization from "./TubeBundleVisualization";
 import DesignComparison, { type SavedDesign } from "./DesignComparison";
 import { HTRIRatingSummary, type HTRIRatingData } from "./HTRIRatingSummary";
+import { generateExcelDatasheet, type ExcelDatasheetData, unitConversions } from "@/lib/excelDatasheet";
 
 type CalculationMode = "design" | "rating";
 type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "crossflow-unmixed" | "crossflow-mixed";
 type TemperatureUnit = "C" | "F" | "K";
 type ShellSideMethod = "kern" | "bell-delaware";
+type UnitSystem = "metric" | "imperial";
 
 interface FluidInputs {
   inletTemp: string;
@@ -107,37 +109,99 @@ const temaTubeCountTable: Record<number, Record<number, { triangular: number; sq
   1524: { 1: { triangular: 2394, square: 1889 }, 2: { triangular: 2282, square: 1802 }, 4: { triangular: 2138, square: 1662 } },
 };
 
-// U value reference data per TEMA and GPSA standards
+// U value reference data per TEMA, GPSA, and Perry's Chemical Engineers' Handbook
 const uValueReference = [
+  // Water services
   { hotSide: "Water", coldSide: "Water", uMin: 850, uMax: 1700, notes: "Clean service" },
   { hotSide: "Steam", coldSide: "Water", uMin: 1000, uMax: 3500, notes: "Condensing steam" },
+  { hotSide: "Steam", coldSide: "Boiling Water", uMin: 1500, uMax: 4000, notes: "Evaporator" },
+  // Hydrocarbon-Water
   { hotSide: "Light Hydrocarbon", coldSide: "Water", uMin: 350, uMax: 700, notes: "Low viscosity" },
+  { hotSide: "Medium Hydrocarbon", coldSide: "Water", uMin: 200, uMax: 450, notes: "Moderate viscosity" },
   { hotSide: "Heavy Hydrocarbon", coldSide: "Water", uMin: 60, uMax: 300, notes: "High viscosity" },
   { hotSide: "Crude Oil", coldSide: "Water", uMin: 60, uMax: 200, notes: "Typical refinery" },
+  { hotSide: "Fuel Oil", coldSide: "Water", uMin: 50, uMax: 150, notes: "Heavy oil" },
+  { hotSide: "Lube Oil", coldSide: "Water", uMin: 100, uMax: 350, notes: "Lube oil cooler" },
+  { hotSide: "Gasoline", coldSide: "Water", uMin: 400, uMax: 550, notes: "Light fraction" },
+  { hotSide: "Kerosene", coldSide: "Water", uMin: 250, uMax: 450, notes: "Middle distillate" },
+  { hotSide: "Diesel", coldSide: "Water", uMin: 200, uMax: 400, notes: "Gas oil" },
+  // Gas-Water
   { hotSide: "Gas (Low P)", coldSide: "Water", uMin: 25, uMax: 60, notes: "< 2 bar" },
+  { hotSide: "Gas (Med P)", coldSide: "Water", uMin: 60, uMax: 150, notes: "2-20 bar" },
   { hotSide: "Gas (High P)", coldSide: "Water", uMin: 150, uMax: 500, notes: "> 20 bar" },
-  { hotSide: "Light HC", coldSide: "Light HC", uMin: 200, uMax: 400, notes: "Liquid-liquid" },
-  { hotSide: "Heavy HC", coldSide: "Heavy HC", uMin: 50, uMax: 150, notes: "High viscosity" },
-  { hotSide: "Steam", coldSide: "Light HC", uMin: 300, uMax: 900, notes: "Reboiler service" },
-  { hotSide: "Steam", coldSide: "Heavy HC", uMin: 60, uMax: 200, notes: "Viscous heating" },
-  { hotSide: "Gas", coldSide: "Gas", uMin: 10, uMax: 50, notes: "Low pressure" },
-  { hotSide: "Condensing HC", coldSide: "Water", uMin: 400, uMax: 900, notes: "Light condensate" },
   { hotSide: "Air", coldSide: "Water", uMin: 25, uMax: 50, notes: "Finned tubes recommended" },
+  { hotSide: "Hydrogen", coldSide: "Water", uMin: 200, uMax: 600, notes: "High k gas" },
+  { hotSide: "Ammonia Gas", coldSide: "Water", uMin: 250, uMax: 500, notes: "Compressor cooler" },
+  // HC-HC
+  { hotSide: "Light HC", coldSide: "Light HC", uMin: 200, uMax: 400, notes: "Liquid-liquid" },
+  { hotSide: "Medium HC", coldSide: "Medium HC", uMin: 150, uMax: 350, notes: "Moderate viscosity" },
+  { hotSide: "Heavy HC", coldSide: "Heavy HC", uMin: 50, uMax: 150, notes: "High viscosity" },
+  { hotSide: "Heavy HC", coldSide: "Light HC", uMin: 100, uMax: 250, notes: "Mixed viscosity" },
+  // Steam heating
+  { hotSide: "Steam", coldSide: "Light HC", uMin: 300, uMax: 900, notes: "Reboiler service" },
+  { hotSide: "Steam", coldSide: "Medium HC", uMin: 150, uMax: 500, notes: "Process heater" },
+  { hotSide: "Steam", coldSide: "Heavy HC", uMin: 60, uMax: 200, notes: "Viscous heating" },
+  { hotSide: "Steam", coldSide: "Gases", uMin: 30, uMax: 100, notes: "Gas heating" },
+  // Condensers
+  { hotSide: "Condensing HC", coldSide: "Water", uMin: 400, uMax: 900, notes: "Light condensate" },
+  { hotSide: "Condensing Steam", coldSide: "Cooling Water", uMin: 2000, uMax: 4500, notes: "Surface condenser" },
+  { hotSide: "Condensing Ammonia", coldSide: "Water", uMin: 800, uMax: 1400, notes: "Refrigeration" },
+  { hotSide: "Condensing Freon", coldSide: "Water", uMin: 400, uMax: 900, notes: "HVAC" },
+  { hotSide: "Cond. Organic Vapors", coldSide: "Water", uMin: 600, uMax: 1200, notes: "Clean organics" },
+  // Gas-Gas
+  { hotSide: "Gas", coldSide: "Gas", uMin: 10, uMax: 50, notes: "Low pressure" },
+  { hotSide: "Gas (High P)", coldSide: "Gas (High P)", uMin: 100, uMax: 300, notes: "> 10 bar both sides" },
+  // Special services
+  { hotSide: "Organic Solvent", coldSide: "Water", uMin: 250, uMax: 700, notes: "Clean solvent" },
+  { hotSide: "Brine", coldSide: "Water", uMin: 600, uMax: 1200, notes: "Refrigeration" },
+  { hotSide: "Molten Salt", coldSide: "Air", uMin: 50, uMax: 150, notes: "Solar thermal" },
+  { hotSide: "Thermal Oil", coldSide: "Water", uMin: 150, uMax: 400, notes: "Hot oil system" },
+  { hotSide: "Glycol Solution", coldSide: "Water", uMin: 400, uMax: 800, notes: "Antifreeze" },
 ];
 
-// Fouling factors per TEMA RGP-T-2.4 (m²·K/W)
+// Fouling factors per TEMA RGP-T-2.4 (m²·K/W) - Extended list
 const foulingReference = [
-  { service: "Distilled water", factor: 0.00009 },
-  { service: "Treated cooling water", factor: 0.00018 },
-  { service: "River water", factor: 0.00035 },
-  { service: "Sea water", factor: 0.00018 },
-  { service: "Light hydrocarbons (clean)", factor: 0.00018 },
-  { service: "Heavy hydrocarbons", factor: 0.00053 },
-  { service: "Crude oil (< 200°C)", factor: 0.00035 },
-  { service: "Crude oil (> 200°C)", factor: 0.00088 },
-  { service: "Natural gas", factor: 0.00018 },
-  { service: "Steam (clean)", factor: 0.00009 },
-  { service: "Refrigerants", factor: 0.00018 },
+  // Water services
+  { service: "Distilled water", factor: 0.00009, notes: "Pure water" },
+  { service: "Treated boiler feedwater", factor: 0.00009, notes: "Deaerated" },
+  { service: "Treated cooling water", factor: 0.00018, notes: "Tower water" },
+  { service: "Untreated cooling water", factor: 0.00035, notes: "Once-through" },
+  { service: "River water", factor: 0.00035, notes: "Fresh water" },
+  { service: "Brackish water", factor: 0.00035, notes: "Estuary" },
+  { service: "Sea water (clean)", factor: 0.00018, notes: "< 50°C" },
+  { service: "Sea water (fouling)", factor: 0.00035, notes: "> 50°C" },
+  { service: "City water", factor: 0.00018, notes: "Municipal supply" },
+  { service: "Muddy/silty water", factor: 0.00053, notes: "High solids" },
+  { service: "Hard water", factor: 0.00053, notes: "Scale forming" },
+  // Hydrocarbons
+  { service: "Light hydrocarbons (clean)", factor: 0.00018, notes: "Gasoline, naphtha" },
+  { service: "MEK, acetone", factor: 0.00018, notes: "Ketones" },
+  { service: "Vegetable oils", factor: 0.00053, notes: "Food grade" },
+  { service: "Heavy fuel oil", factor: 0.00088, notes: "Bunker fuel" },
+  { service: "Asphalt/bitumen", factor: 0.00176, notes: "Very heavy" },
+  { service: "Heavy hydrocarbons", factor: 0.00053, notes: "Residuum" },
+  { service: "Crude oil (< 120°C)", factor: 0.00035, notes: "Light crude" },
+  { service: "Crude oil (120-180°C)", factor: 0.00053, notes: "Medium temp" },
+  { service: "Crude oil (180-230°C)", factor: 0.00070, notes: "High temp" },
+  { service: "Crude oil (> 230°C)", factor: 0.00088, notes: "Very high temp" },
+  { service: "Lean oil (absorber)", factor: 0.00018, notes: "Gas processing" },
+  { service: "Rich oil (absorber)", factor: 0.00035, notes: "Loaded with gas" },
+  // Gases
+  { service: "Natural gas (clean)", factor: 0.00018, notes: "Pipeline quality" },
+  { service: "Natural gas (wet)", factor: 0.00035, notes: "Contains liquids" },
+  { service: "Acid gas", factor: 0.00035, notes: "CO2, H2S" },
+  { service: "Solvent vapors", factor: 0.00018, notes: "Clean organics" },
+  { service: "Air", factor: 0.00035, notes: "Ambient air" },
+  { service: "Compressed air", factor: 0.00018, notes: "Clean/dry" },
+  { service: "Steam (clean)", factor: 0.00009, notes: "Treated" },
+  { service: "Steam (exhaust)", factor: 0.00018, notes: "Untreated" },
+  { service: "Refrigerants", factor: 0.00018, notes: "HFCs, ammonia" },
+  // Process
+  { service: "Amine solutions", factor: 0.00035, notes: "Gas treating" },
+  { service: "Glycol solutions", factor: 0.00035, notes: "Dehydration" },
+  { service: "Caustic solutions", factor: 0.00035, notes: "NaOH, KOH" },
+  { service: "DEA/MEA solutions", factor: 0.00035, notes: "Amine treating" },
+  { service: "Alcohol solutions", factor: 0.00018, notes: "Methanol, ethanol" },
 ];
 
 // Tube material properties
@@ -184,6 +248,12 @@ const HeatExchangerSizing = () => {
   const [htriEnabled, setHtriEnabled] = useState(false);
   const [allowedDPTube, setAllowedDPTube] = useState("50");
   const [allowedDPShell, setAllowedDPShell] = useState("50");
+  
+  // Unit system
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>("metric");
+  
+  // Reference table selector
+  const [selectedTemaRefTable, setSelectedTemaRefTable] = useState("3/4\" OD on 1\" pitch (standard)");
   
   // TEMA auto-calculate mode
   const [autoCalculateGeometry, setAutoCalculateGeometry] = useState(false);
@@ -1221,6 +1291,84 @@ const HeatExchangerSizing = () => {
     toast({ title: "PDF Generated", description: "Datasheet downloaded successfully" });
   }, [results, asmeResults, hotFluid, coldFluid, hotFluidType, coldFluidType, hotFouling, coldFouling, overallU, tubeGeometry, designPressure, shellMaterial, shellSideMethod, companyName, projectName, itemNumber, revisionNo]);
 
+  // Excel export handler
+  const handleExportExcel = useCallback(() => {
+    if (!results) {
+      toast({ title: "No results", description: "Calculate results first", variant: "destructive" });
+      return;
+    }
+    
+    const tempUnitLabel = getTempUnitLabel();
+    
+    const data: ExcelDatasheetData = {
+      companyName,
+      projectName,
+      itemNumber,
+      revisionNo,
+      date: new Date().toLocaleDateString(),
+      temaType: flowArrangement.includes("shell-tube") ? `AES ${tubeGeometry.tubePasses}-Pass` : flowArrangement,
+      orientation: "Horizontal",
+      surfaceArea: results.heatTransferArea,
+      surfaceAreaUnit: unitSystem === 'metric' ? 'm²' : 'ft²',
+      shellFluid: hotFluidType === "custom" ? "Hot Fluid" : hotFluidType,
+      shellInletTemp: parseFloat(hotFluid.inletTemp),
+      shellOutletTemp: results.hotOutletCalc ?? parseFloat(hotFluid.outletTemp),
+      shellFlowRate: parseFloat(hotFluid.flowRate),
+      shellPressureDrop: results.shellSidePressureDrop,
+      shellVelocity: results.shellSideVelocity,
+      shellReynolds: results.shellReynolds,
+      shellHTC: results.ho,
+      tubeFluid: coldFluidType === "custom" ? "Cold Fluid" : coldFluidType,
+      tubeInletTemp: parseFloat(coldFluid.inletTemp),
+      tubeOutletTemp: results.coldOutletCalc ?? parseFloat(coldFluid.outletTemp),
+      tubeFlowRate: parseFloat(coldFluid.flowRate),
+      tubePressureDrop: results.tubeSidePressureDrop,
+      tubeVelocity: results.tubeSideVelocity,
+      tubeReynolds: results.tubeReynolds,
+      tubeHTC: results.hi,
+      heatDuty: results.heatDuty,
+      lmtd: results.lmtd,
+      correctionFactor: results.correctionFactor,
+      effectiveMTD: results.effectiveLmtd,
+      overallU: parseFloat(overallU),
+      cleanU: results.cleanU,
+      fouledU: results.fouledU,
+      overdesign: results.requiredArea > 0 ? ((results.heatTransferArea - results.requiredArea) / results.requiredArea) * 100 : 0,
+      ntu: results.ntu,
+      effectiveness: results.effectiveness,
+      shellFouling: parseFloat(hotFouling),
+      tubeFouling: parseFloat(coldFouling),
+      cleanlinessPercent: results.cleanU > 0 ? (results.fouledU / results.cleanU) * 100 : 100,
+      shellDiameter: parseFloat(tubeGeometry.shellDiameter),
+      tubeOD: parseFloat(tubeGeometry.outerDiameter),
+      tubeWall: parseFloat(tubeGeometry.wallThickness),
+      tubeLength: parseFloat(tubeGeometry.tubeLength),
+      numberOfTubes: parseInt(tubeGeometry.numberOfTubes),
+      tubePitch: parseFloat(tubeGeometry.tubePitch),
+      tubePattern: tubeGeometry.tubePattern === "triangular" ? "Triangular (30°)" : tubeGeometry.tubePattern === "square" ? "Square (90°)" : "Rotated Square (45°)",
+      tubePasses: parseInt(tubeGeometry.tubePasses),
+      baffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
+      baffleCut: parseFloat(tubeGeometry.baffleCut),
+      numberOfBaffles: results.numberOfBaffles,
+      designPressure: parseFloat(designPressure),
+      shellThickness: asmeResults?.shellRecommended ? parseFloat(String(asmeResults.shellRecommended)) : 0,
+      headThickness: asmeResults?.headThicknessWithCA ?? 0,
+      tubesheetThickness: asmeResults?.tubesheetThickness ?? 0,
+      shellMaterial: asmeMaterials[shellMaterial]?.name ?? shellMaterial,
+      tubeMaterial: tubeGeometry.tubeMaterial,
+      flangeClass: asmeResults?.flangeClass ?? "Class 150",
+      naturalFrequency: results.vibration.naturalFrequency,
+      vortexFrequency: results.vibration.vortexSheddingFrequency,
+      criticalVelocity: results.vibration.criticalVelocity,
+      vibrationSafe: !results.vibration.isVibrationRisk,
+      unitSystem,
+      tempUnit: tempUnitLabel,
+    };
+    
+    generateExcelDatasheet(data);
+    toast({ title: "Excel Generated", description: "HTRI-style datasheet downloaded successfully" });
+  }, [results, asmeResults, hotFluid, coldFluid, hotFluidType, coldFluidType, hotFouling, coldFouling, overallU, tubeGeometry, designPressure, shellMaterial, flowArrangement, companyName, projectName, itemNumber, revisionNo, unitSystem, tempUnit]);
+
   // Save design handler
   const handleSaveDesign = useCallback(() => {
     if (!results) {
@@ -1493,6 +1641,23 @@ const HeatExchangerSizing = () => {
                 <SelectItem value="K">Kelvin (K)</SelectItem>
               </SelectContent>
             </Select>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50">
+          <CardContent className="pt-4 space-y-3">
+            <Label className="text-xs text-muted-foreground">Unit System</Label>
+            <Tabs value={unitSystem} onValueChange={(v) => setUnitSystem(v as UnitSystem)}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="metric" className="text-xs">Metric (SI)</TabsTrigger>
+                <TabsTrigger value="imperial" className="text-xs">Imperial</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <p className="text-xs text-muted-foreground">
+              {unitSystem === "metric" 
+                ? "mm, m², kW, kg/hr"
+                : "in, ft², BTU/hr, lb/hr"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -2467,7 +2632,11 @@ const HeatExchangerSizing = () => {
           <div className="flex flex-wrap gap-3">
             <Button onClick={handleExportPDF} className="gap-2">
               <Download className="w-4 h-4" />
-              Export PDF Datasheet
+              Export PDF
+            </Button>
+            <Button onClick={handleExportExcel} variant="outline" className="gap-2">
+              <FileSpreadsheet className="w-4 h-4" />
+              Export Excel (HTRI Style)
             </Button>
             <Button onClick={handleSaveDesign} variant="outline" className="gap-2">
               <Save className="w-4 h-4" />
@@ -2595,6 +2764,7 @@ const HeatExchangerSizing = () => {
                   <TableRow>
                     <TableHead className="text-xs">Service</TableHead>
                     <TableHead className="text-xs">Fouling Factor (m²·K/W)</TableHead>
+                    <TableHead className="text-xs">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2602,6 +2772,7 @@ const HeatExchangerSizing = () => {
                     <TableRow key={idx}>
                       <TableCell className="text-xs">{row.service}</TableCell>
                       <TableCell className="text-xs font-mono">{row.factor.toFixed(5)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.notes}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
