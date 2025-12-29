@@ -53,10 +53,10 @@ const calculators: CalculatorCard[] = [
   {
     id: "compressor-power",
     title: "Compressor Power",
-    description: "Estimate compressor power for ideal and polytropic compression processes",
+    description: "Calculate compressor power, discharge temperature, and multi-stage compression with gas properties",
     icon: <Wind className="w-8 h-8" />,
     route: "/calculators/compressor-power",
-    status: "coming-soon",
+    status: "available",
     category: "Thermodynamics"
   },
   {
