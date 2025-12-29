@@ -1919,21 +1919,6 @@ const HeatExchangerSizing = () => {
                 <Grid3X3 className="w-3 h-3" />
                 Auto-Calculate (TEMA)
               </Button>
-              {getSuggestedTubeCount && (
-                <>
-                  <span className="text-xs text-muted-foreground">
-                    Table: {getSuggestedTubeCount.count} tubes
-                  </span>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-7 text-xs"
-                    onClick={applySuggestedTubeCount}
-                  >
-                    Apply
-                  </Button>
-                </>
-              )}
             </div>
           </CardTitle>
         </CardHeader>
@@ -2807,44 +2792,50 @@ const HeatExchangerSizing = () => {
 
       {/* Reference Tables */}
       <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="tube-count" className="border-border/50">
-          <AccordionTrigger className="text-sm">
-            <div className="flex items-center gap-2">
-              <Grid3X3 className="w-4 h-4 text-primary" />
-              TEMA Tube Count Tables (3/4" OD on 1" pitch)
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Shell ID (mm)</TableHead>
-                    <TableHead className="text-xs">1-Pass Tri</TableHead>
-                    <TableHead className="text-xs">1-Pass Sq</TableHead>
-                    <TableHead className="text-xs">2-Pass Tri</TableHead>
-                    <TableHead className="text-xs">2-Pass Sq</TableHead>
-                    <TableHead className="text-xs">4-Pass Tri</TableHead>
-                    <TableHead className="text-xs">4-Pass Sq</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(temaTubeCountTable).slice(0, 12).map(([shellId, passes]) => (
-                    <TableRow key={shellId}>
-                      <TableCell className="text-xs font-mono">{shellId}</TableCell>
-                      <TableCell className="text-xs">{passes[1].triangular}</TableCell>
-                      <TableCell className="text-xs">{passes[1].square}</TableCell>
-                      <TableCell className="text-xs">{passes[2].triangular}</TableCell>
-                      <TableCell className="text-xs">{passes[2].square}</TableCell>
-                      <TableCell className="text-xs">{passes[4].triangular}</TableCell>
-                      <TableCell className="text-xs">{passes[4].square}</TableCell>
+        {/* All TEMA Tube Count Tables */}
+        {allTubeCountTables.map((table, tableIdx) => (
+          <AccordionItem key={table.name} value={`tube-count-${tableIdx}`} className="border-border/50">
+            <AccordionTrigger className="text-sm">
+              <div className="flex items-center gap-2">
+                <Grid3X3 className="w-4 h-4 text-primary" />
+                TEMA Tube Count: {table.name}
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="overflow-x-auto">
+                <div className="mb-2 text-xs text-muted-foreground">
+                  Tube OD: {table.tubeOD} mm | Tube Pitch: {table.tubePitch} mm
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Shell ID (mm)</TableHead>
+                      <TableHead className="text-xs">1-Pass Tri</TableHead>
+                      <TableHead className="text-xs">1-Pass Sq</TableHead>
+                      <TableHead className="text-xs">2-Pass Tri</TableHead>
+                      <TableHead className="text-xs">2-Pass Sq</TableHead>
+                      <TableHead className="text-xs">4-Pass Tri</TableHead>
+                      <TableHead className="text-xs">4-Pass Sq</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(table.counts).map(([shellId, passes]) => (
+                      <TableRow key={shellId}>
+                        <TableCell className="text-xs font-mono">{shellId}</TableCell>
+                        <TableCell className="text-xs">{passes[1]?.triangular ?? '-'}</TableCell>
+                        <TableCell className="text-xs">{passes[1]?.square ?? '-'}</TableCell>
+                        <TableCell className="text-xs">{passes[2]?.triangular ?? '-'}</TableCell>
+                        <TableCell className="text-xs">{passes[2]?.square ?? '-'}</TableCell>
+                        <TableCell className="text-xs">{passes[4]?.triangular ?? '-'}</TableCell>
+                        <TableCell className="text-xs">{passes[4]?.square ?? '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
 
         <AccordionItem value="u-values" className="border-border/50">
           <AccordionTrigger className="text-sm">
