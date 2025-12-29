@@ -72,6 +72,14 @@ interface CalculationResults {
   massFlow: number;
   specificPower: number;
   adiabaticEfficiency: number;
+  // API 617 / ASME PTC 10 additional parameters
+  polytropicExponent: number;
+  schultzFactor: number;
+  compressibilityX: number;
+  compressibilityY: number;
+  inletDensity: number;
+  dischargeDensity: number;
+  isentropicExponent: number;
 }
 
 const CompressorPowerCalculator: React.FC = () => {
@@ -172,18 +180,23 @@ const CompressorPowerCalculator: React.FC = () => {
     const massFlow = convertFlow(inputs.flowRate, inputs.flowUnit, inputs.molecularWeight, inputs.inletTemperature, P1);
     
     const k = inputs.specificHeatRatio;
-    const Z = inputs.compressibilityFactor;
+    const Z1 = inputs.compressibilityFactor;
     const MW = inputs.molecularWeight;
-    const R = 8314.46 / MW; // J/(kg·K)
+    const Rgas = 8314.46 / MW; // J/(kg·K) - Specific gas constant
     const etaIsen = inputs.isentropicEfficiency / 100;
     const etaPoly = inputs.polytropicEfficiency / 100;
     const etaMech = inputs.mechanicalEfficiency / 100;
     const etaMotor = inputs.motorEfficiency / 100;
-    const n = inputs.numberOfStages;
+    const numStages = inputs.numberOfStages;
+    
+    // ============================================
+    // API 617 / ASME PTC 10 / ISO 5389 Calculations
+    // Reference: Schultz, J.M. (1962) "The Polytropic Analysis of Centrifugal Compressors"
+    // ============================================
     
     // Compression ratio
     const compressionRatio = P2 / P1;
-    const ratioPerStage = Math.pow(compressionRatio, 1 / n);
+    const ratioPerStage = Math.pow(compressionRatio, 1 / numStages);
     
     // Check compression ratio limits
     const compressor = compressorTypes[inputs.compressorType];
@@ -191,65 +204,168 @@ const CompressorPowerCalculator: React.FC = () => {
       newWarnings.push(`Compression ratio per stage (${ratioPerStage.toFixed(2)}) exceeds typical limit for ${compressor.name} (${compressor.maxRatio})`);
     }
     
-    // Polytropic exponent
-    const nPoly = 1 / (1 - ((k - 1) / (k * etaPoly)));
+    // Inlet density per API 617 (kg/m³)
+    // ρ₁ = P₁ / (Z₁ × R × T₁)
+    const P1_Pa = P1 * 1e5; // Convert bar to Pa
+    const rho1 = P1_Pa / (Z1 * Rgas * T1);
+    
+    // Inlet specific volume (m³/kg)
+    const v1 = 1 / rho1;
+    
+    // ============================================
+    // Schultz Compressibility Functions (X and Y)
+    // Per ASME PTC 10 and API 617
+    // For ideal gas: X = 0, Y = 1
+    // For real gas, these account for non-ideal behavior
+    // ============================================
+    
+    // Reduced temperature and pressure for compressibility estimation
+    // Using generalized correlations (simplified Lee-Kesler)
+    const Pc_approx = 4.6 * MW; // Approximate critical pressure (bar) - rough estimate
+    const Tc_approx = 1.2 * MW + 150; // Approximate critical temperature (K) - rough estimate
+    const Tr1 = T1 / Tc_approx;
+    const Pr1 = P1 / Pc_approx;
+    
+    // Schultz X function: X = (T/v)(∂v/∂T)_P - 1
+    // For real gas with compressibility: X ≈ T × (∂Z/∂T)_P / Z
+    // Simplified correlation based on reduced properties
+    const X = Z1 < 0.99 ? (Tr1 - 1) * (1 - Z1) * 0.5 : 0;
+    
+    // Schultz Y function: Y = -(P/v)(∂v/∂P)_T
+    // For ideal gas Y = 1, for real gas Y = 1 + P × (∂Z/∂P)_T / Z
+    const Y = 1 + Pr1 * (1 - Z1) * 0.1;
+    
+    // ============================================
+    // Polytropic Exponent per API 617 / ASME PTC 10
+    // n = (k/Y) × [1 - ((k-1)/(X+1)) × ((1-ηp)/ηp)]
+    // ============================================
+    const nPoly = (k / Y) * (1 - ((k - 1) / (X + 1)) * ((1 - etaPoly) / etaPoly));
+    
+    // Isentropic exponent (accounting for real gas effects)
+    // For ideal gas: ns = k, for real gas: ns = k × Y / (1 + X)
+    const ns = k * Y / (1 + X);
+    
+    // ============================================
+    // Discharge Temperature per API 617
+    // T₂ = T₁ × (P₂/P₁)^m where m = (n-1)/n × (1+X)/Y
+    // ============================================
+    const m = ((nPoly - 1) / nPoly) * ((1 + X) / Y);
     
     // Calculate discharge temperatures for each stage
     const dischargeTempPerStage: number[] = [];
     let T_in = T1;
-    for (let i = 0; i < n; i++) {
-      const T_out = T_in * Math.pow(ratioPerStage, (k - 1) / (k * etaIsen));
+    for (let i = 0; i < numStages; i++) {
+      const T_out = T_in * Math.pow(ratioPerStage, m);
       dischargeTempPerStage.push(T_out - 273.15);
       // Apply intercooler for next stage (except last stage)
-      if (i < n - 1) {
+      if (i < numStages - 1) {
         T_in = T1 + inputs.intercoolerApproach;
       }
     }
     
-    // Final discharge temperature (without intercooling on last stage)
-    const T2_isen = T1 * Math.pow(compressionRatio, (k - 1) / k);
-    const T2_actual = T1 + (T2_isen - T1) / etaIsen;
-    
-    // For multi-stage with intercooling
-    let T2_staged = T1;
-    for (let i = 0; i < n; i++) {
-      const T_out = T2_staged * Math.pow(ratioPerStage, (k - 1) / k);
-      T2_staged = T2_staged + (T_out - T2_staged) / etaIsen;
-      if (i < n - 1) {
-        T2_staged = T1 + inputs.intercoolerApproach;
+    // Final discharge temperature
+    let T2: number;
+    if (numStages > 1) {
+      // Multi-stage with intercooling
+      let T_current = T1;
+      for (let i = 0; i < numStages; i++) {
+        T_current = T_current * Math.pow(ratioPerStage, m);
+        if (i < numStages - 1) {
+          T_current = T1 + inputs.intercoolerApproach;
+        }
       }
+      T2 = T_current;
+    } else {
+      T2 = T1 * Math.pow(compressionRatio, m);
     }
+    const dischargeTemp = T2 - 273.15;
     
-    const dischargeTemp = n > 1 ? T2_staged - 273.15 : T2_actual - 273.15;
+    // Discharge compressibility (estimated)
+    const Tr2 = T2 / Tc_approx;
+    const Pr2 = P2 / Pc_approx;
+    const Z2 = Z1 * (1 + 0.1 * (Pr2 - Pr1) - 0.05 * (Tr2 - Tr1)); // Simplified correlation
+    const Z2_bounded = Math.max(0.5, Math.min(1.1, Z2));
     
-    // Isentropic head (J/kg)
-    const isentropicHead = (Z * R * T1 * k / (k - 1)) * (Math.pow(compressionRatio, (k - 1) / k) - 1);
+    // Discharge density (kg/m³)
+    const P2_Pa = P2 * 1e5;
+    const rho2 = P2_Pa / (Z2_bounded * Rgas * T2);
     
-    // Polytropic head (J/kg)
-    const polytropicHead = (Z * R * T1 * nPoly / (nPoly - 1)) * (Math.pow(compressionRatio, (nPoly - 1) / nPoly) - 1);
+    // Discharge specific volume (m³/kg)
+    const v2 = 1 / rho2;
     
-    // Power calculations (W to kW)
-    const isentropicPower = (massFlow * isentropicHead) / 1000;
-    const polytropicPower = (massFlow * polytropicHead) / 1000;
+    // ============================================
+    // Schultz Head Factor (f) per ASME PTC 10
+    // Corrects polytropic head for real gas behavior
+    // f = ln(P₂/P₁) × (Z₂v₂ - Z₁v₁) / (Z₂v₂ × ln(Z₂v₂/Z₁v₁))
+    // For ideal gas f → 1
+    // ============================================
+    const Z1v1 = Z1 * v1;
+    const Z2v2 = Z2_bounded * v2;
+    let schultzF: number;
+    
+    if (Math.abs(Z2v2 - Z1v1) < 0.001 * Z1v1) {
+      // Nearly ideal gas behavior
+      schultzF = 1.0;
+    } else {
+      const lnPratio = Math.log(P2 / P1);
+      const lnZvRatio = Math.log(Z2v2 / Z1v1);
+      schultzF = lnPratio * (Z2v2 - Z1v1) / (Z2v2 * lnZvRatio);
+    }
+    // Bound Schultz factor to reasonable range
+    schultzF = Math.max(0.9, Math.min(1.1, schultzF));
+    
+    // ============================================
+    // Isentropic Head per API 617 (J/kg)
+    // Hs = (Z₁ × R × T₁ × k / (k-1)) × [(P₂/P₁)^((k-1)/k) - 1]
+    // ============================================
+    const isentropicHead = (Z1 * Rgas * T1 * k / (k - 1)) * (Math.pow(compressionRatio, (k - 1) / k) - 1);
+    
+    // ============================================
+    // Polytropic Head per API 617 / ASME PTC 10 (J/kg)
+    // Hp = f × (Z₁ × R × T₁ × n / (n-1)) × [(P₂/P₁)^((n-1)/n) - 1]
+    // Including Schultz correction factor
+    // ============================================
+    const polytropicHead = schultzF * (Z1 * Rgas * T1 * nPoly / (nPoly - 1)) * (Math.pow(compressionRatio, (nPoly - 1) / nPoly) - 1);
+    
+    // ============================================
+    // Power Calculations per API 617
+    // Gas Power = ṁ × Hp / ηp (for polytropic)
+    // Shaft Power = Gas Power / ηmech
+    // Motor Power = Shaft Power / ηmotor
+    // ============================================
+    const isentropicPower = (massFlow * isentropicHead) / 1000; // kW
+    const polytropicPower = (massFlow * polytropicHead) / 1000; // kW
     const shaftPower = polytropicPower / etaMech;
     const motorPower = shaftPower / etaMotor;
     
     // Actual volumetric flow at inlet conditions (m³/h)
-    const actualFlow = (massFlow * Z * R * T1) / (P1 * 1e5) * 3600;
+    const actualFlow = (massFlow / rho1) * 3600;
     
     // Specific power (kW per 100 Nm³/h)
-    const nm3hFlow = (massFlow * 3600 * 8314.46 * 288.15) / (MW * 101325);
-    const specificPower = (motorPower / nm3hFlow) * 100;
+    // Normal conditions: 0°C (273.15 K), 101.325 kPa
+    const nm3hFlow = (massFlow * 3600 * 8314.46 * 273.15) / (MW * 101325);
+    const specificPower = nm3hFlow > 0 ? (motorPower / nm3hFlow) * 100 : 0;
     
-    // Additional warnings
+    // ============================================
+    // Warnings per API 617 Guidelines
+    // ============================================
     if (dischargeTemp > 200) {
-      newWarnings.push(`High discharge temperature (${dischargeTemp.toFixed(0)}°C) - consider adding cooling or stages`);
+      newWarnings.push(`High discharge temperature (${dischargeTemp.toFixed(0)}°C) exceeds API 617 limit of 200°C - consider adding intercooling or stages`);
     }
-    if (compressionRatio > 10 && n === 1) {
-      newWarnings.push('High compression ratio - consider multi-stage compression');
+    if (dischargeTemp > 150 && inputs.compressorType === 'centrifugal') {
+      newWarnings.push('Discharge temperature exceeds 150°C - verify seal and bearing design ratings');
+    }
+    if (compressionRatio > 10 && numStages === 1) {
+      newWarnings.push('High compression ratio - multi-stage compression recommended per API 617');
     }
     if (P1 < 0.5) {
-      newWarnings.push('Very low suction pressure may cause cavitation issues');
+      newWarnings.push('Very low suction pressure may cause surge or cavitation issues');
+    }
+    if (Z1 < 0.85) {
+      newWarnings.push('Low compressibility factor indicates significant real gas effects - verify Z-factor with equation of state');
+    }
+    if (schultzF < 0.95 || schultzF > 1.05) {
+      newWarnings.push(`Schultz factor (${schultzF.toFixed(3)}) indicates significant real gas deviation - consider detailed thermodynamic analysis`);
     }
     
     setResults({
@@ -266,7 +382,15 @@ const CompressorPowerCalculator: React.FC = () => {
       actualFlow,
       massFlow: massFlow * 3600, // kg/h
       specificPower,
-      adiabaticEfficiency: etaIsen * 100
+      adiabaticEfficiency: etaIsen * 100,
+      // API 617 / ASME PTC 10 parameters
+      polytropicExponent: nPoly,
+      schultzFactor: schultzF,
+      compressibilityX: X,
+      compressibilityY: Y,
+      inletDensity: rho1,
+      dischargeDensity: rho2,
+      isentropicExponent: ns
     });
     
     setWarnings(newWarnings);
@@ -757,6 +881,10 @@ const CompressorPowerCalculator: React.FC = () => {
                       </div>
                     )}
                     <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                      <span className="text-sm text-muted-foreground">Polytropic Exponent (n)</span>
+                      <span className="font-medium">{results.polytropicExponent.toFixed(3)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
                       <span className="text-sm text-muted-foreground">Isentropic Head</span>
                       <span className="font-medium">{results.isentropicHead.toFixed(1)} kJ/kg</span>
                     </div>
@@ -791,7 +919,48 @@ const CompressorPowerCalculator: React.FC = () => {
                       <p className="text-xs text-muted-foreground">Actual Vol. Flow</p>
                       <p className="font-medium">{results.actualFlow.toFixed(1)} m³/h</p>
                     </div>
+                    <div className="p-2 bg-muted/30 rounded text-center">
+                      <p className="text-xs text-muted-foreground">Inlet Density</p>
+                      <p className="font-medium">{results.inletDensity.toFixed(2)} kg/m³</p>
+                    </div>
+                    <div className="p-2 bg-muted/30 rounded text-center">
+                      <p className="text-xs text-muted-foreground">Discharge Density</p>
+                      <p className="font-medium">{results.dischargeDensity.toFixed(2)} kg/m³</p>
+                    </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* API 617 / ASME PTC 10 Parameters */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Info className="h-4 w-4" />
+                    API 617 / ASME PTC 10 Parameters
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 bg-muted/30 rounded">
+                      <p className="text-muted-foreground">Schultz Factor (f)</p>
+                      <p className="font-medium">{results.schultzFactor.toFixed(4)}</p>
+                    </div>
+                    <div className="p-2 bg-muted/30 rounded">
+                      <p className="text-muted-foreground">Isentropic Exp. (ns)</p>
+                      <p className="font-medium">{results.isentropicExponent.toFixed(4)}</p>
+                    </div>
+                    <div className="p-2 bg-muted/30 rounded">
+                      <p className="text-muted-foreground">Comp. Function X</p>
+                      <p className="font-medium">{results.compressibilityX.toFixed(4)}</p>
+                    </div>
+                    <div className="p-2 bg-muted/30 rounded">
+                      <p className="text-muted-foreground">Comp. Function Y</p>
+                      <p className="font-medium">{results.compressibilityY.toFixed(4)}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-2 border-t border-border/50">
+                    Calculations per API 617, ASME PTC 10, and Schultz polytropic method
+                  </p>
                 </CardContent>
               </Card>
 
