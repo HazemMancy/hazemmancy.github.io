@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fluidDatabase, getFluidProperties, getFluidsByCategory } from "@/lib/fluidProperties";
 import { calculateASMEThickness, asmeMaterials, getMaterialOptions, type ASMEResults } from "@/lib/asmeCalculations";
 import { generateDatasheetPDF, type DatasheetData } from "@/lib/pdfDatasheet";
-import { calculateTubeCount, getRecommendedPitch, getRecommendedBaffleSpacing, getAvailableTubeCountTables, allTubeCountTables, type TubeCountTable } from "@/lib/temaGeometry";
+import { calculateTubeCount, getRecommendedPitch, getRecommendedBaffleSpacing, getAvailableTubeCountTables, allTubeCountTables, standardTubeSizes, type TubeCountTable } from "@/lib/temaGeometry";
 import { toast } from "@/hooks/use-toast";
 import TubeBundleVisualization from "./TubeBundleVisualization";
 import DesignComparison, { type SavedDesign } from "./DesignComparison";
@@ -345,13 +345,20 @@ const HeatExchangerSizing = () => {
     vibration: VibrationResults;
   } | null>(null);
 
-  // Get suggested tube count from TEMA table
+  // Get suggested tube count from selected TEMA table
   const getSuggestedTubeCount = useMemo(() => {
+    // Find the selected TEMA table
+    const selectedTable = allTubeCountTables.find(t => t.name === selectedTemaTable);
+    if (!selectedTable) return null;
+    
     const shellDia = parseFloat(tubeGeometry.shellDiameter);
     const passes = parseInt(tubeGeometry.tubePasses);
     const pattern = tubeGeometry.tubePattern === "triangular" ? "triangular" : "square";
     
-    const shellSizes = Object.keys(temaTubeCountTable).map(Number).sort((a, b) => a - b);
+    // Find closest shell size in the selected table
+    const shellSizes = Object.keys(selectedTable.counts).map(Number).sort((a, b) => a - b);
+    if (shellSizes.length === 0) return null;
+    
     let closestSize = shellSizes[0];
     let minDiff = Math.abs(shellDia - closestSize);
     
@@ -363,7 +370,7 @@ const HeatExchangerSizing = () => {
       }
     }
     
-    const passData = temaTubeCountTable[closestSize];
+    const passData = selectedTable.counts[closestSize];
     if (!passData) return null;
     
     const passKey = passes <= 1 ? 1 : passes <= 2 ? 2 : 4;
@@ -374,16 +381,30 @@ const HeatExchangerSizing = () => {
       count: tubeData[pattern],
       shellSize: closestSize,
       pattern,
-      passes: passKey
+      passes: passKey,
+      tubeOD: selectedTable.tubeOD,
+      tubePitch: selectedTable.tubePitch
     };
-  }, [tubeGeometry.shellDiameter, tubeGeometry.tubePasses, tubeGeometry.tubePattern]);
+  }, [selectedTemaTable, tubeGeometry.shellDiameter, tubeGeometry.tubePasses, tubeGeometry.tubePattern]);
 
+  // Apply tube count AND update related geometry from selected TEMA table
   const applySuggestedTubeCount = useCallback(() => {
     if (getSuggestedTubeCount) {
+      // Find matching wall thickness from standard tube sizes
+      const standardTube = standardTubeSizes.find(t => Math.abs(t.od - getSuggestedTubeCount.tubeOD) < 0.5);
+      
       setTubeGeometry(prev => ({
         ...prev,
-        numberOfTubes: getSuggestedTubeCount.count.toString()
+        numberOfTubes: getSuggestedTubeCount.count.toString(),
+        outerDiameter: getSuggestedTubeCount.tubeOD.toString(),
+        tubePitch: getSuggestedTubeCount.tubePitch.toString(),
+        wallThickness: standardTube ? standardTube.wall.toString() : prev.wallThickness
       }));
+      
+      toast({ 
+        title: "TEMA Table Applied", 
+        description: `${getSuggestedTubeCount.count} tubes @ ${getSuggestedTubeCount.tubePitch.toFixed(1)}mm pitch`
+      });
     }
   }, [getSuggestedTubeCount]);
 
@@ -1235,7 +1256,81 @@ const HeatExchangerSizing = () => {
     setAsmeResults(result);
   }, [designPressure, corrosionAllowance, shellMaterial, jointEfficiency, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, hotFluid.inletTemp, coldFluid.inletTemp]);
 
-  // PDF Export handler
+  // Live unit conversion effect
+  const prevUnitSystem = useRef(unitSystem);
+  useEffect(() => {
+    if (prevUnitSystem.current === unitSystem) return;
+    
+    const fromImperial = prevUnitSystem.current === 'imperial';
+    prevUnitSystem.current = unitSystem;
+    
+    // Convert tube geometry values
+    setTubeGeometry(prev => {
+      const convertLength = (val: string) => {
+        const num = parseFloat(val);
+        if (isNaN(num)) return val;
+        // mm <-> inches
+        return fromImperial 
+          ? (num * 25.4).toFixed(2)  // in -> mm
+          : (num / 25.4).toFixed(3); // mm -> in
+      };
+      
+      const convertLengthLong = (val: string) => {
+        const num = parseFloat(val);
+        if (isNaN(num)) return val;
+        // m <-> ft
+        return fromImperial 
+          ? (num / 3.28084).toFixed(2)  // ft -> m
+          : (num * 3.28084).toFixed(2); // m -> ft
+      };
+      
+      return {
+        ...prev,
+        outerDiameter: convertLength(prev.outerDiameter),
+        wallThickness: convertLength(prev.wallThickness),
+        tubePitch: convertLength(prev.tubePitch),
+        shellDiameter: convertLength(prev.shellDiameter),
+        baffleSpacing: convertLength(prev.baffleSpacing),
+        unsupportedSpanLength: convertLength(prev.unsupportedSpanLength),
+        shellBaffleLeakage: convertLength(prev.shellBaffleLeakage),
+        tubeBaffleLeakage: convertLength(prev.tubeBaffleLeakage),
+        tubeLength: convertLengthLong(prev.tubeLength),
+      };
+    });
+    
+    // Convert fluid flow rates
+    const convertFlowRate = (val: string) => {
+      const num = parseFloat(val);
+      if (isNaN(num)) return val;
+      // kg/hr <-> lb/hr
+      return fromImperial 
+        ? (num / 2.20462).toFixed(0)  // lb/hr -> kg/hr
+        : (num * 2.20462).toFixed(0); // kg/hr -> lb/hr
+    };
+    
+    const convertDensity = (val: string) => {
+      const num = parseFloat(val);
+      if (isNaN(num)) return val;
+      // kg/m³ <-> lb/ft³
+      return fromImperial 
+        ? (num / 0.062428).toFixed(1)  // lb/ft³ -> kg/m³
+        : (num * 0.062428).toFixed(3); // kg/m³ -> lb/ft³
+    };
+    
+    setHotFluid(prev => ({
+      ...prev,
+      flowRate: convertFlowRate(prev.flowRate),
+      density: convertDensity(prev.density),
+    }));
+    
+    setColdFluid(prev => ({
+      ...prev,
+      flowRate: convertFlowRate(prev.flowRate),
+      density: convertDensity(prev.density),
+    }));
+    
+  }, [unitSystem]);
+
   const handleExportPDF = useCallback(() => {
     if (!results) {
       toast({ title: "No results", description: "Calculate results first before exporting", variant: "destructive" });
@@ -1453,6 +1548,17 @@ const HeatExchangerSizing = () => {
       case "K": return "K";
     }
   };
+
+  // Unit label helpers
+  const getLengthUnit = () => unitSystem === 'metric' ? 'mm' : 'in';
+  const getLengthLongUnit = () => unitSystem === 'metric' ? 'm' : 'ft';
+  const getFlowRateUnit = () => unitSystem === 'metric' ? 'kg/hr' : 'lb/hr';
+  const getDensityUnit = () => unitSystem === 'metric' ? 'kg/m³' : 'lb/ft³';
+  const getPressureUnit = () => unitSystem === 'metric' ? 'kPa' : 'psi';
+  const getVelocityUnit = () => unitSystem === 'metric' ? 'm/s' : 'ft/s';
+  const getAreaUnit = () => unitSystem === 'metric' ? 'm²' : 'ft²';
+  const getDutyUnit = () => unitSystem === 'metric' ? 'kW' : 'BTU/hr';
+  const getHTCUnit = () => unitSystem === 'metric' ? 'W/m²K' : 'BTU/hr·ft²·°F';
 
   const FluidInputCard = ({
     title,
@@ -1841,13 +1947,38 @@ const HeatExchangerSizing = () => {
                   value={selectedTemaTable} 
                   onValueChange={(value) => {
                     setSelectedTemaTable(value);
-                    // Find the selected table and update tube geometry
+                    // Find the selected table and update tube geometry completely
                     const table = allTubeCountTables.find(t => t.name === value);
                     if (table) {
+                      // Find matching wall thickness from standard tube sizes
+                      const standardTube = standardTubeSizes.find(t => Math.abs(t.od - table.tubeOD) < 0.5);
+                      
+                      // Get tube count for current shell/passes from new table
+                      const shellDia = parseFloat(tubeGeometry.shellDiameter);
+                      const passes = parseInt(tubeGeometry.tubePasses);
+                      const pattern = tubeGeometry.tubePattern === "triangular" ? "triangular" : "square";
+                      
+                      const shellSizes = Object.keys(table.counts).map(Number).sort((a, b) => a - b);
+                      let closestSize = shellSizes[0];
+                      let minDiff = Math.abs(shellDia - closestSize);
+                      for (const size of shellSizes) {
+                        const diff = Math.abs(shellDia - size);
+                        if (diff < minDiff) {
+                          minDiff = diff;
+                          closestSize = size;
+                        }
+                      }
+                      
+                      const passKey = passes <= 1 ? 1 : passes <= 2 ? 2 : 4;
+                      const passData = table.counts[closestSize];
+                      const tubeCount = passData?.[passKey]?.[pattern] ?? parseInt(tubeGeometry.numberOfTubes);
+                      
                       setTubeGeometry(prev => ({
                         ...prev,
                         outerDiameter: table.tubeOD.toString(),
-                        tubePitch: table.tubePitch.toString()
+                        tubePitch: table.tubePitch.toString(),
+                        wallThickness: standardTube ? standardTube.wall.toString() : prev.wallThickness,
+                        numberOfTubes: tubeCount.toString()
                       }));
                     }
                   }}
@@ -1872,7 +2003,7 @@ const HeatExchangerSizing = () => {
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Tube OD (mm)</Label>
+              <Label className="text-xs text-muted-foreground">Tube OD ({getLengthUnit()})</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -1882,7 +2013,7 @@ const HeatExchangerSizing = () => {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Wall Thickness (mm)</Label>
+              <Label className="text-xs text-muted-foreground">Wall Thickness ({getLengthUnit()})</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -1892,7 +2023,7 @@ const HeatExchangerSizing = () => {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Tube Length (m)</Label>
+              <Label className="text-xs text-muted-foreground">Tube Length ({getLengthLongUnit()})</Label>
               <Input
                 type="number"
                 step="0.1"
@@ -1911,7 +2042,7 @@ const HeatExchangerSizing = () => {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Tube Pitch (mm)</Label>
+              <Label className="text-xs text-muted-foreground">Tube Pitch ({getLengthUnit()})</Label>
               <Input
                 type="number"
                 step="0.1"
@@ -1949,7 +2080,7 @@ const HeatExchangerSizing = () => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Shell ID (mm)</Label>
+              <Label className="text-xs text-muted-foreground">Shell ID ({getLengthUnit()})</Label>
               <Input
                 type="number"
                 value={tubeGeometry.shellDiameter}
@@ -1958,7 +2089,7 @@ const HeatExchangerSizing = () => {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Baffle Spacing (mm)</Label>
+              <Label className="text-xs text-muted-foreground">Baffle Spacing ({getLengthUnit()})</Label>
               <Input
                 type="number"
                 value={tubeGeometry.baffleSpacing}
@@ -1994,7 +2125,7 @@ const HeatExchangerSizing = () => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Unsupported Span (mm)</Label>
+              <Label className="text-xs text-muted-foreground">Unsupported Span ({getLengthUnit()})</Label>
               <Input
                 type="number"
                 value={tubeGeometry.unsupportedSpanLength}
@@ -2005,7 +2136,7 @@ const HeatExchangerSizing = () => {
             {shellSideMethod === "bell-delaware" && (
               <>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Shell-Baffle Clearance (mm)</Label>
+                  <Label className="text-xs text-muted-foreground">Shell-Baffle Clearance ({getLengthUnit()})</Label>
                   <Input
                     type="number"
                     step="0.1"
@@ -2015,7 +2146,7 @@ const HeatExchangerSizing = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Tube-Baffle Clearance (mm)</Label>
+                  <Label className="text-xs text-muted-foreground">Tube-Baffle Clearance ({getLengthUnit()})</Label>
                   <Input
                     type="number"
                     step="0.1"
