@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle2, Flame, Disc } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Flame, Disc, Droplets } from 'lucide-react';
 
 // API 520 Vapor Relief Sizing - Eq. 3.1
 const calculateVaporArea = (
@@ -327,6 +327,168 @@ const selectRuptureDiskSize = (requiredArea: number): { size: number; area: numb
   return null;
 };
 
+// ============================================
+// Liquid Overfill Protection Calculations
+// Per API 2000 and API 521 Guidelines
+// ============================================
+
+// Calculate tank vapor space volume
+const calculateVaporSpace = (
+  tankType: 'vertical' | 'horizontal' | 'cone_roof' | 'dome_roof',
+  diameter: number, // ft
+  height: number, // ft (or length for horizontal)
+  liquidLevel: number, // %
+  roofHeight?: number // ft for cone/dome roofs
+): { vaporVolume: number; liquidVolume: number; totalVolume: number } => {
+  const R = diameter / 2;
+  let totalVolume = 0;
+  let liquidVolume = 0;
+  
+  if (tankType === 'horizontal') {
+    // Horizontal cylindrical tank
+    totalVolume = Math.PI * R * R * height;
+    const liquidHeight = (liquidLevel / 100) * diameter;
+    const theta = 2 * Math.acos(1 - liquidHeight / R);
+    const segmentArea = (R * R / 2) * (theta - Math.sin(theta));
+    liquidVolume = segmentArea * height;
+  } else {
+    // Vertical tanks
+    const shellVolume = Math.PI * R * R * height;
+    const roofVol = roofHeight ? (Math.PI * R * R * roofHeight) / 3 : 0; // Simplified cone
+    totalVolume = shellVolume + roofVol;
+    liquidVolume = (liquidLevel / 100) * shellVolume;
+  }
+  
+  const vaporVolume = totalVolume - liquidVolume;
+  return { vaporVolume, liquidVolume, totalVolume };
+};
+
+// Calculate required venting rate for liquid overfill
+// Based on liquid inflow rate and vapor space compression
+const calculateOverfillVentingRate = (
+  liquidInflowRate: number, // gpm or bbl/hr
+  flowUnit: 'gpm' | 'bbl_hr',
+  tankDiameter: number, // ft
+  vaporMW: number,
+  temperature: number, // °F
+  atmosphericPressure: number, // psia (typically 14.7)
+  maxAllowablePressure: number // psig
+): { 
+  volumetricVentRate: number; // SCFH
+  massVentRate: number; // lb/hr
+  liquidRiseRate: number; // ft/hr
+} => {
+  // Convert to consistent units
+  let liquidRateFt3Hr: number;
+  if (flowUnit === 'gpm') {
+    liquidRateFt3Hr = liquidInflowRate * 60 * 0.1337; // gpm to ft³/hr
+  } else {
+    liquidRateFt3Hr = liquidInflowRate * 5.615; // bbl/hr to ft³/hr
+  }
+  
+  // Calculate liquid rise rate
+  const tankArea = Math.PI * Math.pow(tankDiameter / 2, 2);
+  const liquidRiseRate = liquidRateFt3Hr / tankArea;
+  
+  // Required volumetric vent rate equals liquid inflow rate (volume displacement)
+  // Convert to standard conditions
+  const T_abs = temperature + 459.67;
+  const maxPressAbs = maxAllowablePressure + atmosphericPressure;
+  
+  // Correct to standard conditions (60°F, 14.7 psia)
+  const volumetricVentRate = liquidRateFt3Hr * (maxPressAbs / 14.7) * (519.67 / T_abs);
+  
+  // Calculate mass flow rate
+  // PV = nRT, n = PV/RT, mass = n * MW
+  const R = 10.73; // psia·ft³/(lbmol·°R)
+  const molarRate = (atmosphericPressure * volumetricVentRate) / (R * 519.67);
+  const massVentRate = molarRate * vaporMW;
+  
+  return { volumetricVentRate, massVentRate, liquidRiseRate };
+};
+
+// Calculate relief device sizing for liquid overfill
+const calculateOverfillReliefArea = (
+  massFlow: number, // lb/hr
+  vaporMW: number,
+  vaporK: number,
+  setPresure: number, // psig
+  overpressure: number, // %
+  backPressure: number, // psia
+  temperature: number, // °F
+  compressibility: number,
+  Kd: number,
+  Kc: number
+): { requiredArea: number; relievingPressure: number; C: number } => {
+  const P1_abs = setPresure + 14.7;
+  const P1_relieving = P1_abs * (1 + overpressure / 100);
+  const T_abs = temperature + 459.67;
+  const C = calculateCCoefficient(vaporK);
+  
+  // Calculate back pressure correction (assume conventional valve)
+  const criticalRatio = calculateCriticalRatio(vaporK);
+  const backPressureRatio = backPressure / P1_relieving;
+  const Kb = backPressureRatio > criticalRatio ? 0.9 : 1.0;
+  
+  const requiredArea = calculateVaporArea(
+    massFlow,
+    C,
+    Kd,
+    P1_relieving,
+    Kb,
+    Kc,
+    T_abs,
+    compressibility,
+    vaporMW
+  );
+  
+  return { requiredArea, relievingPressure: P1_relieving, C };
+};
+
+// API 2000 normal venting requirements
+const calculateAPI2000NormalVenting = (
+  maxPumpInRate: number, // bbl/hr
+  maxPumpOutRate: number, // bbl/hr
+  tankVolume: number, // bbl
+  latitude: 'tropical' | 'temperate' | 'arctic'
+): { 
+  thermalInbreathing: number; // SCFH
+  thermalOutbreathing: number; // SCFH
+  pumpInVenting: number; // SCFH
+  pumpOutVenting: number; // SCFH
+  totalInbreathing: number; // SCFH
+  totalOutbreathing: number; // SCFH
+} => {
+  // Thermal breathing per API 2000 Table 2
+  // Inbreathing: 1.0 CFH per bbl for first 1000 bbl, 0.6 CFH per bbl thereafter
+  let thermalInbreathing: number;
+  if (tankVolume <= 1000) {
+    thermalInbreathing = tankVolume * 1.0;
+  } else {
+    thermalInbreathing = 1000 * 1.0 + (tankVolume - 1000) * 0.6;
+  }
+  
+  // Adjust for latitude
+  const latitudeFactor = latitude === 'tropical' ? 1.0 : latitude === 'temperate' ? 0.7 : 0.5;
+  
+  // Outbreathing: typically 60% of inbreathing
+  const thermalOutbreathing = thermalInbreathing * 0.6 * latitudeFactor;
+  thermalInbreathing *= latitudeFactor;
+  
+  // Pump in/out venting (1:1 volume displacement)
+  const pumpInVenting = maxPumpInRate * 5.615; // bbl/hr to ft³/hr
+  const pumpOutVenting = maxPumpOutRate * 5.615;
+  
+  return {
+    thermalInbreathing,
+    thermalOutbreathing,
+    pumpInVenting,
+    pumpOutVenting,
+    totalInbreathing: thermalInbreathing + pumpOutVenting,
+    totalOutbreathing: thermalOutbreathing + pumpInVenting,
+  };
+};
+
 export default function API520Calculator() {
   // Vapor inputs
   const [vaporInputs, setVaporInputs] = useState({
@@ -423,7 +585,29 @@ export default function API520Calculator() {
     diskType: 'conventional' as 'conventional' | 'graphite' | 'scored',
   });
 
-  // Vapor calculations
+  // Liquid overfill inputs
+  const [overfillInputs, setOverfillInputs] = useState({
+    tankType: 'vertical' as 'vertical' | 'horizontal' | 'cone_roof' | 'dome_roof',
+    tankDiameter: 40, // ft
+    tankHeight: 48, // ft
+    roofHeight: 4, // ft (for cone/dome)
+    currentLiquidLevel: 80, // %
+    maxLiquidInflowRate: 1000, // bbl/hr
+    flowUnit: 'bbl_hr' as 'gpm' | 'bbl_hr',
+    vaporMW: 86, // Hexane-like
+    vaporK: 1.05,
+    temperature: 100, // °F
+    compressibility: 0.98,
+    maxAllowablePressure: 2.0, // psig (low pressure tank)
+    setPresure: 1.5, // psig
+    overpressure: 10, // %
+    backPressure: 14.7, // psia
+    dischargeCoeff: 0.975,
+    ruptureDisk: false,
+    latitude: 'temperate' as 'tropical' | 'temperate' | 'arctic',
+    maxPumpOutRate: 800, // bbl/hr
+  });
+
   const vaporResults = useMemo(() => {
     const P1_abs = vaporInputs.setPresure + 14.7; // Convert to psia
     const P1_relieving = P1_abs * (1 + vaporInputs.overpressure / 100); // Relieving pressure
@@ -724,6 +908,88 @@ export default function API520Calculator() {
     };
   }, [ruptureDiskInputs]);
 
+  // Liquid overfill calculations
+  const overfillResults = useMemo(() => {
+    // Calculate tank volumes
+    const { vaporVolume, liquidVolume, totalVolume } = calculateVaporSpace(
+      overfillInputs.tankType,
+      overfillInputs.tankDiameter,
+      overfillInputs.tankHeight,
+      overfillInputs.currentLiquidLevel,
+      overfillInputs.roofHeight
+    );
+    
+    // Convert to barrels
+    const totalVolumeBarrels = totalVolume / 5.615;
+    const liquidVolumeBarrels = liquidVolume / 5.615;
+    const vaporVolumeBarrels = vaporVolume / 5.615;
+    
+    // Calculate venting requirements for overfill
+    const { volumetricVentRate, massVentRate, liquidRiseRate } = calculateOverfillVentingRate(
+      overfillInputs.maxLiquidInflowRate,
+      overfillInputs.flowUnit,
+      overfillInputs.tankDiameter,
+      overfillInputs.vaporMW,
+      overfillInputs.temperature,
+      14.7, // atmospheric
+      overfillInputs.maxAllowablePressure
+    );
+    
+    // Calculate API 2000 normal venting
+    const api2000Venting = calculateAPI2000NormalVenting(
+      overfillInputs.maxLiquidInflowRate,
+      overfillInputs.maxPumpOutRate,
+      totalVolumeBarrels,
+      overfillInputs.latitude
+    );
+    
+    // Relief device sizing for overfill case
+    const Kc = overfillInputs.ruptureDisk ? 0.9 : 1.0;
+    const { requiredArea, relievingPressure, C } = calculateOverfillReliefArea(
+      massVentRate,
+      overfillInputs.vaporMW,
+      overfillInputs.vaporK,
+      overfillInputs.setPresure,
+      overfillInputs.overpressure,
+      overfillInputs.backPressure,
+      overfillInputs.temperature,
+      overfillInputs.compressibility,
+      overfillInputs.dischargeCoeff,
+      Kc
+    );
+    
+    const selectedOrifice = selectOrifice(requiredArea);
+    
+    // Calculate time to overfill from current level
+    const remainingVaporVolume = vaporVolume; // ft³
+    let inflowRateFt3Hr: number;
+    if (overfillInputs.flowUnit === 'gpm') {
+      inflowRateFt3Hr = overfillInputs.maxLiquidInflowRate * 60 * 0.1337;
+    } else {
+      inflowRateFt3Hr = overfillInputs.maxLiquidInflowRate * 5.615;
+    }
+    const timeToOverfill = remainingVaporVolume / inflowRateFt3Hr; // hours
+    
+    return {
+      totalVolume,
+      liquidVolume,
+      vaporVolume,
+      totalVolumeBarrels,
+      liquidVolumeBarrels,
+      vaporVolumeBarrels,
+      volumetricVentRate,
+      massVentRate,
+      liquidRiseRate,
+      api2000Venting,
+      requiredArea,
+      relievingPressure,
+      C,
+      selectedOrifice,
+      Kc,
+      timeToOverfill,
+    };
+  }, [overfillInputs]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -733,24 +999,28 @@ export default function API520Calculator() {
             <Badge variant="outline" className="ml-2">API 520 Part I & II</Badge>
           </CardTitle>
           <CardDescription>
-            Pressure relief device sizing for vapor, liquid, two-phase, steam, fire case, and rupture disk per API 520/521
+            Pressure relief device sizing for vapor, liquid, two-phase, steam, fire case, rupture disk, and overfill protection per API 520/521/2000
           </CardDescription>
         </CardHeader>
       </Card>
 
       <Tabs defaultValue="vapor" className="space-y-4">
-        <TabsList className="grid grid-cols-6 w-full">
-          <TabsTrigger value="vapor">Vapor/Gas</TabsTrigger>
+        <TabsList className="grid grid-cols-7 w-full">
+          <TabsTrigger value="vapor">Vapor</TabsTrigger>
           <TabsTrigger value="liquid">Liquid</TabsTrigger>
           <TabsTrigger value="twophase">Two-Phase</TabsTrigger>
           <TabsTrigger value="steam">Steam</TabsTrigger>
           <TabsTrigger value="firecase" className="flex items-center gap-1">
             <Flame className="h-3 w-3" />
-            Fire Case
+            Fire
           </TabsTrigger>
           <TabsTrigger value="rupturedisk" className="flex items-center gap-1">
             <Disc className="h-3 w-3" />
-            Rupture Disk
+            RD
+          </TabsTrigger>
+          <TabsTrigger value="overfill" className="flex items-center gap-1">
+            <Droplets className="h-3 w-3" />
+            Overfill
           </TabsTrigger>
         </TabsList>
 
@@ -1853,43 +2123,378 @@ export default function API520Calculator() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Liquid Overfill Tab */}
+        <TabsContent value="overfill" className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Droplets className="h-4 w-4 text-blue-500" />
+                  Tank Geometry
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tank Type</Label>
+                    <Select
+                      value={overfillInputs.tankType}
+                      onValueChange={(v) => setOverfillInputs({ ...overfillInputs, tankType: v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="vertical">Vertical Cylinder</SelectItem>
+                        <SelectItem value="horizontal">Horizontal Cylinder</SelectItem>
+                        <SelectItem value="cone_roof">Cone Roof</SelectItem>
+                        <SelectItem value="dome_roof">Dome Roof</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Diameter (ft)</Label>
+                    <Input
+                      type="number"
+                      step="1"
+                      value={overfillInputs.tankDiameter}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, tankDiameter: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Height/Length (ft)</Label>
+                    <Input
+                      type="number"
+                      step="1"
+                      value={overfillInputs.tankHeight}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, tankHeight: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  {(overfillInputs.tankType === 'cone_roof' || overfillInputs.tankType === 'dome_roof') && (
+                    <div className="space-y-2">
+                      <Label>Roof Height (ft)</Label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        value={overfillInputs.roofHeight}
+                        onChange={(e) => setOverfillInputs({ ...overfillInputs, roofHeight: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label>Current Liquid Level (%)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={overfillInputs.currentLiquidLevel}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, currentLiquidLevel: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Climate Zone</Label>
+                    <Select
+                      value={overfillInputs.latitude}
+                      onValueChange={(v) => setOverfillInputs({ ...overfillInputs, latitude: v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tropical">Tropical</SelectItem>
+                        <SelectItem value="temperate">Temperate</SelectItem>
+                        <SelectItem value="arctic">Arctic</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Flow Rates & Operating Conditions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Max Liquid Inflow Rate</Label>
+                    <Input
+                      type="number"
+                      value={overfillInputs.maxLiquidInflowRate}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, maxLiquidInflowRate: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Flow Unit</Label>
+                    <Select
+                      value={overfillInputs.flowUnit}
+                      onValueChange={(v) => setOverfillInputs({ ...overfillInputs, flowUnit: v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bbl_hr">bbl/hr</SelectItem>
+                        <SelectItem value="gpm">gpm</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Max Pump Out Rate (bbl/hr)</Label>
+                    <Input
+                      type="number"
+                      value={overfillInputs.maxPumpOutRate}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, maxPumpOutRate: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Temperature (°F)</Label>
+                    <Input
+                      type="number"
+                      value={overfillInputs.temperature}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, temperature: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Max Allowable Pressure (psig)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={overfillInputs.maxAllowablePressure}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, maxAllowablePressure: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Set Pressure (psig)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={overfillInputs.setPresure}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, setPresure: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Vapor Properties</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Vapor Molecular Weight</Label>
+                    <Input
+                      type="number"
+                      value={overfillInputs.vaporMW}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, vaporMW: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Vapor k (Cp/Cv)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={overfillInputs.vaporK}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, vaporK: parseFloat(e.target.value) || 1.05 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Compressibility (Z)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={overfillInputs.compressibility}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, compressibility: parseFloat(e.target.value) || 1.0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Discharge Coefficient (Kd)</Label>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      value={overfillInputs.dischargeCoeff}
+                      onChange={(e) => setOverfillInputs({ ...overfillInputs, dischargeCoeff: parseFloat(e.target.value) || 0.975 })}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="overfillRuptureDisk"
+                    checked={overfillInputs.ruptureDisk}
+                    onChange={(e) => setOverfillInputs({ ...overfillInputs, ruptureDisk: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="overfillRuptureDisk">Rupture Disk Upstream (Kc = 0.9)</Label>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Tank Volume Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Total Volume</p>
+                    <p className="font-mono font-medium">{overfillResults.totalVolumeBarrels.toFixed(0)} bbl</p>
+                    <p className="text-xs text-muted-foreground">({overfillResults.totalVolume.toFixed(0)} ft³)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Liquid Volume</p>
+                    <p className="font-mono font-medium">{overfillResults.liquidVolumeBarrels.toFixed(0)} bbl</p>
+                    <p className="text-xs text-muted-foreground">({overfillResults.liquidVolume.toFixed(0)} ft³)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Vapor Space</p>
+                    <p className="font-mono font-medium">{overfillResults.vaporVolumeBarrels.toFixed(0)} bbl</p>
+                    <p className="text-xs text-muted-foreground">({overfillResults.vaporVolume.toFixed(0)} ft³)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Time to Overfill</p>
+                    <p className="font-mono font-medium">{overfillResults.timeToOverfill.toFixed(1)} hrs</p>
+                    <p className="text-xs text-muted-foreground">at max inflow rate</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                Overfill Protection Results
+                {overfillResults.selectedOrifice ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                )}
+              </CardTitle>
+              <CardDescription>Per API 2000/521 - Liquid Overfill Venting Requirements</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-4 gap-4">
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Overfill Venting</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Volume Rate: <span className="font-mono font-medium">{overfillResults.volumetricVentRate.toFixed(0)} SCFH</span></p>
+                    <p className="text-sm">Mass Rate: <span className="font-mono font-medium">{overfillResults.massVentRate.toFixed(1)} lb/hr</span></p>
+                    <p className="text-sm">Liquid Rise: <span className="font-mono font-medium">{overfillResults.liquidRiseRate.toFixed(2)} ft/hr</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">API 2000 Normal Venting</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Thermal In: <span className="font-mono font-medium">{overfillResults.api2000Venting.thermalInbreathing.toFixed(0)} SCFH</span></p>
+                    <p className="text-sm">Thermal Out: <span className="font-mono font-medium">{overfillResults.api2000Venting.thermalOutbreathing.toFixed(0)} SCFH</span></p>
+                    <p className="text-sm">Total Out: <span className="font-mono font-medium">{overfillResults.api2000Venting.totalOutbreathing.toFixed(0)} SCFH</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Relief Conditions</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Relieving P: <span className="font-mono font-medium">{overfillResults.relievingPressure.toFixed(2)} psia</span></p>
+                    <p className="text-sm">C Coefficient: <span className="font-mono font-medium">{overfillResults.C.toFixed(2)}</span></p>
+                    <p className="text-sm">Kc: <span className="font-mono font-medium">{overfillResults.Kc.toFixed(2)}</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Sizing Results</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm">Required Area: <span className="font-mono font-medium">{overfillResults.requiredArea.toFixed(4)} in²</span></p>
+                    <p className="text-sm">Selected Orifice: <span className="font-mono font-medium">
+                      {overfillResults.selectedOrifice ? `${overfillResults.selectedOrifice.designation} (${overfillResults.selectedOrifice.area} in²)` : 'Exceeds T orifice'}
+                    </span></p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">API 2000 Pump In/Out Venting Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Inbreathing (Vacuum Relief)</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <p className="text-muted-foreground">Thermal:</p>
+                    <p className="font-mono">{overfillResults.api2000Venting.thermalInbreathing.toFixed(0)} SCFH</p>
+                    <p className="text-muted-foreground">Pump Out:</p>
+                    <p className="font-mono">{overfillResults.api2000Venting.pumpOutVenting.toFixed(0)} SCFH</p>
+                    <p className="text-muted-foreground font-medium">Total:</p>
+                    <p className="font-mono font-medium">{overfillResults.api2000Venting.totalInbreathing.toFixed(0)} SCFH</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Outbreathing (Pressure Relief)</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <p className="text-muted-foreground">Thermal:</p>
+                    <p className="font-mono">{overfillResults.api2000Venting.thermalOutbreathing.toFixed(0)} SCFH</p>
+                    <p className="text-muted-foreground">Pump In:</p>
+                    <p className="font-mono">{overfillResults.api2000Venting.pumpInVenting.toFixed(0)} SCFH</p>
+                    <p className="text-muted-foreground font-medium">Total:</p>
+                    <p className="font-mono font-medium">{overfillResults.api2000Venting.totalOutbreathing.toFixed(0)} SCFH</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Reference Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">API 520/521 Reference</CardTitle>
+          <CardTitle className="text-lg">API 520/521/2000 Reference</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-3 gap-6 text-sm">
+          <div className="grid md:grid-cols-4 gap-6 text-sm">
             <div>
               <h4 className="font-medium mb-2">Standard Orifice Designations</h4>
-              <div className="grid grid-cols-4 gap-2 text-xs">
+              <div className="grid grid-cols-4 gap-1 text-xs">
                 {ORIFICE_SIZES.map((o) => (
                   <div key={o.designation} className="flex justify-between bg-muted p-1 rounded">
                     <span className="font-mono font-medium">{o.designation}</span>
-                    <span>{o.area} in²</span>
+                    <span>{o.area}</span>
                   </div>
                 ))}
               </div>
             </div>
             <div>
               <h4 className="font-medium mb-2">Key Equations</h4>
-              <ul className="space-y-1 text-muted-foreground">
+              <ul className="space-y-1 text-muted-foreground text-xs">
                 <li>• <strong>Vapor:</strong> A = W√(TZ/M) / (C·Kd·P1·Kb·Kc)</li>
                 <li>• <strong>Liquid:</strong> A = Q√G / (38·Kd·Kw·Kc·Kv·√ΔP)</li>
                 <li>• <strong>Steam:</strong> A = W / (51.5·P1·Kd·Kb·Kc·Kn·Ksh)</li>
-                <li>• <strong>Two-Phase:</strong> Omega (ω) per Appendix D</li>
                 <li>• <strong>Fire:</strong> Q = C·F·A^0.82 per API 521</li>
-                <li>• <strong>RD:</strong> Knet = Kd / √(1+Kr) per App M</li>
+                <li>• <strong>RD:</strong> Knet = Kd / √(1+Kr)</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-medium mb-2">Environmental Factors (API 521)</h4>
+              <h4 className="font-medium mb-2">Environmental Factors</h4>
               <ul className="space-y-1 text-muted-foreground text-xs">
-                {ENVIRONMENTAL_FACTORS.slice(0, 5).map((ef) => (
+                {ENVIRONMENTAL_FACTORS.slice(0, 4).map((ef) => (
                   <li key={ef.description}>• {ef.description}: F = {ef.F}</li>
                 ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium mb-2">API 2000 Thermal Breathing</h4>
+              <ul className="space-y-1 text-muted-foreground text-xs">
+                <li>• First 1000 bbl: 1.0 CFH/bbl</li>
+                <li>• Above 1000 bbl: 0.6 CFH/bbl</li>
+                <li>• Outbreathing: 60% of inbreathing</li>
+                <li>• Pump in/out: 1:1 displacement</li>
               </ul>
             </div>
           </div>
