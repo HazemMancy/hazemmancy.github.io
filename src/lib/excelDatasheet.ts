@@ -217,25 +217,6 @@ export function generateExcelDatasheet(data: ExcelDatasheetData): void {
     ['Critical Velocity', data.criticalVelocity.toFixed(2), units.velocity, '', ''],
     ['Vibration Status', data.vibrationSafe ? 'ACCEPTABLE' : 'WARNING - REVIEW REQUIRED', '', '', ''],
     ['', '', '', '', ''],
-    ['═══════════════════════════════════════════════════════════════════════════════'],
-    ['TUBE BUNDLE CROSS-SECTION', '', '', '', ''],
-    ['═══════════════════════════════════════════════════════════════════════════════'],
-    ['', '', '', '', ''],
-    ['Bundle Layout Description:', '', '', '', ''],
-    [`Shell ID: ${data.shellDiameter} ${units.length}`, `Tube OD: ${data.tubeOD} ${units.length}`, `Pitch: ${data.tubePitch} ${units.length}`, '', ''],
-    [`Pattern: ${data.tubePattern}`, `Passes: ${data.tubePasses}`, `Tubes: ${data.numberOfTubes}`, '', ''],
-    [`Baffle Cut: ${data.baffleCut}%`, '', '', '', ''],
-    ['', '', '', '', ''],
-    ['Pass Distribution:', '', '', '', ''],
-    ['Pass 1 (Blue)', 'Inlet section - bottom half for 2-pass', '', '', ''],
-    ['Pass 2 (Red)', 'Return section - top half for 2-pass', '', '', ''],
-    ...(data.tubePasses >= 4 ? [
-      ['Pass 3 (Green)', 'Third pass - bottom-left quadrant', '', '', ''],
-      ['Pass 4 (Amber)', 'Fourth pass - bottom-right quadrant', '', '', ''],
-    ] as string[][] : []),
-    ['', '', '', '', ''],
-    ['Note: For accurate visualization, see the UI or exported PDF datasheet.', '', '', '', ''],
-    ['', '', '', '', ''],
   ];
   
   const ws2 = XLSX.utils.aoa_to_sheet(constructionData);
