@@ -38,7 +38,7 @@ const calculators: CalculatorCard[] = [
     description: "Design and rate shell & tube heat exchangers with LMTD and effectiveness-NTU methods",
     icon: <Thermometer className="w-8 h-8" />,
     route: "/calculators/heat-exchanger",
-    status: "coming-soon",
+    status: "available",
     category: "Heat Transfer"
   },
   {
