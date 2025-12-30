@@ -5,14 +5,16 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer, AlertTriangle, BarChart3, Info, BookOpen, Settings } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, AreaChart, Area } from 'recharts';
+import { AlertCircle, CheckCircle2, Flame, Disc, Droplets, Thermometer, AlertTriangle, BarChart3, Info, BookOpen, Settings, GitBranch, ArrowRight, Gauge } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { pipeScheduleData, getNominalSizes, getSchedulesForSize, getInsideDiameter, getOuterDiameter, getWallThickness } from '@/lib/pipeSchedule';
 
 // ============================================
-// UNIT CONVERSION CONSTANTS
+// UNIT CONVERSION SYSTEM
 // ============================================
+type UnitSystem = 'imperial' | 'metric';
+
 const UNIT_CONVERSIONS = {
   pressure: { psiToBar: 0.0689476, barToPsi: 14.5038 },
   temperature: { 
@@ -25,15 +27,73 @@ const UNIT_CONVERSIONS = {
   flow: { gpmToM3h: 0.227125, m3hToGpm: 4.40287 },
   area: { in2ToCm2: 6.4516, cm2ToIn2: 0.155 },
   length: { inToMm: 25.4, mmToIn: 0.03937, ftToM: 0.3048, mToFt: 3.28084 },
-  heat: { btuToKj: 1.05506, kjToBtu: 0.947817 },
+  heat: { btuToKj: 1.05506, kjToBtu: 0.947817, btuLbToKjKg: 2.326 },
   heatFlux: { btuFt2ToKwM2: 0.00315459, kwM2ToBtuFt2: 316.998 },
+  velocity: { fpsToMps: 0.3048, mpsToFps: 3.28084 },
+  density: { lbFt3ToKgM3: 16.0185, kgM3ToLbFt3: 0.0624 },
 };
 
-type UnitSystem = 'imperial' | 'metric';
+// Unit labels helper
+const getUnits = (unitSystem: UnitSystem) => ({
+  pressure: unitSystem === 'metric' ? 'bar' : 'psi',
+  pressureAbs: unitSystem === 'metric' ? 'bara' : 'psia',
+  pressureGauge: unitSystem === 'metric' ? 'barg' : 'psig',
+  temperature: unitSystem === 'metric' ? '°C' : '°F',
+  massFlow: unitSystem === 'metric' ? 'kg/hr' : 'lb/hr',
+  volFlow: unitSystem === 'metric' ? 'm³/h' : 'gpm',
+  area: unitSystem === 'metric' ? 'cm²' : 'in²',
+  length: unitSystem === 'metric' ? 'mm' : 'in',
+  lengthFt: unitSystem === 'metric' ? 'm' : 'ft',
+  heat: unitSystem === 'metric' ? 'kJ/kg' : 'BTU/lb',
+  heatRate: unitSystem === 'metric' ? 'MW' : 'MM BTU/hr',
+  heatFlux: unitSystem === 'metric' ? 'kW/m²' : 'BTU/hr·ft²',
+  velocity: unitSystem === 'metric' ? 'm/s' : 'ft/s',
+  density: unitSystem === 'metric' ? 'kg/m³' : 'lb/ft³',
+  surfaceArea: unitSystem === 'metric' ? 'm²' : 'ft²',
+});
+
+// Convert value for display based on unit system (internal is always imperial)
+const toDisplay = (value: number, type: string, unitSystem: UnitSystem): number => {
+  if (unitSystem === 'imperial') return value;
+  switch (type) {
+    case 'pressure': return value * UNIT_CONVERSIONS.pressure.psiToBar;
+    case 'temperature': return UNIT_CONVERSIONS.temperature.FtoC(value);
+    case 'massFlow': return value * UNIT_CONVERSIONS.mass.lbToKg;
+    case 'volFlow': return value * UNIT_CONVERSIONS.flow.gpmToM3h;
+    case 'area': return value * UNIT_CONVERSIONS.area.in2ToCm2;
+    case 'length': return value * UNIT_CONVERSIONS.length.inToMm;
+    case 'lengthFt': return value * UNIT_CONVERSIONS.length.ftToM;
+    case 'heat': return value * UNIT_CONVERSIONS.heat.btuLbToKjKg;
+    case 'heatFlux': return value * UNIT_CONVERSIONS.heatFlux.btuFt2ToKwM2;
+    case 'velocity': return value * UNIT_CONVERSIONS.velocity.fpsToMps;
+    case 'density': return value * UNIT_CONVERSIONS.density.lbFt3ToKgM3;
+    case 'surfaceArea': return value * Math.pow(UNIT_CONVERSIONS.length.ftToM, 2);
+    default: return value;
+  }
+};
+
+// Convert value from display to internal (imperial) units
+const fromDisplay = (value: number, type: string, unitSystem: UnitSystem): number => {
+  if (unitSystem === 'imperial') return value;
+  switch (type) {
+    case 'pressure': return value * UNIT_CONVERSIONS.pressure.barToPsi;
+    case 'temperature': return UNIT_CONVERSIONS.temperature.CtoF(value);
+    case 'massFlow': return value * UNIT_CONVERSIONS.mass.kgToLb;
+    case 'volFlow': return value * UNIT_CONVERSIONS.flow.m3hToGpm;
+    case 'area': return value * UNIT_CONVERSIONS.area.cm2ToIn2;
+    case 'length': return value / UNIT_CONVERSIONS.length.inToMm;
+    case 'lengthFt': return value / UNIT_CONVERSIONS.length.ftToM;
+    case 'heat': return value / UNIT_CONVERSIONS.heat.btuLbToKjKg;
+    case 'heatFlux': return value / UNIT_CONVERSIONS.heatFlux.btuFt2ToKwM2;
+    case 'velocity': return value / UNIT_CONVERSIONS.velocity.fpsToMps;
+    case 'density': return value / UNIT_CONVERSIONS.density.lbFt3ToKgM3;
+    case 'surfaceArea': return value / Math.pow(UNIT_CONVERSIONS.length.ftToM, 2);
+    default: return value;
+  }
+};
 
 // ============================================
 // API RP 526 STANDARD ORIFICE AREAS
-// Flanged Steel Pressure Relief Valves
 // ============================================
 const ORIFICE_SIZES = [
   { designation: 'D', area: 0.110, areaMetric: 0.710, inletSize: '1', outletSize: '2', diameter: 0.374, diameterMm: 9.50 },
@@ -62,14 +122,9 @@ const selectOrifice = (requiredArea: number): typeof ORIFICE_SIZES[0] | null => 
 const calculateDiameter = (area: number): number => Math.sqrt(4 * area / Math.PI);
 
 // ============================================
-// EXPANDED FLUID DATABASE
-// API 520 Table 9 + Additional Industry Fluids
+// FLUID DATABASE - API 520 Table 9 + Industry
 // ============================================
-const FLUID_DATABASE: Record<string, { 
-  k: number; C: number; MW: number; category: string; 
-  SG?: number; Cp?: number; mu?: number; Tc?: number; Pc?: number;
-}> = {
-  // Common Gases (API 520 Table 9)
+const FLUID_DATABASE: Record<string, { k: number; C: number; MW: number; category: string; Tc?: number; Pc?: number }> = {
   'Air': { k: 1.40, C: 356, MW: 28.97, category: 'Common', Tc: -140.6, Pc: 547 },
   'Ammonia': { k: 1.31, C: 348, MW: 17.03, category: 'Chemical', Tc: 270.1, Pc: 1657 },
   'Argon': { k: 1.67, C: 378, MW: 39.95, category: 'Inert', Tc: -188.3, Pc: 710 },
@@ -80,88 +135,51 @@ const FLUID_DATABASE: Record<string, {
   'Hydrogen': { k: 1.41, C: 357, MW: 2.02, category: 'Chemical', Tc: -399.9, Pc: 188 },
   'Nitrogen': { k: 1.40, C: 356, MW: 28.01, category: 'Common', Tc: -232.5, Pc: 492 },
   'Oxygen': { k: 1.40, C: 356, MW: 32.00, category: 'Common', Tc: -181.1, Pc: 731 },
-  // Hydrocarbons
   'Methane': { k: 1.31, C: 348, MW: 16.04, category: 'Hydrocarbon', Tc: -116.6, Pc: 667 },
   'Ethane': { k: 1.19, C: 336, MW: 30.07, category: 'Hydrocarbon', Tc: 90.1, Pc: 708 },
   'Propane': { k: 1.13, C: 330, MW: 44.10, category: 'Hydrocarbon', Tc: 206.0, Pc: 617 },
   'n-Butane': { k: 1.09, C: 326, MW: 58.12, category: 'Hydrocarbon', Tc: 305.6, Pc: 551 },
   'Isobutane': { k: 1.10, C: 327, MW: 58.12, category: 'Hydrocarbon', Tc: 274.9, Pc: 529 },
   'n-Pentane': { k: 1.07, C: 324, MW: 72.15, category: 'Hydrocarbon', Tc: 385.7, Pc: 489 },
-  'Isopentane': { k: 1.08, C: 325, MW: 72.15, category: 'Hydrocarbon', Tc: 369.0, Pc: 483 },
   'n-Hexane': { k: 1.06, C: 323, MW: 86.18, category: 'Hydrocarbon', Tc: 453.6, Pc: 437 },
   'n-Heptane': { k: 1.05, C: 322, MW: 100.21, category: 'Hydrocarbon', Tc: 512.6, Pc: 397 },
-  'n-Octane': { k: 1.04, C: 321, MW: 114.23, category: 'Hydrocarbon', Tc: 564.1, Pc: 361 },
   'Ethylene': { k: 1.24, C: 341, MW: 28.05, category: 'Hydrocarbon', Tc: 48.5, Pc: 731 },
   'Propylene': { k: 1.15, C: 332, MW: 42.08, category: 'Hydrocarbon', Tc: 197.1, Pc: 667 },
-  'Butylene': { k: 1.11, C: 328, MW: 56.11, category: 'Hydrocarbon', Tc: 295.5, Pc: 583 },
-  // Natural Gas & Refinery
   'Natural Gas (Typical)': { k: 1.27, C: 344, MW: 19.00, category: 'Natural Gas' },
   'Natural Gas (Lean)': { k: 1.30, C: 347, MW: 17.50, category: 'Natural Gas' },
   'Natural Gas (Rich)': { k: 1.22, C: 339, MW: 22.00, category: 'Natural Gas' },
-  'Refinery Gas': { k: 1.20, C: 337, MW: 24.00, category: 'Refinery' },
   'Hydrogen Sulfide': { k: 1.32, C: 349, MW: 34.08, category: 'Sour Gas', Tc: 212.7, Pc: 1306 },
-  'Sulfur Dioxide': { k: 1.26, C: 343, MW: 64.07, category: 'Chemical', Tc: 315.0, Pc: 1143 },
-  // Steam & Water
   'Steam (Saturated)': { k: 1.135, C: 328, MW: 18.02, category: 'Steam' },
   'Steam (Superheated)': { k: 1.30, C: 347, MW: 18.02, category: 'Steam' },
-  // Refrigerants
   'R-22 (HCFC-22)': { k: 1.18, C: 335, MW: 86.47, category: 'Refrigerant', Tc: 205.1, Pc: 722 },
   'R-134a': { k: 1.10, C: 327, MW: 102.03, category: 'Refrigerant', Tc: 213.9, Pc: 589 },
-  'R-410A': { k: 1.14, C: 331, MW: 72.58, category: 'Refrigerant', Tc: 161.8, Pc: 711 },
-  // Industrial Chemicals
   'Acetylene': { k: 1.26, C: 343, MW: 26.04, category: 'Chemical', Tc: 95.5, Pc: 891 },
   'Benzene Vapor': { k: 1.12, C: 329, MW: 78.11, category: 'Chemical', Tc: 552.2, Pc: 710 },
-  'Vinyl Chloride': { k: 1.14, C: 331, MW: 62.50, category: 'Chemical', Tc: 313.5, Pc: 808 },
-  'Ethylene Oxide': { k: 1.21, C: 338, MW: 44.05, category: 'Chemical', Tc: 386.6, Pc: 1042 },
-  'Methanol Vapor': { k: 1.20, C: 337, MW: 32.04, category: 'Chemical', Tc: 464.0, Pc: 1174 },
-  'Ethanol Vapor': { k: 1.13, C: 330, MW: 46.07, category: 'Chemical', Tc: 469.4, Pc: 891 },
 };
 
 // Liquid expansion coefficients for thermal relief
 const LIQUID_EXPANSION_COEFFICIENTS: Record<string, { beta: number; name: string; SG: number; category: string }> = {
-  // Water & Aqueous
   water: { beta: 0.00012, name: 'Water', SG: 1.00, category: 'Aqueous' },
   seawater: { beta: 0.00015, name: 'Seawater', SG: 1.025, category: 'Aqueous' },
-  brine: { beta: 0.00018, name: 'Brine (25% NaCl)', SG: 1.19, category: 'Aqueous' },
   glycol_meg: { beta: 0.00035, name: 'MEG (50%)', SG: 1.05, category: 'Aqueous' },
-  glycol_deg: { beta: 0.00038, name: 'DEG', SG: 1.12, category: 'Aqueous' },
-  // Crude Oils
   crude_light: { beta: 0.00050, name: 'Light Crude (30-40 API)', SG: 0.82, category: 'Crude' },
   crude_medium: { beta: 0.00045, name: 'Medium Crude (22-30 API)', SG: 0.88, category: 'Crude' },
   crude_heavy: { beta: 0.00038, name: 'Heavy Crude (10-22 API)', SG: 0.95, category: 'Crude' },
-  crude_extra_heavy: { beta: 0.00032, name: 'Extra Heavy Crude (<10 API)', SG: 1.02, category: 'Crude' },
-  // Refined Products
   gasoline: { beta: 0.00062, name: 'Gasoline', SG: 0.74, category: 'Refined' },
   naphtha: { beta: 0.00058, name: 'Naphtha', SG: 0.72, category: 'Refined' },
   kerosene: { beta: 0.00055, name: 'Kerosene/Jet Fuel', SG: 0.80, category: 'Refined' },
   diesel: { beta: 0.00048, name: 'Diesel/Gas Oil', SG: 0.85, category: 'Refined' },
-  fuel_oil: { beta: 0.00040, name: 'Fuel Oil', SG: 0.92, category: 'Refined' },
-  residual_oil: { beta: 0.00035, name: 'Residual/Bunker', SG: 0.98, category: 'Refined' },
-  // LPG & NGL
   lpg: { beta: 0.00120, name: 'LPG (Liquid)', SG: 0.55, category: 'LPG' },
   propane: { beta: 0.00150, name: 'Propane (Liquid)', SG: 0.50, category: 'LPG' },
-  butane: { beta: 0.00110, name: 'n-Butane (Liquid)', SG: 0.58, category: 'LPG' },
-  ngl: { beta: 0.00090, name: 'NGL', SG: 0.60, category: 'LPG' },
-  // Chemicals
   ammonia_liq: { beta: 0.00130, name: 'Ammonia (Liquid)', SG: 0.68, category: 'Chemical' },
   methanol: { beta: 0.00070, name: 'Methanol', SG: 0.79, category: 'Chemical' },
-  ethanol: { beta: 0.00065, name: 'Ethanol', SG: 0.79, category: 'Chemical' },
   benzene: { beta: 0.00060, name: 'Benzene', SG: 0.88, category: 'Chemical' },
-  toluene: { beta: 0.00058, name: 'Toluene', SG: 0.87, category: 'Chemical' },
-  xylene: { beta: 0.00055, name: 'Xylene', SG: 0.86, category: 'Chemical' },
-  caustic: { beta: 0.00025, name: 'Caustic Soda (50%)', SG: 1.52, category: 'Chemical' },
-  acid_sulfuric: { beta: 0.00030, name: 'Sulfuric Acid (98%)', SG: 1.84, category: 'Chemical' },
-  // Lubricants
-  lube_oil: { beta: 0.00038, name: 'Lube Oil (ISO VG 46)', SG: 0.87, category: 'Lubricant' },
-  hydraulic_oil: { beta: 0.00040, name: 'Hydraulic Oil', SG: 0.88, category: 'Lubricant' },
-  transformer_oil: { beta: 0.00042, name: 'Transformer Oil', SG: 0.89, category: 'Lubricant' },
-  // Custom
+  lube_oil: { beta: 0.00038, name: 'Lube Oil', SG: 0.87, category: 'Lubricant' },
   custom: { beta: 0.00050, name: 'Custom Fluid', SG: 1.0, category: 'Custom' },
 };
 
 // ============================================
 // API 520 PART I - SIZING EQUATIONS
-// Per API 520 Part I (10th Edition, November 2024)
 // ============================================
 
 // Coefficient C from k (Cp/Cv) - Equation 3.2
@@ -171,86 +189,42 @@ const calculateCCoefficient = (k: number): number => {
   return 520 * Math.sqrt(k * term);
 };
 
-// Critical pressure ratio - Equation 4
+// Critical pressure ratio
 const calculateCriticalRatio = (k: number): number => Math.pow(2 / (k + 1), k / (k - 1));
 
-// ============================================
-// VAPOR/GAS SIZING - API 520 Section 5.6.2
-// A = W × √(TZ/M) / (C × Kd × P₁ × Kb × Kc)
-// Where:
-//   A = required effective discharge area (in²)
-//   W = required relieving rate (lb/hr)
-//   T = relieving temperature (°R = °F + 459.67)
-//   Z = compressibility factor
-//   M = molecular weight
-//   C = coefficient from Table 9 or Equation 3.2
-//   Kd = effective coefficient of discharge (0.975 certified gas/vapor)
-//   P₁ = relieving pressure, psia (set + overpressure + atm)
-//   Kb = backpressure correction factor
-//   Kc = combination correction factor (0.9 with rupture disk)
-// ============================================
-const calculateVaporArea = (
-  W: number, C: number, Kd: number, P1: number, Kb: number, Kc: number, T: number, Z: number, M: number
-): number => {
+// Gas/Vapor sizing - API 520 Section 5.6.2
+const calculateVaporArea = (W: number, C: number, Kd: number, P1: number, Kb: number, Kc: number, T: number, Z: number, M: number): number => {
   if (P1 <= 0 || M <= 0) return 0;
   return (W * Math.sqrt((T * Z) / M)) / (C * Kd * P1 * Kb * Kc);
 };
 
-// ============================================
-// LIQUID SIZING - API 520 Section 5.8
-// A = Q × √G / (38 × Kd × Kw × Kc × Kv × √ΔP)
-// Where:
-//   A = required effective discharge area (in²)
-//   Q = required capacity (gpm at flowing temperature)
-//   G = specific gravity at flowing conditions
-//   Kd = effective coefficient of discharge (0.65 certified liquid)
-//   Kw = backpressure correction factor (balanced only)
-//   Kc = combination correction factor
-//   Kv = viscosity correction factor
-//   ΔP = P₁ - P₂ differential pressure (psi)
-// ============================================
-const calculateLiquidArea = (
-  Q: number, G: number, Kd: number, Kw: number, Kc: number, Kv: number, P1: number, P2: number
-): number => {
+// Liquid sizing - API 520 Section 5.8
+const calculateLiquidArea = (Q: number, G: number, Kd: number, Kw: number, Kc: number, Kv: number, P1: number, P2: number): number => {
   const deltaP = P1 - P2;
   if (deltaP <= 0) return 0;
   return (Q * Math.sqrt(G)) / (38 * Kd * Kw * Kc * Kv * Math.sqrt(deltaP));
 };
 
-// ============================================
-// STEAM SIZING - API 520 Section 5.7
-// A = W / (51.5 × P₁ × Kd × Kb × Kc × Kn × Ksh)
-// Where:
-//   W = required steam flow (lb/hr)
-//   P₁ = relieving pressure (psia)
-//   Kn = Napier correction (for P > 1515 psia)
-//   Ksh = superheat correction factor
-// ============================================
-const calculateSteamArea = (
-  W: number, P1: number, Kd: number, Kb: number, Kc: number, Kn: number, Ksh: number
-): number => {
+// Steam sizing - API 520 Section 5.7
+const calculateSteamArea = (W: number, P1: number, Kd: number, Kb: number, Kc: number, Kn: number, Ksh: number): number => {
   if (P1 <= 0) return 0;
   return W / (51.5 * P1 * Kd * Kb * Kc * Kn * Ksh);
 };
 
-// Napier correction factor (Kn) - API 520 Section 5.7.2
+// Napier correction factor
 const calculateKn = (P1: number): number => {
   if (P1 <= 1515) return 1.0;
   if (P1 <= 3215) return (0.1906 * P1 - 1000) / (0.2292 * P1 - 1061);
   return 1.0;
 };
 
-// Superheat correction factor (Ksh) - API 520 Table 6
+// Superheat correction table
 const SUPERHEAT_TABLE: { pressure: number; temps: { temp: number; Ksh: number }[] }[] = [
-  { pressure: 15, temps: [{ temp: 300, Ksh: 0.987 }, { temp: 400, Ksh: 0.957 }, { temp: 500, Ksh: 0.930 }, { temp: 600, Ksh: 0.905 }, { temp: 700, Ksh: 0.882 }, { temp: 800, Ksh: 0.861 }, { temp: 900, Ksh: 0.841 }, { temp: 1000, Ksh: 0.823 }] },
-  { pressure: 50, temps: [{ temp: 300, Ksh: 0.998 }, { temp: 400, Ksh: 0.963 }, { temp: 500, Ksh: 0.935 }, { temp: 600, Ksh: 0.909 }, { temp: 700, Ksh: 0.885 }, { temp: 800, Ksh: 0.864 }, { temp: 900, Ksh: 0.844 }, { temp: 1000, Ksh: 0.825 }] },
-  { pressure: 100, temps: [{ temp: 400, Ksh: 0.972 }, { temp: 500, Ksh: 0.942 }, { temp: 600, Ksh: 0.914 }, { temp: 700, Ksh: 0.890 }, { temp: 800, Ksh: 0.868 }, { temp: 900, Ksh: 0.847 }, { temp: 1000, Ksh: 0.828 }] },
-  { pressure: 200, temps: [{ temp: 400, Ksh: 0.987 }, { temp: 500, Ksh: 0.953 }, { temp: 600, Ksh: 0.923 }, { temp: 700, Ksh: 0.897 }, { temp: 800, Ksh: 0.874 }, { temp: 900, Ksh: 0.852 }, { temp: 1000, Ksh: 0.833 }] },
-  { pressure: 300, temps: [{ temp: 500, Ksh: 0.965 }, { temp: 600, Ksh: 0.932 }, { temp: 700, Ksh: 0.905 }, { temp: 800, Ksh: 0.880 }, { temp: 900, Ksh: 0.858 }, { temp: 1000, Ksh: 0.837 }] },
-  { pressure: 500, temps: [{ temp: 500, Ksh: 0.991 }, { temp: 600, Ksh: 0.951 }, { temp: 700, Ksh: 0.919 }, { temp: 800, Ksh: 0.892 }, { temp: 900, Ksh: 0.868 }, { temp: 1000, Ksh: 0.846 }] },
-  { pressure: 1000, temps: [{ temp: 600, Ksh: 0.997 }, { temp: 700, Ksh: 0.954 }, { temp: 800, Ksh: 0.921 }, { temp: 900, Ksh: 0.893 }, { temp: 1000, Ksh: 0.868 }] },
-  { pressure: 1500, temps: [{ temp: 700, Ksh: 0.993 }, { temp: 800, Ksh: 0.951 }, { temp: 900, Ksh: 0.918 }, { temp: 1000, Ksh: 0.890 }] },
-  { pressure: 2000, temps: [{ temp: 800, Ksh: 0.984 }, { temp: 900, Ksh: 0.946 }, { temp: 1000, Ksh: 0.914 }] },
+  { pressure: 15, temps: [{ temp: 300, Ksh: 0.987 }, { temp: 400, Ksh: 0.957 }, { temp: 500, Ksh: 0.930 }, { temp: 600, Ksh: 0.905 }, { temp: 700, Ksh: 0.882 }, { temp: 800, Ksh: 0.861 }] },
+  { pressure: 100, temps: [{ temp: 400, Ksh: 0.972 }, { temp: 500, Ksh: 0.942 }, { temp: 600, Ksh: 0.914 }, { temp: 700, Ksh: 0.890 }, { temp: 800, Ksh: 0.868 }] },
+  { pressure: 300, temps: [{ temp: 500, Ksh: 0.965 }, { temp: 600, Ksh: 0.932 }, { temp: 700, Ksh: 0.905 }, { temp: 800, Ksh: 0.880 }] },
+  { pressure: 500, temps: [{ temp: 500, Ksh: 0.991 }, { temp: 600, Ksh: 0.951 }, { temp: 700, Ksh: 0.919 }, { temp: 800, Ksh: 0.892 }] },
+  { pressure: 1000, temps: [{ temp: 600, Ksh: 0.997 }, { temp: 700, Ksh: 0.954 }, { temp: 800, Ksh: 0.921 }] },
 ];
 
 const calculateKsh = (P1: number, superheatTemp: number): number => {
@@ -267,11 +241,7 @@ const calculateKsh = (P1: number, superheatTemp: number): number => {
   const getKshAtPressure = (row: typeof SUPERHEAT_TABLE[0]) => {
     for (let i = 0; i < row.temps.length - 1; i++) {
       if (superheatTemp >= row.temps[i].temp && superheatTemp <= row.temps[i + 1].temp) {
-        const t1 = row.temps[i].temp;
-        const t2 = row.temps[i + 1].temp;
-        const k1 = row.temps[i].Ksh;
-        const k2 = row.temps[i + 1].Ksh;
-        return k1 + (k2 - k1) * (superheatTemp - t1) / (t2 - t1);
+        return row.temps[i].Ksh + (row.temps[i + 1].Ksh - row.temps[i].Ksh) * (superheatTemp - row.temps[i].temp) / (row.temps[i + 1].temp - row.temps[i].temp);
       }
     }
     return row.temps[row.temps.length - 1].Ksh;
@@ -279,11 +249,10 @@ const calculateKsh = (P1: number, superheatTemp: number): number => {
   const kshLower = getKshAtPressure(lowerP);
   const kshUpper = getKshAtPressure(upperP);
   if (lowerP.pressure === upperP.pressure) return kshLower;
-  const fraction = (P1 - lowerP.pressure) / (upperP.pressure - lowerP.pressure);
-  return kshLower + (kshUpper - kshLower) * fraction;
+  return kshLower + (kshUpper - kshLower) * (P1 - lowerP.pressure) / (upperP.pressure - lowerP.pressure);
 };
 
-// Viscosity correction factor (Kv) - API 520 Section 5.8.3
+// Viscosity correction factor - API 520 Section 5.8.3
 const calculateKv = (Re: number): number => {
   if (Re >= 100000) return 1.0;
   if (Re <= 0) return 0.3;
@@ -296,13 +265,12 @@ const calculateReynoldsForLiquid = (Q: number, G: number, viscosity: number, are
   return (2800 * Q) / (viscosity * Math.sqrt(Math.max(area, 0.001)));
 };
 
-// Backpressure correction factors - API 520 Section 5.2.3
+// Backpressure correction factors
 const calculateKbConventional = (k: number, P1: number, Pb: number): number => {
   const criticalRatio = calculateCriticalRatio(k);
   const actualRatio = Pb / P1;
   if (actualRatio <= criticalRatio) return 1.0;
-  const Kb = 1.0 - (actualRatio - criticalRatio) / (1.0 - criticalRatio);
-  return Math.max(0.1, Math.min(1.0, Kb));
+  return Math.max(0.1, 1.0 - (actualRatio - criticalRatio) / (1.0 - criticalRatio));
 };
 
 const calculateKbBalanced = (percentBackpressure: number): number => {
@@ -315,8 +283,7 @@ const calculateKbPilot = (k: number, P1: number, Pb: number): number => {
   const criticalRatio = calculateCriticalRatio(k);
   const actualRatio = Pb / P1;
   if (actualRatio <= criticalRatio) return 1.0;
-  const Kb = 1.0 - 0.8 * (actualRatio - criticalRatio) / (1.0 - criticalRatio);
-  return Math.max(0.2, Math.min(1.0, Kb));
+  return Math.max(0.2, 1.0 - 0.8 * (actualRatio - criticalRatio) / (1.0 - criticalRatio));
 };
 
 const calculateKw = (percentBackpressure: number): number => {
@@ -325,13 +292,8 @@ const calculateKw = (percentBackpressure: number): number => {
   return 1.0 - 0.00571 * (percentBackpressure - 15);
 };
 
-// ============================================
-// TWO-PHASE OMEGA METHOD - API 520 Appendix D
-// Based on API 520 Appendix D.2
-// ============================================
-const calculateOmegaMethod = (
-  W: number, P1: number, P2: number, x: number, rhoL: number, rhoV: number, Kd: number, Kc: number, k: number
-): { area: number; omega: number; massFlux: number; flowRegime: string } => {
+// Two-Phase Omega Method - API 520 Appendix D
+const calculateOmegaMethod = (W: number, P1: number, P2: number, x: number, rhoL: number, rhoV: number, Kd: number, Kc: number, k: number): { area: number; omega: number; massFlux: number; flowRegime: string } => {
   const vL = 1 / rhoL;
   const vV = 1 / rhoV;
   const vTP = x * vV + (1 - x) * vL;
@@ -350,37 +312,27 @@ const calculateOmegaMethod = (
     const term3 = (1 - eta * eta) / 2;
     massFlux = 68.09 * Kd * Kc * Math.sqrt(P1 * rhoL * (term1 + term2 + term3) / omega);
   }
-  const area = W / massFlux;
-  return { area, omega, massFlux, flowRegime };
+  return { area: W / massFlux, omega, massFlux, flowRegime };
 };
 
 // ============================================
 // API 521 - FIRE CASE CALCULATIONS
-// Per API 521 (7th Edition) Section 5.15
 // ============================================
 const ENVIRONMENTAL_FACTORS = [
   { description: 'Bare vessel (no insulation)', F: 1.0, notes: 'No credit for drainage' },
-  { description: 'Insulated - k×t ≥ 22.7 W/m² (4 BTU/hr·ft²·°F)', F: 0.30, notes: '1" min. mineral fiber' },
-  { description: 'Insulated - k×t ≥ 11.4 W/m² (2 BTU/hr·ft²·°F)', F: 0.15, notes: '2" min. mineral fiber' },
-  { description: 'Insulated - k×t ≥ 5.7 W/m² (1 BTU/hr·ft²·°F)', F: 0.075, notes: '4" min. mineral fiber' },
-  { description: 'Insulated - k×t ≥ 3.8 W/m² (0.67 BTU/hr·ft²·°F)', F: 0.05, notes: '6" min. mineral fiber' },
-  { description: 'Earth-covered storage (above grade)', F: 0.03, notes: 'Min. 3 ft earth cover' },
-  { description: 'Underground storage', F: 0.00, notes: 'Below grade, no relief needed' },
-  { description: 'Water application per NFPA', F: 1.0, notes: 'No insulation credit with water' },
-  { description: 'Depressuring system installed', F: 1.0, notes: 'May reduce relief requirement' },
+  { description: 'Insulated - k×t ≥ 22.7 W/m²', F: 0.30, notes: '1" min. mineral fiber' },
+  { description: 'Insulated - k×t ≥ 11.4 W/m²', F: 0.15, notes: '2" min. mineral fiber' },
+  { description: 'Insulated - k×t ≥ 5.7 W/m²', F: 0.075, notes: '4" min. mineral fiber' },
+  { description: 'Earth-covered storage', F: 0.03, notes: 'Min. 3 ft earth cover' },
+  { description: 'Underground storage', F: 0.00, notes: 'Below grade' },
 ];
 
-// Fire heat absorption - API 521 Equation 1 & 2
 const calculateFireHeatAbsorption = (wettedArea: number, F: number, promptDrainage: boolean): number => {
-  // C = 21,000 BTU/hr·ft^0.82 (adequate drainage)
-  // C = 34,500 BTU/hr·ft^0.82 (inadequate drainage)
   const C = promptDrainage ? 21000 : 34500;
   return C * F * Math.pow(wettedArea, 0.82);
 };
 
-const calculateWettedArea = (
-  vesselType: 'horizontal' | 'vertical' | 'sphere', diameter: number, length: number, liquidLevel: number
-): { wettedArea: number; totalSurfaceArea: number } => {
+const calculateWettedArea = (vesselType: 'horizontal' | 'vertical' | 'sphere', diameter: number, length: number, liquidLevel: number): { wettedArea: number; totalSurfaceArea: number } => {
   const R = diameter / 2;
   let wettedArea = 0;
   let totalSurfaceArea = 0;
@@ -394,7 +346,6 @@ const calculateWettedArea = (
     wettedArea = shellWetted + headArea;
     totalSurfaceArea = Math.PI * diameter * length + 2 * Math.PI * R * R * 1.09;
   } else if (vesselType === 'vertical') {
-    // API 521: Max wetted height = 25 ft above grade
     const liquidHeight = (liquidLevel / 100) * length;
     const effectiveHeight = Math.min(liquidHeight, 25);
     const shellWetted = Math.PI * diameter * effectiveHeight;
@@ -409,10 +360,7 @@ const calculateWettedArea = (
   return { wettedArea, totalSurfaceArea };
 };
 
-const calculateFireCaseRelief = (
-  heatAbsorption: number, latentHeat: number, vaporMW: number, vaporK: number,
-  relievingPressure: number, relievingTemp: number, compressibility: number, Kd: number, Kb: number, Kc: number
-): { massFlow: number; requiredArea: number; C: number } => {
+const calculateFireCaseRelief = (heatAbsorption: number, latentHeat: number, vaporMW: number, vaporK: number, relievingPressure: number, relievingTemp: number, compressibility: number, Kd: number, Kb: number, Kc: number): { massFlow: number; requiredArea: number; C: number } => {
   const massFlow = heatAbsorption / latentHeat;
   const C = calculateCCoefficient(vaporK);
   const requiredArea = calculateVaporArea(massFlow, C, Kd, relievingPressure, Kb, Kc, relievingTemp, compressibility, vaporMW);
@@ -420,15 +368,14 @@ const calculateFireCaseRelief = (
 };
 
 // ============================================
-// API 520 PART II - RUPTURE DISK SIZING
-// Per API 520 Part II, Section 5
+// API 520 PART II - RUPTURE DISK
 // ============================================
 const RUPTURE_DISK_TYPES = [
-  { type: 'Pre-scored tension acting', Kr: 1.0, description: 'Scored metal disk, forward acting' },
-  { type: 'Pre-scored reverse acting', Kr: 1.5, description: 'Scored reverse buckling' },
-  { type: 'Conventional metal', Kr: 2.4, description: 'Solid metal, forward acting' },
-  { type: 'Graphite / composite', Kr: 2.0, description: 'Composite or graphite' },
-  { type: 'With knife blade', Kr: 0.8, description: 'Knife blade or cutter' },
+  { type: 'Pre-scored tension acting', Kr: 1.0 },
+  { type: 'Pre-scored reverse acting', Kr: 1.5 },
+  { type: 'Conventional metal', Kr: 2.4 },
+  { type: 'Graphite / composite', Kr: 2.0 },
+  { type: 'With knife blade', Kr: 0.8 },
 ];
 
 const RUPTURE_DISK_SIZES = [
@@ -439,11 +386,7 @@ const RUPTURE_DISK_SIZES = [
   { size: 20, area: 314.159 }, { size: 24, area: 452.389 },
 ];
 
-const calculateRuptureDiskArea = (
-  deviceType: 'vapor' | 'liquid' | 'steam', flowRate: number, Kd: number, Kr: number,
-  pressure: number, backPressure: number, vaporMW?: number, vaporK?: number,
-  temperature?: number, compressibility?: number, specificGravity?: number
-): { requiredArea: number; Knet: number } => {
+const calculateRuptureDiskArea = (deviceType: 'vapor' | 'liquid' | 'steam', flowRate: number, Kd: number, Kr: number, pressure: number, backPressure: number, vaporMW?: number, vaporK?: number, temperature?: number, compressibility?: number, specificGravity?: number): { requiredArea: number; Knet: number } => {
   const Knet = Kd / Math.sqrt(1 + Kr);
   let requiredArea = 0;
   if (deviceType === 'vapor' && vaporMW && vaporK && temperature && compressibility) {
@@ -466,43 +409,51 @@ const selectRuptureDiskSize = (requiredArea: number): { size: number; area: numb
 };
 
 // ============================================
-// API 521 - THERMAL RELIEF CALCULATIONS
-// Per API 521 Section 5.6
+// API 520 PART II - PIPING SIZING
 // ============================================
-const calculateThermalExpansionRate = (
-  liquidVolume: number, expansionCoeff: number, heatingRate: number
-): { volumeRate: number; massRate: number } => {
-  const volumeRateGPH = liquidVolume * expansionCoeff * heatingRate;
-  const volumeRate = volumeRateGPH / 60;
-  const massRate = volumeRateGPH * 8.34;
-  return { volumeRate, massRate };
+const PIPE_SCHEDULES = ['5S', '10S', '40/STD', '80/XS', '160', 'XXS'];
+
+// Darcy-Weisbach pressure drop calculation
+const calculatePressureDrop = (massFlow: number, density: number, viscosity: number, pipeID: number, length: number, fittingsK: number): { deltaP: number; velocity: number; Re: number; frictionFactor: number } => {
+  // pipeID in inches, length in feet, massFlow in lb/hr, density in lb/ft³, viscosity in cP
+  const area = Math.PI * Math.pow(pipeID / 24, 2); // ft²
+  const volFlow = massFlow / density / 3600; // ft³/s
+  const velocity = volFlow / area; // ft/s
+  const Re = (density * velocity * (pipeID / 12)) / (viscosity * 0.000672); // Reynolds number
+  
+  // Colebrook friction factor (simplified approximation)
+  const roughness = 0.00015; // ft for commercial steel
+  const relRough = roughness / (pipeID / 12);
+  let f = 0.02;
+  if (Re > 4000) {
+    // Swamee-Jain approximation
+    f = 0.25 / Math.pow(Math.log10(relRough / 3.7 + 5.74 / Math.pow(Re, 0.9)), 2);
+  } else if (Re > 0) {
+    f = 64 / Re;
+  }
+  
+  // Darcy-Weisbach: ΔP = f × (L/D) × (ρV²/2) + K × (ρV²/2)
+  const deltaP = (f * (length / (pipeID / 12)) + fittingsK) * (density * velocity * velocity / 2) / 144; // psi
+  
+  return { deltaP, velocity, Re, frictionFactor: f };
 };
 
-// ============================================
-// API 521 - CONTROL VALVE FAILURE SCENARIOS
-// Per API 521 Section 5.3
-// ============================================
+// API 521 - Failure Scenarios
 const FAILURE_SCENARIOS = [
   { id: 'cv_fail_open', name: 'Control Valve Fails Open', description: 'Upstream CV fails fully open - API 521 5.3.1' },
   { id: 'cv_fail_closed', name: 'Control Valve Fails Closed', description: 'Downstream CV fails closed - API 521 5.3.2' },
   { id: 'check_valve_fail', name: 'Check Valve Failure', description: 'Check valve fails to close - API 521 5.3.3' },
   { id: 'pump_deadhead', name: 'Pump Deadhead', description: 'Pump against closed discharge - API 521 5.4' },
   { id: 'tube_rupture', name: 'Exchanger Tube Rupture', description: 'High to low pressure rupture - API 521 5.9' },
-  { id: 'regulator_fail', name: 'Pressure Regulator Failure', description: 'Regulator fails open - API 521 5.3.4' },
   { id: 'blocked_outlet', name: 'Blocked Outlet', description: 'Blocked discharge with heat input - API 521 5.6' },
   { id: 'power_failure', name: 'Power Failure', description: 'Loss of electrical power - API 521 5.11' },
   { id: 'cooling_water_fail', name: 'Cooling Water Failure', description: 'Loss of cooling medium - API 521 5.12' },
-  { id: 'reflux_failure', name: 'Reflux Failure', description: 'Loss of reflux in distillation - API 521 5.13' },
 ] as const;
 
-const calculateCvFlow = (
-  Cv: number, P1: number, P2: number, specificGravity: number, fluidType: 'liquid' | 'gas',
-  molecularWeight?: number, temperature?: number, Z?: number, k?: number
-): { flowRate: number; flowUnit: string; isCritical?: boolean } => {
+const calculateCvFlow = (Cv: number, P1: number, P2: number, specificGravity: number, fluidType: 'liquid' | 'gas', molecularWeight?: number, temperature?: number, Z?: number, k?: number): { flowRate: number; flowUnit: string; isCritical?: boolean } => {
   const deltaP = P1 - P2;
   if (fluidType === 'liquid') {
-    const flowRate = Cv * Math.sqrt(Math.max(deltaP, 0) / specificGravity);
-    return { flowRate, flowUnit: 'gpm' };
+    return { flowRate: Cv * Math.sqrt(Math.max(deltaP, 0) / specificGravity), flowUnit: 'gpm' };
   } else if (molecularWeight && temperature && Z && k) {
     const P1_abs = P1 + 14.7;
     const P2_abs = Math.max(P2 + 14.7, 14.7);
@@ -522,24 +473,24 @@ const calculateCvFlow = (
 };
 
 // ============================================
-// ORIFICE RESULT DISPLAY COMPONENT
+// COMPONENTS
 // ============================================
+
+// Orifice Result Card
 interface OrificeResultProps {
   requiredArea: number;
   selectedOrifice: typeof ORIFICE_SIZES[0] | null;
   title?: string;
   unitSystem: UnitSystem;
-  additionalInfo?: React.ReactNode;
 }
 
-const OrificeResultCard: React.FC<OrificeResultProps> = ({ requiredArea, selectedOrifice, title = "Orifice Selection", unitSystem, additionalInfo }) => {
+const OrificeResultCard: React.FC<OrificeResultProps> = ({ requiredArea, selectedOrifice, title = "Orifice Selection", unitSystem }) => {
   const requiredDiameter = calculateDiameter(requiredArea);
   const utilizationPercent = selectedOrifice ? (requiredArea / selectedOrifice.area * 100) : 0;
+  const units = getUnits(unitSystem);
   
   const displayArea = unitSystem === 'metric' ? requiredArea * UNIT_CONVERSIONS.area.in2ToCm2 : requiredArea;
-  const areaUnit = unitSystem === 'metric' ? 'cm²' : 'in²';
   const displayDia = unitSystem === 'metric' ? requiredDiameter * UNIT_CONVERSIONS.length.inToMm : requiredDiameter;
-  const diaUnit = unitSystem === 'metric' ? 'mm' : 'in';
   
   return (
     <Card className="border-gold/30 bg-gradient-card shadow-card">
@@ -556,11 +507,11 @@ const OrificeResultCard: React.FC<OrificeResultProps> = ({ requiredArea, selecte
             <div className="space-y-2">
               <div className="flex justify-between items-baseline">
                 <span className="text-sm text-muted-foreground">Area:</span>
-                <span className="text-xl font-mono font-bold text-foreground">{displayArea.toFixed(4)} {areaUnit}</span>
+                <span className="text-xl font-mono font-bold text-foreground">{displayArea.toFixed(4)} {units.area}</span>
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-sm text-muted-foreground">Equiv. Diameter:</span>
-                <span className="font-mono font-medium text-foreground">{displayDia.toFixed(3)} {diaUnit}</span>
+                <span className="font-mono font-medium text-foreground">{displayDia.toFixed(3)} {units.length}</span>
               </div>
             </div>
           </div>
@@ -575,15 +526,11 @@ const OrificeResultCard: React.FC<OrificeResultProps> = ({ requiredArea, selecte
                 </div>
                 <div className="flex justify-between items-baseline">
                   <span className="text-sm text-muted-foreground">Effective Area:</span>
-                  <span className="font-mono font-medium">
-                    {unitSystem === 'metric' ? `${selectedOrifice.areaMetric.toFixed(3)} cm²` : `${selectedOrifice.area} in²`}
-                  </span>
+                  <span className="font-mono font-medium">{unitSystem === 'metric' ? `${selectedOrifice.areaMetric.toFixed(3)} cm²` : `${selectedOrifice.area} in²`}</span>
                 </div>
                 <div className="flex justify-between items-baseline">
                   <span className="text-sm text-muted-foreground">Orifice Dia.:</span>
-                  <span className="font-mono font-medium">
-                    {unitSystem === 'metric' ? `${selectedOrifice.diameterMm.toFixed(2)} mm` : `${selectedOrifice.diameter.toFixed(3)} in`}
-                  </span>
+                  <span className="font-mono font-medium">{unitSystem === 'metric' ? `${selectedOrifice.diameterMm.toFixed(2)} mm` : `${selectedOrifice.diameter.toFixed(3)} in`}</span>
                 </div>
                 <div className="flex justify-between items-baseline">
                   <span className="text-sm text-muted-foreground">Inlet × Outlet:</span>
@@ -607,15 +554,12 @@ const OrificeResultCard: React.FC<OrificeResultProps> = ({ requiredArea, selecte
             )}
           </div>
         </div>
-        {additionalInfo && <div className="mt-4">{additionalInfo}</div>}
       </CardContent>
     </Card>
   );
 };
 
-// ============================================
-// UNIT SYSTEM HEADER COMPONENT
-// ============================================
+// Unit System Header
 const UnitSystemHeader: React.FC<{ unitSystem: UnitSystem; setUnitSystem: (u: UnitSystem) => void }> = ({ unitSystem, setUnitSystem }) => (
   <div className="flex items-center gap-2 p-2 bg-secondary/50 rounded-lg border border-border">
     <Settings className="h-4 w-4 text-muted-foreground" />
@@ -628,17 +572,15 @@ const UnitSystemHeader: React.FC<{ unitSystem: UnitSystem; setUnitSystem: (u: Un
       ))}
     </div>
     <span className="text-xs text-muted-foreground ml-2">
-      {unitSystem === 'imperial' ? '(psi, °F, lb, gpm, in²)' : '(bar, °C, kg, m³/h, cm²)'}
+      {unitSystem === 'imperial' ? '(psi, °F, lb/hr, gpm, in²)' : '(bar, °C, kg/hr, m³/h, cm²)'}
     </span>
   </div>
 );
 
-// ============================================
-// SENSITIVITY CHART COMPONENT
-// ============================================
+// Sensitivity Chart Component
 interface SensitivityChartProps {
   title: string;
-  data: { x: number; area: number; label?: string }[];
+  data: { x: number; area: number }[];
   xLabel: string;
   xUnit: string;
   currentValue: number;
@@ -664,14 +606,12 @@ const SensitivityChart: React.FC<SensitivityChartProps> = ({ title, data, xLabel
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="x" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: `${xLabel} (${xUnit})`, position: 'bottom', offset: 0, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Area (in²)', angle: -90, position: 'insideLeft', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} formatter={(value: number) => [`${value.toFixed(4)} in²`, 'Required Area']} labelFormatter={(label) => `${xLabel}: ${label} ${xUnit}`} />
+            <XAxis dataKey="x" tick={{ fontSize: 10 }} label={{ value: `${xLabel} (${xUnit})`, position: 'bottom', fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} label={{ value: 'Area (in²)', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => [`${value.toFixed(4)} in²`, 'Required Area']} />
             <Area type="monotone" dataKey="area" stroke="hsl(var(--primary))" fill="url(#areaGradient)" strokeWidth={2} />
-            <ReferenceLine x={currentValue} stroke="hsl(var(--destructive))" strokeDasharray="5 5" label={{ value: 'Current', position: 'top', fontSize: 9, fill: 'hsl(var(--destructive))' }} />
-            {selectedOrificeArea && (
-              <ReferenceLine y={selectedOrificeArea} stroke="hsl(var(--chart-2))" strokeDasharray="3 3" label={{ value: 'Selected', position: 'right', fontSize: 9, fill: 'hsl(var(--chart-2))' }} />
-            )}
+            <ReferenceLine x={currentValue} stroke="hsl(var(--destructive))" strokeDasharray="5 5" label={{ value: 'Current', position: 'top', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
+            {selectedOrificeArea && <ReferenceLine y={selectedOrificeArea} stroke="hsl(var(--primary))" strokeDasharray="3 3" label={{ value: 'Selected', position: 'right', fontSize: 10 }} />}
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -680,146 +620,151 @@ const SensitivityChart: React.FC<SensitivityChartProps> = ({ title, data, xLabel
 );
 
 // ============================================
-// MAIN COMPONENT
+// MAIN CALCULATOR COMPONENT
 // ============================================
 export default function API520Calculator() {
-  // Unit system state
   const [unitSystem, setUnitSystem] = useState<UnitSystem>('imperial');
+  const units = getUnits(unitSystem);
 
-  // Vapor inputs
+  // ===== STATE: All inputs in IMPERIAL units internally =====
   const [vaporInputs, setVaporInputs] = useState({
-    massFlow: 10000, setPresure: 150, overpressure: 10, backPressure: 14.7,
-    temperature: 200, molecularWeight: 28.97, specificHeatRatio: 1.40, compressibility: 1.0,
-    dischargeCoeff: 0.975, valveType: 'conventional' as 'conventional' | 'balanced' | 'pilot',
-    ruptureDisk: false, selectedGas: 'Air',
+    massFlow: 50000, setPresure: 150, overpressure: 10, backPressure: 14.7, temperature: 300,
+    selectedGas: 'Natural Gas (Typical)', molecularWeight: 19, specificHeatRatio: 1.27, compressibility: 0.95,
+    valveType: 'conventional' as 'conventional' | 'balanced' | 'pilot', dischargeCoeff: 0.975, ruptureDisk: false
   });
 
-  // Liquid inputs
   const [liquidInputs, setLiquidInputs] = useState({
-    flowRate: 500, specificGravity: 1.0, viscosity: 1.0, setPresure: 150,
-    overpressure: 10, backPressure: 0, dischargeCoeff: 0.65,
-    valveType: 'conventional' as 'conventional' | 'balanced', ruptureDisk: false,
+    flowRate: 500, setPresure: 150, overpressure: 10, backPressure: 14.7, specificGravity: 0.85,
+    viscosity: 10, valveType: 'conventional' as 'conventional' | 'balanced', dischargeCoeff: 0.65, ruptureDisk: false
   });
 
-  // Two-phase inputs
   const [twoPhaseInputs, setTwoPhaseInputs] = useState({
-    totalMassFlow: 50000, vaporFraction: 0.1, setPresure: 150, overpressure: 10,
-    backPressure: 14.7, liquidDensity: 50, vaporDensity: 0.5, specificHeatRatio: 1.3,
-    dischargeCoeff: 0.85, ruptureDisk: false,
+    totalMassFlow: 100000, setPresure: 300, overpressure: 10, backPressure: 50, vaporFraction: 0.2,
+    liquidDensity: 50, vaporDensity: 2, specificHeatRatio: 1.15, dischargeCoeff: 0.85, ruptureDisk: false
   });
 
-  // Steam inputs
   const [steamInputs, setSteamInputs] = useState({
-    massFlow: 10000, setPresure: 150, overpressure: 10, backPressure: 14.7,
-    steamType: 'saturated' as 'saturated' | 'superheated', superheatTemp: 0,
-    dischargeCoeff: 0.975, valveType: 'conventional' as 'conventional' | 'balanced' | 'pilot', ruptureDisk: false,
+    massFlow: 25000, setPresure: 200, overpressure: 10, backPressure: 14.7, steamType: 'saturated' as 'saturated' | 'superheated',
+    superheatTemp: 500, valveType: 'conventional' as 'conventional' | 'balanced' | 'pilot', dischargeCoeff: 0.975, ruptureDisk: false
   });
 
-  // Fire case inputs
   const [fireCaseInputs, setFireCaseInputs] = useState({
-    vesselType: 'horizontal' as 'horizontal' | 'vertical' | 'sphere',
-    diameter: 10, length: 30, liquidLevel: 50, environmentalFactor: 1.0,
-    promptDrainage: true, latentHeat: 150, vaporMW: 44, vaporK: 1.13,
-    setPresure: 250, overpressure: 21, relievingTemp: 200, compressibility: 0.85,
-    dischargeCoeff: 0.975, ruptureDisk: false,
+    vesselType: 'horizontal' as 'horizontal' | 'vertical' | 'sphere', diameter: 10, length: 40, liquidLevel: 75,
+    environmentalFactor: 1.0, promptDrainage: true, latentHeat: 150, vaporMW: 44, vaporK: 1.13,
+    setPresure: 250, overpressure: 21, relievingTemp: 350, compressibility: 0.9, dischargeCoeff: 0.975, ruptureDisk: false
   });
 
-  // Rupture disk inputs
   const [ruptureDiskInputs, setRuptureDiskInputs] = useState({
-    serviceType: 'vapor' as 'vapor' | 'liquid' | 'steam', flowRate: 10000,
-    burstPressure: 150, overpressure: 10, backPressure: 14.7, diskType: 0,
-    dischargeCoeff: 0.62, vaporMW: 29, vaporK: 1.4, temperature: 200,
-    compressibility: 1.0, specificGravity: 1.0,
+    serviceType: 'vapor' as 'vapor' | 'liquid' | 'steam', diskType: 0, flowRate: 50000, burstPressure: 150,
+    overpressure: 10, backPressure: 14.7, temperature: 300, vaporMW: 28, vaporK: 1.4,
+    compressibility: 1.0, specificGravity: 0.85, dischargeCoeff: 0.62
   });
 
-  // Thermal relief inputs
   const [thermalInputs, setThermalInputs] = useState({
-    geometry: 'pipe' as 'pipe' | 'vessel', diameter: 8, length: 500,
-    liquidType: 'crude_light' as keyof typeof LIQUID_EXPANSION_COEFFICIENTS,
-    customBeta: 0.0005, specificGravity: 0.85, viscosity: 5.0, heatFlux: 100,
-    setPresure: 150, overpressure: 10, backPressure: 0, dischargeCoeff: 0.65, ruptureDisk: false,
+    geometry: 'pipe' as 'pipe' | 'vessel', diameter: 12, length: 1000, liquidType: 'crude_light' as keyof typeof LIQUID_EXPANSION_COEFFICIENTS,
+    specificGravity: 0.82, viscosity: 5, heatFlux: 100, setPresure: 150, overpressure: 10,
+    backPressure: 14.7, customBeta: 0.0005, dischargeCoeff: 0.65, ruptureDisk: false
   });
 
-  // Failure scenario inputs
   const [failureInputs, setFailureInputs] = useState({
-    scenario: 'cv_fail_open' as typeof FAILURE_SCENARIOS[number]['id'],
-    fluidType: 'liquid' as 'liquid' | 'gas', valveCv: 200, upstreamPressure: 300,
-    downstreamPressure: 50, specificGravity: 0.85, viscosity: 5.0, vaporMW: 44,
-    vaporK: 1.15, temperature: 100, compressibility: 0.95, setPresure: 150,
-    overpressure: 10, backPressure: 0, dischargeCoeff: 0.65, ruptureDisk: false,
+    scenario: 'cv_fail_open' as typeof FAILURE_SCENARIOS[number]['id'], fluidType: 'liquid' as 'liquid' | 'gas',
+    valveCv: 100, upstreamPressure: 500, downstreamPressure: 50, setPresure: 150, overpressure: 10,
+    backPressure: 14.7, specificGravity: 0.85, viscosity: 10, vaporMW: 28, vaporK: 1.4,
+    temperature: 100, compressibility: 1.0, dischargeCoeff: 0.65, ruptureDisk: false
   });
 
-  // ===== VAPOR CALCULATIONS (API 520 Part I, Section 5.6) =====
+  const [pipingInputs, setPipingInputs] = useState({
+    fluidType: 'vapor' as 'vapor' | 'liquid' | 'steam',
+    massFlow: 50000, volumeFlow: 500, density: 2, viscosity: 0.015,
+    inletSize: '3"', inletSchedule: '40/STD', inletLength: 3, inletFittingsK: 1.5,
+    outletSize: '4"', outletSchedule: '40/STD', outletLength: 50, outletFittingsK: 5,
+    setPresure: 150, overpressure: 10
+  });
+
+  // ===== CALCULATIONS =====
+
+  // Vapor Results
   const vaporResults = useMemo(() => {
     const P1_abs = vaporInputs.setPresure + 14.7;
     const relievingPressure = P1_abs * (1 + vaporInputs.overpressure / 100);
     const T_abs = vaporInputs.temperature + 459.67;
-    const gasData = FLUID_DATABASE[vaporInputs.selectedGas];
-    const C = gasData ? gasData.C : calculateCCoefficient(vaporInputs.specificHeatRatio);
+    const gasData = FLUID_DATABASE[vaporInputs.selectedGas] || { k: vaporInputs.specificHeatRatio, C: calculateCCoefficient(vaporInputs.specificHeatRatio), MW: vaporInputs.molecularWeight };
+    const k = vaporInputs.selectedGas === 'custom' ? vaporInputs.specificHeatRatio : gasData.k;
+    const C = calculateCCoefficient(k);
+    const criticalRatio = calculateCriticalRatio(k);
+    const actualRatio = vaporInputs.backPressure / relievingPressure;
+    const isCritical = actualRatio <= criticalRatio;
     const percentBackpressure = (vaporInputs.backPressure / relievingPressure) * 100;
     let Kb: number;
     switch (vaporInputs.valveType) {
       case 'balanced': Kb = calculateKbBalanced(percentBackpressure); break;
-      case 'pilot': Kb = calculateKbPilot(vaporInputs.specificHeatRatio, relievingPressure, vaporInputs.backPressure); break;
-      default: Kb = calculateKbConventional(vaporInputs.specificHeatRatio, relievingPressure, vaporInputs.backPressure);
+      case 'pilot': Kb = calculateKbPilot(k, relievingPressure, vaporInputs.backPressure); break;
+      default: Kb = calculateKbConventional(k, relievingPressure, vaporInputs.backPressure);
     }
     const Kc = vaporInputs.ruptureDisk ? 0.9 : 1.0;
-    const criticalRatio = calculateCriticalRatio(vaporInputs.specificHeatRatio);
-    const actualRatio = vaporInputs.backPressure / relievingPressure;
-    const flowRegime = actualRatio < criticalRatio ? 'Critical (Sonic)' : 'Subcritical';
-    const requiredArea = calculateVaporArea(vaporInputs.massFlow, C, vaporInputs.dischargeCoeff, relievingPressure, Kb, Kc, T_abs, vaporInputs.compressibility, vaporInputs.molecularWeight);
+    const MW = vaporInputs.selectedGas === 'custom' ? vaporInputs.molecularWeight : gasData.MW;
+    const requiredArea = calculateVaporArea(vaporInputs.massFlow, C, vaporInputs.dischargeCoeff, relievingPressure, Kb, Kc, T_abs, vaporInputs.compressibility, MW);
     const selectedOrifice = selectOrifice(requiredArea);
-    return { relievingPressure, C, Kb, Kc, criticalRatio, flowRegime, requiredArea, selectedOrifice, T_abs };
+    return { relievingPressure, T_abs, k, C, criticalRatio, actualRatio, isCritical, Kb, Kc, requiredArea, selectedOrifice, MW, percentBackpressure };
   }, [vaporInputs]);
 
-  // Generate sensitivity data for vapor
+  // Vapor Sensitivity Data
   const vaporSensitivityData = useMemo(() => {
-    const { C, dischargeCoeff, Kb, Kc, T_abs, compressibility, molecularWeight } = { ...vaporInputs, ...vaporResults };
-    
-    // Vary set pressure ±30%
-    const pressureData = [];
-    for (let p = vaporInputs.setPresure * 0.7; p <= vaporInputs.setPresure * 1.3; p += vaporInputs.setPresure * 0.05) {
-      const P1 = (p + 14.7) * (1 + vaporInputs.overpressure / 100);
-      const area = calculateVaporArea(vaporInputs.massFlow, vaporResults.C, vaporInputs.dischargeCoeff, P1, vaporResults.Kb, vaporResults.Kc, vaporResults.T_abs, vaporInputs.compressibility, vaporInputs.molecularWeight);
-      pressureData.push({ x: Math.round(p), area });
-    }
-    
-    // Vary flow rate ±50%
-    const flowData = [];
-    for (let w = vaporInputs.massFlow * 0.5; w <= vaporInputs.massFlow * 1.5; w += vaporInputs.massFlow * 0.1) {
-      const area = calculateVaporArea(w, vaporResults.C, vaporInputs.dischargeCoeff, vaporResults.relievingPressure, vaporResults.Kb, vaporResults.Kc, vaporResults.T_abs, vaporInputs.compressibility, vaporInputs.molecularWeight);
-      flowData.push({ x: Math.round(w), area });
-    }
-    
-    // Vary back pressure
-    const bpData = [];
-    for (let bp = 14.7; bp <= vaporResults.relievingPressure * 0.5; bp += (vaporResults.relievingPressure * 0.5 - 14.7) / 10) {
-      const pct = (bp / vaporResults.relievingPressure) * 100;
-      const kb = vaporInputs.valveType === 'balanced' ? calculateKbBalanced(pct) : calculateKbConventional(vaporInputs.specificHeatRatio, vaporResults.relievingPressure, bp);
-      const area = calculateVaporArea(vaporInputs.massFlow, vaporResults.C, vaporInputs.dischargeCoeff, vaporResults.relievingPressure, kb, vaporResults.Kc, vaporResults.T_abs, vaporInputs.compressibility, vaporInputs.molecularWeight);
-      bpData.push({ x: Math.round(bp), area });
-    }
-    
-    return { pressureData, flowData, bpData };
+    const generateData = (param: 'pressure' | 'flow' | 'backpressure') => {
+      const points: { x: number; area: number }[] = [];
+      const baseP1 = vaporInputs.setPresure + 14.7;
+      const baseRelP = baseP1 * (1 + vaporInputs.overpressure / 100);
+      for (let i = 0; i <= 10; i++) {
+        let x: number, area: number;
+        if (param === 'pressure') {
+          x = vaporInputs.setPresure * (0.5 + i * 0.1);
+          const P1 = x + 14.7;
+          const relP = P1 * (1 + vaporInputs.overpressure / 100);
+          const Kb = calculateKbConventional(vaporResults.k, relP, vaporInputs.backPressure);
+          area = calculateVaporArea(vaporInputs.massFlow, vaporResults.C, vaporInputs.dischargeCoeff, relP, Kb, vaporResults.Kc, vaporResults.T_abs, vaporInputs.compressibility, vaporResults.MW);
+        } else if (param === 'flow') {
+          x = vaporInputs.massFlow * (0.5 + i * 0.1);
+          area = calculateVaporArea(x, vaporResults.C, vaporInputs.dischargeCoeff, vaporResults.relievingPressure, vaporResults.Kb, vaporResults.Kc, vaporResults.T_abs, vaporInputs.compressibility, vaporResults.MW);
+        } else {
+          x = baseRelP * (i * 0.08);
+          const Kb = calculateKbConventional(vaporResults.k, baseRelP, x);
+          area = calculateVaporArea(vaporInputs.massFlow, vaporResults.C, vaporInputs.dischargeCoeff, baseRelP, Kb, vaporResults.Kc, vaporResults.T_abs, vaporInputs.compressibility, vaporResults.MW);
+        }
+        points.push({ x: Math.round(x * 10) / 10, area });
+      }
+      return points;
+    };
+    return { pressureData: generateData('pressure'), flowData: generateData('flow'), bpData: generateData('backpressure') };
   }, [vaporInputs, vaporResults]);
 
-  // ===== LIQUID CALCULATIONS (API 520 Part I, Section 5.8) =====
+  // Liquid Results
   const liquidResults = useMemo(() => {
     const P1 = liquidInputs.setPresure * (1 + liquidInputs.overpressure / 100);
-    const P2 = liquidInputs.backPressure;
-    const deltaP = P1 - P2;
-    const percentBackpressure = (P2 / P1) * 100;
+    const deltaP = P1 - liquidInputs.backPressure;
+    const percentBackpressure = (liquidInputs.backPressure / P1) * 100;
     const Kw = liquidInputs.valveType === 'balanced' ? calculateKw(percentBackpressure) : 1.0;
     const Kc = liquidInputs.ruptureDisk ? 0.9 : 1.0;
-    const prelimArea = calculateLiquidArea(liquidInputs.flowRate, liquidInputs.specificGravity, liquidInputs.dischargeCoeff, Kw, Kc, 1.0, P1, P2);
+    const prelimArea = calculateLiquidArea(liquidInputs.flowRate, liquidInputs.specificGravity, liquidInputs.dischargeCoeff, Kw, Kc, 1.0, P1, liquidInputs.backPressure);
     const Re = calculateReynoldsForLiquid(liquidInputs.flowRate, liquidInputs.specificGravity, liquidInputs.viscosity, Math.max(prelimArea, 0.1));
     const Kv = calculateKv(Re);
-    const requiredArea = calculateLiquidArea(liquidInputs.flowRate, liquidInputs.specificGravity, liquidInputs.dischargeCoeff, Kw, Kc, Kv, P1, P2);
+    const requiredArea = calculateLiquidArea(liquidInputs.flowRate, liquidInputs.specificGravity, liquidInputs.dischargeCoeff, Kw, Kc, Kv, P1, liquidInputs.backPressure);
     const selectedOrifice = selectOrifice(requiredArea);
     return { relievingPressure: P1, deltaP, Kw, Kv, Kc, Re, requiredArea, selectedOrifice };
   }, [liquidInputs]);
 
-  // ===== TWO-PHASE CALCULATIONS (API 520 Appendix D) =====
+  // Liquid Sensitivity Data
+  const liquidSensitivityData = useMemo(() => {
+    const points: { x: number; area: number }[] = [];
+    for (let i = 0; i <= 10; i++) {
+      const x = liquidInputs.flowRate * (0.5 + i * 0.1);
+      const P1 = liquidInputs.setPresure * (1 + liquidInputs.overpressure / 100);
+      const area = calculateLiquidArea(x, liquidInputs.specificGravity, liquidInputs.dischargeCoeff, liquidResults.Kw, liquidResults.Kc, liquidResults.Kv, P1, liquidInputs.backPressure);
+      points.push({ x: Math.round(x), area });
+    }
+    return points;
+  }, [liquidInputs, liquidResults]);
+
+  // Two-Phase Results
   const twoPhaseResults = useMemo(() => {
     const P1_abs = twoPhaseInputs.setPresure + 14.7;
     const relievingPressure = P1_abs * (1 + twoPhaseInputs.overpressure / 100);
@@ -829,7 +774,21 @@ export default function API520Calculator() {
     return { relievingPressure, Kc, ...result, selectedOrifice };
   }, [twoPhaseInputs]);
 
-  // ===== STEAM CALCULATIONS (API 520 Part I, Section 5.7) =====
+  // Two-Phase Sensitivity Data
+  const twoPhaseSensitivityData = useMemo(() => {
+    const points: { x: number; area: number }[] = [];
+    for (let i = 0; i <= 10; i++) {
+      const x = i * 0.1;
+      const P1_abs = twoPhaseInputs.setPresure + 14.7;
+      const relievingPressure = P1_abs * (1 + twoPhaseInputs.overpressure / 100);
+      const Kc = twoPhaseInputs.ruptureDisk ? 0.9 : 1.0;
+      const result = calculateOmegaMethod(twoPhaseInputs.totalMassFlow, relievingPressure, twoPhaseInputs.backPressure, x, twoPhaseInputs.liquidDensity, twoPhaseInputs.vaporDensity, twoPhaseInputs.dischargeCoeff, Kc, twoPhaseInputs.specificHeatRatio);
+      points.push({ x: Math.round(x * 100), area: result.area });
+    }
+    return points;
+  }, [twoPhaseInputs]);
+
+  // Steam Results
   const steamResults = useMemo(() => {
     const P1_abs = steamInputs.setPresure + 14.7;
     const relievingPressure = P1_abs * (1 + steamInputs.overpressure / 100);
@@ -848,7 +807,18 @@ export default function API520Calculator() {
     return { relievingPressure, Kb, Kc, Kn, Ksh, requiredArea, selectedOrifice };
   }, [steamInputs]);
 
-  // ===== FIRE CASE CALCULATIONS (API 521 Section 5.15) =====
+  // Steam Sensitivity Data
+  const steamSensitivityData = useMemo(() => {
+    const points: { x: number; area: number }[] = [];
+    for (let i = 0; i <= 10; i++) {
+      const x = steamInputs.massFlow * (0.5 + i * 0.1);
+      const area = calculateSteamArea(x, steamResults.relievingPressure, steamInputs.dischargeCoeff, steamResults.Kb, steamResults.Kc, steamResults.Kn, steamResults.Ksh);
+      points.push({ x: Math.round(x), area });
+    }
+    return points;
+  }, [steamInputs, steamResults]);
+
+  // Fire Case Results
   const fireCaseResults = useMemo(() => {
     const P1_abs = fireCaseInputs.setPresure + 14.7;
     const relievingPressure = P1_abs * (1 + fireCaseInputs.overpressure / 100);
@@ -861,7 +831,21 @@ export default function API520Calculator() {
     return { wettedArea, totalSurfaceArea, heatAbsorption, massFlow, relievingPressure, C, Kc, requiredArea, selectedOrifice };
   }, [fireCaseInputs]);
 
-  // ===== RUPTURE DISK CALCULATIONS (API 520 Part II) =====
+  // Fire Case Sensitivity Data
+  const fireCaseSensitivityData = useMemo(() => {
+    const points: { x: number; area: number }[] = [];
+    for (let i = 0; i <= 10; i++) {
+      const x = (i + 1) * 10;
+      const { wettedArea } = calculateWettedArea(fireCaseInputs.vesselType, fireCaseInputs.diameter, fireCaseInputs.length, x);
+      const heatAbsorption = calculateFireHeatAbsorption(wettedArea, fireCaseInputs.environmentalFactor, fireCaseInputs.promptDrainage);
+      const T_abs = fireCaseInputs.relievingTemp + 459.67;
+      const { requiredArea } = calculateFireCaseRelief(heatAbsorption, fireCaseInputs.latentHeat, fireCaseInputs.vaporMW, fireCaseInputs.vaporK, fireCaseResults.relievingPressure, T_abs, fireCaseInputs.compressibility, fireCaseInputs.dischargeCoeff, 1.0, fireCaseResults.Kc);
+      points.push({ x, area: requiredArea });
+    }
+    return points;
+  }, [fireCaseInputs, fireCaseResults]);
+
+  // Rupture Disk Results
   const ruptureDiskResults = useMemo(() => {
     const P1_abs = ruptureDiskInputs.burstPressure + 14.7;
     const relievingPressure = P1_abs * (1 + ruptureDiskInputs.overpressure / 100);
@@ -873,7 +857,7 @@ export default function API520Calculator() {
     return { relievingPressure, Kr, Knet, requiredArea, selectedDisk, diskType: diskData.type };
   }, [ruptureDiskInputs]);
 
-  // ===== THERMAL RELIEF CALCULATIONS (API 521 Section 5.6) =====
+  // Thermal Results
   const thermalResults = useMemo(() => {
     const liquidProps = LIQUID_EXPANSION_COEFFICIENTS[thermalInputs.liquidType];
     const beta = thermalInputs.liquidType === 'custom' ? thermalInputs.customBeta : liquidProps.beta;
@@ -889,20 +873,20 @@ export default function API520Calculator() {
     const heatInput = thermalInputs.heatFlux * surfaceArea;
     const liquidCp = 0.5;
     const heatingRate = heatInput / (volumeGal * 8.34 * thermalInputs.specificGravity * liquidCp);
-    const { volumeRate, massRate } = calculateThermalExpansionRate(volumeGal, beta, heatingRate);
+    const volumeRateGPH = volumeGal * beta * heatingRate;
+    const volumeRate = volumeRateGPH / 60;
     const P1 = thermalInputs.setPresure * (1 + thermalInputs.overpressure / 100);
     const Kc = thermalInputs.ruptureDisk ? 0.9 : 1.0;
     const requiredArea = calculateLiquidArea(volumeRate, thermalInputs.specificGravity, thermalInputs.dischargeCoeff, 1.0, Kc, 1.0, P1, thermalInputs.backPressure);
     const selectedOrifice = selectOrifice(requiredArea);
-    return { volumeGal, surfaceArea, heatInput, beta, heatingRate, volumeRate, massRate, relievingPressure: P1, Kc, requiredArea, selectedOrifice };
+    return { volumeGal, surfaceArea, heatInput, beta, heatingRate, volumeRate, relievingPressure: P1, Kc, requiredArea, selectedOrifice };
   }, [thermalInputs]);
 
-  // ===== FAILURE SCENARIO CALCULATIONS (API 521 Section 5.3) =====
+  // Failure Results
   const failureResults = useMemo(() => {
     const scenarioInfo = FAILURE_SCENARIOS.find(s => s.id === failureInputs.scenario);
     const cvFlow = calculateCvFlow(failureInputs.valveCv, failureInputs.upstreamPressure, failureInputs.downstreamPressure, failureInputs.specificGravity, failureInputs.fluidType, failureInputs.vaporMW, failureInputs.temperature, failureInputs.compressibility, failureInputs.vaporK);
     const reliefFlowRate = cvFlow.flowRate;
-    const reliefFlowUnit = cvFlow.flowUnit;
     const P1 = failureInputs.setPresure * (1 + failureInputs.overpressure / 100);
     const Kc = failureInputs.ruptureDisk ? 0.9 : 1.0;
     let requiredArea: number;
@@ -918,8 +902,38 @@ export default function API520Calculator() {
       requiredArea = calculateLiquidArea(reliefFlowRate, failureInputs.specificGravity, failureInputs.dischargeCoeff, 1.0, Kc, Kv, P1, failureInputs.backPressure);
     }
     const selectedOrifice = selectOrifice(requiredArea);
-    return { scenarioInfo, cvFlow, reliefFlowRate, reliefFlowUnit, relievingPressure: P1, Kc, requiredArea, selectedOrifice };
+    return { scenarioInfo, cvFlow, reliefFlowRate, reliefFlowUnit: cvFlow.flowUnit, relievingPressure: P1, Kc, requiredArea, selectedOrifice };
   }, [failureInputs]);
+
+  // Piping Results
+  const pipingResults = useMemo(() => {
+    const inletID = getInsideDiameter(pipingInputs.inletSize, pipingInputs.inletSchedule);
+    const outletID = getInsideDiameter(pipingInputs.outletSize, pipingInputs.outletSchedule);
+    const P1 = pipingInputs.setPresure * (1 + pipingInputs.overpressure / 100);
+    
+    if (!inletID || !outletID) return null;
+    
+    const inletIDin = inletID / 25.4;
+    const outletIDin = outletID / 25.4;
+    
+    // Use density for pressure drop calcs
+    const density = pipingInputs.density;
+    const viscosity = pipingInputs.viscosity;
+    
+    // Calculate inlet pressure drop
+    const inletCalc = calculatePressureDrop(pipingInputs.massFlow, density, viscosity, inletIDin, pipingInputs.inletLength, pipingInputs.inletFittingsK);
+    const inletDeltaPPercent = (inletCalc.deltaP / P1) * 100;
+    const inletPass = inletDeltaPPercent <= 3;
+    
+    // Calculate outlet pressure drop
+    const outletCalc = calculatePressureDrop(pipingInputs.massFlow, density, viscosity, outletIDin, pipingInputs.outletLength, pipingInputs.outletFittingsK);
+    
+    return {
+      inlet: { ...inletCalc, ID: inletIDin, deltaPPercent: inletDeltaPPercent, pass: inletPass },
+      outlet: { ...outletCalc, ID: outletIDin },
+      P1
+    };
+  }, [pipingInputs]);
 
   // Group fluids by category
   const fluidsByCategory = useMemo(() => {
@@ -931,7 +945,6 @@ export default function API520Calculator() {
     return grouped;
   }, []);
 
-  // Group liquids by category
   const liquidsByCategory = useMemo(() => {
     const grouped: Record<string, string[]> = {};
     Object.entries(LIQUID_EXPANSION_COEFFICIENTS).forEach(([key, data]) => {
@@ -941,9 +954,18 @@ export default function API520Calculator() {
     return grouped;
   }, []);
 
+  // Input handler with unit conversion
+  const handleInput = useCallback((value: number, type: string, setter: (v: number) => void) => {
+    setter(fromDisplay(value, type, unitSystem));
+  }, [unitSystem]);
+
+  const displayValue = useCallback((value: number, type: string): string => {
+    return toDisplay(value, type, unitSystem).toFixed(type === 'area' ? 4 : type === 'length' ? 2 : 1);
+  }, [unitSystem]);
+
   return (
     <div className="space-y-6">
-      {/* Header Card */}
+      {/* Header */}
       <Card className="border-gold/30 bg-gradient-card shadow-card">
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -955,10 +977,10 @@ export default function API520Calculator() {
                 Comprehensive pressure relief device sizing per API Standards
               </CardDescription>
               <div className="flex flex-wrap gap-2 mt-3">
-                <Badge variant="outline" className="border-gold/50 text-primary">API 520 Part I (10th Ed) - Sizing</Badge>
+                <Badge variant="outline" className="border-gold/50 text-primary">API 520 Part I - Sizing</Badge>
                 <Badge variant="outline" className="border-gold/50 text-primary">API 520 Part II - Installation</Badge>
-                <Badge variant="outline" className="border-gold/50 text-primary">API 521 (7th Ed) - Scenarios</Badge>
-                <Badge variant="outline" className="border-gold/50 text-primary">API RP 526 - Orifice Sizes</Badge>
+                <Badge variant="outline" className="border-gold/50 text-primary">API 521 - Scenarios</Badge>
+                <Badge variant="outline" className="border-gold/50 text-primary">API RP 526 - Orifices</Badge>
               </div>
             </div>
             <UnitSystemHeader unitSystem={unitSystem} setUnitSystem={setUnitSystem} />
@@ -967,7 +989,7 @@ export default function API520Calculator() {
       </Card>
 
       <Tabs defaultValue="vapor" className="space-y-4">
-        <TabsList className="grid grid-cols-5 md:grid-cols-10 w-full bg-secondary/50 border border-border">
+        <TabsList className="grid grid-cols-6 md:grid-cols-11 w-full bg-secondary/50 border border-border">
           <TabsTrigger value="vapor" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Gas/Vapor</TabsTrigger>
           <TabsTrigger value="liquid" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Liquid</TabsTrigger>
           <TabsTrigger value="twophase" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">2-Phase</TabsTrigger>
@@ -984,15 +1006,18 @@ export default function API520Calculator() {
           <TabsTrigger value="failure" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <AlertTriangle className="h-3 w-3" />Failure
           </TabsTrigger>
+          <TabsTrigger value="piping" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <GitBranch className="h-3 w-3" />Piping
+          </TabsTrigger>
           <TabsTrigger value="reference" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <Info className="h-3 w-3" />Reference
+            <Info className="h-3 w-3" />Ref
           </TabsTrigger>
           <TabsTrigger value="guidance" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <BookOpen className="h-3 w-3" />Guide
           </TabsTrigger>
         </TabsList>
 
-        {/* VAPOR TAB - API 520 Part I, Section 5.6 */}
+        {/* VAPOR TAB */}
         <TabsContent value="vapor" className="space-y-4">
           <Card className="border-border bg-card">
             <CardHeader className="border-b border-border pb-4">
@@ -1009,24 +1034,24 @@ export default function API520Calculator() {
               <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Mass Flow Rate ({unitSystem === 'metric' ? 'kg/hr' : 'lb/hr'})</Label>
-                    <Input type="number" value={vaporInputs.massFlow} onChange={(e) => setVaporInputs({ ...vaporInputs, massFlow: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Mass Flow ({units.massFlow})</Label>
+                    <Input type="number" value={parseFloat(displayValue(vaporInputs.massFlow, 'massFlow'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'massFlow', (v) => setVaporInputs({ ...vaporInputs, massFlow: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Set Pressure ({unitSystem === 'metric' ? 'barg' : 'psig'})</Label>
-                    <Input type="number" value={vaporInputs.setPresure} onChange={(e) => setVaporInputs({ ...vaporInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Set Pressure ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(vaporInputs.setPresure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setVaporInputs({ ...vaporInputs, setPresure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Overpressure (%)</Label>
                     <Input type="number" value={vaporInputs.overpressure} onChange={(e) => setVaporInputs({ ...vaporInputs, overpressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Back Pressure ({unitSystem === 'metric' ? 'bara' : 'psia'})</Label>
-                    <Input type="number" value={vaporInputs.backPressure} onChange={(e) => setVaporInputs({ ...vaporInputs, backPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Back Pressure ({units.pressureAbs})</Label>
+                    <Input type="number" value={parseFloat(displayValue(vaporInputs.backPressure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setVaporInputs({ ...vaporInputs, backPressure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Temperature ({unitSystem === 'metric' ? '°C' : '°F'})</Label>
-                    <Input type="number" value={vaporInputs.temperature} onChange={(e) => setVaporInputs({ ...vaporInputs, temperature: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Temperature ({units.temperature})</Label>
+                    <Input type="number" value={parseFloat(displayValue(vaporInputs.temperature, 'temperature'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'temperature', (v) => setVaporInputs({ ...vaporInputs, temperature: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Gas Selection</Label>
@@ -1065,39 +1090,39 @@ export default function API520Calculator() {
 
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg text-primary">Valve Configuration</CardTitle>
+                <CardTitle className="text-lg text-primary">Valve Configuration & Results</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Valve Type</Label>
-                  <Select value={vaporInputs.valveType} onValueChange={(v) => setVaporInputs({ ...vaporInputs, valveType: v as any })}>
-                    <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="conventional">Conventional</SelectItem>
-                      <SelectItem value="balanced">Balanced Bellows</SelectItem>
-                      <SelectItem value="pilot">Pilot Operated</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Discharge Coefficient (Kd)</Label>
-                  <Input type="number" step="0.001" value={vaporInputs.dischargeCoeff} onChange={(e) => setVaporInputs({ ...vaporInputs, dischargeCoeff: parseFloat(e.target.value) || 0.975 })} className="bg-secondary/50 border-border" />
-                  <p className="text-xs text-muted-foreground">API default: 0.975 (certified), 0.62 (uncertified)</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Valve Type</Label>
+                    <Select value={vaporInputs.valveType} onValueChange={(v) => setVaporInputs({ ...vaporInputs, valveType: v as any })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="conventional">Conventional</SelectItem>
+                        <SelectItem value="balanced">Balanced Bellows</SelectItem>
+                        <SelectItem value="pilot">Pilot Operated</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Kd (Discharge Coeff)</Label>
+                    <Input type="number" step="0.001" value={vaporInputs.dischargeCoeff} onChange={(e) => setVaporInputs({ ...vaporInputs, dischargeCoeff: parseFloat(e.target.value) || 0.975 })} className="bg-secondary/50 border-border" />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input type="checkbox" id="vaporRuptureDisk" checked={vaporInputs.ruptureDisk} onChange={(e) => setVaporInputs({ ...vaporInputs, ruptureDisk: e.target.checked })} className="h-4 w-4 accent-primary" />
-                  <Label htmlFor="vaporRuptureDisk" className="text-muted-foreground">Rupture Disk Upstream (Kc = 0.9)</Label>
+                  <input type="checkbox" id="vaporRD" checked={vaporInputs.ruptureDisk} onChange={(e) => setVaporInputs({ ...vaporInputs, ruptureDisk: e.target.checked })} className="h-4 w-4 accent-primary" />
+                  <Label htmlFor="vaporRD" className="text-muted-foreground">Rupture Disk Upstream (Kc = 0.9)</Label>
                 </div>
                 <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
                   <h4 className="font-medium text-sm text-primary">API 520 Equation 1 (Section 5.6.2):</h4>
                   <p className="font-mono text-xs text-foreground">A = W × √(TZ/M) / (C × Kd × P₁ × Kb × Kc)</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
-                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{vaporResults.relievingPressure.toFixed(1)} psia</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{toDisplay(vaporResults.relievingPressure, 'pressure', unitSystem).toFixed(1)} {units.pressureAbs}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">C:</span> <span className="font-mono font-medium">{vaporResults.C.toFixed(0)}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">Kb:</span> <span className="font-mono font-medium">{vaporResults.Kb.toFixed(3)}</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">Kc:</span> <span className="font-mono font-medium">{vaporResults.Kc.toFixed(2)}</span></div>
-                  <div className="col-span-2 text-sm"><span className="text-muted-foreground">Flow Regime:</span> <Badge variant="secondary" className="ml-2">{vaporResults.flowRegime}</Badge></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Flow:</span> <Badge variant="secondary">{vaporResults.isCritical ? 'Critical' : 'Subcritical'}</Badge></div>
                 </div>
               </CardContent>
             </Card>
@@ -1105,26 +1130,14 @@ export default function API520Calculator() {
 
           <OrificeResultCard requiredArea={vaporResults.requiredArea} selectedOrifice={vaporResults.selectedOrifice} title="Gas/Vapor Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
 
-          {/* Sensitivity Analysis Charts */}
-          <Card className="border-gold/30 bg-gradient-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-primary flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                Sensitivity Analysis
-              </CardTitle>
-              <CardDescription>How required orifice area changes with key parameters</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-3 gap-4">
-                <SensitivityChart title="Area vs Set Pressure" data={vaporSensitivityData.pressureData} xLabel="Set Pressure" xUnit="psig" currentValue={vaporInputs.setPresure} selectedOrificeArea={vaporResults.selectedOrifice?.area} />
-                <SensitivityChart title="Area vs Flow Rate" data={vaporSensitivityData.flowData} xLabel="Mass Flow" xUnit="lb/hr" currentValue={vaporInputs.massFlow} selectedOrificeArea={vaporResults.selectedOrifice?.area} />
-                <SensitivityChart title="Area vs Back Pressure" data={vaporSensitivityData.bpData} xLabel="Back Pressure" xUnit="psia" currentValue={vaporInputs.backPressure} selectedOrificeArea={vaporResults.selectedOrifice?.area} />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid md:grid-cols-3 gap-4">
+            <SensitivityChart title="Area vs Set Pressure" data={vaporSensitivityData.pressureData} xLabel="Set Pressure" xUnit={units.pressureGauge} currentValue={vaporInputs.setPresure} selectedOrificeArea={vaporResults.selectedOrifice?.area} />
+            <SensitivityChart title="Area vs Mass Flow" data={vaporSensitivityData.flowData} xLabel="Mass Flow" xUnit={units.massFlow} currentValue={vaporInputs.massFlow} selectedOrificeArea={vaporResults.selectedOrifice?.area} />
+            <SensitivityChart title="Area vs Back Pressure" data={vaporSensitivityData.bpData} xLabel="Back Pressure" xUnit={units.pressureAbs} currentValue={vaporInputs.backPressure} selectedOrificeArea={vaporResults.selectedOrifice?.area} />
+          </div>
         </TabsContent>
 
-        {/* LIQUID TAB - API 520 Part I, Section 5.8 */}
+        {/* LIQUID TAB */}
         <TabsContent value="liquid" className="space-y-4">
           <Card className="border-border bg-card">
             <CardHeader className="border-b border-border pb-4">
@@ -1141,28 +1154,28 @@ export default function API520Calculator() {
               <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Flow Rate ({unitSystem === 'metric' ? 'm³/h' : 'gpm'})</Label>
-                    <Input type="number" value={liquidInputs.flowRate} onChange={(e) => setLiquidInputs({ ...liquidInputs, flowRate: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Volume Flow ({units.volFlow})</Label>
+                    <Input type="number" value={parseFloat(displayValue(liquidInputs.flowRate, 'volFlow'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'volFlow', (v) => setLiquidInputs({ ...liquidInputs, flowRate: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Specific Gravity</Label>
-                    <Input type="number" step="0.01" value={liquidInputs.specificGravity} onChange={(e) => setLiquidInputs({ ...liquidInputs, specificGravity: parseFloat(e.target.value) || 1.0 })} className="bg-secondary/50 border-border" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Viscosity (cP)</Label>
-                    <Input type="number" step="0.1" value={liquidInputs.viscosity} onChange={(e) => setLiquidInputs({ ...liquidInputs, viscosity: parseFloat(e.target.value) || 1.0 })} className="bg-secondary/50 border-border" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Set Pressure ({unitSystem === 'metric' ? 'barg' : 'psig'})</Label>
-                    <Input type="number" value={liquidInputs.setPresure} onChange={(e) => setLiquidInputs({ ...liquidInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Set Pressure ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(liquidInputs.setPresure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setLiquidInputs({ ...liquidInputs, setPresure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Overpressure (%)</Label>
                     <Input type="number" value={liquidInputs.overpressure} onChange={(e) => setLiquidInputs({ ...liquidInputs, overpressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Back Pressure ({unitSystem === 'metric' ? 'barg' : 'psig'})</Label>
-                    <Input type="number" value={liquidInputs.backPressure} onChange={(e) => setLiquidInputs({ ...liquidInputs, backPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Back Pressure ({units.pressureAbs})</Label>
+                    <Input type="number" value={parseFloat(displayValue(liquidInputs.backPressure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setLiquidInputs({ ...liquidInputs, backPressure: v }))} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Specific Gravity</Label>
+                    <Input type="number" step="0.01" value={liquidInputs.specificGravity} onChange={(e) => setLiquidInputs({ ...liquidInputs, specificGravity: parseFloat(e.target.value) || 0.85 })} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Viscosity (cP)</Label>
+                    <Input type="number" value={liquidInputs.viscosity} onChange={(e) => setLiquidInputs({ ...liquidInputs, viscosity: parseFloat(e.target.value) || 1 })} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
               </CardContent>
@@ -1170,38 +1183,17 @@ export default function API520Calculator() {
 
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg text-primary">Valve Configuration</CardTitle>
+                <CardTitle className="text-lg text-primary">Valve Configuration & Results</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Valve Type</Label>
-                  <Select value={liquidInputs.valveType} onValueChange={(v) => setLiquidInputs({ ...liquidInputs, valveType: v as any })}>
-                    <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="conventional">Conventional</SelectItem>
-                      <SelectItem value="balanced">Balanced Bellows</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Discharge Coefficient (Kd)</Label>
-                  <Input type="number" step="0.01" value={liquidInputs.dischargeCoeff} onChange={(e) => setLiquidInputs({ ...liquidInputs, dischargeCoeff: parseFloat(e.target.value) || 0.65 })} className="bg-secondary/50 border-border" />
-                  <p className="text-xs text-muted-foreground">API default: 0.65 (certified), 0.62 (uncertified)</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="liquidRuptureDisk" checked={liquidInputs.ruptureDisk} onChange={(e) => setLiquidInputs({ ...liquidInputs, ruptureDisk: e.target.checked })} className="h-4 w-4 accent-primary" />
-                  <Label htmlFor="liquidRuptureDisk" className="text-muted-foreground">Rupture Disk Upstream (Kc = 0.9)</Label>
-                </div>
                 <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
                   <h4 className="font-medium text-sm text-primary">API 520 Equation 5 (Section 5.8):</h4>
                   <p className="font-mono text-xs text-foreground">A = Q × √G / (38 × Kd × Kw × Kc × Kv × √ΔP)</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
-                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{liquidResults.relievingPressure.toFixed(1)} psig</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">ΔP:</span> <span className="font-mono font-medium">{liquidResults.deltaP.toFixed(1)} psi</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">ΔP:</span> <span className="font-mono font-medium">{toDisplay(liquidResults.deltaP, 'pressure', unitSystem).toFixed(1)} {units.pressure}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">Kw:</span> <span className="font-mono font-medium">{liquidResults.Kw.toFixed(3)}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">Kv:</span> <span className="font-mono font-medium">{liquidResults.Kv.toFixed(3)}</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">Kc:</span> <span className="font-mono font-medium">{liquidResults.Kc.toFixed(2)}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">Re:</span> <span className="font-mono font-medium">{liquidResults.Re.toFixed(0)}</span></div>
                 </div>
               </CardContent>
@@ -1209,47 +1201,49 @@ export default function API520Calculator() {
           </div>
 
           <OrificeResultCard requiredArea={liquidResults.requiredArea} selectedOrifice={liquidResults.selectedOrifice} title="Liquid Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+
+          <SensitivityChart title="Area vs Volume Flow Rate" data={liquidSensitivityData} xLabel="Flow Rate" xUnit={units.volFlow} currentValue={liquidInputs.flowRate} selectedOrificeArea={liquidResults.selectedOrifice?.area} />
         </TabsContent>
 
-        {/* TWO-PHASE TAB - API 520 Appendix D */}
+        {/* TWO-PHASE TAB */}
         <TabsContent value="twophase" className="space-y-4">
           <Card className="border-border bg-card">
             <CardHeader className="border-b border-border pb-4">
-              <CardTitle className="text-lg text-primary">API 520 Part I - Two-Phase Relief Sizing</CardTitle>
-              <CardDescription>Appendix D - Omega (ω) Method</CardDescription>
+              <CardTitle className="text-lg text-primary">API 520 Appendix D - Two-Phase Relief Sizing</CardTitle>
+              <CardDescription>Omega (ω) Method for Flashing & Two-Phase Flow</CardDescription>
             </CardHeader>
           </Card>
 
           <div className="grid md:grid-cols-2 gap-4">
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg text-primary">Process Conditions</CardTitle>
+                <CardTitle className="text-lg text-primary">Two-Phase Conditions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Total Mass Flow ({unitSystem === 'metric' ? 'kg/hr' : 'lb/hr'})</Label>
-                    <Input type="number" value={twoPhaseInputs.totalMassFlow} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, totalMassFlow: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Total Mass Flow ({units.massFlow})</Label>
+                    <Input type="number" value={parseFloat(displayValue(twoPhaseInputs.totalMassFlow, 'massFlow'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'massFlow', (v) => setTwoPhaseInputs({ ...twoPhaseInputs, totalMassFlow: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Vapor Mass Fraction (x)</Label>
                     <Input type="number" step="0.01" min="0" max="1" value={twoPhaseInputs.vaporFraction} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, vaporFraction: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Liquid Density ({unitSystem === 'metric' ? 'kg/m³' : 'lb/ft³'})</Label>
-                    <Input type="number" value={twoPhaseInputs.liquidDensity} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, liquidDensity: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Liquid Density ({units.density})</Label>
+                    <Input type="number" value={parseFloat(displayValue(twoPhaseInputs.liquidDensity, 'density'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'density', (v) => setTwoPhaseInputs({ ...twoPhaseInputs, liquidDensity: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Vapor Density ({unitSystem === 'metric' ? 'kg/m³' : 'lb/ft³'})</Label>
-                    <Input type="number" step="0.01" value={twoPhaseInputs.vaporDensity} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, vaporDensity: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Vapor Density ({units.density})</Label>
+                    <Input type="number" value={parseFloat(displayValue(twoPhaseInputs.vaporDensity, 'density'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'density', (v) => setTwoPhaseInputs({ ...twoPhaseInputs, vaporDensity: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Set Pressure ({unitSystem === 'metric' ? 'barg' : 'psig'})</Label>
-                    <Input type="number" value={twoPhaseInputs.setPresure} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Set Pressure ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(twoPhaseInputs.setPresure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setTwoPhaseInputs({ ...twoPhaseInputs, setPresure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">k (Cp/Cv)</Label>
-                    <Input type="number" step="0.01" value={twoPhaseInputs.specificHeatRatio} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, specificHeatRatio: parseFloat(e.target.value) || 1.3 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Back Pressure ({units.pressureAbs})</Label>
+                    <Input type="number" value={parseFloat(displayValue(twoPhaseInputs.backPressure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setTwoPhaseInputs({ ...twoPhaseInputs, backPressure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
               </CardContent>
@@ -1260,47 +1254,43 @@ export default function API520Calculator() {
                 <CardTitle className="text-lg text-primary">Omega Method Results</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
-                <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
-                  <h4 className="font-medium text-sm text-primary">API 520 Appendix D.2:</h4>
-                  <p className="font-mono text-xs text-foreground">ω = (x·vV + (1-x)·vL·k) / vTP</p>
-                  <p className="font-mono text-xs text-foreground">G = 68.09 × Kd × Kc × √(P₁ × ρL × (1-ηc) / ω)</p>
-                </div>
                 <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
-                  <div className="text-sm"><span className="text-muted-foreground">ω (Omega):</span> <span className="font-mono font-medium">{twoPhaseResults.omega.toFixed(3)}</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">Mass Flux:</span> <span className="font-mono font-medium">{twoPhaseResults.massFlux.toFixed(1)} lb/hr·in²</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{twoPhaseResults.relievingPressure.toFixed(1)} psia</span></div>
-                  <div className="col-span-2 text-sm"><span className="text-muted-foreground">Flow Regime:</span> <Badge variant="secondary" className="ml-2">{twoPhaseResults.flowRegime}</Badge></div>
+                  <div className="text-sm"><span className="text-muted-foreground">ω:</span> <span className="font-mono font-medium">{twoPhaseResults.omega.toFixed(3)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Mass Flux:</span> <span className="font-mono font-medium">{twoPhaseResults.massFlux.toFixed(0)} lb/hr·in²</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Flow Regime:</span> <Badge variant="secondary">{twoPhaseResults.flowRegime}</Badge></div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           <OrificeResultCard requiredArea={twoPhaseResults.area} selectedOrifice={twoPhaseResults.selectedOrifice} title="Two-Phase Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+
+          <SensitivityChart title="Area vs Vapor Fraction" data={twoPhaseSensitivityData} xLabel="Vapor Fraction" xUnit="%" currentValue={twoPhaseInputs.vaporFraction * 100} selectedOrificeArea={twoPhaseResults.selectedOrifice?.area} />
         </TabsContent>
 
-        {/* STEAM TAB - API 520 Part I, Section 5.7 */}
+        {/* STEAM TAB */}
         <TabsContent value="steam" className="space-y-4">
           <Card className="border-border bg-card">
             <CardHeader className="border-b border-border pb-4">
               <CardTitle className="text-lg text-primary">API 520 Part I - Steam Relief Sizing</CardTitle>
-              <CardDescription>Section 5.7 - Saturated and Superheated Steam</CardDescription>
+              <CardDescription>Section 5.7 - Steam Sizing with Kn & Ksh Corrections</CardDescription>
             </CardHeader>
           </Card>
 
           <div className="grid md:grid-cols-2 gap-4">
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg text-primary">Process Conditions</CardTitle>
+                <CardTitle className="text-lg text-primary">Steam Conditions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Mass Flow Rate ({unitSystem === 'metric' ? 'kg/hr' : 'lb/hr'})</Label>
-                    <Input type="number" value={steamInputs.massFlow} onChange={(e) => setSteamInputs({ ...steamInputs, massFlow: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Mass Flow ({units.massFlow})</Label>
+                    <Input type="number" value={parseFloat(displayValue(steamInputs.massFlow, 'massFlow'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'massFlow', (v) => setSteamInputs({ ...steamInputs, massFlow: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Set Pressure ({unitSystem === 'metric' ? 'barg' : 'psig'})</Label>
-                    <Input type="number" value={steamInputs.setPresure} onChange={(e) => setSteamInputs({ ...steamInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Set Pressure ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(steamInputs.setPresure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setSteamInputs({ ...steamInputs, setPresure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Steam Type</Label>
@@ -1314,8 +1304,8 @@ export default function API520Calculator() {
                   </div>
                   {steamInputs.steamType === 'superheated' && (
                     <div className="space-y-2">
-                      <Label className="text-muted-foreground">Superheat Temp ({unitSystem === 'metric' ? '°C' : '°F'})</Label>
-                      <Input type="number" value={steamInputs.superheatTemp} onChange={(e) => setSteamInputs({ ...steamInputs, superheatTemp: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                      <Label className="text-muted-foreground">Superheat Temp ({units.temperature})</Label>
+                      <Input type="number" value={parseFloat(displayValue(steamInputs.superheatTemp, 'temperature'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'temperature', (v) => setSteamInputs({ ...steamInputs, superheatTemp: v }))} className="bg-secondary/50 border-border" />
                     </div>
                   )}
                 </div>
@@ -1324,7 +1314,7 @@ export default function API520Calculator() {
 
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg text-primary">Valve Configuration</CardTitle>
+                <CardTitle className="text-lg text-primary">Steam Results</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
                 <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
@@ -1332,7 +1322,7 @@ export default function API520Calculator() {
                   <p className="font-mono text-xs text-foreground">A = W / (51.5 × P₁ × Kd × Kb × Kc × Kn × Ksh)</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
-                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{steamResults.relievingPressure.toFixed(1)} psia</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{toDisplay(steamResults.relievingPressure, 'pressure', unitSystem).toFixed(1)} {units.pressureAbs}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">Kb:</span> <span className="font-mono font-medium">{steamResults.Kb.toFixed(3)}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">Kn:</span> <span className="font-mono font-medium">{steamResults.Kn.toFixed(3)}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">Ksh:</span> <span className="font-mono font-medium">{steamResults.Ksh.toFixed(3)}</span></div>
@@ -1342,9 +1332,11 @@ export default function API520Calculator() {
           </div>
 
           <OrificeResultCard requiredArea={steamResults.requiredArea} selectedOrifice={steamResults.selectedOrifice} title="Steam Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+
+          <SensitivityChart title="Area vs Steam Flow Rate" data={steamSensitivityData} xLabel="Mass Flow" xUnit={units.massFlow} currentValue={steamInputs.massFlow} selectedOrificeArea={steamResults.selectedOrifice?.area} />
         </TabsContent>
 
-        {/* FIRE CASE TAB - API 521 Section 5.15 */}
+        {/* FIRE CASE TAB */}
         <TabsContent value="firecase" className="space-y-4">
           <Card className="border-border bg-card">
             <CardHeader className="border-b border-border pb-4">
@@ -1375,12 +1367,12 @@ export default function API520Calculator() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Diameter ({unitSystem === 'metric' ? 'm' : 'ft'})</Label>
-                    <Input type="number" step="0.5" value={fireCaseInputs.diameter} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, diameter: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Diameter ({units.lengthFt})</Label>
+                    <Input type="number" step="0.5" value={parseFloat(displayValue(fireCaseInputs.diameter, 'lengthFt'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'lengthFt', (v) => setFireCaseInputs({ ...fireCaseInputs, diameter: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">{fireCaseInputs.vesselType === 'sphere' ? 'N/A' : `Length/Height (${unitSystem === 'metric' ? 'm' : 'ft'})`}</Label>
-                    <Input type="number" step="0.5" value={fireCaseInputs.length} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, length: parseFloat(e.target.value) || 0 })} disabled={fireCaseInputs.vesselType === 'sphere'} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Length ({units.lengthFt})</Label>
+                    <Input type="number" step="0.5" value={parseFloat(displayValue(fireCaseInputs.length, 'lengthFt'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'lengthFt', (v) => setFireCaseInputs({ ...fireCaseInputs, length: v }))} disabled={fireCaseInputs.vesselType === 'sphere'} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Liquid Level (%)</Label>
@@ -1398,47 +1390,34 @@ export default function API520Calculator() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="promptDrainage" checked={fireCaseInputs.promptDrainage} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, promptDrainage: e.target.checked })} className="h-4 w-4 accent-primary" />
-                  <Label htmlFor="promptDrainage" className="text-muted-foreground">Adequate Drainage (C=21,000)</Label>
-                </div>
               </CardContent>
             </Card>
 
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg text-primary">Fluid Properties & Results</CardTitle>
+                <CardTitle className="text-lg text-primary">Fire Case Results</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Latent Heat ({unitSystem === 'metric' ? 'kJ/kg' : 'BTU/lb'})</Label>
-                    <Input type="number" value={fireCaseInputs.latentHeat} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, latentHeat: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Vapor MW</Label>
-                    <Input type="number" value={fireCaseInputs.vaporMW} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, vaporMW: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
-                  </div>
-                </div>
                 <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
-                  <h4 className="font-medium text-sm text-primary">API 521 Equations:</h4>
-                  <p className="font-mono text-xs text-foreground">Q = C × F × A^0.82 (Heat absorbed)</p>
-                  <p className="font-mono text-xs text-foreground">W = Q / λ (Vapor generation rate)</p>
+                  <h4 className="font-medium text-sm text-primary">API 521 Equation (Section 5.15):</h4>
+                  <p className="font-mono text-xs text-foreground">Q = C × F × A^0.82</p>
+                  <p className="font-mono text-xs text-foreground">W = Q / λ</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
-                  <div className="text-sm"><span className="text-muted-foreground">Wetted Area:</span> <span className="font-mono font-medium">{fireCaseResults.wettedArea.toFixed(1)} ft²</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">Heat Input:</span> <span className="font-mono font-medium">{(fireCaseResults.heatAbsorption / 1e6).toFixed(2)} MM BTU/hr</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">Relief Rate:</span> <span className="font-mono font-medium">{fireCaseResults.massFlow.toFixed(0)} lb/hr</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">C:</span> <span className="font-mono font-medium">{fireCaseResults.C.toFixed(0)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Wetted Area:</span> <span className="font-mono font-medium">{toDisplay(fireCaseResults.wettedArea, 'surfaceArea', unitSystem).toFixed(1)} {units.surfaceArea}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Heat Input:</span> <span className="font-mono font-medium">{(fireCaseResults.heatAbsorption / 1e6).toFixed(2)} {units.heatRate}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Relief Rate:</span> <span className="font-mono font-medium">{toDisplay(fireCaseResults.massFlow, 'massFlow', unitSystem).toFixed(0)} {units.massFlow}</span></div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           <OrificeResultCard requiredArea={fireCaseResults.requiredArea} selectedOrifice={fireCaseResults.selectedOrifice} title="Fire Case Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+
+          <SensitivityChart title="Area vs Liquid Level" data={fireCaseSensitivityData} xLabel="Liquid Level" xUnit="%" currentValue={fireCaseInputs.liquidLevel} selectedOrificeArea={fireCaseResults.selectedOrifice?.area} />
         </TabsContent>
 
-        {/* RUPTURE DISK TAB - API 520 Part II */}
+        {/* RUPTURE DISK TAB */}
         <TabsContent value="rupturedisk" className="space-y-4">
           <Card className="border-border bg-card">
             <CardHeader className="border-b border-border pb-4">
@@ -1480,17 +1459,13 @@ export default function API520Calculator() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Flow Rate ({ruptureDiskInputs.serviceType === 'liquid' ? 'gpm' : 'lb/hr'})</Label>
+                    <Label className="text-muted-foreground">Flow Rate ({ruptureDiskInputs.serviceType === 'liquid' ? units.volFlow : units.massFlow})</Label>
                     <Input type="number" value={ruptureDiskInputs.flowRate} onChange={(e) => setRuptureDiskInputs({ ...ruptureDiskInputs, flowRate: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Burst Pressure (psig)</Label>
-                    <Input type="number" value={ruptureDiskInputs.burstPressure} onChange={(e) => setRuptureDiskInputs({ ...ruptureDiskInputs, burstPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Burst Pressure ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(ruptureDiskInputs.burstPressure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setRuptureDiskInputs({ ...ruptureDiskInputs, burstPressure: v }))} className="bg-secondary/50 border-border" />
                   </div>
-                </div>
-                <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
-                  <h4 className="font-medium text-sm text-primary">Net Discharge Coefficient:</h4>
-                  <p className="font-mono text-xs text-foreground">K_net = Kd / √(1 + Kr)</p>
                 </div>
               </CardContent>
             </Card>
@@ -1500,28 +1475,24 @@ export default function API520Calculator() {
                 <CardTitle className="text-lg text-primary">Rupture Disk Results</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
+                <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
+                  <h4 className="font-medium text-sm text-primary">Net Discharge Coefficient:</h4>
+                  <p className="font-mono text-xs text-foreground">K_net = Kd / √(1 + Kr)</p>
+                </div>
                 <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
                   <div className="text-sm"><span className="text-muted-foreground">Kr:</span> <span className="font-mono font-medium">{ruptureDiskResults.Kr.toFixed(2)}</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">K_net:</span> <span className="font-mono font-medium">{ruptureDiskResults.Knet.toFixed(3)}</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{ruptureDiskResults.relievingPressure.toFixed(1)} psia</span></div>
                 </div>
                 <div className="p-4 bg-primary/10 rounded-lg border border-gold/30 space-y-3">
-                  <h4 className="font-semibold text-sm text-primary uppercase tracking-wide">Required Disk Size</h4>
                   <div className="flex justify-between items-baseline">
                     <span className="text-sm text-muted-foreground">Required Area:</span>
-                    <span className="text-xl font-mono font-bold">{ruptureDiskResults.requiredArea.toFixed(4)} in²</span>
+                    <span className="text-xl font-mono font-bold">{toDisplay(ruptureDiskResults.requiredArea, 'area', unitSystem).toFixed(4)} {units.area}</span>
                   </div>
                   {ruptureDiskResults.selectedDisk ? (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Selected NPS:</span>
-                        <Badge variant="outline" className="text-lg font-bold border-gold text-primary px-3 py-1">{ruptureDiskResults.selectedDisk.size}"</Badge>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-sm text-muted-foreground">Selected Area:</span>
-                        <span className="font-mono font-medium">{ruptureDiskResults.selectedDisk.area.toFixed(2)} in²</span>
-                      </div>
-                    </>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Selected NPS:</span>
+                      <Badge variant="outline" className="text-lg font-bold border-gold text-primary px-3 py-1">{ruptureDiskResults.selectedDisk.size}"</Badge>
+                    </div>
                   ) : (
                     <p className="text-destructive font-medium">Exceeds 24" disk</p>
                   )}
@@ -1531,7 +1502,7 @@ export default function API520Calculator() {
           </div>
         </TabsContent>
 
-        {/* THERMAL TAB - API 521 Section 5.6 */}
+        {/* THERMAL TAB */}
         <TabsContent value="thermal" className="space-y-4">
           <Card className="border-border bg-card">
             <CardHeader className="border-b border-border pb-4">
@@ -1551,7 +1522,7 @@ export default function API520Calculator() {
               <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Geometry Type</Label>
+                    <Label className="text-muted-foreground">Geometry</Label>
                     <Select value={thermalInputs.geometry} onValueChange={(v) => setThermalInputs({ ...thermalInputs, geometry: v as any })}>
                       <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -1561,11 +1532,11 @@ export default function API520Calculator() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Diameter ({thermalInputs.geometry === 'pipe' ? 'in' : 'ft'})</Label>
+                    <Label className="text-muted-foreground">Diameter ({thermalInputs.geometry === 'pipe' ? units.length : units.lengthFt})</Label>
                     <Input type="number" value={thermalInputs.diameter} onChange={(e) => setThermalInputs({ ...thermalInputs, diameter: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Length (ft)</Label>
+                    <Label className="text-muted-foreground">Length ({units.lengthFt})</Label>
                     <Input type="number" value={thermalInputs.length} onChange={(e) => setThermalInputs({ ...thermalInputs, length: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
@@ -1585,7 +1556,23 @@ export default function API520Calculator() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Heat Flux ({units.heatFlux})</Label>
+                    <Input type="number" value={parseFloat(displayValue(thermalInputs.heatFlux, 'heatFlux'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'heatFlux', (v) => setThermalInputs({ ...thermalInputs, heatFlux: v }))} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Set Pressure ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(thermalInputs.setPresure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setThermalInputs({ ...thermalInputs, setPresure: v }))} className="bg-secondary/50 border-border" />
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Thermal Results</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
                   <div className="text-sm"><span className="text-muted-foreground">Volume:</span> <span className="font-mono font-medium">{thermalResults.volumeGal.toFixed(0)} gal</span></div>
                   <div className="text-sm"><span className="text-muted-foreground">β:</span> <span className="font-mono font-medium">{thermalResults.beta.toFixed(5)} /°F</span></div>
@@ -1594,38 +1581,12 @@ export default function API520Calculator() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card className="border-border bg-card">
-              <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg text-primary">Valve Configuration</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Specific Gravity</Label>
-                    <Input type="number" step="0.01" value={thermalInputs.specificGravity} onChange={(e) => setThermalInputs({ ...thermalInputs, specificGravity: parseFloat(e.target.value) || 0.85 })} className="bg-secondary/50 border-border" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Viscosity (cP)</Label>
-                    <Input type="number" value={thermalInputs.viscosity} onChange={(e) => setThermalInputs({ ...thermalInputs, viscosity: parseFloat(e.target.value) || 5 })} className="bg-secondary/50 border-border" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Heat Flux (BTU/hr·ft²)</Label>
-                    <Input type="number" value={thermalInputs.heatFlux} onChange={(e) => setThermalInputs({ ...thermalInputs, heatFlux: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
-                    <Input type="number" value={thermalInputs.setPresure} onChange={(e) => setThermalInputs({ ...thermalInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           <OrificeResultCard requiredArea={thermalResults.requiredArea} selectedOrifice={thermalResults.selectedOrifice} title="Thermal Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
         </TabsContent>
 
-        {/* FAILURE TAB - API 521 Section 5.3 */}
+        {/* FAILURE TAB */}
         <TabsContent value="failure" className="space-y-4">
           <Card className="border-border bg-card">
             <CardHeader className="border-b border-border pb-4">
@@ -1648,9 +1609,7 @@ export default function API520Calculator() {
                   <Select value={failureInputs.scenario} onValueChange={(v) => setFailureInputs({ ...failureInputs, scenario: v as any })}>
                     <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {FAILURE_SCENARIOS.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
+                      {FAILURE_SCENARIOS.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">{failureResults.scenarioInfo?.description}</p>
@@ -1671,20 +1630,16 @@ export default function API520Calculator() {
                     <Input type="number" value={failureInputs.valveCv} onChange={(e) => setFailureInputs({ ...failureInputs, valveCv: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Upstream P (psig)</Label>
-                    <Input type="number" value={failureInputs.upstreamPressure} onChange={(e) => setFailureInputs({ ...failureInputs, upstreamPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Upstream P ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(failureInputs.upstreamPressure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setFailureInputs({ ...failureInputs, upstreamPressure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Downstream P (psig)</Label>
-                    <Input type="number" value={failureInputs.downstreamPressure} onChange={(e) => setFailureInputs({ ...failureInputs, downstreamPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Downstream P ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(failureInputs.downstreamPressure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setFailureInputs({ ...failureInputs, downstreamPressure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
-                    <Input type="number" value={failureInputs.setPresure} onChange={(e) => setFailureInputs({ ...failureInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Overpressure (%)</Label>
-                    <Input type="number" value={failureInputs.overpressure} onChange={(e) => setFailureInputs({ ...failureInputs, overpressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                    <Label className="text-muted-foreground">Set Pressure ({units.pressureGauge})</Label>
+                    <Input type="number" value={parseFloat(displayValue(failureInputs.setPresure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setFailureInputs({ ...failureInputs, setPresure: v }))} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
               </CardContent>
@@ -1692,12 +1647,12 @@ export default function API520Calculator() {
 
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg text-primary">Failure Scenario Results</CardTitle>
+                <CardTitle className="text-lg text-primary">Failure Results</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
                   <div className="text-sm"><span className="text-muted-foreground">Relief Flow:</span> <span className="font-mono font-medium">{failureResults.reliefFlowRate.toFixed(1)} {failureResults.reliefFlowUnit}</span></div>
-                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{failureResults.relievingPressure.toFixed(1)} psig</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{toDisplay(failureResults.relievingPressure, 'pressure', unitSystem).toFixed(1)} {units.pressureGauge}</span></div>
                   {failureResults.cvFlow.isCritical !== undefined && (
                     <div className="col-span-2 text-sm">
                       <span className="text-muted-foreground">Flow:</span> <Badge variant="secondary" className="ml-2">{failureResults.cvFlow.isCritical ? 'Critical' : 'Subcritical'}</Badge>
@@ -1709,6 +1664,166 @@ export default function API520Calculator() {
           </div>
 
           <OrificeResultCard requiredArea={failureResults.requiredArea} selectedOrifice={failureResults.selectedOrifice} title="Failure Scenario Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+        </TabsContent>
+
+        {/* PIPING TAB - API 520 Part II */}
+        <TabsContent value="piping" className="space-y-4">
+          <Card className="border-border bg-card">
+            <CardHeader className="border-b border-border pb-4">
+              <CardTitle className="text-lg text-primary flex items-center gap-2">
+                <GitBranch className="h-5 w-5 text-green-500" />
+                API 520 Part II - Inlet/Outlet Piping Sizing
+              </CardTitle>
+              <CardDescription>Section 4 & 6 - Pressure Drop Verification per API 520 Part II (7th Ed)</CardDescription>
+            </CardHeader>
+          </Card>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Inlet Piping */}
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary flex items-center gap-2">
+                  <ArrowRight className="h-4 w-4" />
+                  Inlet Piping (Section 4)
+                </CardTitle>
+                <CardDescription>Max 3% pressure drop per API 520 Part II</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Pipe Size (NPS)</Label>
+                    <Select value={pipingInputs.inletSize} onValueChange={(v) => {
+                      const schedules = getSchedulesForSize(v);
+                      setPipingInputs({ ...pipingInputs, inletSize: v, inletSchedule: schedules[0] || '40/STD' });
+                    }}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {getNominalSizes().map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Schedule</Label>
+                    <Select value={pipingInputs.inletSchedule} onValueChange={(v) => setPipingInputs({ ...pipingInputs, inletSchedule: v })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {getSchedulesForSize(pipingInputs.inletSize).map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Length ({units.lengthFt})</Label>
+                    <Input type="number" value={parseFloat(displayValue(pipingInputs.inletLength, 'lengthFt'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'lengthFt', (v) => setPipingInputs({ ...pipingInputs, inletLength: v }))} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Fittings K-factor</Label>
+                    <Input type="number" step="0.1" value={pipingInputs.inletFittingsK} onChange={(e) => setPipingInputs({ ...pipingInputs, inletFittingsK: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                  </div>
+                </div>
+                {pipingResults && (
+                  <div className={`p-4 rounded-lg border ${pipingResults.inlet.pass ? 'bg-green-500/10 border-green-500/30' : 'bg-destructive/10 border-destructive/30'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">Inlet Pressure Drop</span>
+                      {pipingResults.inlet.pass ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5 text-destructive" />}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div><span className="text-muted-foreground">ΔP:</span> <span className="font-mono">{toDisplay(pipingResults.inlet.deltaP, 'pressure', unitSystem).toFixed(3)} {units.pressure}</span></div>
+                      <div><span className="text-muted-foreground">ΔP/P₁:</span> <span className={`font-mono font-bold ${pipingResults.inlet.pass ? 'text-green-500' : 'text-destructive'}`}>{pipingResults.inlet.deltaPPercent.toFixed(2)}%</span></div>
+                      <div><span className="text-muted-foreground">Velocity:</span> <span className="font-mono">{toDisplay(pipingResults.inlet.velocity, 'velocity', unitSystem).toFixed(1)} {units.velocity}</span></div>
+                      <div><span className="text-muted-foreground">Re:</span> <span className="font-mono">{pipingResults.inlet.Re.toFixed(0)}</span></div>
+                    </div>
+                    <p className="text-xs mt-2 text-muted-foreground">API 520 Part II requires inlet ΔP ≤ 3% of set pressure</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Outlet Piping */}
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary flex items-center gap-2">
+                  <ArrowRight className="h-4 w-4 rotate-180" />
+                  Outlet Piping (Section 6)
+                </CardTitle>
+                <CardDescription>Check backpressure effect on valve capacity</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Pipe Size (NPS)</Label>
+                    <Select value={pipingInputs.outletSize} onValueChange={(v) => {
+                      const schedules = getSchedulesForSize(v);
+                      setPipingInputs({ ...pipingInputs, outletSize: v, outletSchedule: schedules[0] || '40/STD' });
+                    }}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {getNominalSizes().map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Schedule</Label>
+                    <Select value={pipingInputs.outletSchedule} onValueChange={(v) => setPipingInputs({ ...pipingInputs, outletSchedule: v })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {getSchedulesForSize(pipingInputs.outletSize).map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Length ({units.lengthFt})</Label>
+                    <Input type="number" value={parseFloat(displayValue(pipingInputs.outletLength, 'lengthFt'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'lengthFt', (v) => setPipingInputs({ ...pipingInputs, outletLength: v }))} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Fittings K-factor</Label>
+                    <Input type="number" step="0.1" value={pipingInputs.outletFittingsK} onChange={(e) => setPipingInputs({ ...pipingInputs, outletFittingsK: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                  </div>
+                </div>
+                {pipingResults && (
+                  <div className="p-4 rounded-lg border bg-secondary/30 border-border">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">Outlet Pressure Drop</span>
+                      <Gauge className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div><span className="text-muted-foreground">ΔP:</span> <span className="font-mono">{toDisplay(pipingResults.outlet.deltaP, 'pressure', unitSystem).toFixed(3)} {units.pressure}</span></div>
+                      <div><span className="text-muted-foreground">Velocity:</span> <span className="font-mono">{toDisplay(pipingResults.outlet.velocity, 'velocity', unitSystem).toFixed(1)} {units.velocity}</span></div>
+                      <div><span className="text-muted-foreground">Re:</span> <span className="font-mono">{pipingResults.outlet.Re.toFixed(0)}</span></div>
+                      <div><span className="text-muted-foreground">f:</span> <span className="font-mono">{pipingResults.outlet.frictionFactor.toFixed(4)}</span></div>
+                    </div>
+                    <p className="text-xs mt-2 text-muted-foreground">Add this ΔP to downstream pressure to get total backpressure</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Flow Conditions */}
+          <Card className="border-border bg-card">
+            <CardHeader className="border-b border-border pb-4">
+              <CardTitle className="text-lg text-primary">Flow Conditions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Mass Flow ({units.massFlow})</Label>
+                  <Input type="number" value={parseFloat(displayValue(pipingInputs.massFlow, 'massFlow'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'massFlow', (v) => setPipingInputs({ ...pipingInputs, massFlow: v }))} className="bg-secondary/50 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Density ({units.density})</Label>
+                  <Input type="number" value={parseFloat(displayValue(pipingInputs.density, 'density'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'density', (v) => setPipingInputs({ ...pipingInputs, density: v }))} className="bg-secondary/50 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Viscosity (cP)</Label>
+                  <Input type="number" step="0.001" value={pipingInputs.viscosity} onChange={(e) => setPipingInputs({ ...pipingInputs, viscosity: parseFloat(e.target.value) || 0.01 })} className="bg-secondary/50 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Set Pressure ({units.pressureGauge})</Label>
+                  <Input type="number" value={parseFloat(displayValue(pipingInputs.setPresure, 'pressure'))} onChange={(e) => handleInput(parseFloat(e.target.value) || 0, 'pressure', (v) => setPipingInputs({ ...pipingInputs, setPresure: v }))} className="bg-secondary/50 border-border" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* REFERENCE TAB */}
@@ -1723,8 +1838,8 @@ export default function API520Calculator() {
                   <TableHeader>
                     <TableRow className="border-border">
                       <TableHead className="text-primary">Type</TableHead>
-                      <TableHead className="text-primary">Area (in²)</TableHead>
-                      <TableHead className="text-primary">Dia. (in)</TableHead>
+                      <TableHead className="text-primary">Area ({units.area})</TableHead>
+                      <TableHead className="text-primary">Dia. ({units.length})</TableHead>
                       <TableHead className="text-primary">Inlet × Outlet</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1732,8 +1847,8 @@ export default function API520Calculator() {
                     {ORIFICE_SIZES.map((o) => (
                       <TableRow key={o.designation} className="border-border hover:bg-muted/50">
                         <TableCell className="font-bold text-primary">{o.designation}</TableCell>
-                        <TableCell className="font-mono">{o.area}</TableCell>
-                        <TableCell className="font-mono">{o.diameter.toFixed(3)}</TableCell>
+                        <TableCell className="font-mono">{unitSystem === 'metric' ? o.areaMetric.toFixed(3) : o.area}</TableCell>
+                        <TableCell className="font-mono">{unitSystem === 'metric' ? o.diameterMm.toFixed(2) : o.diameter.toFixed(3)}</TableCell>
                         <TableCell>{o.inletSize}" × {o.outletSize}"</TableCell>
                       </TableRow>
                     ))}
@@ -1774,147 +1889,155 @@ export default function API520Calculator() {
 
         {/* GUIDANCE TAB */}
         <TabsContent value="guidance" className="space-y-4">
-          <div className="grid gap-4">
-            <Card className="border-gold/30 bg-gradient-card">
-              <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-xl text-primary flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  API Standards Guide for Pressure Relief Devices
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-6">
-                {/* API 520 Section */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-bold text-primary border-b border-gold/30 pb-2">API 520 - Sizing, Selection & Installation of Pressure-Relieving Devices</h3>
-                  
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-3">
-                      <h4 className="font-semibold text-primary">Part I - Sizing & Selection (10th Ed)</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Section 5.6 - Gas/Vapor sizing (critical & subcritical flow)</li>
-                        <li>• Section 5.7 - Steam sizing with Kn and Ksh factors</li>
-                        <li>• Section 5.8 - Liquid sizing with Kv viscosity correction</li>
-                        <li>• Appendix D - Two-phase Omega (ω) method</li>
-                        <li>• Table 9 - C coefficients for common gases</li>
-                        <li>• Table 6 - Superheat correction factors</li>
-                      </ul>
-                      <div className="p-3 bg-primary/10 rounded border border-gold/20">
-                        <p className="text-xs font-mono text-foreground">Gas: A = W√(TZ/M) / (C·Kd·P₁·Kb·Kc)</p>
-                        <p className="text-xs font-mono text-foreground">Liquid: A = Q√G / (38·Kd·Kw·Kc·Kv·√ΔP)</p>
-                        <p className="text-xs font-mono text-foreground">Steam: A = W / (51.5·P₁·Kd·Kb·Kc·Kn·Ksh)</p>
-                      </div>
-                    </div>
+          <Card className="border-gold/30 bg-gradient-card">
+            <CardHeader className="border-b border-border pb-4">
+              <CardTitle className="text-xl text-primary flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                API Standards Guide for Pressure Relief Devices
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              {/* Quick Memory Trick */}
+              <div className="p-6 bg-primary/10 rounded-lg border border-gold/30">
+                <h3 className="text-lg font-bold text-primary mb-4">🧠 One-Line Memory Trick</h3>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-background/50 rounded-lg border border-border">
+                    <Badge variant="outline" className="text-lg mb-2 border-gold text-primary">API 521</Badge>
+                    <p className="font-medium text-foreground">Do I need relief?</p>
+                    <p className="text-sm text-muted-foreground">From what scenario?</p>
+                  </div>
+                  <div className="text-center p-4 bg-background/50 rounded-lg border border-border">
+                    <Badge variant="outline" className="text-lg mb-2 border-gold text-primary">API 520</Badge>
+                    <p className="font-medium text-foreground">How big should it be?</p>
+                    <p className="text-sm text-muted-foreground">Calculate orifice size</p>
+                  </div>
+                  <div className="text-center p-4 bg-background/50 rounded-lg border border-border">
+                    <Badge variant="outline" className="text-lg mb-2 border-gold text-primary">API 526</Badge>
+                    <p className="font-medium text-foreground">Which standard size?</p>
+                    <p className="text-sm text-muted-foreground">Select D through T</p>
+                  </div>
+                </div>
+              </div>
 
-                    <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-3">
-                      <h4 className="font-semibold text-primary">Part II - Installation (7th Ed)</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Section 4 - Inlet piping requirements</li>
-                        <li>• Section 5 - Rupture disk sizing & installation</li>
-                        <li>• Section 6 - Discharge piping design</li>
-                        <li>• Pressure drop limits: 3% inlet, variable outlet</li>
-                        <li>• Combination devices (RD + PRV)</li>
+              {/* API 521 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-primary border-b border-gold/30 pb-2">API 521 - Pressure-Relieving & Depressuring Systems (7th Ed)</h3>
+                <p className="text-sm text-muted-foreground">Identifies WHY and WHEN relief is required - the process logic & safety philosophy</p>
+                <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-3">
+                  <div className="grid md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="font-medium text-foreground mb-1">Equipment Failures</p>
+                      <ul className="text-muted-foreground space-y-1">
+                        <li>• 5.3 - Control valve failure</li>
+                        <li>• 5.4 - Pump deadhead</li>
+                        <li>• 5.9 - Tube rupture</li>
                       </ul>
-                      <div className="p-3 bg-primary/10 rounded border border-gold/20">
-                        <p className="text-xs font-mono text-foreground">K_net = Kd / √(1 + Kr)</p>
-                        <p className="text-xs font-mono text-foreground">Kc = 0.9 (with rupture disk upstream)</p>
-                      </div>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground mb-1">Process Upsets</p>
+                      <ul className="text-muted-foreground space-y-1">
+                        <li>• 5.6 - Blocked outlet</li>
+                        <li>• 5.11 - Power failure</li>
+                        <li>• 5.12 - Cooling water loss</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground mb-1">External Events</p>
+                      <ul className="text-muted-foreground space-y-1">
+                        <li>• 5.15 - Fire case</li>
+                        <li>• 5.13 - Reflux failure</li>
+                        <li>• 5.7 - Gas blowby</li>
+                      </ul>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* API 521 Section */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-bold text-primary border-b border-gold/30 pb-2">API 521 - Pressure-Relieving & Depressuring Systems (7th Ed)</h3>
-                  
+              {/* API 520 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-primary border-b border-gold/30 pb-2">API 520 - Sizing, Selection & Installation (Part I: 10th Ed, Part II: 7th Ed)</h3>
+                <div className="grid md:grid-cols-2 gap-4">
                   <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-3">
-                    <h4 className="font-semibold text-primary">Relief Scenarios Covered</h4>
-                    <div className="grid md:grid-cols-3 gap-4 text-sm text-muted-foreground">
-                      <div>
-                        <p className="font-medium text-foreground mb-1">Equipment Failures</p>
-                        <ul className="space-y-1">
-                          <li>• 5.3 - Control valve failure</li>
-                          <li>• 5.4 - Pump deadhead</li>
-                          <li>• 5.9 - Tube rupture</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground mb-1">Process Upsets</p>
-                        <ul className="space-y-1">
-                          <li>• 5.6 - Blocked outlet</li>
-                          <li>• 5.11 - Power failure</li>
-                          <li>• 5.12 - Cooling water loss</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground mb-1">External Events</p>
-                        <ul className="space-y-1">
-                          <li>• 5.15 - Fire case</li>
-                          <li>• 5.13 - Reflux failure</li>
-                          <li>• 5.7 - Gas blowby</li>
-                        </ul>
-                      </div>
-                    </div>
+                    <h4 className="font-semibold text-primary">Part I - Sizing & Selection</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Section 5.6 - Gas/Vapor sizing (critical & subcritical)</li>
+                      <li>• Section 5.7 - Steam sizing with Kn, Ksh</li>
+                      <li>• Section 5.8 - Liquid sizing with Kv</li>
+                      <li>• Appendix D - Two-phase Omega method</li>
+                    </ul>
                     <div className="p-3 bg-primary/10 rounded border border-gold/20">
-                      <p className="text-xs font-mono text-foreground">Fire: Q = C × F × A^0.82 (BTU/hr)</p>
-                      <p className="text-xs font-mono text-foreground">C = 21,000 (adequate drainage) or 34,500 (inadequate)</p>
-                      <p className="text-xs font-mono text-foreground">Overpressure: 10% normal, 16% multiple, 21% fire</p>
+                      <p className="text-xs font-mono">Gas: A = W√(TZ/M) / (C·Kd·P₁·Kb·Kc)</p>
+                      <p className="text-xs font-mono">Liquid: A = Q√G / (38·Kd·Kw·Kc·Kv·√ΔP)</p>
+                      <p className="text-xs font-mono">Steam: A = W / (51.5·P₁·Kd·Kb·Kc·Kn·Ksh)</p>
                     </div>
                   </div>
-                </div>
-
-                {/* API 526 Section */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-bold text-primary border-b border-gold/30 pb-2">API RP 526 - Flanged Steel Pressure Relief Valves</h3>
-                  
                   <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-3">
-                    <h4 className="font-semibold text-primary">Standard Orifice Designations</h4>
-                    <p className="text-sm text-muted-foreground">Defines standard effective discharge areas (D through T) for flanged steel PRVs</p>
-                    <div className="grid grid-cols-7 gap-2">
-                      {ORIFICE_SIZES.map((o) => (
-                        <div key={o.designation} className="text-center p-2 bg-primary/10 rounded border border-gold/20">
-                          <span className="font-bold text-primary text-lg">{o.designation}</span>
-                          <p className="text-xs text-muted-foreground">{o.area} in²</p>
-                        </div>
-                      ))}
+                    <h4 className="font-semibold text-primary">Part II - Installation</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Section 4 - Inlet piping (≤3% ΔP)</li>
+                      <li>• Section 5 - Rupture disk sizing</li>
+                      <li>• Section 6 - Discharge piping design</li>
+                      <li>• Combination devices (RD + PRV)</li>
+                    </ul>
+                    <div className="p-3 bg-primary/10 rounded border border-gold/20">
+                      <p className="text-xs font-mono">Inlet ΔP ≤ 3% of set pressure</p>
+                      <p className="text-xs font-mono">Kc = 0.9 with rupture disk upstream</p>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Calculator Usage Guide */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-bold text-primary border-b border-gold/30 pb-2">Calculator Usage Guide</h3>
-                  
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-2">
-                      <h4 className="font-semibold text-foreground">Correction Factors</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li><span className="font-mono text-primary">Kd</span> - Discharge coefficient (0.975 gas, 0.65 liquid)</li>
-                        <li><span className="font-mono text-primary">Kb</span> - Backpressure correction (valve type dependent)</li>
-                        <li><span className="font-mono text-primary">Kc</span> - Combination factor (0.9 with rupture disk)</li>
-                        <li><span className="font-mono text-primary">Kv</span> - Viscosity correction (liquid, Re-based)</li>
-                        <li><span className="font-mono text-primary">Kw</span> - Liquid backpressure (balanced bellows)</li>
-                        <li><span className="font-mono text-primary">Kn</span> - Napier correction (steam &gt;1515 psia)</li>
-                        <li><span className="font-mono text-primary">Ksh</span> - Superheat correction (superheated steam)</li>
-                      </ul>
+              {/* API 526 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-primary border-b border-gold/30 pb-2">API RP 526 - Flanged Steel Pressure Relief Valves</h3>
+                <p className="text-sm text-muted-foreground">Standard orifice designations D through T with fixed inlet/outlet sizes</p>
+                <div className="grid grid-cols-7 gap-2">
+                  {ORIFICE_SIZES.map((o) => (
+                    <div key={o.designation} className="text-center p-2 bg-primary/10 rounded border border-gold/20">
+                      <span className="font-bold text-primary text-lg">{o.designation}</span>
+                      <p className="text-xs text-muted-foreground">{o.area} in²</p>
                     </div>
+                  ))}
+                </div>
+              </div>
 
-                    <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-2">
-                      <h4 className="font-semibold text-foreground">Best Practices</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Always use certified Kd values from manufacturer</li>
-                        <li>• Consider all applicable relief scenarios per API 521</li>
-                        <li>• Use 10% overpressure for single devices, 16% for multiple</li>
-                        <li>• Apply 21% overpressure for fire case only</li>
-                        <li>• Verify inlet/outlet piping per API 520 Part II</li>
-                        <li>• Check backpressure limits for valve type selected</li>
-                        <li>• Use sensitivity analysis to understand design margins</li>
-                      </ul>
-                    </div>
+              {/* Correction Factors */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-primary border-b border-gold/30 pb-2">Correction Factors Quick Reference</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-2">
+                    <h4 className="font-semibold text-foreground">Discharge Coefficients</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li><span className="font-mono text-primary">Kd = 0.975</span> - Gas/vapor (certified)</li>
+                      <li><span className="font-mono text-primary">Kd = 0.65</span> - Liquid (certified)</li>
+                      <li><span className="font-mono text-primary">Kd = 0.62</span> - Rupture disk</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-2">
+                    <h4 className="font-semibold text-foreground">Special Factors</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li><span className="font-mono text-primary">Kb</span> - Backpressure (valve type dependent)</li>
+                      <li><span className="font-mono text-primary">Kc = 0.9</span> - With rupture disk upstream</li>
+                      <li><span className="font-mono text-primary">Kv</span> - Viscosity (liquid, Re-based)</li>
+                      <li><span className="font-mono text-primary">Kn</span> - Napier (steam &gt;1515 psia)</li>
+                      <li><span className="font-mono text-primary">Ksh</span> - Superheat (superheated steam)</li>
+                    </ul>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+
+              {/* Overpressure Guidelines */}
+              <div className="p-4 bg-secondary/30 rounded-lg border border-border">
+                <h4 className="font-semibold text-foreground mb-2">Overpressure Guidelines</h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• <span className="font-mono text-primary">10%</span> - Single device, general service</li>
+                  <li>• <span className="font-mono text-primary">16%</span> - Multiple devices in parallel</li>
+                  <li>• <span className="font-mono text-primary">21%</span> - Fire case only (API 521 allowance)</li>
+                  <li>• <span className="font-mono text-primary">25 psi or 3%</span> - Minimum for vessels per ASME</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
