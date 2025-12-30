@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container, Shield, Activity, Wrench } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface CalculatorCard {
   id: string;
@@ -79,8 +80,8 @@ const calculators: CalculatorCard[] = [
   },
   {
     id: "api-520",
-    title: "API 520/521 Relief Valve",
-    description: "Size pressure relief devices for vapor, liquid, two-phase, and steam service with orifice selection",
+    title: "API 520/521 Relief Valve Sizing",
+    description: "Size pressure relief valves per API 520/521 for vapor, liquid, two-phase, steam, and fire cases with orifice selection and inlet/outlet piping verification",
     icon: <Shield className="w-8 h-8" />,
     route: "/calculators/api-520",
     status: "available",
@@ -108,9 +109,9 @@ const calculators: CalculatorCard[] = [
 
 const Calculators = () => {
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background transition-colors duration-300">
       {/* Header */}
-      <header className="bg-card/50 backdrop-blur-lg border-b border-border sticky top-0 z-50">
+      <header className="bg-card/50 backdrop-blur-lg border-b border-border sticky top-0 z-50 transition-colors duration-300">
         <div className="container mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <Link 
@@ -120,11 +121,14 @@ const Calculators = () => {
               <ArrowLeft className="w-5 h-5" />
               <span className="hidden sm:inline">Back to Portfolio</span>
             </Link>
-            <div className="flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-primary" />
-              <h1 className="font-heading text-lg sm:text-xl font-bold">
-                Process Engineering <span className="text-primary">Calculators</span>
-              </h1>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-primary" />
+                <h1 className="font-heading text-lg sm:text-xl font-bold">
+                  Process Engineering <span className="text-primary">Calculators</span>
+                </h1>
+              </div>
+              <ThemeToggle />
             </div>
           </div>
         </div>
