@@ -93,80 +93,296 @@ const PipeVisualization = ({ pipe }: { pipe: typeof pipeData[0] | undefined }) =
 };
 
 // ==================== FLANGE VISUALIZATION ====================
-const FlangeVisualization = ({ flange }: { flange: typeof flangeData[0] | undefined }) => {
-  if (!flange) return <div className="flex items-center justify-center h-64 text-muted-foreground">Select size and class</div>;
+type FlangeStandard = 'B16.5' | 'B16.47A' | 'B16.47B' | 'B16.36';
+
+const FlangeVisualization = ({ 
+  flange, 
+  standard = 'B16.5',
+  flangeType = 'wn'
+}: { 
+  flange: typeof flangeData[0] | undefined;
+  standard?: FlangeStandard;
+  flangeType?: string;
+}) => {
+  if (!flange) return (
+    <div className="flex items-center justify-center h-64 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
+      <div className="text-center">
+        <Circle className="w-12 h-12 mx-auto mb-2 opacity-30" />
+        <p>Select size and class</p>
+      </div>
+    </div>
+  );
   
-  const cx = 150, cy = 130;
-  const scale = 0.32;
-  const od = Math.min(flange.outerDiameter * scale, 100);
+  const cx = 150, cy = 140;
+  const scale = 0.28;
+  const od = Math.min(flange.outerDiameter * scale, 95);
   const bcd = (flange.boltCircleDiameter / flange.outerDiameter) * od;
   const rf = (flange.raisedFaceDiameter / flange.outerDiameter) * od;
   const hub = (flange.hubDiameter / flange.outerDiameter) * od;
+  const bore = hub * 0.6;
+  
+  // Cross-section dimensions for side view
+  const sideWidth = 280;
+  const sideHeight = 120;
+  const flangeThk = Math.min(flange.thickness * 1.5, 40);
+  const hubLength = flangeType === 'wn' ? 50 : (flangeType === 'so' ? 25 : 0);
+  
+  const isOrifice = standard === 'B16.36';
+  
+  const standardColors: Record<FlangeStandard, { from: string; to: string; accent: string }> = {
+    'B16.5': { from: 'from-orange-500/10', to: 'to-amber-500/10', accent: 'hsl(var(--primary))' },
+    'B16.47A': { from: 'from-blue-500/10', to: 'to-indigo-500/10', accent: 'hsl(200 70% 50%)' },
+    'B16.47B': { from: 'from-emerald-500/10', to: 'to-teal-500/10', accent: 'hsl(160 60% 45%)' },
+    'B16.36': { from: 'from-purple-500/10', to: 'to-pink-500/10', accent: 'hsl(280 60% 55%)' },
+  };
+  
+  const colors = standardColors[standard];
   
   return (
     <div className="space-y-4">
-      <div className="bg-gradient-to-br from-orange-500/10 via-muted/30 to-yellow-500/10 rounded-xl p-6 border border-primary/20">
-        <svg viewBox="0 0 300 260" className="w-full max-w-sm mx-auto">
+      {/* Front View - Face */}
+      <div className={`bg-gradient-to-br ${colors.from} via-muted/30 ${colors.to} rounded-xl p-4 border border-primary/20`}>
+        <div className="text-center mb-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Front View</span>
+        </div>
+        <svg viewBox="0 0 300 280" className="w-full max-w-xs mx-auto">
           <defs>
-            <linearGradient id="flangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.2"/>
-              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.05"/>
+            <linearGradient id={`flangeGrad-${standard}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={colors.accent} stopOpacity="0.25"/>
+              <stop offset="50%" stopColor={colors.accent} stopOpacity="0.12"/>
+              <stop offset="100%" stopColor={colors.accent} stopOpacity="0.05"/>
             </linearGradient>
-            <filter id="flangeShadow">
-              <feDropShadow dx="2" dy="2" stdDeviation="4" floodOpacity="0.15"/>
+            <radialGradient id={`flangeRadial-${standard}`} cx="30%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="white" stopOpacity="0.15"/>
+              <stop offset="100%" stopColor="transparent"/>
+            </radialGradient>
+            <filter id="flangeShadow2" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="3" dy="3" stdDeviation="5" floodColor="#000" floodOpacity="0.2"/>
             </filter>
+            <pattern id="boltPattern" width="4" height="4" patternUnits="userSpaceOnUse">
+              <circle cx="2" cy="2" r="0.8" fill="hsl(var(--foreground))" fillOpacity="0.3"/>
+            </pattern>
           </defs>
-          {/* Outer diameter */}
-          <circle cx={cx} cy={cy} r={od} fill="url(#flangeGrad)" stroke="hsl(var(--primary))" strokeWidth="2.5" filter="url(#flangeShadow)"/>
-          {/* Bolt circle (dashed) */}
-          <circle cx={cx} cy={cy} r={bcd} fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeDasharray="6,4"/>
-          {/* Raised face */}
-          <circle cx={cx} cy={cy} r={rf} fill="hsl(var(--primary)/0.15)" stroke="hsl(var(--primary))" strokeWidth="2"/>
-          {/* Hub/bore */}
-          <circle cx={cx} cy={cy} r={hub} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="2"/>
           
-          {/* Bolt holes */}
+          {/* Outer flange body with metallic effect */}
+          <circle cx={cx} cy={cy} r={od} fill={`url(#flangeGrad-${standard})`} stroke={colors.accent} strokeWidth="3" filter="url(#flangeShadow2)"/>
+          <circle cx={cx} cy={cy} r={od} fill={`url(#flangeRadial-${standard})`}/>
+          
+          {/* Machining lines */}
+          <circle cx={cx} cy={cy} r={od * 0.92} fill="none" stroke="hsl(var(--foreground))" strokeWidth="0.5" strokeOpacity="0.2"/>
+          <circle cx={cx} cy={cy} r={od * 0.85} fill="none" stroke="hsl(var(--foreground))" strokeWidth="0.3" strokeOpacity="0.15"/>
+          
+          {/* Bolt circle (dashed) */}
+          <circle cx={cx} cy={cy} r={bcd} fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1" strokeDasharray="8,4"/>
+          
+          {/* Raised face with texture */}
+          <circle cx={cx} cy={cy} r={rf} fill="hsl(var(--muted))" stroke={colors.accent} strokeWidth="2"/>
+          <circle cx={cx} cy={cy} r={rf * 0.95} fill="none" stroke="hsl(var(--foreground))" strokeWidth="0.5" strokeOpacity="0.2"/>
+          
+          {/* Orifice taps for B16.36 */}
+          {isOrifice && (
+            <>
+              <circle cx={cx - rf * 0.7} cy={cy} r="6" fill="hsl(var(--background))" stroke="hsl(var(--destructive))" strokeWidth="2"/>
+              <circle cx={cx + rf * 0.7} cy={cy} r="6" fill="hsl(var(--background))" stroke="hsl(var(--destructive))" strokeWidth="2"/>
+              <text x={cx - rf * 0.7} y={cy - 12} textAnchor="middle" className="text-[7px] fill-destructive font-bold">TAP</text>
+              <text x={cx + rf * 0.7} y={cy - 12} textAnchor="middle" className="text-[7px] fill-destructive font-bold">TAP</text>
+            </>
+          )}
+          
+          {/* Hub/bore with depth effect */}
+          <circle cx={cx} cy={cy} r={bore} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="2.5"/>
+          <circle cx={cx} cy={cy} r={bore * 0.85} fill="none" stroke="hsl(var(--foreground))" strokeWidth="1" strokeOpacity="0.3" strokeDasharray="2,2"/>
+          
+          {/* Bolt holes with detail */}
           {Array.from({ length: flange.numBolts }).map((_, i) => {
             const angle = (2 * Math.PI * i) / flange.numBolts - Math.PI/2;
             const bx = cx + bcd * Math.cos(angle);
             const by = cy + bcd * Math.sin(angle);
+            const boltR = Math.max(4, od * 0.055);
             return (
               <g key={i}>
-                <circle cx={bx} cy={by} r={5} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1.5"/>
-                <circle cx={bx} cy={by} r={2} fill="hsl(var(--foreground))"/>
+                <circle cx={bx} cy={by} r={boltR + 2} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="1"/>
+                <circle cx={bx} cy={by} r={boltR} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1.5"/>
+                <circle cx={bx} cy={by} r={boltR * 0.4} fill="hsl(var(--foreground))" fillOpacity="0.5"/>
               </g>
             );
           })}
           
+          {/* Dimension annotations */}
           {/* OD dimension */}
-          <line x1={cx} y1={cy - od - 5} x2={cx + od + 30} y2={cy - od - 5} stroke="hsl(var(--destructive))" strokeWidth="1" strokeDasharray="3,2"/>
-          <text x={cx + od + 35} y={cy - od - 2} className="text-[10px] fill-destructive font-bold">OD {flange.outerDiameter}</text>
+          <line x1={cx} y1={cy - od - 8} x2={cx + od + 25} y2={cy - od - 8} stroke="hsl(var(--destructive))" strokeWidth="1" strokeDasharray="3,2"/>
+          <line x1={cx + od} y1={cy - od - 3} x2={cx + od} y2={cy - od - 13} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <text x={cx + od + 30} y={cy - od - 4} className="text-[9px] fill-destructive font-bold">OD {flange.outerDiameter}</text>
           
-          {/* BCD dimension */}
-          <line x1={cx} y1={cy} x2={cx + bcd} y2={cy - bcd * 0.7} stroke="hsl(var(--chart-3))" strokeWidth="1" strokeDasharray="3,2"/>
-          <text x={cx + bcd + 5} y={cy - bcd * 0.7} className="text-[9px] fill-chart-3 font-medium">BCD {flange.boltCircleDiameter}</text>
+          {/* BCD arc dimension */}
+          <path d={`M ${cx + bcd * 0.7} ${cy - bcd * 0.7} A ${bcd} ${bcd} 0 0 1 ${cx + bcd} ${cy}`} fill="none" stroke="hsl(var(--chart-3))" strokeWidth="1" strokeDasharray="3,2"/>
+          <text x={cx + bcd + 8} y={cy - 15} className="text-[8px] fill-chart-3 font-medium">BCD {flange.boltCircleDiameter}</text>
           
-          {/* Labels */}
-          <text x={cx} y={cy + 4} textAnchor="middle" className="text-[10px] fill-muted-foreground font-medium">BORE</text>
+          {/* RF dimension */}
+          <line x1={cx - rf} y1={cy + od + 20} x2={cx + rf} y2={cy + od + 20} stroke="hsl(var(--primary))" strokeWidth="1.5"/>
+          <line x1={cx - rf} y1={cy + od + 15} x2={cx - rf} y2={cy + od + 25} stroke="hsl(var(--primary))" strokeWidth="1"/>
+          <line x1={cx + rf} y1={cy + od + 15} x2={cx + rf} y2={cy + od + 25} stroke="hsl(var(--primary))" strokeWidth="1"/>
+          <text x={cx} y={cy + od + 35} textAnchor="middle" className="text-[9px] fill-primary font-bold">RF ⌀{flange.raisedFaceDiameter}</text>
+          
+          {/* Center mark */}
+          <line x1={cx - 6} y1={cy} x2={cx + 6} y2={cy} stroke="hsl(var(--primary))" strokeWidth="1"/>
+          <line x1={cx} y1={cy - 6} x2={cx} y2={cy + 6} stroke="hsl(var(--primary))" strokeWidth="1"/>
+          <circle cx={cx} cy={cy} r="2" fill="hsl(var(--primary))"/>
         </svg>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-4 rounded-xl">
-          <div className="text-xs text-muted-foreground">Outer Diameter</div>
-          <div className="text-lg font-bold text-primary">{flange.outerDiameter} mm</div>
+      
+      {/* Side View - Cross Section */}
+      <div className={`bg-gradient-to-br ${colors.from} via-muted/30 ${colors.to} rounded-xl p-4 border border-primary/20`}>
+        <div className="text-center mb-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cross Section</span>
         </div>
-        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-4 rounded-xl">
-          <div className="text-xs text-muted-foreground">Bolt Circle</div>
-          <div className="text-lg font-bold text-primary">{flange.boltCircleDiameter} mm</div>
+        <svg viewBox={`0 0 ${sideWidth} ${sideHeight}`} className="w-full max-w-xs mx-auto">
+          <defs>
+            <linearGradient id={`sideGrad-${standard}`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={colors.accent} stopOpacity="0.3"/>
+              <stop offset="50%" stopColor={colors.accent} stopOpacity="0.15"/>
+              <stop offset="100%" stopColor={colors.accent} stopOpacity="0.25"/>
+            </linearGradient>
+            <pattern id="hatchPattern" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="hsl(var(--foreground))" strokeWidth="0.5" strokeOpacity="0.15"/>
+            </pattern>
+          </defs>
+          
+          {/* Flange body cross-section */}
+          <g transform={`translate(${sideWidth/2 - flangeThk/2 - (flangeType === 'wn' ? hubLength/2 : 0)}, 10)`}>
+            {/* Hub/neck for weld neck */}
+            {flangeType === 'wn' && (
+              <>
+                <path 
+                  d={`M 0 ${sideHeight/2 - 25} 
+                      L ${hubLength} ${sideHeight/2 - 35} 
+                      L ${hubLength} ${sideHeight/2 + 35} 
+                      L 0 ${sideHeight/2 + 25} Z`}
+                  fill={`url(#sideGrad-${standard})`}
+                  stroke={colors.accent}
+                  strokeWidth="2"
+                />
+                <path 
+                  d={`M 0 ${sideHeight/2 - 25} 
+                      L ${hubLength} ${sideHeight/2 - 35} 
+                      L ${hubLength} ${sideHeight/2 + 35} 
+                      L 0 ${sideHeight/2 + 25} Z`}
+                  fill="url(#hatchPattern)"
+                />
+              </>
+            )}
+            
+            {/* Flange face */}
+            <rect 
+              x={flangeType === 'wn' ? hubLength : 0} 
+              y={sideHeight/2 - 45} 
+              width={flangeThk} 
+              height={90} 
+              fill={`url(#sideGrad-${standard})`}
+              stroke={colors.accent}
+              strokeWidth="2"
+              rx="1"
+            />
+            <rect 
+              x={flangeType === 'wn' ? hubLength : 0} 
+              y={sideHeight/2 - 45} 
+              width={flangeThk} 
+              height={90} 
+              fill="url(#hatchPattern)"
+            />
+            
+            {/* Raised face */}
+            <rect 
+              x={flangeType === 'wn' ? hubLength + flangeThk : flangeThk} 
+              y={sideHeight/2 - 30} 
+              width={4} 
+              height={60} 
+              fill={colors.accent}
+              fillOpacity="0.4"
+              stroke={colors.accent}
+              strokeWidth="1"
+            />
+            
+            {/* Bore hole */}
+            <rect 
+              x={0} 
+              y={sideHeight/2 - 12} 
+              width={flangeType === 'wn' ? hubLength + flangeThk + 4 : flangeThk + 4} 
+              height={24} 
+              fill="hsl(var(--background))"
+              stroke="hsl(var(--foreground))"
+              strokeWidth="1"
+            />
+            
+            {/* Bolt holes (shown as circles on side) */}
+            <circle 
+              cx={flangeType === 'wn' ? hubLength + flangeThk/2 : flangeThk/2} 
+              y={sideHeight/2 - 38} 
+              cy={sideHeight/2 - 38}
+              r="4" 
+              fill="hsl(var(--background))" 
+              stroke="hsl(var(--foreground))" 
+              strokeWidth="1.5"
+            />
+            <circle 
+              cx={flangeType === 'wn' ? hubLength + flangeThk/2 : flangeThk/2} 
+              cy={sideHeight/2 + 38}
+              r="4" 
+              fill="hsl(var(--background))" 
+              stroke="hsl(var(--foreground))" 
+              strokeWidth="1.5"
+            />
+            
+            {/* Thickness dimension */}
+            <line 
+              x1={flangeType === 'wn' ? hubLength : 0} 
+              y1={sideHeight - 5} 
+              x2={flangeType === 'wn' ? hubLength + flangeThk : flangeThk} 
+              y2={sideHeight - 5} 
+              stroke="hsl(var(--chart-3))" 
+              strokeWidth="1.5"
+            />
+            <text 
+              x={flangeType === 'wn' ? hubLength + flangeThk/2 : flangeThk/2} 
+              y={sideHeight + 5} 
+              textAnchor="middle" 
+              className="text-[8px] fill-chart-3 font-bold"
+            >
+              t={flange.thickness}
+            </text>
+          </g>
+          
+          {/* Centerline */}
+          <line x1="10" y1={sideHeight/2 + 10} x2={sideWidth - 10} y2={sideHeight/2 + 10} stroke="hsl(var(--primary))" strokeWidth="0.8" strokeDasharray="8,3"/>
+          <text x="15" y={sideHeight/2 + 7} className="text-[7px] fill-primary font-medium">CL</text>
+        </svg>
+      </div>
+      
+      {/* Data Cards */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-3 rounded-xl">
+          <div className="text-[10px] text-muted-foreground font-medium uppercase">Outer Diameter</div>
+          <div className="text-lg font-bold text-primary">{flange.outerDiameter} <span className="text-xs font-normal">mm</span></div>
         </div>
-        <div className="bg-muted/50 p-4 rounded-xl border">
-          <div className="text-xs text-muted-foreground">Bolts</div>
-          <div className="font-semibold">{flange.numBolts} × {flange.boltSize}</div>
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-3 rounded-xl">
+          <div className="text-[10px] text-muted-foreground font-medium uppercase">Bolt Circle</div>
+          <div className="text-lg font-bold text-primary">{flange.boltCircleDiameter} <span className="text-xs font-normal">mm</span></div>
         </div>
-        <div className="bg-muted/50 p-4 rounded-xl border">
-          <div className="text-xs text-muted-foreground">Thickness</div>
-          <div className="font-semibold">{flange.thickness} mm</div>
+        <div className="bg-muted/50 p-3 rounded-xl border">
+          <div className="text-[10px] text-muted-foreground uppercase">Bolting</div>
+          <div className="font-semibold text-sm">{flange.numBolts} × {flange.boltSize}</div>
         </div>
+        <div className="bg-muted/50 p-3 rounded-xl border">
+          <div className="text-[10px] text-muted-foreground uppercase">Thickness</div>
+          <div className="font-semibold text-sm">{flange.thickness} mm</div>
+        </div>
+      </div>
+      
+      {/* Standard Badge */}
+      <div className="flex justify-center">
+        <Badge variant="outline" className="text-xs bg-background/50">
+          ASME {standard} • Class {flange.pressureClass} • {flange.size}
+        </Badge>
       </div>
     </div>
   );
@@ -861,6 +1077,8 @@ export default function PipingComponentsCalculator() {
   const [pipeSchedule, setPipeSchedule] = useState<string>("40/STD");
   const [selectedSize, setSelectedSize] = useState<string>("4\"");
   const [selectedClass, setSelectedClass] = useState<string>("150");
+  const [selectedFlangeStandard, setSelectedFlangeStandard] = useState<'B16.5' | 'B16.47A' | 'B16.47B' | 'B16.36'>('B16.5');
+  const [selectedFlangeType, setSelectedFlangeType] = useState<string>('wn');
   const [selectedValveType, setSelectedValveType] = useState<string>("Gate");
   const [selectedFittingSize, setSelectedFittingSize] = useState<string>("4\"");
   const [selectedFittingType, setSelectedFittingType] = useState<string>("elbow");
@@ -883,6 +1101,17 @@ export default function PipingComponentsCalculator() {
   const selectedOlet = oletData.find(o => o.type === selectedOletType);
   const selectedSIF = flexibilityData.find(f => f.component === selectedSIFComponent);
   const selectedSpan = safeSpanData.find(s => s.size === selectedSpanSize && s.contentDensity === 1000);
+  
+  // Get available pressure classes based on standard
+  const getAvailableClasses = () => {
+    switch (selectedFlangeStandard) {
+      case 'B16.5': return ['150', '300', '600', '900', '1500', '2500'];
+      case 'B16.47A': return ['150', '300', '600', '900'];
+      case 'B16.47B': return ['75', '150', '300', '400', '600', '900'];
+      case 'B16.36': return ['150', '300', '600', '900', '1500', '2500'];
+      default: return pressureClasses;
+    }
+  };
   
   return (
     <div className="space-y-6">
@@ -981,45 +1210,122 @@ export default function PipingComponentsCalculator() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <CardTitle className="flex items-center gap-2"><Circle className="w-5 h-5 text-primary" />Flange Dimensions</CardTitle>
-                  <CardDescription>Weld Neck, Slip-On, Blind Flanges</CardDescription>
+                  <CardDescription>Weld Neck, Slip-On, Blind, Socket Weld, Threaded, Lap Joint</CardDescription>
                 </div>
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">ASME B16.5</Badge>
+                <div className="flex gap-2 flex-wrap">
+                  <Badge variant={selectedFlangeStandard === 'B16.5' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setSelectedFlangeStandard('B16.5')}>B16.5</Badge>
+                  <Badge variant={selectedFlangeStandard === 'B16.47A' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setSelectedFlangeStandard('B16.47A')}>B16.47 A</Badge>
+                  <Badge variant={selectedFlangeStandard === 'B16.47B' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setSelectedFlangeStandard('B16.47B')}>B16.47 B</Badge>
+                  <Badge variant={selectedFlangeStandard === 'B16.36' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setSelectedFlangeStandard('B16.36')}>B16.36</Badge>
+                </div>
+              </div>
+              {/* Standard Description */}
+              <div className="mt-3 p-3 bg-muted/50 rounded-lg border text-sm">
+                {selectedFlangeStandard === 'B16.5' && (
+                  <p><strong>ASME B16.5</strong> — Pipe Flanges and Flanged Fittings: NPS ½" through NPS 24". Standard flange sizes for most industrial applications.</p>
+                )}
+                {selectedFlangeStandard === 'B16.47A' && (
+                  <p><strong>ASME B16.47 Series A</strong> — Large Diameter Steel Flanges: NPS 26" through NPS 60". MSS SP-44 design (compact design, lighter weight).</p>
+                )}
+                {selectedFlangeStandard === 'B16.47B' && (
+                  <p><strong>ASME B16.47 Series B</strong> — Large Diameter Steel Flanges: NPS 26" through NPS 60". API 605 design (older design, heavier).</p>
+                )}
+                {selectedFlangeStandard === 'B16.36' && (
+                  <p><strong>ASME B16.36</strong> — Orifice Flanges: NPS ½" through NPS 24". Includes pressure taps for flow measurement with orifice plates.</p>
+                )}
               </div>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="grid lg:grid-cols-2 gap-8">
                 <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Size, Class, Type selectors */}
+                  <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-2">
-                      <Label>Size</Label>
+                      <Label className="text-xs font-medium">Size</Label>
                       <Select value={selectedSize} onValueChange={setSelectedSize}>
-                        <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="bg-background h-9"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-popover border shadow-lg z-50">{sizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Class</Label>
+                      <Label className="text-xs font-medium">Class</Label>
                       <Select value={selectedClass} onValueChange={setSelectedClass}>
-                        <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-popover border shadow-lg z-50">{pressureClasses.map(c => <SelectItem key={c} value={c}>Class {c}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="bg-background h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-popover border shadow-lg z-50">{getAvailableClasses().map(c => <SelectItem key={c} value={c}>{c}#</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Type</Label>
+                      <Select value={selectedFlangeType} onValueChange={setSelectedFlangeType}>
+                        <SelectTrigger className="bg-background h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-popover border shadow-lg z-50">
+                          {flangeTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.abbr} - {t.name}</SelectItem>)}
+                        </SelectContent>
                       </Select>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">{flangeTypes.map(t => <Badge key={t.id} variant="secondary" className="text-xs">{t.abbr} - {t.name}</Badge>)}</div>
-                  <FlangeVisualization flange={selectedFlange} />
+                  
+                  {/* Flange Type Description */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {flangeTypes.map(t => (
+                      <Badge 
+                        key={t.id} 
+                        variant={t.id === selectedFlangeType ? "default" : "secondary"} 
+                        className={`text-xs cursor-pointer transition-all ${t.id === selectedFlangeType ? 'ring-2 ring-primary/30' : 'hover:bg-muted'}`}
+                        onClick={() => setSelectedFlangeType(t.id)}
+                      >
+                        {t.abbr}
+                      </Badge>
+                    ))}
+                  </div>
+                  
+                  {/* Visualization */}
+                  <FlangeVisualization 
+                    flange={selectedFlange} 
+                    standard={selectedFlangeStandard}
+                    flangeType={selectedFlangeType}
+                  />
                 </div>
-                <ScrollArea className="h-[450px] rounded-xl border-2">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur"><TableRow><TableHead>Size</TableHead><TableHead>Class</TableHead><TableHead>OD</TableHead><TableHead>BCD</TableHead><TableHead>Bolts</TableHead><TableHead>Thk</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                      {flangeData.filter(f => f.size === selectedSize).map((f, i) => (
-                        <TableRow key={i} className={`cursor-pointer transition-all ${f.pressureClass === selectedClass ? "bg-primary/15 border-l-4 border-l-primary" : "hover:bg-muted/50"}`} onClick={() => setSelectedClass(f.pressureClass)}>
-                          <TableCell className="font-medium">{f.size}</TableCell><TableCell><Badge variant="outline">{f.pressureClass}</Badge></TableCell><TableCell>{f.outerDiameter}</TableCell><TableCell>{f.boltCircleDiameter}</TableCell><TableCell>{f.numBolts}×{f.boltSize}</TableCell><TableCell>{f.thickness}</TableCell>
+                
+                {/* Data Table */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">ASME {selectedFlangeStandard} Data</span>
+                    <Badge variant="outline" className="text-xs">{flangeData.filter(f => f.size === selectedSize).length} entries</Badge>
+                  </div>
+                  <ScrollArea className="h-[500px] rounded-xl border-2">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur z-10">
+                        <TableRow>
+                          <TableHead className="font-semibold text-xs">Size</TableHead>
+                          <TableHead className="text-xs">Class</TableHead>
+                          <TableHead className="text-xs">OD</TableHead>
+                          <TableHead className="text-xs">BCD</TableHead>
+                          <TableHead className="text-xs">Bolts</TableHead>
+                          <TableHead className="text-xs">Thk</TableHead>
+                          <TableHead className="text-xs">Wt</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                      </TableHeader>
+                      <TableBody>
+                        {flangeData.filter(f => f.size === selectedSize).map((f, i) => (
+                          <TableRow 
+                            key={i} 
+                            className={`cursor-pointer transition-all ${f.pressureClass === selectedClass ? "bg-primary/15 border-l-4 border-l-primary" : "hover:bg-muted/50"}`} 
+                            onClick={() => setSelectedClass(f.pressureClass)}
+                          >
+                            <TableCell className="font-medium text-xs">{f.size}</TableCell>
+                            <TableCell><Badge variant={f.pressureClass === selectedClass ? "default" : "outline"} className="text-xs">{f.pressureClass}#</Badge></TableCell>
+                            <TableCell className="text-xs">{f.outerDiameter}</TableCell>
+                            <TableCell className="text-xs">{f.boltCircleDiameter}</TableCell>
+                            <TableCell className="text-xs font-mono">{f.numBolts}×{f.boltSize}</TableCell>
+                            <TableCell className="text-xs">{f.thickness}</TableCell>
+                            <TableCell className="text-xs">{f.weight} kg</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
               </div>
             </CardContent>
           </Card>
