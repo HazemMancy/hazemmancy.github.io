@@ -15,46 +15,28 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 // Per API 520 Part I (10th Ed) & API 521 (7th Ed)
 // ============================================
 
-// Scenario comparison types
-interface SavedScenario {
-  id: string;
-  name: string;
-  type: 'vapor' | 'liquid' | 'twophase' | 'steam' | 'fire' | 'rupturedisk' | 'overfill' | 'thermal' | 'failure';
-  timestamp: Date;
-  inputs: Record<string, any>;
-  results: {
-    requiredArea: number;
-    selectedOrifice: { designation: string; area: number } | null;
-    relievingPressure: number;
-    massFlow?: number;
-    flowRate?: number;
-    flowUnit?: string;
-    correctionFactors: Record<string, number>;
-  };
-}
-
 // ============================================
 // API 520 STANDARD ORIFICE AREAS (API RP 526)
 // Effective discharge areas in square inches
 // ============================================
 const ORIFICE_SIZES = [
-  { designation: 'D', area: 0.110, inletSize: '1', outletSize: '2' },
-  { designation: 'E', area: 0.196, inletSize: '1', outletSize: '2' },
-  { designation: 'F', area: 0.307, inletSize: '1.5x2', outletSize: '2.5' },
-  { designation: 'G', area: 0.503, inletSize: '1.5x2', outletSize: '3' },
-  { designation: 'H', area: 0.785, inletSize: '2x3', outletSize: '4' },
-  { designation: 'J', area: 1.287, inletSize: '3', outletSize: '4' },
-  { designation: 'K', area: 1.838, inletSize: '3', outletSize: '4x6' },
-  { designation: 'L', area: 2.853, inletSize: '4', outletSize: '6' },
-  { designation: 'M', area: 3.600, inletSize: '4', outletSize: '6' },
-  { designation: 'N', area: 4.340, inletSize: '4', outletSize: '6' },
-  { designation: 'P', area: 6.380, inletSize: '4x6', outletSize: '8' },
-  { designation: 'Q', area: 11.05, inletSize: '6', outletSize: '8x10' },
-  { designation: 'R', area: 16.00, inletSize: '6x8', outletSize: '10' },
-  { designation: 'T', area: 26.00, inletSize: '8', outletSize: '10x12' },
+  { designation: 'D', area: 0.110, inletSize: '1', outletSize: '2', diameter: 0.374 },
+  { designation: 'E', area: 0.196, inletSize: '1', outletSize: '2', diameter: 0.500 },
+  { designation: 'F', area: 0.307, inletSize: '1.5x2', outletSize: '2.5', diameter: 0.625 },
+  { designation: 'G', area: 0.503, inletSize: '1.5x2', outletSize: '3', diameter: 0.800 },
+  { designation: 'H', area: 0.785, inletSize: '2x3', outletSize: '4', diameter: 1.000 },
+  { designation: 'J', area: 1.287, inletSize: '3', outletSize: '4', diameter: 1.280 },
+  { designation: 'K', area: 1.838, inletSize: '3', outletSize: '4x6', diameter: 1.530 },
+  { designation: 'L', area: 2.853, inletSize: '4', outletSize: '6', diameter: 1.906 },
+  { designation: 'M', area: 3.600, inletSize: '4', outletSize: '6', diameter: 2.141 },
+  { designation: 'N', area: 4.340, inletSize: '4', outletSize: '6', diameter: 2.352 },
+  { designation: 'P', area: 6.380, inletSize: '4x6', outletSize: '8', diameter: 2.850 },
+  { designation: 'Q', area: 11.05, inletSize: '6', outletSize: '8x10', diameter: 3.750 },
+  { designation: 'R', area: 16.00, inletSize: '6x8', outletSize: '10', diameter: 4.512 },
+  { designation: 'T', area: 26.00, inletSize: '8', outletSize: '10x12', diameter: 5.754 },
 ];
 
-const selectOrifice = (requiredArea: number): { designation: string; area: number; inletSize: string; outletSize: string } | null => {
+const selectOrifice = (requiredArea: number): { designation: string; area: number; inletSize: string; outletSize: string; diameter: number } | null => {
   for (const orifice of ORIFICE_SIZES) {
     if (orifice.area >= requiredArea) {
       return orifice;
@@ -63,13 +45,18 @@ const selectOrifice = (requiredArea: number): { designation: string; area: numbe
   return null;
 };
 
+// Calculate equivalent orifice diameter from area
+const calculateDiameter = (area: number): number => {
+  return Math.sqrt(4 * area / Math.PI);
+};
+
 // ============================================
 // API 520 COEFFICIENT C FROM k (Cp/Cv)
 // Per API 520 Part I, Equation 3.2
 // C = 520 × √[k × (2/(k+1))^((k+1)/(k-1))]
 // ============================================
 const calculateCCoefficient = (k: number): number => {
-  if (k <= 1) return 315; // Minimum practical value
+  if (k <= 1) return 315;
   const term = Math.pow(2 / (k + 1), (k + 1) / (k - 1));
   return 520 * Math.sqrt(k * term);
 };
@@ -98,10 +85,7 @@ const C_VALUES_TABLE: Record<string, { k: number; C: number; MW: number }> = {
   'Sulfur Dioxide': { k: 1.26, C: 343, MW: 64.07 },
 };
 
-// ============================================
-// CRITICAL PRESSURE RATIO
-// Per API 520 Part I
-// ============================================
+// Critical pressure ratio
 const calculateCriticalRatio = (k: number): number => {
   return Math.pow(2 / (k + 1), k / (k - 1));
 };
@@ -109,29 +93,9 @@ const calculateCriticalRatio = (k: number): number => {
 // ============================================
 // API 520 VAPOR/GAS RELIEF SIZING
 // Per API 520 Part I, Section 5.6.2, Equation 1
-// A = W × √(TZ/M) / (C × Kd × P1 × Kb × Kc)
-// Where:
-//   A = required area (in²)
-//   W = mass flow rate (lb/hr)
-//   T = relieving temperature (°R)
-//   Z = compressibility factor
-//   M = molecular weight
-//   C = coefficient from k
-//   Kd = discharge coefficient (0.975 for vapor)
-//   P1 = relieving pressure (psia)
-//   Kb = backpressure correction factor
-//   Kc = combination correction factor
 // ============================================
 const calculateVaporArea = (
-  W: number,      // Mass flow rate (lb/hr)
-  C: number,      // Coefficient from gas properties
-  Kd: number,     // Discharge coefficient (default 0.975)
-  P1: number,     // Relieving pressure (psia)
-  Kb: number,     // Back pressure correction factor
-  Kc: number,     // Combination correction factor
-  T: number,      // Relieving temperature (°R)
-  Z: number,      // Compressibility factor
-  M: number       // Molecular weight
+  W: number, C: number, Kd: number, P1: number, Kb: number, Kc: number, T: number, Z: number, M: number
 ): number => {
   if (P1 <= 0 || M <= 0) return 0;
   return (W * Math.sqrt((T * Z) / M)) / (C * Kd * P1 * Kb * Kc);
@@ -140,27 +104,9 @@ const calculateVaporArea = (
 // ============================================
 // API 520 LIQUID RELIEF SIZING
 // Per API 520 Part I, Section 5.8, Equation 5
-// A = Q × √(G) / (38 × Kd × Kw × Kc × Kv × √(P1-P2))
-// Where:
-//   A = required area (in²)
-//   Q = volumetric flow rate (gpm at flowing temp)
-//   G = specific gravity at flowing temp (water = 1.0)
-//   Kd = discharge coefficient (0.65 certified, use 0.62 if uncertified)
-//   Kw = backpressure correction factor (balanced bellows only)
-//   Kc = combination correction factor
-//   Kv = viscosity correction factor
-//   P1 = set pressure + overpressure (psig)
-//   P2 = total back pressure (psig)
 // ============================================
 const calculateLiquidArea = (
-  Q: number,      // Flow rate (gpm)
-  G: number,      // Specific gravity
-  Kd: number,     // Discharge coefficient (default 0.65)
-  Kw: number,     // Back pressure correction factor
-  Kc: number,     // Combination correction factor
-  Kv: number,     // Viscosity correction factor
-  P1: number,     // Set pressure + overpressure (psig)
-  P2: number      // Total back pressure (psig)
+  Q: number, G: number, Kd: number, Kw: number, Kc: number, Kv: number, P1: number, P2: number
 ): number => {
   const deltaP = P1 - P2;
   if (deltaP <= 0) return 0;
@@ -170,76 +116,40 @@ const calculateLiquidArea = (
 // ============================================
 // API 520 STEAM RELIEF SIZING
 // Per API 520 Part I, Section 5.7
-// For saturated steam:
-//   A = W / (51.5 × Kd × P1 × Kb × Kc × Kn × Ksh)
-// Where:
-//   A = required area (in²)
-//   W = steam mass flow rate (lb/hr)
-//   Kd = discharge coefficient (0.975)
-//   P1 = relieving pressure (psia)
-//   Kb = backpressure correction factor
-//   Kc = combination correction factor
-//   Kn = Napier correction factor (for P > 1500 psia)
-//   Ksh = superheat correction factor
 // ============================================
 const calculateSteamArea = (
-  W: number,      // Steam flow rate (lb/hr)
-  P1: number,     // Relieving pressure (psia)
-  Kd: number,     // Discharge coefficient
-  Kb: number,     // Back pressure correction factor
-  Kc: number,     // Combination correction factor
-  Kn: number,     // Napier correction factor
-  Ksh: number     // Superheat correction factor
+  W: number, P1: number, Kd: number, Kb: number, Kc: number, Kn: number, Ksh: number
 ): number => {
   if (P1 <= 0) return 0;
   return W / (51.5 * P1 * Kd * Kb * Kc * Kn * Ksh);
 };
 
-// ============================================
-// NAPIER CORRECTION FACTOR (Kn)
-// Per API 520 Part I, Section 5.7.1
-// For saturated steam at high pressures
-// Kn = 1.0 for P1 ≤ 1515 psia
-// Kn = (0.1906×P1 - 1000) / (0.2292×P1 - 1061) for 1515 < P1 ≤ 3215 psia
-// ============================================
+// Napier correction factor (Kn)
 const calculateKn = (P1: number): number => {
   if (P1 <= 1515) return 1.0;
   if (P1 <= 3215) {
     return (0.1906 * P1 - 1000) / (0.2292 * P1 - 1061);
   }
-  return 1.0; // Beyond valid range
+  return 1.0;
 };
 
-// ============================================
-// SUPERHEAT CORRECTION FACTOR (Ksh)
-// Per API 520 Part I, Table 9
-// Interpolated values based on pressure and temperature
-// ============================================
+// Superheat correction factor (Ksh) table
 const SUPERHEAT_TABLE: { pressure: number; temps: { temp: number; Ksh: number }[] }[] = [
   { pressure: 15, temps: [{ temp: 300, Ksh: 0.987 }, { temp: 400, Ksh: 0.957 }, { temp: 500, Ksh: 0.930 }, { temp: 600, Ksh: 0.905 }, { temp: 700, Ksh: 0.882 }, { temp: 800, Ksh: 0.861 }, { temp: 900, Ksh: 0.841 }, { temp: 1000, Ksh: 0.823 }] },
   { pressure: 50, temps: [{ temp: 300, Ksh: 0.998 }, { temp: 400, Ksh: 0.963 }, { temp: 500, Ksh: 0.935 }, { temp: 600, Ksh: 0.909 }, { temp: 700, Ksh: 0.885 }, { temp: 800, Ksh: 0.864 }, { temp: 900, Ksh: 0.844 }, { temp: 1000, Ksh: 0.825 }] },
   { pressure: 100, temps: [{ temp: 400, Ksh: 0.972 }, { temp: 500, Ksh: 0.942 }, { temp: 600, Ksh: 0.914 }, { temp: 700, Ksh: 0.890 }, { temp: 800, Ksh: 0.868 }, { temp: 900, Ksh: 0.847 }, { temp: 1000, Ksh: 0.828 }] },
   { pressure: 200, temps: [{ temp: 400, Ksh: 0.987 }, { temp: 500, Ksh: 0.953 }, { temp: 600, Ksh: 0.923 }, { temp: 700, Ksh: 0.897 }, { temp: 800, Ksh: 0.874 }, { temp: 900, Ksh: 0.852 }, { temp: 1000, Ksh: 0.833 }] },
   { pressure: 300, temps: [{ temp: 500, Ksh: 0.965 }, { temp: 600, Ksh: 0.932 }, { temp: 700, Ksh: 0.905 }, { temp: 800, Ksh: 0.880 }, { temp: 900, Ksh: 0.858 }, { temp: 1000, Ksh: 0.837 }] },
-  { pressure: 400, temps: [{ temp: 500, Ksh: 0.978 }, { temp: 600, Ksh: 0.941 }, { temp: 700, Ksh: 0.912 }, { temp: 800, Ksh: 0.886 }, { temp: 900, Ksh: 0.863 }, { temp: 1000, Ksh: 0.842 }] },
   { pressure: 500, temps: [{ temp: 500, Ksh: 0.991 }, { temp: 600, Ksh: 0.951 }, { temp: 700, Ksh: 0.919 }, { temp: 800, Ksh: 0.892 }, { temp: 900, Ksh: 0.868 }, { temp: 1000, Ksh: 0.846 }] },
-  { pressure: 600, temps: [{ temp: 500, Ksh: 0.999 }, { temp: 600, Ksh: 0.960 }, { temp: 700, Ksh: 0.926 }, { temp: 800, Ksh: 0.898 }, { temp: 900, Ksh: 0.873 }, { temp: 1000, Ksh: 0.851 }] },
-  { pressure: 800, temps: [{ temp: 600, Ksh: 0.979 }, { temp: 700, Ksh: 0.940 }, { temp: 800, Ksh: 0.909 }, { temp: 900, Ksh: 0.883 }, { temp: 1000, Ksh: 0.859 }] },
   { pressure: 1000, temps: [{ temp: 600, Ksh: 0.997 }, { temp: 700, Ksh: 0.954 }, { temp: 800, Ksh: 0.921 }, { temp: 900, Ksh: 0.893 }, { temp: 1000, Ksh: 0.868 }] },
-  { pressure: 1250, temps: [{ temp: 700, Ksh: 0.973 }, { temp: 800, Ksh: 0.935 }, { temp: 900, Ksh: 0.905 }, { temp: 1000, Ksh: 0.879 }] },
   { pressure: 1500, temps: [{ temp: 700, Ksh: 0.993 }, { temp: 800, Ksh: 0.951 }, { temp: 900, Ksh: 0.918 }, { temp: 1000, Ksh: 0.890 }] },
   { pressure: 2000, temps: [{ temp: 800, Ksh: 0.984 }, { temp: 900, Ksh: 0.946 }, { temp: 1000, Ksh: 0.914 }] },
-  { pressure: 2500, temps: [{ temp: 900, Ksh: 0.979 }, { temp: 1000, Ksh: 0.941 }] },
-  { pressure: 3000, temps: [{ temp: 1000, Ksh: 0.973 }] },
 ];
 
 const calculateKsh = (P1: number, superheatTemp: number): number => {
-  if (superheatTemp <= 0) return 1.0; // Saturated steam
-  
-  // Find pressure bounds
+  if (superheatTemp <= 0) return 1.0;
   let lowerP = SUPERHEAT_TABLE[0];
   let upperP = SUPERHEAT_TABLE[SUPERHEAT_TABLE.length - 1];
-  
   for (let i = 0; i < SUPERHEAT_TABLE.length - 1; i++) {
     if (P1 >= SUPERHEAT_TABLE[i].pressure && P1 <= SUPERHEAT_TABLE[i + 1].pressure) {
       lowerP = SUPERHEAT_TABLE[i];
@@ -247,8 +157,6 @@ const calculateKsh = (P1: number, superheatTemp: number): number => {
       break;
     }
   }
-  
-  // Interpolate Ksh based on temperature at each pressure
   const getKshAtPressure = (row: typeof SUPERHEAT_TABLE[0]) => {
     for (let i = 0; i < row.temps.length - 1; i++) {
       if (superheatTemp >= row.temps[i].temp && superheatTemp <= row.temps[i + 1].temp) {
@@ -261,288 +169,145 @@ const calculateKsh = (P1: number, superheatTemp: number): number => {
     }
     return row.temps[row.temps.length - 1].Ksh;
   };
-  
   const kshLower = getKshAtPressure(lowerP);
   const kshUpper = getKshAtPressure(upperP);
-  
-  // Interpolate between pressure levels
   if (lowerP.pressure === upperP.pressure) return kshLower;
   const fraction = (P1 - lowerP.pressure) / (upperP.pressure - lowerP.pressure);
   return kshLower + (kshUpper - kshLower) * fraction;
 };
 
-// ============================================
-// VISCOSITY CORRECTION FACTOR (Kv)
-// Per API 520 Part I, Section 5.8.4
-// Based on Reynolds number at the orifice
-// Kv = (0.9935 + 2.878/√Re + 342.75/Re^1.5)^(-0.5)
-// ============================================
+// Viscosity correction factor (Kv)
 const calculateKv = (Re: number): number => {
   if (Re >= 100000) return 1.0;
-  if (Re <= 0) return 0.3; // Minimum
+  if (Re <= 0) return 0.3;
   const Kv = Math.pow(0.9935 + 2.878 / Math.sqrt(Re) + 342.75 / Math.pow(Re, 1.5), -0.5);
   return Math.max(0.3, Math.min(1.0, Kv));
 };
 
-// Calculate Reynolds number for liquid flow through orifice
-// Re = Q × 2800 / (μ × √A)
-// Where Q = gpm, μ = centipoise, A = in²
 const calculateReynoldsForLiquid = (Q: number, G: number, viscosity: number, area: number): number => {
   if (viscosity <= 0 || area <= 0) return 100000;
   return (2800 * Q) / (viscosity * Math.sqrt(Math.max(area, 0.001)));
 };
 
-// ============================================
-// BACKPRESSURE CORRECTION FACTOR (Kb)
-// Per API 520 Part I, Figure 30 (Conventional)
-// and Figure 31 (Balanced Bellows)
-// ============================================
-
-// For conventional valves (vapor/gas service)
-// Kb is based on critical flow - if subcritical, capacity is reduced
+// Backpressure correction factors
 const calculateKbConventional = (k: number, P1: number, Pb: number): number => {
   const criticalRatio = calculateCriticalRatio(k);
   const actualRatio = Pb / P1;
-  
-  if (actualRatio <= criticalRatio) {
-    return 1.0; // Critical flow
-  }
-  
-  // Subcritical flow - linear reduction from critical ratio to 1.0
-  // Per API 520 Figure 30
+  if (actualRatio <= criticalRatio) return 1.0;
   const Kb = 1.0 - (actualRatio - criticalRatio) / (1.0 - criticalRatio);
   return Math.max(0.1, Math.min(1.0, Kb));
 };
 
-// For balanced bellows valves (vapor/gas service)
-// Per API 520 Figure 31 - more conservative than conventional
 const calculateKbBalanced = (percentBackpressure: number): number => {
-  // Based on API 520 Figure 31 curve
   if (percentBackpressure <= 30) return 1.0;
   if (percentBackpressure >= 50) return 0.70;
-  
-  // Linear interpolation between 30% and 50%
   return 1.0 - (percentBackpressure - 30) * 0.015;
 };
 
-// For pilot operated valves
-// Kb = 1.0 for modulating pilots (up to critical)
-// Kb follows conventional curve for pop-action pilots
 const calculateKbPilot = (k: number, P1: number, Pb: number): number => {
   const criticalRatio = calculateCriticalRatio(k);
   const actualRatio = Pb / P1;
-  
   if (actualRatio <= criticalRatio) return 1.0;
-  
-  // For subcritical, similar to conventional but slightly better
   const Kb = 1.0 - 0.8 * (actualRatio - criticalRatio) / (1.0 - criticalRatio);
   return Math.max(0.2, Math.min(1.0, Kb));
 };
 
-// ============================================
-// BACKPRESSURE CORRECTION FACTOR (Kw)
-// For liquid service (balanced bellows only)
-// Per API 520 Part I, Figure 32
-// ============================================
 const calculateKw = (percentBackpressure: number): number => {
   if (percentBackpressure <= 15) return 1.0;
   if (percentBackpressure >= 50) return 0.80;
-  
-  // Curve fit to API 520 Figure 32
   return 1.0 - 0.00571 * (percentBackpressure - 15);
 };
 
 // ============================================
 // TWO-PHASE OMEGA METHOD
 // Per API 520 Part I, Appendix D
-// For flashing and two-phase flow relief
 // ============================================
 const calculateOmegaMethod = (
-  W: number,        // Total mass flow (lb/hr)
-  P1: number,       // Relieving pressure (psia)
-  P2: number,       // Back pressure (psia)
-  x: number,        // Inlet vapor mass fraction (0-1)
-  rhoL: number,     // Liquid density (lb/ft³)
-  rhoV: number,     // Vapor density at inlet (lb/ft³)
-  Kd: number,       // Discharge coefficient (0.85 typical for 2-phase)
-  Kc: number,       // Combination factor
-  k: number         // Specific heat ratio
+  W: number, P1: number, P2: number, x: number, rhoL: number, rhoV: number, Kd: number, Kc: number, k: number
 ): { area: number; omega: number; massFlux: number; flowRegime: string } => {
-  // Calculate specific volumes
   const vL = 1 / rhoL;
   const vV = 1 / rhoV;
-  const vTP = x * vV + (1 - x) * vL; // Two-phase specific volume
-  
-  // Calculate omega parameter (API 520 Eq. D.3)
-  // ω = (x × vV + (1-x) × vL × k) / vTP
+  const vTP = x * vV + (1 - x) * vL;
   const omega = (x * vV + (1 - x) * vL * k) / vTP;
-  
-  // Calculate pressure ratio
   const eta = P2 / P1;
-  
-  // Calculate critical pressure ratio for two-phase (API 520 Eq. D.5)
-  // η_c = 0.55 + 0.217×ln(ω) - 0.046×(ln(ω))²
   let etaC = 0.55 + 0.217 * Math.log(omega) - 0.046 * Math.pow(Math.log(omega), 2);
   etaC = Math.max(0.05, Math.min(0.95, etaC));
-  
-  // Determine flow regime
   const isCritical = eta < etaC;
   const flowRegime = isCritical ? 'Critical (Choked)' : 'Subcritical';
-  
-  // Calculate mass flux G (lb/hr/in²)
   let massFlux: number;
-  
   if (isCritical) {
-    // Critical flow (API 520 Eq. D.6)
-    // G = 68.09 × √(P1 × ρL × (1 - η_c) / ω)
     massFlux = 68.09 * Kd * Kc * Math.sqrt((P1 * rhoL * (1 - etaC)) / omega);
   } else {
-    // Subcritical flow (API 520 Eq. D.7)
     const term1 = -2 * (omega - 1) * Math.log(eta);
     const term2 = (omega - 1) * (1 - eta);
     const term3 = (1 - eta * eta) / 2;
     massFlux = 68.09 * Kd * Kc * Math.sqrt(P1 * rhoL * (term1 + term2 + term3) / omega);
   }
-  
-  // Calculate required area (A = W / G)
   const area = W / massFlux;
-  
   return { area, omega, massFlux, flowRegime };
 };
 
 // ============================================
 // API 521 FIRE CASE CALCULATIONS
-// Per API 521 Section 5.15
 // ============================================
-
-// Environmental factors per API 521 Table 5
 const ENVIRONMENTAL_FACTORS = [
   { description: 'Bare vessel (no insulation)', F: 1.0, notes: 'No credit for drainage' },
-  { description: 'Insulated - k×t ≥ 22.7 W/m² (4 BTU/hr·ft²·°F)', F: 0.30, notes: '1" min. mineral fiber equiv.' },
-  { description: 'Insulated - k×t ≥ 11.4 W/m² (2 BTU/hr·ft²·°F)', F: 0.15, notes: '2" min. mineral fiber equiv.' },
-  { description: 'Insulated - k×t ≥ 5.7 W/m² (1 BTU/hr·ft²·°F)', F: 0.075, notes: '4" min. mineral fiber equiv.' },
-  { description: 'Insulated - k×t ≥ 3.8 W/m² (0.67 BTU/hr·ft²·°F)', F: 0.05, notes: '6" min. mineral fiber equiv.' },
+  { description: 'Insulated - k×t ≥ 22.7 W/m² (4 BTU/hr·ft²·°F)', F: 0.30, notes: '1" min. mineral fiber' },
+  { description: 'Insulated - k×t ≥ 11.4 W/m² (2 BTU/hr·ft²·°F)', F: 0.15, notes: '2" min. mineral fiber' },
+  { description: 'Insulated - k×t ≥ 5.7 W/m² (1 BTU/hr·ft²·°F)', F: 0.075, notes: '4" min. mineral fiber' },
+  { description: 'Insulated - k×t ≥ 3.8 W/m² (0.67 BTU/hr·ft²·°F)', F: 0.05, notes: '6" min. mineral fiber' },
   { description: 'Earth-covered storage (above grade)', F: 0.03, notes: 'Min. 3 ft earth cover' },
   { description: 'Underground storage', F: 0.00, notes: 'Below grade, no relief needed' },
-  { description: 'Water spray system (approved)', F: 1.0, notes: 'No credit per API 521' },
-  { description: 'Depressuring system installed', F: 1.0, notes: 'Requires separate analysis' },
 ];
 
-// Fire heat absorption per API 521 Table 4 (updated values)
-// Q = C × F × A^0.82
-// C = 21000 for adequate drainage, 34500 for inadequate drainage
-// A = wetted surface area (ft²)
-const calculateFireHeatAbsorption = (
-  wettedArea: number,    // ft²
-  F: number,             // Environmental factor
-  promptDrainage: boolean
-): number => {
-  // Per API 521 Table 4 / Section 5.15.2
-  // For adequate drainage: Q = 21000 × F × A^0.82
-  // For inadequate drainage: Q = 34500 × F × A^0.82
+const calculateFireHeatAbsorption = (wettedArea: number, F: number, promptDrainage: boolean): number => {
   const C = promptDrainage ? 21000 : 34500;
   return C * F * Math.pow(wettedArea, 0.82);
 };
 
-// Calculate wetted area for different vessel geometries
-// Per API 521 Section 5.15.3
 const calculateWettedArea = (
-  vesselType: 'horizontal' | 'vertical' | 'sphere',
-  diameter: number,        // ft
-  length: number,          // ft (or height for vertical)
-  liquidLevel: number      // % of diameter/height
-): { wettedArea: number; totalSurfaceArea: number; maxWettedArea: number } => {
+  vesselType: 'horizontal' | 'vertical' | 'sphere', diameter: number, length: number, liquidLevel: number
+): { wettedArea: number; totalSurfaceArea: number } => {
   const R = diameter / 2;
   let wettedArea = 0;
   let totalSurfaceArea = 0;
-  
   if (vesselType === 'horizontal') {
-    // Horizontal cylinder with 2:1 elliptical heads
     const liquidHeight = (liquidLevel / 100) * diameter;
-    
-    // Shell wetted area
     const theta = 2 * Math.acos(Math.max(-1, Math.min(1, 1 - liquidHeight / R)));
     const wettedPerimeter = R * theta;
     const shellWetted = wettedPerimeter * length;
-    
-    // Head wetted area (2:1 elliptical)
     const headWettedFraction = Math.min(1, liquidLevel / 100);
     const headArea = 2 * Math.PI * R * R * 1.09 * headWettedFraction;
-    
     wettedArea = shellWetted + headArea;
     totalSurfaceArea = Math.PI * diameter * length + 2 * Math.PI * R * R * 1.09;
-    
   } else if (vesselType === 'vertical') {
-    // Vertical cylinder - limited to 25 ft above grade per API 521
     const liquidHeight = (liquidLevel / 100) * length;
-    const effectiveHeight = Math.min(liquidHeight, 25); // API 521 25 ft limit
-    
+    const effectiveHeight = Math.min(liquidHeight, 25);
     const shellWetted = Math.PI * diameter * effectiveHeight;
-    const bottomHeadArea = Math.PI * R * R * 1.09; // 2:1 elliptical bottom
-    
+    const bottomHeadArea = Math.PI * R * R * 1.09;
     wettedArea = shellWetted + bottomHeadArea;
     totalSurfaceArea = Math.PI * diameter * length + 2 * Math.PI * R * R * 1.09;
-    
-  } else { // sphere
+  } else {
     const liquidHeight = (liquidLevel / 100) * diameter;
-    // Spherical cap area = π × D × h (for height h on sphere of diameter D)
     wettedArea = Math.PI * diameter * liquidHeight;
     totalSurfaceArea = Math.PI * diameter * diameter;
   }
-  
-  // Maximum wetted area for fire case (API 521 limits)
-  const maxWettedArea = vesselType === 'vertical' 
-    ? Math.PI * diameter * 25 + Math.PI * R * R * 1.09 
-    : wettedArea;
-  
-  return { 
-    wettedArea: Math.min(wettedArea, maxWettedArea), 
-    totalSurfaceArea,
-    maxWettedArea 
-  };
+  return { wettedArea, totalSurfaceArea };
 };
 
-// Calculate fire case relief requirements
 const calculateFireCaseRelief = (
-  heatAbsorption: number,   // BTU/hr
-  latentHeat: number,       // BTU/lb
-  vaporMW: number,
-  vaporK: number,
-  relievingPressure: number, // psia
-  relievingTemp: number,     // °R
-  compressibility: number,
-  Kd: number,
-  Kb: number,
-  Kc: number
+  heatAbsorption: number, latentHeat: number, vaporMW: number, vaporK: number,
+  relievingPressure: number, relievingTemp: number, compressibility: number, Kd: number, Kb: number, Kc: number
 ): { massFlow: number; requiredArea: number; C: number } => {
-  // Mass flow rate = Q / λ (heat absorption / latent heat)
   const massFlow = heatAbsorption / latentHeat;
-  
-  // Calculate C coefficient
   const C = calculateCCoefficient(vaporK);
-  
-  // Calculate required area using vapor equation
-  const requiredArea = calculateVaporArea(
-    massFlow,
-    C,
-    Kd,
-    relievingPressure,
-    Kb,
-    Kc,
-    relievingTemp,
-    compressibility,
-    vaporMW
-  );
-  
+  const requiredArea = calculateVaporArea(massFlow, C, Kd, relievingPressure, Kb, Kc, relievingTemp, compressibility, vaporMW);
   return { massFlow, requiredArea, C };
 };
 
 // ============================================
 // RUPTURE DISK SIZING
-// Per API 520 Part II, Section 5
 // ============================================
-
-// Rupture disk resistance factors (Kr) per API 520 Part II
 const RUPTURE_DISK_TYPES = [
   { type: 'Pre-scored tension acting', Kr: 1.0, description: 'Scored metal disk, forward acting' },
   { type: 'Pre-scored reverse acting', Kr: 1.5, description: 'Scored reverse buckling' },
@@ -551,7 +316,6 @@ const RUPTURE_DISK_TYPES = [
   { type: 'With knife blade', Kr: 0.8, description: 'Knife blade or cutter' },
 ];
 
-// Standard rupture disk sizes per ASME B16.5 flanges
 const RUPTURE_DISK_SIZES = [
   { size: 1, area: 0.785 },
   { size: 1.5, area: 1.767 },
@@ -569,58 +333,37 @@ const RUPTURE_DISK_SIZES = [
   { size: 24, area: 452.389 },
 ];
 
-// Calculate RD with PRV in series
-// Knet = Kd / √(1 + Kr)
 const calculateRuptureDiskArea = (
-  deviceType: 'vapor' | 'liquid' | 'steam',
-  flowRate: number,
-  Kd: number,
-  Kr: number,
-  pressure: number,
-  backPressure: number,
-  vaporMW?: number,
-  vaporK?: number,
-  temperature?: number,
-  compressibility?: number,
-  specificGravity?: number
+  deviceType: 'vapor' | 'liquid' | 'steam', flowRate: number, Kd: number, Kr: number,
+  pressure: number, backPressure: number, vaporMW?: number, vaporK?: number,
+  temperature?: number, compressibility?: number, specificGravity?: number
 ): { requiredArea: number; Knet: number } => {
-  // Net coefficient accounting for RD resistance
   const Knet = Kd / Math.sqrt(1 + Kr);
-  
   let requiredArea = 0;
-  
   if (deviceType === 'vapor' && vaporMW && vaporK && temperature && compressibility) {
     const C = calculateCCoefficient(vaporK);
-    requiredArea = (flowRate * Math.sqrt((temperature * compressibility) / vaporMW)) / 
-                   (C * Knet * pressure);
+    requiredArea = (flowRate * Math.sqrt((temperature * compressibility) / vaporMW)) / (C * Knet * pressure);
   } else if (deviceType === 'liquid' && specificGravity) {
     const deltaP = pressure - backPressure;
     if (deltaP > 0) {
-      requiredArea = (flowRate * Math.sqrt(specificGravity)) / 
-                     (38 * Knet * Math.sqrt(deltaP));
+      requiredArea = (flowRate * Math.sqrt(specificGravity)) / (38 * Knet * Math.sqrt(deltaP));
     }
   } else if (deviceType === 'steam') {
     requiredArea = flowRate / (51.5 * pressure * Knet);
   }
-  
   return { requiredArea, Knet };
 };
 
 const selectRuptureDiskSize = (requiredArea: number): { size: number; area: number } | null => {
   for (const disk of RUPTURE_DISK_SIZES) {
-    if (disk.area >= requiredArea) {
-      return disk;
-    }
+    if (disk.area >= requiredArea) return disk;
   }
   return null;
 };
 
 // ============================================
 // THERMAL RELIEF / BLOCKED OUTLET
-// Per API 521 Section 5.6
 // ============================================
-
-// Liquid thermal expansion coefficients (β) per API 521
 const LIQUID_EXPANSION_COEFFICIENTS: Record<string, { beta: number; name: string; SG: number }> = {
   water: { beta: 0.00012, name: 'Water', SG: 1.0 },
   crude_light: { beta: 0.00050, name: 'Light Crude Oil', SG: 0.80 },
@@ -634,28 +377,20 @@ const LIQUID_EXPANSION_COEFFICIENTS: Record<string, { beta: number; name: string
   butane: { beta: 0.00110, name: 'n-Butane', SG: 0.58 },
   ammonia: { beta: 0.00130, name: 'Ammonia', SG: 0.68 },
   methanol: { beta: 0.00070, name: 'Methanol', SG: 0.79 },
-  ethanol: { beta: 0.00062, name: 'Ethanol', SG: 0.79 },
-  benzene: { beta: 0.00068, name: 'Benzene', SG: 0.88 },
-  toluene: { beta: 0.00058, name: 'Toluene', SG: 0.87 },
   custom: { beta: 0.00050, name: 'Custom', SG: 1.0 },
 };
 
-// Calculate thermal expansion flow rate (API 521 Eq. 5)
-// Q = V × β × ΔT/Δt
 const calculateThermalExpansionRate = (
-  liquidVolume: number,    // gallons
-  expansionCoeff: number,  // 1/°F
-  heatingRate: number      // °F/hr
+  liquidVolume: number, expansionCoeff: number, heatingRate: number
 ): { volumeRate: number; massRate: number } => {
   const volumeRateGPH = liquidVolume * expansionCoeff * heatingRate;
-  const volumeRate = volumeRateGPH / 60; // gpm
-  const massRate = volumeRateGPH * 8.34; // lb/hr (assuming water density)
+  const volumeRate = volumeRateGPH / 60;
+  const massRate = volumeRateGPH * 8.34;
   return { volumeRate, massRate };
 };
 
 // ============================================
 // CONTROL VALVE FAILURE SCENARIOS
-// Per API 521 Section 5.3
 // ============================================
 const FAILURE_SCENARIOS = [
   { id: 'cv_fail_open', name: 'Control Valve Fails Open', description: 'Upstream CV fails fully open' },
@@ -667,22 +402,11 @@ const FAILURE_SCENARIOS = [
   { id: 'blocked_outlet', name: 'Blocked Outlet', description: 'Blocked discharge with heat input' },
 ] as const;
 
-// Control valve flow calculation (IEC 60534 / ISA 75.01)
-// Liquid: Q = Cv × √(ΔP / G)
-// Gas: W = 63.3 × Cv × P1 × √(M/(T×Z)) for choked flow
 const calculateCvFlow = (
-  Cv: number,
-  P1: number,        // Upstream pressure (psig)
-  P2: number,        // Downstream pressure (psig)
-  specificGravity: number,
-  fluidType: 'liquid' | 'gas',
-  molecularWeight?: number,
-  temperature?: number,
-  Z?: number,
-  k?: number
+  Cv: number, P1: number, P2: number, specificGravity: number, fluidType: 'liquid' | 'gas',
+  molecularWeight?: number, temperature?: number, Z?: number, k?: number
 ): { flowRate: number; flowUnit: string; isCritical?: boolean } => {
   const deltaP = P1 - P2;
-  
   if (fluidType === 'liquid') {
     const flowRate = Cv * Math.sqrt(Math.max(deltaP, 0) / specificGravity);
     return { flowRate, flowUnit: 'gpm' };
@@ -690,23 +414,113 @@ const calculateCvFlow = (
     const P1_abs = P1 + 14.7;
     const P2_abs = Math.max(P2 + 14.7, 14.7);
     const T = temperature + 460;
-    
-    // Critical pressure ratio
     const Pcrit = P1_abs * Math.pow(2 / (k + 1), k / (k - 1));
     const isCritical = P2_abs < Pcrit;
-    
     let flowRate: number;
     if (isCritical) {
-      // Critical (choked) flow
       flowRate = 63.3 * Cv * P1_abs * Math.sqrt(molecularWeight / (T * Z));
     } else {
-      // Subcritical flow
       const Y = 1 - (P1_abs - P2_abs) / (3 * P1_abs * Math.pow(2 / (k + 1), k / (k - 1)));
       flowRate = 1360 * Cv * Y * Math.sqrt((P1_abs - P2_abs) * molecularWeight / (T * Z));
     }
     return { flowRate, flowUnit: 'lb/hr', isCritical };
   }
   return { flowRate: 0, flowUnit: 'gpm' };
+};
+
+// ============================================
+// RESULT DISPLAY COMPONENT
+// ============================================
+interface OrificeResultProps {
+  requiredArea: number;
+  selectedOrifice: { designation: string; area: number; inletSize: string; outletSize: string; diameter: number } | null;
+  title?: string;
+  additionalInfo?: React.ReactNode;
+}
+
+const OrificeResultCard: React.FC<OrificeResultProps> = ({ requiredArea, selectedOrifice, title = "Orifice Selection", additionalInfo }) => {
+  const requiredDiameter = calculateDiameter(requiredArea);
+  const utilizationPercent = selectedOrifice ? (requiredArea / selectedOrifice.area * 100) : 0;
+  
+  return (
+    <Card className="border-gold/30 bg-gradient-card shadow-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2 text-primary">
+          {selectedOrifice ? (
+            <CheckCircle2 className="h-5 w-5 text-green-500" />
+          ) : (
+            <AlertCircle className="h-5 w-5 text-destructive" />
+          )}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Required Area */}
+          <div className="space-y-3 p-4 bg-secondary/50 rounded-lg border border-border">
+            <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Required</h4>
+            <div className="space-y-2">
+              <div className="flex justify-between items-baseline">
+                <span className="text-sm text-muted-foreground">Area:</span>
+                <span className="text-xl font-mono font-bold text-foreground">{requiredArea.toFixed(4)} in²</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-sm text-muted-foreground">Equiv. Diameter:</span>
+                <span className="font-mono font-medium text-foreground">{requiredDiameter.toFixed(3)}"</span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Selected Orifice */}
+          <div className="space-y-3 p-4 bg-primary/10 rounded-lg border border-gold/30">
+            <h4 className="font-semibold text-sm text-primary uppercase tracking-wide">Selected (API RP 526)</h4>
+            {selectedOrifice ? (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Orifice Type:</span>
+                  <Badge variant="outline" className="text-lg font-bold border-gold text-primary px-3 py-1">
+                    {selectedOrifice.designation}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm text-muted-foreground">Effective Area:</span>
+                  <span className="font-mono font-medium">{selectedOrifice.area} in²</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm text-muted-foreground">Orifice Dia.:</span>
+                  <span className="font-mono font-medium">{selectedOrifice.diameter.toFixed(3)}"</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm text-muted-foreground">Inlet × Outlet:</span>
+                  <span className="font-mono font-medium">{selectedOrifice.inletSize}" × {selectedOrifice.outletSize}"</span>
+                </div>
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-muted-foreground">Utilization:</span>
+                    <span className={`font-mono font-bold ${utilizationPercent > 90 ? 'text-amber-500' : 'text-green-500'}`}>
+                      {utilizationPercent.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 bg-secondary rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all ${utilizationPercent > 90 ? 'bg-amber-500' : 'bg-green-500'}`}
+                      style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-destructive font-medium">Exceeds T Orifice</p>
+                <p className="text-sm text-muted-foreground mt-1">Consider multiple valves or rupture disk</p>
+              </div>
+            )}
+          </div>
+        </div>
+        {additionalInfo && <div className="mt-4">{additionalInfo}</div>}
+      </CardContent>
+    </Card>
+  );
 };
 
 // ============================================
@@ -841,67 +655,30 @@ export default function API520Calculator() {
     ruptureDisk: false,
   });
 
-  // Saved scenarios for comparison
-  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
-  const [newScenarioName, setNewScenarioName] = useState('');
-
   // ===== VAPOR CALCULATIONS =====
   const vaporResults = useMemo(() => {
     const P1_abs = vaporInputs.setPresure + 14.7;
     const relievingPressure = P1_abs * (1 + vaporInputs.overpressure / 100);
     const T_abs = vaporInputs.temperature + 459.67;
-    
-    // Get C from table or calculate
     const gasData = C_VALUES_TABLE[vaporInputs.selectedGas];
     const C = gasData ? gasData.C : calculateCCoefficient(vaporInputs.specificHeatRatio);
-    
-    // Calculate Kb based on valve type
     const percentBackpressure = (vaporInputs.backPressure / relievingPressure) * 100;
     let Kb: number;
     switch (vaporInputs.valveType) {
-      case 'balanced':
-        Kb = calculateKbBalanced(percentBackpressure);
-        break;
-      case 'pilot':
-        Kb = calculateKbPilot(vaporInputs.specificHeatRatio, relievingPressure, vaporInputs.backPressure);
-        break;
-      default:
-        Kb = calculateKbConventional(vaporInputs.specificHeatRatio, relievingPressure, vaporInputs.backPressure);
+      case 'balanced': Kb = calculateKbBalanced(percentBackpressure); break;
+      case 'pilot': Kb = calculateKbPilot(vaporInputs.specificHeatRatio, relievingPressure, vaporInputs.backPressure); break;
+      default: Kb = calculateKbConventional(vaporInputs.specificHeatRatio, relievingPressure, vaporInputs.backPressure);
     }
-    
-    // Kc for rupture disk upstream
     const Kc = vaporInputs.ruptureDisk ? 0.9 : 1.0;
-    
-    // Critical ratio check
     const criticalRatio = calculateCriticalRatio(vaporInputs.specificHeatRatio);
     const actualRatio = vaporInputs.backPressure / relievingPressure;
     const flowRegime = actualRatio < criticalRatio ? 'Critical (Sonic)' : 'Subcritical';
-    
-    // Calculate required area
     const requiredArea = calculateVaporArea(
-      vaporInputs.massFlow,
-      C,
-      vaporInputs.dischargeCoeff,
-      relievingPressure,
-      Kb,
-      Kc,
-      T_abs,
-      vaporInputs.compressibility,
-      vaporInputs.molecularWeight
+      vaporInputs.massFlow, C, vaporInputs.dischargeCoeff, relievingPressure,
+      Kb, Kc, T_abs, vaporInputs.compressibility, vaporInputs.molecularWeight
     );
-    
     const selectedOrifice = selectOrifice(requiredArea);
-    
-    return {
-      relievingPressure,
-      C,
-      Kb,
-      Kc,
-      criticalRatio,
-      flowRegime,
-      requiredArea,
-      selectedOrifice,
-    };
+    return { relievingPressure, C, Kb, Kc, criticalRatio, flowRegime, requiredArea, selectedOrifice };
   }, [vaporInputs]);
 
   // ===== LIQUID CALCULATIONS =====
@@ -909,136 +686,48 @@ export default function API520Calculator() {
     const P1 = liquidInputs.setPresure * (1 + liquidInputs.overpressure / 100);
     const P2 = liquidInputs.backPressure;
     const deltaP = P1 - P2;
-    
-    // Kw for balanced bellows in liquid service
     const percentBackpressure = (P2 / P1) * 100;
     const Kw = liquidInputs.valveType === 'balanced' ? calculateKw(percentBackpressure) : 1.0;
-    
-    // Kc for rupture disk
     const Kc = liquidInputs.ruptureDisk ? 0.9 : 1.0;
-    
-    // Preliminary area for Re calculation
-    const prelimArea = calculateLiquidArea(
-      liquidInputs.flowRate,
-      liquidInputs.specificGravity,
-      liquidInputs.dischargeCoeff,
-      Kw,
-      Kc,
-      1.0,
-      P1,
-      P2
-    );
-    
-    // Reynolds number and Kv
-    const Re = calculateReynoldsForLiquid(
-      liquidInputs.flowRate,
-      liquidInputs.specificGravity,
-      liquidInputs.viscosity,
-      Math.max(prelimArea, 0.1)
-    );
+    const prelimArea = calculateLiquidArea(liquidInputs.flowRate, liquidInputs.specificGravity, liquidInputs.dischargeCoeff, Kw, Kc, 1.0, P1, P2);
+    const Re = calculateReynoldsForLiquid(liquidInputs.flowRate, liquidInputs.specificGravity, liquidInputs.viscosity, Math.max(prelimArea, 0.1));
     const Kv = calculateKv(Re);
-    
-    // Final area with Kv
-    const requiredArea = calculateLiquidArea(
-      liquidInputs.flowRate,
-      liquidInputs.specificGravity,
-      liquidInputs.dischargeCoeff,
-      Kw,
-      Kc,
-      Kv,
-      P1,
-      P2
-    );
-    
+    const requiredArea = calculateLiquidArea(liquidInputs.flowRate, liquidInputs.specificGravity, liquidInputs.dischargeCoeff, Kw, Kc, Kv, P1, P2);
     const selectedOrifice = selectOrifice(requiredArea);
-    
-    return {
-      relievingPressure: P1,
-      deltaP,
-      Kw,
-      Kv,
-      Kc,
-      Re,
-      requiredArea,
-      selectedOrifice,
-    };
+    return { relievingPressure: P1, deltaP, Kw, Kv, Kc, Re, requiredArea, selectedOrifice };
   }, [liquidInputs]);
 
   // ===== TWO-PHASE CALCULATIONS =====
   const twoPhaseResults = useMemo(() => {
     const P1_abs = twoPhaseInputs.setPresure + 14.7;
     const relievingPressure = P1_abs * (1 + twoPhaseInputs.overpressure / 100);
-    
     const Kc = twoPhaseInputs.ruptureDisk ? 0.9 : 1.0;
-    
     const result = calculateOmegaMethod(
-      twoPhaseInputs.totalMassFlow,
-      relievingPressure,
-      twoPhaseInputs.backPressure,
-      twoPhaseInputs.vaporFraction,
-      twoPhaseInputs.liquidDensity,
-      twoPhaseInputs.vaporDensity,
-      twoPhaseInputs.dischargeCoeff,
-      Kc,
-      twoPhaseInputs.specificHeatRatio
+      twoPhaseInputs.totalMassFlow, relievingPressure, twoPhaseInputs.backPressure,
+      twoPhaseInputs.vaporFraction, twoPhaseInputs.liquidDensity, twoPhaseInputs.vaporDensity,
+      twoPhaseInputs.dischargeCoeff, Kc, twoPhaseInputs.specificHeatRatio
     );
-    
     const selectedOrifice = selectOrifice(result.area);
-    
-    return {
-      relievingPressure,
-      Kc,
-      ...result,
-      selectedOrifice,
-    };
+    return { relievingPressure, Kc, ...result, selectedOrifice };
   }, [twoPhaseInputs]);
 
   // ===== STEAM CALCULATIONS =====
   const steamResults = useMemo(() => {
     const P1_abs = steamInputs.setPresure + 14.7;
     const relievingPressure = P1_abs * (1 + steamInputs.overpressure / 100);
-    
-    // Kb based on valve type
     const percentBackpressure = (steamInputs.backPressure / relievingPressure) * 100;
     let Kb: number;
     switch (steamInputs.valveType) {
-      case 'balanced':
-        Kb = calculateKbBalanced(percentBackpressure);
-        break;
-      case 'pilot':
-        Kb = calculateKbPilot(1.33, relievingPressure, steamInputs.backPressure);
-        break;
-      default:
-        Kb = calculateKbConventional(1.33, relievingPressure, steamInputs.backPressure);
+      case 'balanced': Kb = calculateKbBalanced(percentBackpressure); break;
+      case 'pilot': Kb = calculateKbPilot(1.33, relievingPressure, steamInputs.backPressure); break;
+      default: Kb = calculateKbConventional(1.33, relievingPressure, steamInputs.backPressure);
     }
-    
     const Kc = steamInputs.ruptureDisk ? 0.9 : 1.0;
     const Kn = calculateKn(relievingPressure);
-    const Ksh = steamInputs.steamType === 'superheated' 
-      ? calculateKsh(relievingPressure, steamInputs.superheatTemp)
-      : 1.0;
-    
-    const requiredArea = calculateSteamArea(
-      steamInputs.massFlow,
-      relievingPressure,
-      steamInputs.dischargeCoeff,
-      Kb,
-      Kc,
-      Kn,
-      Ksh
-    );
-    
+    const Ksh = steamInputs.steamType === 'superheated' ? calculateKsh(relievingPressure, steamInputs.superheatTemp) : 1.0;
+    const requiredArea = calculateSteamArea(steamInputs.massFlow, relievingPressure, steamInputs.dischargeCoeff, Kb, Kc, Kn, Ksh);
     const selectedOrifice = selectOrifice(requiredArea);
-    
-    return {
-      relievingPressure,
-      Kb,
-      Kc,
-      Kn,
-      Ksh,
-      requiredArea,
-      selectedOrifice,
-    };
+    return { relievingPressure, Kb, Kc, Kn, Ksh, requiredArea, selectedOrifice };
   }, [steamInputs]);
 
   // ===== FIRE CASE CALCULATIONS =====
@@ -1046,48 +735,17 @@ export default function API520Calculator() {
     const P1_abs = fireCaseInputs.setPresure + 14.7;
     const relievingPressure = P1_abs * (1 + fireCaseInputs.overpressure / 100);
     const T_abs = fireCaseInputs.relievingTemp + 459.67;
-    
     const { wettedArea, totalSurfaceArea } = calculateWettedArea(
-      fireCaseInputs.vesselType,
-      fireCaseInputs.diameter,
-      fireCaseInputs.length,
-      fireCaseInputs.liquidLevel
+      fireCaseInputs.vesselType, fireCaseInputs.diameter, fireCaseInputs.length, fireCaseInputs.liquidLevel
     );
-    
-    const heatAbsorption = calculateFireHeatAbsorption(
-      wettedArea,
-      fireCaseInputs.environmentalFactor,
-      fireCaseInputs.promptDrainage
-    );
-    
+    const heatAbsorption = calculateFireHeatAbsorption(wettedArea, fireCaseInputs.environmentalFactor, fireCaseInputs.promptDrainage);
     const Kc = fireCaseInputs.ruptureDisk ? 0.9 : 1.0;
-    
     const { massFlow, requiredArea, C } = calculateFireCaseRelief(
-      heatAbsorption,
-      fireCaseInputs.latentHeat,
-      fireCaseInputs.vaporMW,
-      fireCaseInputs.vaporK,
-      relievingPressure,
-      T_abs,
-      fireCaseInputs.compressibility,
-      fireCaseInputs.dischargeCoeff,
-      1.0, // Kb = 1.0 for fire case (atmospheric discharge)
-      Kc
+      heatAbsorption, fireCaseInputs.latentHeat, fireCaseInputs.vaporMW, fireCaseInputs.vaporK,
+      relievingPressure, T_abs, fireCaseInputs.compressibility, fireCaseInputs.dischargeCoeff, 1.0, Kc
     );
-    
     const selectedOrifice = selectOrifice(requiredArea);
-    
-    return {
-      wettedArea,
-      totalSurfaceArea,
-      heatAbsorption,
-      massFlow,
-      relievingPressure,
-      C,
-      Kc,
-      requiredArea,
-      selectedOrifice,
-    };
+    return { wettedArea, totalSurfaceArea, heatAbsorption, massFlow, relievingPressure, C, Kc, requiredArea, selectedOrifice };
   }, [fireCaseInputs]);
 
   // ===== RUPTURE DISK CALCULATIONS =====
@@ -1095,327 +753,179 @@ export default function API520Calculator() {
     const P1_abs = ruptureDiskInputs.burstPressure + 14.7;
     const relievingPressure = P1_abs * (1 + ruptureDiskInputs.overpressure / 100);
     const T_abs = ruptureDiskInputs.temperature + 459.67;
-    
     const diskData = RUPTURE_DISK_TYPES[ruptureDiskInputs.diskType];
     const Kr = diskData.Kr;
-    
     const { requiredArea, Knet } = calculateRuptureDiskArea(
-      ruptureDiskInputs.serviceType,
-      ruptureDiskInputs.flowRate,
-      ruptureDiskInputs.dischargeCoeff,
-      Kr,
-      relievingPressure,
-      ruptureDiskInputs.backPressure,
-      ruptureDiskInputs.vaporMW,
-      ruptureDiskInputs.vaporK,
-      T_abs,
-      ruptureDiskInputs.compressibility,
-      ruptureDiskInputs.specificGravity
+      ruptureDiskInputs.serviceType, ruptureDiskInputs.flowRate, ruptureDiskInputs.dischargeCoeff, Kr,
+      relievingPressure, ruptureDiskInputs.backPressure, ruptureDiskInputs.vaporMW, ruptureDiskInputs.vaporK,
+      T_abs, ruptureDiskInputs.compressibility, ruptureDiskInputs.specificGravity
     );
-    
     const selectedDisk = selectRuptureDiskSize(requiredArea);
-    
-    return {
-      relievingPressure,
-      Kr,
-      Knet,
-      requiredArea,
-      selectedDisk,
-      diskType: diskData.type,
-    };
+    return { relievingPressure, Kr, Knet, requiredArea, selectedDisk, diskType: diskData.type };
   }, [ruptureDiskInputs]);
 
   // ===== THERMAL RELIEF CALCULATIONS =====
   const thermalResults = useMemo(() => {
     const liquidProps = LIQUID_EXPANSION_COEFFICIENTS[thermalInputs.liquidType];
-    const beta = thermalInputs.liquidType === 'custom' 
-      ? thermalInputs.customBeta 
-      : liquidProps.beta;
-    
-    // Calculate volume
-    let volumeGal: number;
-    let surfaceArea: number;
-    
+    const beta = thermalInputs.liquidType === 'custom' ? thermalInputs.customBeta : liquidProps.beta;
+    let volumeGal: number, surfaceArea: number;
     if (thermalInputs.geometry === 'pipe') {
       const diamFt = thermalInputs.diameter / 12;
       volumeGal = Math.PI * Math.pow(diamFt / 2, 2) * thermalInputs.length * 7.481;
       surfaceArea = Math.PI * diamFt * thermalInputs.length;
     } else {
       volumeGal = Math.PI * Math.pow(thermalInputs.diameter / 2, 2) * thermalInputs.length * 7.481;
-      surfaceArea = Math.PI * thermalInputs.diameter * thermalInputs.length + 
-                   Math.PI * Math.pow(thermalInputs.diameter, 2) / 2;
+      surfaceArea = Math.PI * thermalInputs.diameter * thermalInputs.length + Math.PI * Math.pow(thermalInputs.diameter, 2) / 2;
     }
-    
-    // Heat input and heating rate
     const totalHeatInput = thermalInputs.heatFlux * surfaceArea;
     const liquidMass = volumeGal * 8.34 * thermalInputs.specificGravity;
-    const heatingRate = totalHeatInput / (liquidMass * 0.5); // Assume Cp ≈ 0.5 BTU/lb°F
-    
-    // Thermal expansion flow
+    const heatingRate = totalHeatInput / (liquidMass * 0.5);
     const { volumeRate } = calculateThermalExpansionRate(volumeGal, beta, heatingRate);
-    
-    // Relief sizing
     const P1 = thermalInputs.setPresure * (1 + thermalInputs.overpressure / 100);
     const Kc = thermalInputs.ruptureDisk ? 0.9 : 1.0;
-    
-    // Preliminary area for Re
-    const prelimArea = calculateLiquidArea(
-      volumeRate, thermalInputs.specificGravity, thermalInputs.dischargeCoeff,
-      1.0, Kc, 1.0, P1, thermalInputs.backPressure
-    );
-    
-    const Re = calculateReynoldsForLiquid(volumeRate, thermalInputs.specificGravity, 
-                                           thermalInputs.viscosity, Math.max(prelimArea, 0.01));
+    const prelimArea = calculateLiquidArea(volumeRate, thermalInputs.specificGravity, thermalInputs.dischargeCoeff, 1.0, Kc, 1.0, P1, thermalInputs.backPressure);
+    const Re = calculateReynoldsForLiquid(volumeRate, thermalInputs.specificGravity, thermalInputs.viscosity, Math.max(prelimArea, 0.01));
     const Kv = calculateKv(Re);
-    
-    const requiredArea = calculateLiquidArea(
-      volumeRate, thermalInputs.specificGravity, thermalInputs.dischargeCoeff,
-      1.0, Kc, Kv, P1, thermalInputs.backPressure
-    );
-    
+    const requiredArea = calculateLiquidArea(volumeRate, thermalInputs.specificGravity, thermalInputs.dischargeCoeff, 1.0, Kc, Kv, P1, thermalInputs.backPressure);
     const selectedOrifice = selectOrifice(requiredArea);
-    
-    return {
-      volumeGal,
-      surfaceArea,
-      beta,
-      heatingRate,
-      totalHeatInput,
-      volumeRate,
-      relievingPressure: P1,
-      Kv,
-      Kc,
-      Re,
-      requiredArea,
-      selectedOrifice,
-      liquidName: liquidProps.name,
-    };
+    return { volumeGal, surfaceArea, beta, heatingRate, totalHeatInput, volumeRate, relievingPressure: P1, Kv, Kc, Re, requiredArea, selectedOrifice, liquidName: liquidProps.name };
   }, [thermalInputs]);
 
   // ===== FAILURE SCENARIO CALCULATIONS =====
   const failureResults = useMemo(() => {
     const scenarioInfo = FAILURE_SCENARIOS.find(s => s.id === failureInputs.scenario);
-    
     const cvFlow = calculateCvFlow(
-      failureInputs.valveCv,
-      failureInputs.upstreamPressure,
-      failureInputs.downstreamPressure,
-      failureInputs.specificGravity,
-      failureInputs.fluidType,
-      failureInputs.vaporMW,
-      failureInputs.temperature,
-      failureInputs.compressibility,
-      failureInputs.vaporK
+      failureInputs.valveCv, failureInputs.upstreamPressure, failureInputs.downstreamPressure,
+      failureInputs.specificGravity, failureInputs.fluidType, failureInputs.vaporMW,
+      failureInputs.temperature, failureInputs.compressibility, failureInputs.vaporK
     );
-    
     const reliefFlowRate = cvFlow.flowRate;
     const reliefFlowUnit = cvFlow.flowUnit;
-    
     const P1 = failureInputs.setPresure * (1 + failureInputs.overpressure / 100);
     const Kc = failureInputs.ruptureDisk ? 0.9 : 1.0;
-    
     let requiredArea: number;
-    
     if (failureInputs.fluidType === 'gas') {
       const C = calculateCCoefficient(failureInputs.vaporK);
       const T_abs = failureInputs.temperature + 459.67;
       const P1_abs = P1 + 14.7;
-      requiredArea = calculateVaporArea(
-        reliefFlowRate, C, 0.975, P1_abs, 1.0, Kc,
-        T_abs, failureInputs.compressibility, failureInputs.vaporMW
-      );
+      requiredArea = calculateVaporArea(reliefFlowRate, C, 0.975, P1_abs, 1.0, Kc, T_abs, failureInputs.compressibility, failureInputs.vaporMW);
     } else {
-      const prelimArea = calculateLiquidArea(
-        reliefFlowRate, failureInputs.specificGravity, failureInputs.dischargeCoeff,
-        1.0, Kc, 1.0, P1, failureInputs.backPressure
-      );
-      const Re = calculateReynoldsForLiquid(reliefFlowRate, failureInputs.specificGravity,
-                                             failureInputs.viscosity, Math.max(prelimArea, 0.1));
+      const prelimArea = calculateLiquidArea(reliefFlowRate, failureInputs.specificGravity, failureInputs.dischargeCoeff, 1.0, Kc, 1.0, P1, failureInputs.backPressure);
+      const Re = calculateReynoldsForLiquid(reliefFlowRate, failureInputs.specificGravity, failureInputs.viscosity, Math.max(prelimArea, 0.1));
       const Kv = calculateKv(Re);
-      requiredArea = calculateLiquidArea(
-        reliefFlowRate, failureInputs.specificGravity, failureInputs.dischargeCoeff,
-        1.0, Kc, Kv, P1, failureInputs.backPressure
-      );
+      requiredArea = calculateLiquidArea(reliefFlowRate, failureInputs.specificGravity, failureInputs.dischargeCoeff, 1.0, Kc, Kv, P1, failureInputs.backPressure);
     }
-    
     const selectedOrifice = selectOrifice(requiredArea);
-    
-    return {
-      scenarioInfo,
-      cvFlow,
-      reliefFlowRate,
-      reliefFlowUnit,
-      relievingPressure: P1,
-      Kc,
-      requiredArea,
-      selectedOrifice,
-    };
+    return { scenarioInfo, cvFlow, reliefFlowRate, reliefFlowUnit, relievingPressure: P1, Kc, requiredArea, selectedOrifice };
   }, [failureInputs]);
 
   return (
     <div className="space-y-6">
-      <Card>
+      {/* Header Card */}
+      <Card className="border-gold/30 bg-gradient-card shadow-card">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            API 520/521 Relief Valve Sizing
-            <Badge variant="outline" className="ml-2">API 520 Part I (10th Ed)</Badge>
-            <Badge variant="outline">API 521 (7th Ed)</Badge>
+          <CardTitle className="flex items-center gap-3 text-2xl">
+            <span className="text-gradient-gold">API 520/521 Relief Valve Sizing</span>
+            <Badge variant="outline" className="border-gold/50 text-primary">API 520 Part I (10th Ed)</Badge>
+            <Badge variant="outline" className="border-gold/50 text-primary">API 521 (7th Ed)</Badge>
           </CardTitle>
-          <CardDescription>
-            Comprehensive pressure relief device sizing per API 520/521 standards
+          <CardDescription className="text-muted-foreground">
+            Comprehensive pressure relief device sizing per API 520/521 standards with orifice selection per API RP 526
           </CardDescription>
         </CardHeader>
       </Card>
 
       <Tabs defaultValue="vapor" className="space-y-4">
-        <TabsList className="grid grid-cols-9 w-full">
-          <TabsTrigger value="vapor" className="text-xs">Vapor/Gas</TabsTrigger>
-          <TabsTrigger value="liquid" className="text-xs">Liquid</TabsTrigger>
-          <TabsTrigger value="twophase" className="text-xs">2-Phase</TabsTrigger>
-          <TabsTrigger value="steam" className="text-xs">Steam</TabsTrigger>
-          <TabsTrigger value="firecase" className="flex items-center gap-1 text-xs">
-            <Flame className="h-3 w-3" />
-            Fire
+        <TabsList className="grid grid-cols-9 w-full bg-secondary/50 border border-border">
+          <TabsTrigger value="vapor" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Vapor/Gas</TabsTrigger>
+          <TabsTrigger value="liquid" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Liquid</TabsTrigger>
+          <TabsTrigger value="twophase" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">2-Phase</TabsTrigger>
+          <TabsTrigger value="steam" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Steam</TabsTrigger>
+          <TabsTrigger value="firecase" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Flame className="h-3 w-3" />Fire
           </TabsTrigger>
-          <TabsTrigger value="rupturedisk" className="flex items-center gap-1 text-xs">
-            <Disc className="h-3 w-3" />
-            RD
+          <TabsTrigger value="rupturedisk" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Disc className="h-3 w-3" />RD
           </TabsTrigger>
-          <TabsTrigger value="thermal" className="flex items-center gap-1 text-xs">
-            <Thermometer className="h-3 w-3" />
-            Thermal
+          <TabsTrigger value="thermal" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Thermometer className="h-3 w-3" />Thermal
           </TabsTrigger>
-          <TabsTrigger value="failure" className="flex items-center gap-1 text-xs">
-            <AlertTriangle className="h-3 w-3" />
-            Failure
+          <TabsTrigger value="failure" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <AlertTriangle className="h-3 w-3" />Failure
           </TabsTrigger>
-          <TabsTrigger value="reference" className="flex items-center gap-1 text-xs">
-            <Info className="h-3 w-3" />
-            Reference
+          <TabsTrigger value="reference" className="flex items-center gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Info className="h-3 w-3" />Reference
           </TabsTrigger>
         </TabsList>
 
         {/* VAPOR TAB */}
         <TabsContent value="vapor" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Process Conditions</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Process Conditions</CardTitle>
                 <CardDescription>Per API 520 Part I, Section 5.6</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Mass Flow Rate (lb/hr)</Label>
-                    <Input
-                      type="number"
-                      value={vaporInputs.massFlow}
-                      onChange={(e) => setVaporInputs({ ...vaporInputs, massFlow: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Mass Flow Rate (lb/hr)</Label>
+                    <Input type="number" value={vaporInputs.massFlow} onChange={(e) => setVaporInputs({ ...vaporInputs, massFlow: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Set Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={vaporInputs.setPresure}
-                      onChange={(e) => setVaporInputs({ ...vaporInputs, setPresure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
+                    <Input type="number" value={vaporInputs.setPresure} onChange={(e) => setVaporInputs({ ...vaporInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Overpressure (%)</Label>
-                    <Input
-                      type="number"
-                      value={vaporInputs.overpressure}
-                      onChange={(e) => setVaporInputs({ ...vaporInputs, overpressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Overpressure (%)</Label>
+                    <Input type="number" value={vaporInputs.overpressure} onChange={(e) => setVaporInputs({ ...vaporInputs, overpressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Back Pressure (psia)</Label>
-                    <Input
-                      type="number"
-                      value={vaporInputs.backPressure}
-                      onChange={(e) => setVaporInputs({ ...vaporInputs, backPressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Back Pressure (psia)</Label>
+                    <Input type="number" value={vaporInputs.backPressure} onChange={(e) => setVaporInputs({ ...vaporInputs, backPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Temperature (°F)</Label>
-                    <Input
-                      type="number"
-                      value={vaporInputs.temperature}
-                      onChange={(e) => setVaporInputs({ ...vaporInputs, temperature: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Temperature (°F)</Label>
+                    <Input type="number" value={vaporInputs.temperature} onChange={(e) => setVaporInputs({ ...vaporInputs, temperature: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Gas Selection</Label>
-                    <Select
-                      value={vaporInputs.selectedGas}
-                      onValueChange={(v) => {
-                        const gasData = C_VALUES_TABLE[v];
-                        if (gasData) {
-                          setVaporInputs({
-                            ...vaporInputs,
-                            selectedGas: v,
-                            molecularWeight: gasData.MW,
-                            specificHeatRatio: gasData.k,
-                          });
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Gas Selection</Label>
+                    <Select value={vaporInputs.selectedGas} onValueChange={(v) => {
+                      const gasData = C_VALUES_TABLE[v];
+                      if (gasData) setVaporInputs({ ...vaporInputs, selectedGas: v, molecularWeight: gasData.MW, specificHeatRatio: gasData.k });
+                    }}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {Object.keys(C_VALUES_TABLE).map((gas) => (
-                          <SelectItem key={gas} value={gas}>{gas}</SelectItem>
-                        ))}
+                        {Object.keys(C_VALUES_TABLE).map((gas) => (<SelectItem key={gas} value={gas}>{gas}</SelectItem>))}
                         <SelectItem value="custom">Custom</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Molecular Weight</Label>
-                    <Input
-                      type="number"
-                      value={vaporInputs.molecularWeight}
-                      onChange={(e) => setVaporInputs({ ...vaporInputs, molecularWeight: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Molecular Weight</Label>
+                    <Input type="number" value={vaporInputs.molecularWeight} onChange={(e) => setVaporInputs({ ...vaporInputs, molecularWeight: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>k (Cp/Cv)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={vaporInputs.specificHeatRatio}
-                      onChange={(e) => setVaporInputs({ ...vaporInputs, specificHeatRatio: parseFloat(e.target.value) || 1.4 })}
-                    />
+                    <Label className="text-muted-foreground">k (Cp/Cv)</Label>
+                    <Input type="number" step="0.01" value={vaporInputs.specificHeatRatio} onChange={(e) => setVaporInputs({ ...vaporInputs, specificHeatRatio: parseFloat(e.target.value) || 1.4 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Compressibility (Z)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={vaporInputs.compressibility}
-                      onChange={(e) => setVaporInputs({ ...vaporInputs, compressibility: parseFloat(e.target.value) || 1.0 })}
-                    />
+                    <Label className="text-muted-foreground">Compressibility (Z)</Label>
+                    <Input type="number" step="0.01" value={vaporInputs.compressibility} onChange={(e) => setVaporInputs({ ...vaporInputs, compressibility: parseFloat(e.target.value) || 1.0 })} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Valve Configuration</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Valve Configuration</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Valve Type</Label>
-                  <Select
-                    value={vaporInputs.valveType}
-                    onValueChange={(v) => setVaporInputs({ ...vaporInputs, valveType: v as any })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Label className="text-muted-foreground">Valve Type</Label>
+                  <Select value={vaporInputs.valveType} onValueChange={(v) => setVaporInputs({ ...vaporInputs, valveType: v as any })}>
+                    <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="conventional">Conventional</SelectItem>
                       <SelectItem value="balanced">Balanced Bellows</SelectItem>
@@ -1424,158 +934,81 @@ export default function API520Calculator() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Discharge Coefficient (Kd)</Label>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    value={vaporInputs.dischargeCoeff}
-                    onChange={(e) => setVaporInputs({ ...vaporInputs, dischargeCoeff: parseFloat(e.target.value) || 0.975 })}
-                  />
-                  <p className="text-xs text-muted-foreground">API default: 0.975 for vapor</p>
+                  <Label className="text-muted-foreground">Discharge Coefficient (Kd)</Label>
+                  <Input type="number" step="0.001" value={vaporInputs.dischargeCoeff} onChange={(e) => setVaporInputs({ ...vaporInputs, dischargeCoeff: parseFloat(e.target.value) || 0.975 })} className="bg-secondary/50 border-border" />
+                  <p className="text-xs text-muted-foreground">API default: 0.975 for vapor (certified)</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="vaporRuptureDisk"
-                    checked={vaporInputs.ruptureDisk}
-                    onChange={(e) => setVaporInputs({ ...vaporInputs, ruptureDisk: e.target.checked })}
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="vaporRuptureDisk">Rupture Disk Upstream (Kc = 0.9)</Label>
+                  <input type="checkbox" id="vaporRuptureDisk" checked={vaporInputs.ruptureDisk} onChange={(e) => setVaporInputs({ ...vaporInputs, ruptureDisk: e.target.checked })} className="h-4 w-4 accent-primary" />
+                  <Label htmlFor="vaporRuptureDisk" className="text-muted-foreground">Rupture Disk Upstream (Kc = 0.9)</Label>
                 </div>
-                
-                <div className="p-3 bg-muted rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">API 520 Equation (5.6.2):</h4>
-                  <p className="font-mono text-xs">A = W × √(TZ/M) / (C × Kd × P₁ × Kb × Kc)</p>
+                <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
+                  <h4 className="font-medium text-sm text-primary">API 520 Equation (5.6.2):</h4>
+                  <p className="font-mono text-xs text-foreground">A = W × √(TZ/M) / (C × Kd × P₁ × Kb × Kc)</p>
+                </div>
+
+                {/* Coefficients Display */}
+                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{vaporResults.relievingPressure.toFixed(1)} psia</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">C:</span> <span className="font-mono font-medium">{vaporResults.C.toFixed(0)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Kb:</span> <span className="font-mono font-medium">{vaporResults.Kb.toFixed(3)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Kc:</span> <span className="font-mono font-medium">{vaporResults.Kc.toFixed(2)}</span></div>
+                  <div className="col-span-2 text-sm"><span className="text-muted-foreground">Flow Regime:</span> <Badge variant="secondary" className="ml-2">{vaporResults.flowRegime}</Badge></div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Vapor Relief Sizing Results
-                {vaporResults.selectedOrifice ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-4 gap-4">
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Pressure</h4>
-                  <p className="text-sm">Relieving: <span className="font-mono font-medium">{vaporResults.relievingPressure.toFixed(1)} psia</span></p>
-                  <p className="text-sm">Critical Ratio: <span className="font-mono font-medium">{vaporResults.criticalRatio.toFixed(3)}</span></p>
-                  <p className="text-sm">Flow Regime: <span className="font-mono font-medium">{vaporResults.flowRegime}</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Coefficients</h4>
-                  <p className="text-sm">C: <span className="font-mono font-medium">{vaporResults.C.toFixed(0)}</span></p>
-                  <p className="text-sm">Kb: <span className="font-mono font-medium">{vaporResults.Kb.toFixed(3)}</span></p>
-                  <p className="text-sm">Kc: <span className="font-mono font-medium">{vaporResults.Kc.toFixed(2)}</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Required Area</h4>
-                  <p className="text-2xl font-mono font-bold">{vaporResults.requiredArea.toFixed(4)} in²</p>
-                </div>
-                <div className="space-y-2 p-3 bg-primary/10 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Selected Orifice</h4>
-                  {vaporResults.selectedOrifice ? (
-                    <>
-                      <p className="text-2xl font-mono font-bold">{vaporResults.selectedOrifice.designation}</p>
-                      <p className="text-sm">Area: {vaporResults.selectedOrifice.area} in²</p>
-                      <p className="text-sm">Inlet: {vaporResults.selectedOrifice.inletSize}"</p>
-                    </>
-                  ) : (
-                    <p className="text-destructive font-medium">Exceeds T orifice</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <OrificeResultCard requiredArea={vaporResults.requiredArea} selectedOrifice={vaporResults.selectedOrifice} title="Vapor Relief Valve Selection" />
         </TabsContent>
 
         {/* LIQUID TAB */}
         <TabsContent value="liquid" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Process Conditions</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Process Conditions</CardTitle>
                 <CardDescription>Per API 520 Part I, Section 5.8</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Flow Rate (gpm)</Label>
-                    <Input
-                      type="number"
-                      value={liquidInputs.flowRate}
-                      onChange={(e) => setLiquidInputs({ ...liquidInputs, flowRate: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Flow Rate (gpm)</Label>
+                    <Input type="number" value={liquidInputs.flowRate} onChange={(e) => setLiquidInputs({ ...liquidInputs, flowRate: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Specific Gravity</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={liquidInputs.specificGravity}
-                      onChange={(e) => setLiquidInputs({ ...liquidInputs, specificGravity: parseFloat(e.target.value) || 1.0 })}
-                    />
+                    <Label className="text-muted-foreground">Specific Gravity</Label>
+                    <Input type="number" step="0.01" value={liquidInputs.specificGravity} onChange={(e) => setLiquidInputs({ ...liquidInputs, specificGravity: parseFloat(e.target.value) || 1.0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Viscosity (cP)</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={liquidInputs.viscosity}
-                      onChange={(e) => setLiquidInputs({ ...liquidInputs, viscosity: parseFloat(e.target.value) || 1.0 })}
-                    />
+                    <Label className="text-muted-foreground">Viscosity (cP)</Label>
+                    <Input type="number" step="0.1" value={liquidInputs.viscosity} onChange={(e) => setLiquidInputs({ ...liquidInputs, viscosity: parseFloat(e.target.value) || 1.0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Set Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={liquidInputs.setPresure}
-                      onChange={(e) => setLiquidInputs({ ...liquidInputs, setPresure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
+                    <Input type="number" value={liquidInputs.setPresure} onChange={(e) => setLiquidInputs({ ...liquidInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Overpressure (%)</Label>
-                    <Input
-                      type="number"
-                      value={liquidInputs.overpressure}
-                      onChange={(e) => setLiquidInputs({ ...liquidInputs, overpressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Overpressure (%)</Label>
+                    <Input type="number" value={liquidInputs.overpressure} onChange={(e) => setLiquidInputs({ ...liquidInputs, overpressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Back Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={liquidInputs.backPressure}
-                      onChange={(e) => setLiquidInputs({ ...liquidInputs, backPressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Back Pressure (psig)</Label>
+                    <Input type="number" value={liquidInputs.backPressure} onChange={(e) => setLiquidInputs({ ...liquidInputs, backPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Valve Configuration</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Valve Configuration</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Valve Type</Label>
-                  <Select
-                    value={liquidInputs.valveType}
-                    onValueChange={(v) => setLiquidInputs({ ...liquidInputs, valveType: v as any })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Label className="text-muted-foreground">Valve Type</Label>
+                  <Select value={liquidInputs.valveType} onValueChange={(v) => setLiquidInputs({ ...liquidInputs, valveType: v as any })}>
+                    <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="conventional">Conventional</SelectItem>
                       <SelectItem value="balanced">Balanced Bellows</SelectItem>
@@ -1583,325 +1016,165 @@ export default function API520Calculator() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Discharge Coefficient (Kd)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={liquidInputs.dischargeCoeff}
-                    onChange={(e) => setLiquidInputs({ ...liquidInputs, dischargeCoeff: parseFloat(e.target.value) || 0.65 })}
-                  />
+                  <Label className="text-muted-foreground">Discharge Coefficient (Kd)</Label>
+                  <Input type="number" step="0.01" value={liquidInputs.dischargeCoeff} onChange={(e) => setLiquidInputs({ ...liquidInputs, dischargeCoeff: parseFloat(e.target.value) || 0.65 })} className="bg-secondary/50 border-border" />
                   <p className="text-xs text-muted-foreground">API default: 0.65 for liquid (certified), 0.62 (uncertified)</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="liquidRuptureDisk"
-                    checked={liquidInputs.ruptureDisk}
-                    onChange={(e) => setLiquidInputs({ ...liquidInputs, ruptureDisk: e.target.checked })}
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="liquidRuptureDisk">Rupture Disk Upstream (Kc = 0.9)</Label>
+                  <input type="checkbox" id="liquidRuptureDisk" checked={liquidInputs.ruptureDisk} onChange={(e) => setLiquidInputs({ ...liquidInputs, ruptureDisk: e.target.checked })} className="h-4 w-4 accent-primary" />
+                  <Label htmlFor="liquidRuptureDisk" className="text-muted-foreground">Rupture Disk Upstream (Kc = 0.9)</Label>
                 </div>
-                
-                <div className="p-3 bg-muted rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">API 520 Equation (5.8):</h4>
-                  <p className="font-mono text-xs">A = Q × √G / (38 × Kd × Kw × Kc × Kv × √ΔP)</p>
+                <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
+                  <h4 className="font-medium text-sm text-primary">API 520 Equation (5.8):</h4>
+                  <p className="font-mono text-xs text-foreground">A = Q × √G / (38 × Kd × Kw × Kc × Kv × √ΔP)</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{liquidResults.relievingPressure.toFixed(1)} psig</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">ΔP:</span> <span className="font-mono font-medium">{liquidResults.deltaP.toFixed(1)} psi</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Kw:</span> <span className="font-mono font-medium">{liquidResults.Kw.toFixed(3)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Kv:</span> <span className="font-mono font-medium">{liquidResults.Kv.toFixed(3)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Kc:</span> <span className="font-mono font-medium">{liquidResults.Kc.toFixed(2)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Re:</span> <span className="font-mono font-medium">{liquidResults.Re.toFixed(0)}</span></div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Liquid Relief Sizing Results
-                {liquidResults.selectedOrifice ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-4 gap-4">
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Pressure</h4>
-                  <p className="text-sm">Relieving: <span className="font-mono font-medium">{liquidResults.relievingPressure.toFixed(1)} psig</span></p>
-                  <p className="text-sm">ΔP: <span className="font-mono font-medium">{liquidResults.deltaP.toFixed(1)} psi</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Correction Factors</h4>
-                  <p className="text-sm">Kw: <span className="font-mono font-medium">{liquidResults.Kw.toFixed(3)}</span></p>
-                  <p className="text-sm">Kv: <span className="font-mono font-medium">{liquidResults.Kv.toFixed(3)}</span></p>
-                  <p className="text-sm">Kc: <span className="font-mono font-medium">{liquidResults.Kc.toFixed(2)}</span></p>
-                  <p className="text-sm">Re: <span className="font-mono font-medium">{liquidResults.Re.toFixed(0)}</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Required Area</h4>
-                  <p className="text-2xl font-mono font-bold">{liquidResults.requiredArea.toFixed(4)} in²</p>
-                </div>
-                <div className="space-y-2 p-3 bg-primary/10 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Selected Orifice</h4>
-                  {liquidResults.selectedOrifice ? (
-                    <>
-                      <p className="text-2xl font-mono font-bold">{liquidResults.selectedOrifice.designation}</p>
-                      <p className="text-sm">Area: {liquidResults.selectedOrifice.area} in²</p>
-                    </>
-                  ) : (
-                    <p className="text-destructive font-medium">Exceeds T orifice</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <OrificeResultCard requiredArea={liquidResults.requiredArea} selectedOrifice={liquidResults.selectedOrifice} title="Liquid Relief Valve Selection" />
         </TabsContent>
 
         {/* TWO-PHASE TAB */}
         <TabsContent value="twophase" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Two-Phase Flow Conditions</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Two-Phase Flow Conditions</CardTitle>
                 <CardDescription>Per API 520 Part I, Appendix D (Omega Method)</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Total Mass Flow (lb/hr)</Label>
-                    <Input
-                      type="number"
-                      value={twoPhaseInputs.totalMassFlow}
-                      onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, totalMassFlow: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Total Mass Flow (lb/hr)</Label>
+                    <Input type="number" value={twoPhaseInputs.totalMassFlow} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, totalMassFlow: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Vapor Mass Fraction</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="1"
-                      value={twoPhaseInputs.vaporFraction}
-                      onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, vaporFraction: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Vapor Mass Fraction</Label>
+                    <Input type="number" step="0.01" min="0" max="1" value={twoPhaseInputs.vaporFraction} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, vaporFraction: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Set Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={twoPhaseInputs.setPresure}
-                      onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, setPresure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
+                    <Input type="number" value={twoPhaseInputs.setPresure} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Overpressure (%)</Label>
-                    <Input
-                      type="number"
-                      value={twoPhaseInputs.overpressure}
-                      onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, overpressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Overpressure (%)</Label>
+                    <Input type="number" value={twoPhaseInputs.overpressure} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, overpressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Back Pressure (psia)</Label>
-                    <Input
-                      type="number"
-                      value={twoPhaseInputs.backPressure}
-                      onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, backPressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Back Pressure (psia)</Label>
+                    <Input type="number" value={twoPhaseInputs.backPressure} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, backPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Liquid Density (lb/ft³)</Label>
-                    <Input
-                      type="number"
-                      value={twoPhaseInputs.liquidDensity}
-                      onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, liquidDensity: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Liquid Density (lb/ft³)</Label>
+                    <Input type="number" value={twoPhaseInputs.liquidDensity} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, liquidDensity: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Vapor Density (lb/ft³)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={twoPhaseInputs.vaporDensity}
-                      onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, vaporDensity: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Vapor Density (lb/ft³)</Label>
+                    <Input type="number" step="0.01" value={twoPhaseInputs.vaporDensity} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, vaporDensity: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>k (Cp/Cv)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={twoPhaseInputs.specificHeatRatio}
-                      onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, specificHeatRatio: parseFloat(e.target.value) || 1.3 })}
-                    />
+                    <Label className="text-muted-foreground">k (Cp/Cv)</Label>
+                    <Input type="number" step="0.01" value={twoPhaseInputs.specificHeatRatio} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, specificHeatRatio: parseFloat(e.target.value) || 1.3 })} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Configuration</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Configuration</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Discharge Coefficient (Kd)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={twoPhaseInputs.dischargeCoeff}
-                    onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, dischargeCoeff: parseFloat(e.target.value) || 0.85 })}
-                  />
+                  <Label className="text-muted-foreground">Discharge Coefficient (Kd)</Label>
+                  <Input type="number" step="0.01" value={twoPhaseInputs.dischargeCoeff} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, dischargeCoeff: parseFloat(e.target.value) || 0.85 })} className="bg-secondary/50 border-border" />
                   <p className="text-xs text-muted-foreground">Typical: 0.85 for two-phase</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="tpRuptureDisk"
-                    checked={twoPhaseInputs.ruptureDisk}
-                    onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, ruptureDisk: e.target.checked })}
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="tpRuptureDisk">Rupture Disk Upstream (Kc = 0.9)</Label>
+                  <input type="checkbox" id="tpRuptureDisk" checked={twoPhaseInputs.ruptureDisk} onChange={(e) => setTwoPhaseInputs({ ...twoPhaseInputs, ruptureDisk: e.target.checked })} className="h-4 w-4 accent-primary" />
+                  <Label htmlFor="tpRuptureDisk" className="text-muted-foreground">Rupture Disk Upstream (Kc = 0.9)</Label>
                 </div>
-                
-                <div className="p-3 bg-muted rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">Omega Method (API 520 Appendix D):</h4>
-                  <p className="font-mono text-xs">ω = (x×vᵥ + (1-x)×vₗ×k) / vₜₚ</p>
-                  <p className="font-mono text-xs">η꜀ = 0.55 + 0.217×ln(ω) - 0.046×(ln(ω))²</p>
+                <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
+                  <h4 className="font-medium text-sm text-primary">Omega Method (API 520 Appendix D):</h4>
+                  <p className="font-mono text-xs text-foreground">ω = (x×vᵥ + (1-x)×vₗ×k) / vₜₚ</p>
+                  <p className="font-mono text-xs text-foreground">η꜀ = 0.55 + 0.217×ln(ω) - 0.046×(ln(ω))²</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <div className="text-sm"><span className="text-muted-foreground">ω (Omega):</span> <span className="font-mono font-medium">{twoPhaseResults.omega.toFixed(3)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Mass Flux:</span> <span className="font-mono font-medium">{twoPhaseResults.massFlux.toFixed(0)} lb/hr/in²</span></div>
+                  <div className="col-span-2 text-sm"><span className="text-muted-foreground">Flow Regime:</span> <Badge variant="secondary" className="ml-2">{twoPhaseResults.flowRegime}</Badge></div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Two-Phase Relief Sizing Results
-                {twoPhaseResults.selectedOrifice ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-4 gap-4">
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Flow Parameters</h4>
-                  <p className="text-sm">ω (Omega): <span className="font-mono font-medium">{twoPhaseResults.omega.toFixed(3)}</span></p>
-                  <p className="text-sm">Flow Regime: <span className="font-mono font-medium">{twoPhaseResults.flowRegime}</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Mass Flux</h4>
-                  <p className="text-sm">G: <span className="font-mono font-medium">{twoPhaseResults.massFlux.toFixed(0)} lb/hr/in²</span></p>
-                  <p className="text-sm">Kc: <span className="font-mono font-medium">{twoPhaseResults.Kc.toFixed(2)}</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Required Area</h4>
-                  <p className="text-2xl font-mono font-bold">{twoPhaseResults.area.toFixed(4)} in²</p>
-                </div>
-                <div className="space-y-2 p-3 bg-primary/10 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Selected Orifice</h4>
-                  {twoPhaseResults.selectedOrifice ? (
-                    <>
-                      <p className="text-2xl font-mono font-bold">{twoPhaseResults.selectedOrifice.designation}</p>
-                      <p className="text-sm">Area: {twoPhaseResults.selectedOrifice.area} in²</p>
-                    </>
-                  ) : (
-                    <p className="text-destructive font-medium">Exceeds T orifice</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <OrificeResultCard requiredArea={twoPhaseResults.area} selectedOrifice={twoPhaseResults.selectedOrifice} title="Two-Phase Relief Valve Selection" />
         </TabsContent>
 
         {/* STEAM TAB */}
         <TabsContent value="steam" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Steam Conditions</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Steam Conditions</CardTitle>
                 <CardDescription>Per API 520 Part I, Section 5.7</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Mass Flow Rate (lb/hr)</Label>
-                    <Input
-                      type="number"
-                      value={steamInputs.massFlow}
-                      onChange={(e) => setSteamInputs({ ...steamInputs, massFlow: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Mass Flow Rate (lb/hr)</Label>
+                    <Input type="number" value={steamInputs.massFlow} onChange={(e) => setSteamInputs({ ...steamInputs, massFlow: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Set Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={steamInputs.setPresure}
-                      onChange={(e) => setSteamInputs({ ...steamInputs, setPresure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
+                    <Input type="number" value={steamInputs.setPresure} onChange={(e) => setSteamInputs({ ...steamInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Overpressure (%)</Label>
-                    <Input
-                      type="number"
-                      value={steamInputs.overpressure}
-                      onChange={(e) => setSteamInputs({ ...steamInputs, overpressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Overpressure (%)</Label>
+                    <Input type="number" value={steamInputs.overpressure} onChange={(e) => setSteamInputs({ ...steamInputs, overpressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Back Pressure (psia)</Label>
-                    <Input
-                      type="number"
-                      value={steamInputs.backPressure}
-                      onChange={(e) => setSteamInputs({ ...steamInputs, backPressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Back Pressure (psia)</Label>
+                    <Input type="number" value={steamInputs.backPressure} onChange={(e) => setSteamInputs({ ...steamInputs, backPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Steam Type</Label>
-                    <Select
-                      value={steamInputs.steamType}
-                      onValueChange={(v) => setSteamInputs({ ...steamInputs, steamType: v as any })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Steam Type</Label>
+                    <Select value={steamInputs.steamType} onValueChange={(v) => setSteamInputs({ ...steamInputs, steamType: v as any })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="saturated">Saturated Steam</SelectItem>
-                        <SelectItem value="superheated">Superheated Steam</SelectItem>
+                        <SelectItem value="saturated">Saturated</SelectItem>
+                        <SelectItem value="superheated">Superheated</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   {steamInputs.steamType === 'superheated' && (
                     <div className="space-y-2">
-                      <Label>Superheat Temperature (°F)</Label>
-                      <Input
-                        type="number"
-                        value={steamInputs.superheatTemp}
-                        onChange={(e) => setSteamInputs({ ...steamInputs, superheatTemp: parseFloat(e.target.value) || 0 })}
-                      />
+                      <Label className="text-muted-foreground">Superheat Temp (°F)</Label>
+                      <Input type="number" value={steamInputs.superheatTemp} onChange={(e) => setSteamInputs({ ...steamInputs, superheatTemp: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                     </div>
                   )}
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Valve Configuration</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Valve Configuration</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Valve Type</Label>
-                  <Select
-                    value={steamInputs.valveType}
-                    onValueChange={(v) => setSteamInputs({ ...steamInputs, valveType: v as any })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Label className="text-muted-foreground">Valve Type</Label>
+                  <Select value={steamInputs.valveType} onValueChange={(v) => setSteamInputs({ ...steamInputs, valveType: v as any })}>
+                    <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="conventional">Conventional</SelectItem>
                       <SelectItem value="balanced">Balanced Bellows</SelectItem>
@@ -1910,99 +1183,47 @@ export default function API520Calculator() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Discharge Coefficient (Kd)</Label>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    value={steamInputs.dischargeCoeff}
-                    onChange={(e) => setSteamInputs({ ...steamInputs, dischargeCoeff: parseFloat(e.target.value) || 0.975 })}
-                  />
+                  <Label className="text-muted-foreground">Discharge Coefficient (Kd)</Label>
+                  <Input type="number" step="0.001" value={steamInputs.dischargeCoeff} onChange={(e) => setSteamInputs({ ...steamInputs, dischargeCoeff: parseFloat(e.target.value) || 0.975 })} className="bg-secondary/50 border-border" />
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="steamRuptureDisk"
-                    checked={steamInputs.ruptureDisk}
-                    onChange={(e) => setSteamInputs({ ...steamInputs, ruptureDisk: e.target.checked })}
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="steamRuptureDisk">Rupture Disk Upstream (Kc = 0.9)</Label>
+                  <input type="checkbox" id="steamRuptureDisk" checked={steamInputs.ruptureDisk} onChange={(e) => setSteamInputs({ ...steamInputs, ruptureDisk: e.target.checked })} className="h-4 w-4 accent-primary" />
+                  <Label htmlFor="steamRuptureDisk" className="text-muted-foreground">Rupture Disk Upstream (Kc = 0.9)</Label>
                 </div>
-                
-                <div className="p-3 bg-muted rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">API 520 Steam Equation (5.7):</h4>
-                  <p className="font-mono text-xs">A = W / (51.5 × Kd × P₁ × Kb × Kc × Kn × Ksh)</p>
+                <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
+                  <h4 className="font-medium text-sm text-primary">API 520 Equation (5.7):</h4>
+                  <p className="font-mono text-xs text-foreground">A = W / (51.5 × Kd × P₁ × Kb × Kc × Kn × Ksh)</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{steamResults.relievingPressure.toFixed(1)} psia</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Kb:</span> <span className="font-mono font-medium">{steamResults.Kb.toFixed(3)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Kn:</span> <span className="font-mono font-medium">{steamResults.Kn.toFixed(3)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Ksh:</span> <span className="font-mono font-medium">{steamResults.Ksh.toFixed(3)}</span></div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Steam Relief Sizing Results
-                {steamResults.selectedOrifice ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-4 gap-4">
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Pressure</h4>
-                  <p className="text-sm">Relieving: <span className="font-mono font-medium">{steamResults.relievingPressure.toFixed(1)} psia</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Correction Factors</h4>
-                  <p className="text-sm">Kb: <span className="font-mono font-medium">{steamResults.Kb.toFixed(3)}</span></p>
-                  <p className="text-sm">Kc: <span className="font-mono font-medium">{steamResults.Kc.toFixed(2)}</span></p>
-                  <p className="text-sm">Kn: <span className="font-mono font-medium">{steamResults.Kn.toFixed(3)}</span></p>
-                  <p className="text-sm">Ksh: <span className="font-mono font-medium">{steamResults.Ksh.toFixed(3)}</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Required Area</h4>
-                  <p className="text-2xl font-mono font-bold">{steamResults.requiredArea.toFixed(4)} in²</p>
-                </div>
-                <div className="space-y-2 p-3 bg-primary/10 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Selected Orifice</h4>
-                  {steamResults.selectedOrifice ? (
-                    <>
-                      <p className="text-2xl font-mono font-bold">{steamResults.selectedOrifice.designation}</p>
-                      <p className="text-sm">Area: {steamResults.selectedOrifice.area} in²</p>
-                    </>
-                  ) : (
-                    <p className="text-destructive font-medium">Exceeds T orifice</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <OrificeResultCard requiredArea={steamResults.requiredArea} selectedOrifice={steamResults.selectedOrifice} title="Steam Relief Valve Selection" />
         </TabsContent>
 
         {/* FIRE CASE TAB */}
         <TabsContent value="firecase" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-orange-500" />
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary flex items-center gap-2">
+                  <Flame className="h-5 w-5 text-orange-500" />
                   Vessel Geometry
                 </CardTitle>
                 <CardDescription>Per API 521 Section 5.15</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Vessel Type</Label>
-                    <Select
-                      value={fireCaseInputs.vesselType}
-                      onValueChange={(v) => setFireCaseInputs({ ...fireCaseInputs, vesselType: v as any })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Vessel Type</Label>
+                    <Select value={fireCaseInputs.vesselType} onValueChange={(v) => setFireCaseInputs({ ...fireCaseInputs, vesselType: v as any })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="horizontal">Horizontal Cylinder</SelectItem>
                         <SelectItem value="vertical">Vertical Cylinder</SelectItem>
@@ -2011,212 +1232,99 @@ export default function API520Calculator() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Diameter (ft)</Label>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      value={fireCaseInputs.diameter}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, diameter: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Diameter (ft)</Label>
+                    <Input type="number" step="0.5" value={fireCaseInputs.diameter} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, diameter: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>{fireCaseInputs.vesselType === 'sphere' ? 'N/A' : 'Length/Height (ft)'}</Label>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      value={fireCaseInputs.length}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, length: parseFloat(e.target.value) || 0 })}
-                      disabled={fireCaseInputs.vesselType === 'sphere'}
-                    />
+                    <Label className="text-muted-foreground">{fireCaseInputs.vesselType === 'sphere' ? 'N/A' : 'Length/Height (ft)'}</Label>
+                    <Input type="number" step="0.5" value={fireCaseInputs.length} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, length: parseFloat(e.target.value) || 0 })} disabled={fireCaseInputs.vesselType === 'sphere'} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Liquid Level (%)</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={fireCaseInputs.liquidLevel}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, liquidLevel: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Liquid Level (%)</Label>
+                    <Input type="number" min="0" max="100" value={fireCaseInputs.liquidLevel} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, liquidLevel: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Environmental Factor (F)</Label>
-                    <Select
-                      value={fireCaseInputs.environmentalFactor.toString()}
-                      onValueChange={(v) => setFireCaseInputs({ ...fireCaseInputs, environmentalFactor: parseFloat(v) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Environmental Factor (F)</Label>
+                    <Select value={fireCaseInputs.environmentalFactor.toString()} onValueChange={(v) => setFireCaseInputs({ ...fireCaseInputs, environmentalFactor: parseFloat(v) })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {ENVIRONMENTAL_FACTORS.map((ef) => (
-                          <SelectItem key={ef.description} value={ef.F.toString()}>
-                            {ef.description} (F = {ef.F})
-                          </SelectItem>
+                          <SelectItem key={ef.description} value={ef.F.toString()}>{ef.description} (F = {ef.F})</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="flex items-center gap-2 pt-6">
-                    <input
-                      type="checkbox"
-                      id="promptDrainage"
-                      checked={fireCaseInputs.promptDrainage}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, promptDrainage: e.target.checked })}
-                      className="h-4 w-4"
-                    />
-                    <Label htmlFor="promptDrainage">Adequate Drainage (C=21000)</Label>
+                    <input type="checkbox" id="promptDrainage" checked={fireCaseInputs.promptDrainage} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, promptDrainage: e.target.checked })} className="h-4 w-4 accent-primary" />
+                    <Label htmlFor="promptDrainage" className="text-muted-foreground">Adequate Drainage (C=21000)</Label>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Fluid Properties & Relief Conditions</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Fluid Properties & Relief</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Latent Heat (BTU/lb)</Label>
-                    <Input
-                      type="number"
-                      value={fireCaseInputs.latentHeat}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, latentHeat: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Latent Heat (BTU/lb)</Label>
+                    <Input type="number" value={fireCaseInputs.latentHeat} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, latentHeat: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Vapor MW</Label>
-                    <Input
-                      type="number"
-                      value={fireCaseInputs.vaporMW}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, vaporMW: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Vapor MW</Label>
+                    <Input type="number" value={fireCaseInputs.vaporMW} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, vaporMW: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Vapor k (Cp/Cv)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={fireCaseInputs.vaporK}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, vaporK: parseFloat(e.target.value) || 1.1 })}
-                    />
+                    <Label className="text-muted-foreground">Vapor k (Cp/Cv)</Label>
+                    <Input type="number" step="0.01" value={fireCaseInputs.vaporK} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, vaporK: parseFloat(e.target.value) || 1.1 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Compressibility (Z)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={fireCaseInputs.compressibility}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, compressibility: parseFloat(e.target.value) || 1.0 })}
-                    />
+                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
+                    <Input type="number" value={fireCaseInputs.setPresure} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Set Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={fireCaseInputs.setPresure}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, setPresure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Overpressure (%) - Fire: 21%</Label>
+                    <Input type="number" value={fireCaseInputs.overpressure} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, overpressure: parseFloat(e.target.value) || 21 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Overpressure (%) - Fire allows 21%</Label>
-                    <Input
-                      type="number"
-                      value={fireCaseInputs.overpressure}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, overpressure: parseFloat(e.target.value) || 21 })}
-                    />
+                    <Label className="text-muted-foreground">Relieving Temp (°F)</Label>
+                    <Input type="number" value={fireCaseInputs.relievingTemp} onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, relievingTemp: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Relieving Temperature (°F)</Label>
-                    <Input
-                      type="number"
-                      value={fireCaseInputs.relievingTemp}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, relievingTemp: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Discharge Coefficient (Kd)</Label>
-                    <Input
-                      type="number"
-                      step="0.001"
-                      value={fireCaseInputs.dischargeCoeff}
-                      onChange={(e) => setFireCaseInputs({ ...fireCaseInputs, dischargeCoeff: parseFloat(e.target.value) || 0.975 })}
-                    />
-                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <div className="text-sm"><span className="text-muted-foreground">Wetted Area:</span> <span className="font-mono font-medium">{fireCaseResults.wettedArea.toFixed(1)} ft²</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Heat Input:</span> <span className="font-mono font-medium">{(fireCaseResults.heatAbsorption / 1e6).toFixed(2)} MM BTU/hr</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Relief Rate:</span> <span className="font-mono font-medium">{fireCaseResults.massFlow.toFixed(0)} lb/hr</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">C:</span> <span className="font-mono font-medium">{fireCaseResults.C.toFixed(0)}</span></div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Fire Case Relief Sizing Results
-                {fireCaseResults.selectedOrifice ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-              <CardDescription>Per API 521 Table 4 - Q = C × F × A^0.82</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-4 gap-4">
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Wetted Area</h4>
-                  <p className="text-sm">Wetted: <span className="font-mono font-medium">{fireCaseResults.wettedArea.toFixed(1)} ft²</span></p>
-                  <p className="text-sm">Total Surface: <span className="font-mono font-medium">{fireCaseResults.totalSurfaceArea.toFixed(1)} ft²</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Heat & Vapor</h4>
-                  <p className="text-sm">Q: <span className="font-mono font-medium">{(fireCaseResults.heatAbsorption / 1e6).toFixed(2)} MM BTU/hr</span></p>
-                  <p className="text-sm">W: <span className="font-mono font-medium">{fireCaseResults.massFlow.toFixed(0)} lb/hr</span></p>
-                </div>
-                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Required Area</h4>
-                  <p className="text-2xl font-mono font-bold">{fireCaseResults.requiredArea.toFixed(4)} in²</p>
-                </div>
-                <div className="space-y-2 p-3 bg-primary/10 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Selected Orifice</h4>
-                  {fireCaseResults.selectedOrifice ? (
-                    <>
-                      <p className="text-2xl font-mono font-bold">{fireCaseResults.selectedOrifice.designation}</p>
-                      <p className="text-sm">Area: {fireCaseResults.selectedOrifice.area} in²</p>
-                    </>
-                  ) : (
-                    <p className="text-destructive font-medium">Exceeds T orifice</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <OrificeResultCard requiredArea={fireCaseResults.requiredArea} selectedOrifice={fireCaseResults.selectedOrifice} title="Fire Case Relief Valve Selection" />
         </TabsContent>
 
         {/* RUPTURE DISK TAB */}
         <TabsContent value="rupturedisk" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Disc className="h-4 w-4 text-blue-500" />
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary flex items-center gap-2">
+                  <Disc className="h-5 w-5 text-blue-500" />
                   Rupture Disk Configuration
                 </CardTitle>
                 <CardDescription>Per API 520 Part II, Section 5</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Service Type</Label>
-                    <Select
-                      value={ruptureDiskInputs.serviceType}
-                      onValueChange={(v) => setRuptureDiskInputs({ ...ruptureDiskInputs, serviceType: v as any })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Service Type</Label>
+                    <Select value={ruptureDiskInputs.serviceType} onValueChange={(v) => setRuptureDiskInputs({ ...ruptureDiskInputs, serviceType: v as any })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="vapor">Vapor/Gas</SelectItem>
                         <SelectItem value="liquid">Liquid</SelectItem>
@@ -2225,70 +1333,60 @@ export default function API520Calculator() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Disk Type</Label>
-                    <Select
-                      value={ruptureDiskInputs.diskType.toString()}
-                      onValueChange={(v) => setRuptureDiskInputs({ ...ruptureDiskInputs, diskType: parseInt(v) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Disk Type</Label>
+                    <Select value={ruptureDiskInputs.diskType.toString()} onValueChange={(v) => setRuptureDiskInputs({ ...ruptureDiskInputs, diskType: parseInt(v) })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {RUPTURE_DISK_TYPES.map((disk, idx) => (
-                          <SelectItem key={disk.type} value={idx.toString()}>
-                            {disk.type} (Kr = {disk.Kr})
-                          </SelectItem>
+                          <SelectItem key={disk.type} value={idx.toString()}>{disk.type} (Kr = {disk.Kr})</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Flow Rate ({ruptureDiskInputs.serviceType === 'liquid' ? 'gpm' : 'lb/hr'})</Label>
-                    <Input
-                      type="number"
-                      value={ruptureDiskInputs.flowRate}
-                      onChange={(e) => setRuptureDiskInputs({ ...ruptureDiskInputs, flowRate: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Flow Rate ({ruptureDiskInputs.serviceType === 'liquid' ? 'gpm' : 'lb/hr'})</Label>
+                    <Input type="number" value={ruptureDiskInputs.flowRate} onChange={(e) => setRuptureDiskInputs({ ...ruptureDiskInputs, flowRate: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Burst Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={ruptureDiskInputs.burstPressure}
-                      onChange={(e) => setRuptureDiskInputs({ ...ruptureDiskInputs, burstPressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Burst Pressure (psig)</Label>
+                    <Input type="number" value={ruptureDiskInputs.burstPressure} onChange={(e) => setRuptureDiskInputs({ ...ruptureDiskInputs, burstPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
-                
-                <div className="p-3 bg-muted rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">Net Discharge Coefficient:</h4>
-                  <p className="font-mono text-xs">K_net = Kd / √(1 + Kr)</p>
+                <div className="p-4 bg-secondary/30 rounded-lg border border-gold/20 space-y-2">
+                  <h4 className="font-medium text-sm text-primary">Net Discharge Coefficient:</h4>
+                  <p className="font-mono text-xs text-foreground">K_net = Kd / √(1 + Kr)</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Results</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Rupture Disk Results</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                    <h4 className="font-medium text-sm text-muted-foreground">Coefficients</h4>
-                    <p className="text-sm">Kr: <span className="font-mono font-medium">{ruptureDiskResults.Kr.toFixed(2)}</span></p>
-                    <p className="text-sm">K_net: <span className="font-mono font-medium">{ruptureDiskResults.Knet.toFixed(3)}</span></p>
-                  </div>
-                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                    <h4 className="font-medium text-sm text-muted-foreground">Required Area</h4>
-                    <p className="text-2xl font-mono font-bold">{ruptureDiskResults.requiredArea.toFixed(4)} in²</p>
-                  </div>
+              <CardContent className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <div className="text-sm"><span className="text-muted-foreground">Kr:</span> <span className="font-mono font-medium">{ruptureDiskResults.Kr.toFixed(2)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">K_net:</span> <span className="font-mono font-medium">{ruptureDiskResults.Knet.toFixed(3)}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{ruptureDiskResults.relievingPressure.toFixed(1)} psia</span></div>
                 </div>
-                <div className="space-y-2 p-3 bg-primary/10 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Selected Disk Size</h4>
+                <div className="p-4 bg-primary/10 rounded-lg border border-gold/30 space-y-3">
+                  <h4 className="font-semibold text-sm text-primary uppercase tracking-wide">Required Disk Size</h4>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-muted-foreground">Required Area:</span>
+                    <span className="text-xl font-mono font-bold">{ruptureDiskResults.requiredArea.toFixed(4)} in²</span>
+                  </div>
                   {ruptureDiskResults.selectedDisk ? (
                     <>
-                      <p className="text-2xl font-mono font-bold">{ruptureDiskResults.selectedDisk.size}" NPS</p>
-                      <p className="text-sm">Area: {ruptureDiskResults.selectedDisk.area.toFixed(2)} in²</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Selected NPS:</span>
+                        <Badge variant="outline" className="text-lg font-bold border-gold text-primary px-3 py-1">
+                          {ruptureDiskResults.selectedDisk.size}"
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-sm text-muted-foreground">Selected Area:</span>
+                        <span className="font-mono font-medium">{ruptureDiskResults.selectedDisk.area.toFixed(2)} in²</span>
+                      </div>
                     </>
                   ) : (
                     <p className="text-destructive font-medium">Exceeds 24" disk</p>
@@ -2302,25 +1400,20 @@ export default function API520Calculator() {
         {/* THERMAL TAB */}
         <TabsContent value="thermal" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Thermometer className="h-4 w-4 text-red-500" />
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary flex items-center gap-2">
+                  <Thermometer className="h-5 w-5 text-red-500" />
                   System Geometry
                 </CardTitle>
                 <CardDescription>Per API 521 Section 5.6 - Blocked Outlet</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Geometry Type</Label>
-                    <Select
-                      value={thermalInputs.geometry}
-                      onValueChange={(v) => setThermalInputs({ ...thermalInputs, geometry: v as any })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Geometry Type</Label>
+                    <Select value={thermalInputs.geometry} onValueChange={(v) => setThermalInputs({ ...thermalInputs, geometry: v as any })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pipe">Pipeline</SelectItem>
                         <SelectItem value="vessel">Vessel/Tank</SelectItem>
@@ -2328,124 +1421,95 @@ export default function API520Calculator() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Diameter ({thermalInputs.geometry === 'pipe' ? 'in' : 'ft'})</Label>
-                    <Input
-                      type="number"
-                      value={thermalInputs.diameter}
-                      onChange={(e) => setThermalInputs({ ...thermalInputs, diameter: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Diameter ({thermalInputs.geometry === 'pipe' ? 'in' : 'ft'})</Label>
+                    <Input type="number" value={thermalInputs.diameter} onChange={(e) => setThermalInputs({ ...thermalInputs, diameter: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Length (ft)</Label>
-                    <Input
-                      type="number"
-                      value={thermalInputs.length}
-                      onChange={(e) => setThermalInputs({ ...thermalInputs, length: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Length (ft)</Label>
+                    <Input type="number" value={thermalInputs.length} onChange={(e) => setThermalInputs({ ...thermalInputs, length: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Liquid Type</Label>
-                    <Select
-                      value={thermalInputs.liquidType}
-                      onValueChange={(v) => {
-                        const liq = LIQUID_EXPANSION_COEFFICIENTS[v as keyof typeof LIQUID_EXPANSION_COEFFICIENTS];
-                        setThermalInputs({ 
-                          ...thermalInputs, 
-                          liquidType: v as any,
-                          specificGravity: liq.SG
-                        });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Liquid Type</Label>
+                    <Select value={thermalInputs.liquidType} onValueChange={(v) => {
+                      const liq = LIQUID_EXPANSION_COEFFICIENTS[v as keyof typeof LIQUID_EXPANSION_COEFFICIENTS];
+                      setThermalInputs({ ...thermalInputs, liquidType: v as any, specificGravity: liq.SG });
+                    }}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Object.entries(LIQUID_EXPANSION_COEFFICIENTS).map(([key, val]) => (
-                          <SelectItem key={key} value={key}>{val.name} (β = {val.beta.toExponential(2)})</SelectItem>
+                          <SelectItem key={key} value={key}>{val.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Heat Flux (BTU/hr/ft²)</Label>
-                    <Input
-                      type="number"
-                      value={thermalInputs.heatFlux}
-                      onChange={(e) => setThermalInputs({ ...thermalInputs, heatFlux: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Heat Flux (BTU/hr·ft²)</Label>
+                    <Input type="number" value={thermalInputs.heatFlux} onChange={(e) => setThermalInputs({ ...thermalInputs, heatFlux: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Viscosity (cP)</Label>
-                    <Input
-                      type="number"
-                      value={thermalInputs.viscosity}
-                      onChange={(e) => setThermalInputs({ ...thermalInputs, viscosity: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
+                    <Input type="number" value={thermalInputs.setPresure} onChange={(e) => setThermalInputs({ ...thermalInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <div className="text-sm"><span className="text-muted-foreground">Volume:</span> <span className="font-mono font-medium">{thermalResults.volumeGal.toFixed(0)} gal</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">β:</span> <span className="font-mono font-medium">{thermalResults.beta.toFixed(5)} /°F</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Heat Rate:</span> <span className="font-mono font-medium">{thermalResults.heatingRate.toFixed(2)} °F/hr</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Relief Rate:</span> <span className="font-mono font-medium">{thermalResults.volumeRate.toFixed(4)} gpm</span></div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Results</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Valve Configuration</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                    <h4 className="font-medium text-sm text-muted-foreground">Volume & Area</h4>
-                    <p className="text-sm">Volume: <span className="font-mono font-medium">{thermalResults.volumeGal.toFixed(0)} gal</span></p>
-                    <p className="text-sm">Surface: <span className="font-mono font-medium">{thermalResults.surfaceArea.toFixed(1)} ft²</span></p>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Specific Gravity</Label>
+                    <Input type="number" step="0.01" value={thermalInputs.specificGravity} onChange={(e) => setThermalInputs({ ...thermalInputs, specificGravity: parseFloat(e.target.value) || 0.85 })} className="bg-secondary/50 border-border" />
                   </div>
-                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                    <h4 className="font-medium text-sm text-muted-foreground">Thermal Flow</h4>
-                    <p className="text-sm">β: <span className="font-mono font-medium">{thermalResults.beta.toExponential(2)} /°F</span></p>
-                    <p className="text-sm">Q: <span className="font-mono font-medium">{thermalResults.volumeRate.toFixed(4)} gpm</span></p>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Viscosity (cP)</Label>
+                    <Input type="number" value={thermalInputs.viscosity} onChange={(e) => setThermalInputs({ ...thermalInputs, viscosity: parseFloat(e.target.value) || 5 })} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Overpressure (%)</Label>
+                    <Input type="number" value={thermalInputs.overpressure} onChange={(e) => setThermalInputs({ ...thermalInputs, overpressure: parseFloat(e.target.value) || 10 })} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Kd</Label>
+                    <Input type="number" step="0.01" value={thermalInputs.dischargeCoeff} onChange={(e) => setThermalInputs({ ...thermalInputs, dischargeCoeff: parseFloat(e.target.value) || 0.65 })} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                    <h4 className="font-medium text-sm text-muted-foreground">Required Area</h4>
-                    <p className="text-2xl font-mono font-bold">{thermalResults.requiredArea.toFixed(4)} in²</p>
-                  </div>
-                  <div className="space-y-2 p-3 bg-primary/10 rounded-lg">
-                    <h4 className="font-medium text-sm text-muted-foreground">Selected Orifice</h4>
-                    {thermalResults.selectedOrifice ? (
-                      <>
-                        <p className="text-2xl font-mono font-bold">{thermalResults.selectedOrifice.designation}</p>
-                        <p className="text-sm">Area: {thermalResults.selectedOrifice.area} in²</p>
-                      </>
-                    ) : (
-                      <p className="text-destructive font-medium">Exceeds T</p>
-                    )}
-                  </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="thermalRD" checked={thermalInputs.ruptureDisk} onChange={(e) => setThermalInputs({ ...thermalInputs, ruptureDisk: e.target.checked })} className="h-4 w-4 accent-primary" />
+                  <Label htmlFor="thermalRD" className="text-muted-foreground">Rupture Disk Upstream (Kc = 0.9)</Label>
                 </div>
               </CardContent>
             </Card>
           </div>
+
+          <OrificeResultCard requiredArea={thermalResults.requiredArea} selectedOrifice={thermalResults.selectedOrifice} title="Thermal Relief Valve Selection" />
         </TabsContent>
 
         {/* FAILURE TAB */}
         <TabsContent value="failure" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
                   Failure Scenario
                 </CardTitle>
                 <CardDescription>Per API 521 Section 5.3</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Scenario Type</Label>
-                  <Select
-                    value={failureInputs.scenario}
-                    onValueChange={(v) => setFailureInputs({ ...failureInputs, scenario: v as any })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Label className="text-muted-foreground">Scenario Type</Label>
+                  <Select value={failureInputs.scenario} onValueChange={(v) => setFailureInputs({ ...failureInputs, scenario: v as any })}>
+                    <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {FAILURE_SCENARIOS.map((s) => (
                         <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -2456,106 +1520,84 @@ export default function API520Calculator() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Fluid Type</Label>
-                    <Select
-                      value={failureInputs.fluidType}
-                      onValueChange={(v) => setFailureInputs({ ...failureInputs, fluidType: v as any })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label className="text-muted-foreground">Fluid Type</Label>
+                    <Select value={failureInputs.fluidType} onValueChange={(v) => setFailureInputs({ ...failureInputs, fluidType: v as any })}>
+                      <SelectTrigger className="bg-secondary/50 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="liquid">Liquid</SelectItem>
-                        <SelectItem value="gas">Vapor/Gas</SelectItem>
+                        <SelectItem value="gas">Gas</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Valve Cv</Label>
-                    <Input
-                      type="number"
-                      value={failureInputs.valveCv}
-                      onChange={(e) => setFailureInputs({ ...failureInputs, valveCv: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Control Valve Cv</Label>
+                    <Input type="number" value={failureInputs.valveCv} onChange={(e) => setFailureInputs({ ...failureInputs, valveCv: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Upstream Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={failureInputs.upstreamPressure}
-                      onChange={(e) => setFailureInputs({ ...failureInputs, upstreamPressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Upstream P (psig)</Label>
+                    <Input type="number" value={failureInputs.upstreamPressure} onChange={(e) => setFailureInputs({ ...failureInputs, upstreamPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Downstream Pressure (psig)</Label>
-                    <Input
-                      type="number"
-                      value={failureInputs.downstreamPressure}
-                      onChange={(e) => setFailureInputs({ ...failureInputs, downstreamPressure: parseFloat(e.target.value) || 0 })}
-                    />
+                    <Label className="text-muted-foreground">Downstream P (psig)</Label>
+                    <Input type="number" value={failureInputs.downstreamPressure} onChange={(e) => setFailureInputs({ ...failureInputs, downstreamPressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Set Pressure (psig)</Label>
+                    <Input type="number" value={failureInputs.setPresure} onChange={(e) => setFailureInputs({ ...failureInputs, setPresure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Overpressure (%)</Label>
+                    <Input type="number" value={failureInputs.overpressure} onChange={(e) => setFailureInputs({ ...failureInputs, overpressure: parseFloat(e.target.value) || 0 })} className="bg-secondary/50 border-border" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Results</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Failure Scenario Results</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                    <h4 className="font-medium text-sm text-muted-foreground">CV Flow</h4>
-                    <p className="text-sm">Flow: <span className="font-mono font-medium">{failureResults.reliefFlowRate.toFixed(0)} {failureResults.reliefFlowUnit}</span></p>
-                    {failureResults.cvFlow.isCritical !== undefined && (
-                      <p className="text-sm">Regime: <span className="font-mono font-medium">{failureResults.cvFlow.isCritical ? 'Critical' : 'Subcritical'}</span></p>
-                    )}
-                  </div>
-                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                    <h4 className="font-medium text-sm text-muted-foreground">Required Area</h4>
-                    <p className="text-2xl font-mono font-bold">{failureResults.requiredArea.toFixed(4)} in²</p>
-                  </div>
-                </div>
-                <div className="space-y-2 p-3 bg-primary/10 rounded-lg">
-                  <h4 className="font-medium text-sm text-muted-foreground">Selected Orifice</h4>
-                  {failureResults.selectedOrifice ? (
-                    <>
-                      <p className="text-2xl font-mono font-bold">{failureResults.selectedOrifice.designation}</p>
-                      <p className="text-sm">Area: {failureResults.selectedOrifice.area} in²</p>
-                    </>
-                  ) : (
-                    <p className="text-destructive font-medium">Exceeds T orifice</p>
+              <CardContent className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/30 rounded-lg border border-border">
+                  <div className="text-sm"><span className="text-muted-foreground">Relief Flow:</span> <span className="font-mono font-medium">{failureResults.reliefFlowRate.toFixed(1)} {failureResults.reliefFlowUnit}</span></div>
+                  <div className="text-sm"><span className="text-muted-foreground">Relieving P:</span> <span className="font-mono font-medium">{failureResults.relievingPressure.toFixed(1)} psig</span></div>
+                  {failureResults.cvFlow.isCritical !== undefined && (
+                    <div className="col-span-2 text-sm">
+                      <span className="text-muted-foreground">Flow:</span> <Badge variant="secondary" className="ml-2">{failureResults.cvFlow.isCritical ? 'Critical' : 'Subcritical'}</Badge>
+                    </div>
                   )}
                 </div>
               </CardContent>
             </Card>
           </div>
+
+          <OrificeResultCard requiredArea={failureResults.requiredArea} selectedOrifice={failureResults.selectedOrifice} title="Failure Scenario Relief Valve Selection" />
         </TabsContent>
 
         {/* REFERENCE TAB */}
         <TabsContent value="reference" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">API Standard Orifice Sizes (API RP 526)</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">API RP 526 Standard Orifice Sizes</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Designation</TableHead>
-                      <TableHead>Effective Area (in²)</TableHead>
-                      <TableHead>Inlet Size</TableHead>
-                      <TableHead>Outlet Size</TableHead>
+                    <TableRow className="border-border">
+                      <TableHead className="text-primary">Designation</TableHead>
+                      <TableHead className="text-primary">Area (in²)</TableHead>
+                      <TableHead className="text-primary">Diameter (in)</TableHead>
+                      <TableHead className="text-primary">Inlet × Outlet</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {ORIFICE_SIZES.map((orifice) => (
-                      <TableRow key={orifice.designation}>
-                        <TableCell className="font-mono font-bold">{orifice.designation}</TableCell>
-                        <TableCell className="font-mono">{orifice.area}</TableCell>
-                        <TableCell>{orifice.inletSize}"</TableCell>
-                        <TableCell>{orifice.outletSize}"</TableCell>
+                    {ORIFICE_SIZES.map((o) => (
+                      <TableRow key={o.designation} className="border-border hover:bg-muted/50">
+                        <TableCell className="font-bold text-primary">{o.designation}</TableCell>
+                        <TableCell className="font-mono">{o.area}</TableCell>
+                        <TableCell className="font-mono">{o.diameter.toFixed(3)}</TableCell>
+                        <TableCell>{o.inletSize}" × {o.outletSize}"</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2563,27 +1605,27 @@ export default function API520Calculator() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Gas Properties (API 520 Table 9)</CardTitle>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="text-lg text-primary">Gas Properties (API 520 Table 9)</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4 max-h-[500px] overflow-y-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Gas</TableHead>
-                      <TableHead>k (Cp/Cv)</TableHead>
-                      <TableHead>C</TableHead>
-                      <TableHead>MW</TableHead>
+                    <TableRow className="border-border">
+                      <TableHead className="text-primary">Gas</TableHead>
+                      <TableHead className="text-primary">MW</TableHead>
+                      <TableHead className="text-primary">k</TableHead>
+                      <TableHead className="text-primary">C</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Object.entries(C_VALUES_TABLE).slice(0, 10).map(([gas, data]) => (
-                      <TableRow key={gas}>
+                    {Object.entries(C_VALUES_TABLE).map(([gas, data]) => (
+                      <TableRow key={gas} className="border-border hover:bg-muted/50">
                         <TableCell>{gas}</TableCell>
+                        <TableCell className="font-mono">{data.MW}</TableCell>
                         <TableCell className="font-mono">{data.k}</TableCell>
                         <TableCell className="font-mono">{data.C}</TableCell>
-                        <TableCell className="font-mono">{data.MW.toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2591,32 +1633,6 @@ export default function API520Calculator() {
               </CardContent>
             </Card>
           </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Environmental Factors (API 521 Table 5)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Condition</TableHead>
-                    <TableHead>Factor (F)</TableHead>
-                    <TableHead>Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ENVIRONMENTAL_FACTORS.map((ef) => (
-                    <TableRow key={ef.description}>
-                      <TableCell>{ef.description}</TableCell>
-                      <TableCell className="font-mono font-bold">{ef.F}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{ef.notes}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </div>
