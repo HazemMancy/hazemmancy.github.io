@@ -236,13 +236,13 @@
   animation: float 6s ease-in-out infinite;
 }
 
-/* Hide number input spinners */
-.no-spinner::-webkit-outer-spin-button,
-.no-spinner::-webkit-inner-spin-button {
+/* Hide number input spinners globally */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.no-spinner[type="number"] {
+input[type="number"] {
   -moz-appearance: textfield;
 }

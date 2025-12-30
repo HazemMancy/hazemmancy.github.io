@@ -122,9 +122,40 @@ const ReynoldsFrictionCalculator: React.FC = () => {
       // Auto-update roughness when material changes
       if (key === 'roughnessMaterial' && value !== 'Custom') {
         const roughnessM = pipeRoughness[value as string];
-        // Convert to current unit
         const roughnessInUnit = roughnessM / roughnessConversions[prev.roughnessUnit];
         newInputs.roughness = parseFloat(roughnessInUnit.toPrecision(4));
+      }
+      
+      // Convert values when units change (keep physical value constant)
+      if (key === 'velocityUnit') {
+        const oldFactor = velocityConversions[prev.velocityUnit];
+        const newFactor = velocityConversions[value as string];
+        newInputs.velocity = parseFloat((prev.velocity * oldFactor / newFactor).toPrecision(6));
+      }
+      if (key === 'flowRateUnit') {
+        const oldFactor = flowRateConversions[prev.flowRateUnit];
+        const newFactor = flowRateConversions[value as string];
+        newInputs.flowRate = parseFloat((prev.flowRate * oldFactor / newFactor).toPrecision(6));
+      }
+      if (key === 'diameterUnit') {
+        const oldFactor = lengthConversions[prev.diameterUnit];
+        const newFactor = lengthConversions[value as string];
+        newInputs.diameter = parseFloat((prev.diameter * oldFactor / newFactor).toPrecision(6));
+      }
+      if (key === 'densityUnit') {
+        const oldFactor = densityConversions[prev.densityUnit];
+        const newFactor = densityConversions[value as string];
+        newInputs.density = parseFloat((prev.density * oldFactor / newFactor).toPrecision(6));
+      }
+      if (key === 'viscosityUnit') {
+        const oldFactor = viscosityConversions[prev.viscosityUnit];
+        const newFactor = viscosityConversions[value as string];
+        newInputs.viscosity = parseFloat((prev.viscosity * oldFactor / newFactor).toPrecision(6));
+      }
+      if (key === 'roughnessUnit') {
+        const oldFactor = roughnessConversions[prev.roughnessUnit];
+        const newFactor = roughnessConversions[value as string];
+        newInputs.roughness = parseFloat((prev.roughness * oldFactor / newFactor).toPrecision(4));
       }
       
       return newInputs;
