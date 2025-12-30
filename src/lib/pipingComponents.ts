@@ -151,7 +151,103 @@ export function getPipeBySchedule(size: string, schedule: string): PipeData | un
 
 // ============= FLANGES (ASME B16.5 / B16.47) =============
 
-export type FlangeStandard = 'B16.5' | 'B16.47A' | 'B16.47B';
+export type FlangeStandard = 'B16.5' | 'B16.47A' | 'B16.47B' | 'B16.36';
+
+// ============= ORIFICE FLANGES (ASME B16.36) =============
+
+export interface OrificeFlangeData {
+  size: string;
+  nominalDN: number;
+  pressureClass: string;
+  outerDiameter: number;      // mm
+  boltCircleDiameter: number; // mm
+  numBolts: number;
+  boltSize: string;
+  thickness: number;          // mm
+  raisedFaceDiameter: number; // mm
+  orificeBore: number;        // mm - bore diameter for orifice plate
+  tapSpacing: number;         // mm - distance between pressure taps
+  tapSize: string;            // NPT tap size
+  tapLocation: string;        // Flange taps or pipe taps
+  weight: number;             // kg per pair
+}
+
+export const orificeFlangeData: OrificeFlangeData[] = [
+  // ASME B16.36 Orifice Flanges - Class 300 (Flange Taps)
+  { size: '1"', nominalDN: 25, pressureClass: '300', outerDiameter: 124, boltCircleDiameter: 88.9, numBolts: 4, boltSize: '5/8"', thickness: 22, raisedFaceDiameter: 54, orificeBore: 26.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 3.2 },
+  { size: '1-1/2"', nominalDN: 40, pressureClass: '300', outerDiameter: 156, boltCircleDiameter: 114.3, numBolts: 4, boltSize: '3/4"', thickness: 25, raisedFaceDiameter: 79, orificeBore: 40.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 5.4 },
+  { size: '2"', nominalDN: 50, pressureClass: '300', outerDiameter: 165, boltCircleDiameter: 127, numBolts: 8, boltSize: '5/8"', thickness: 29, raisedFaceDiameter: 92, orificeBore: 52.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 7.8 },
+  { size: '3"', nominalDN: 80, pressureClass: '300', outerDiameter: 210, boltCircleDiameter: 168.3, numBolts: 8, boltSize: '3/4"', thickness: 32, raisedFaceDiameter: 127, orificeBore: 77.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 14.5 },
+  { size: '4"', nominalDN: 100, pressureClass: '300', outerDiameter: 254, boltCircleDiameter: 200, numBolts: 8, boltSize: '3/4"', thickness: 35, raisedFaceDiameter: 157, orificeBore: 102.3, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 22.0 },
+  { size: '6"', nominalDN: 150, pressureClass: '300', outerDiameter: 318, boltCircleDiameter: 269.9, numBolts: 12, boltSize: '3/4"', thickness: 41, raisedFaceDiameter: 216, orificeBore: 154.1, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 42.0 },
+  { size: '8"', nominalDN: 200, pressureClass: '300', outerDiameter: 381, boltCircleDiameter: 330.2, numBolts: 12, boltSize: '7/8"', thickness: 48, raisedFaceDiameter: 270, orificeBore: 202.7, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 68.0 },
+  { size: '10"', nominalDN: 250, pressureClass: '300', outerDiameter: 445, boltCircleDiameter: 387.4, numBolts: 16, boltSize: '1"', thickness: 54, raisedFaceDiameter: 324, orificeBore: 254.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 105.0 },
+  { size: '12"', nominalDN: 300, pressureClass: '300', outerDiameter: 521, boltCircleDiameter: 450.8, numBolts: 16, boltSize: '1-1/8"', thickness: 57, raisedFaceDiameter: 381, orificeBore: 304.8, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 150.0 },
+  { size: '14"', nominalDN: 350, pressureClass: '300', outerDiameter: 584, boltCircleDiameter: 514.4, numBolts: 20, boltSize: '1-1/8"', thickness: 60, raisedFaceDiameter: 432, orificeBore: 336.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 185.0 },
+  { size: '16"', nominalDN: 400, pressureClass: '300', outerDiameter: 648, boltCircleDiameter: 571.5, numBolts: 20, boltSize: '1-1/4"', thickness: 63, raisedFaceDiameter: 495, orificeBore: 387.4, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 235.0 },
+  { size: '18"', nominalDN: 450, pressureClass: '300', outerDiameter: 711, boltCircleDiameter: 628.6, numBolts: 24, boltSize: '1-1/4"', thickness: 67, raisedFaceDiameter: 546, orificeBore: 438.2, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 295.0 },
+  { size: '20"', nominalDN: 500, pressureClass: '300', outerDiameter: 775, boltCircleDiameter: 685.8, numBolts: 24, boltSize: '1-1/4"', thickness: 70, raisedFaceDiameter: 610, orificeBore: 488.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 360.0 },
+  { size: '24"', nominalDN: 600, pressureClass: '300', outerDiameter: 914, boltCircleDiameter: 812.8, numBolts: 24, boltSize: '1-1/2"', thickness: 76, raisedFaceDiameter: 718, orificeBore: 590.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 520.0 },
+  
+  // ASME B16.36 Orifice Flanges - Class 600 (Flange Taps)
+  { size: '1"', nominalDN: 25, pressureClass: '600', outerDiameter: 124, boltCircleDiameter: 88.9, numBolts: 4, boltSize: '5/8"', thickness: 25, raisedFaceDiameter: 54, orificeBore: 26.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 4.0 },
+  { size: '1-1/2"', nominalDN: 40, pressureClass: '600', outerDiameter: 156, boltCircleDiameter: 114.3, numBolts: 4, boltSize: '3/4"', thickness: 29, raisedFaceDiameter: 79, orificeBore: 40.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 6.8 },
+  { size: '2"', nominalDN: 50, pressureClass: '600', outerDiameter: 165, boltCircleDiameter: 127, numBolts: 8, boltSize: '5/8"', thickness: 35, raisedFaceDiameter: 92, orificeBore: 52.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 9.5 },
+  { size: '3"', nominalDN: 80, pressureClass: '600', outerDiameter: 210, boltCircleDiameter: 168.3, numBolts: 8, boltSize: '3/4"', thickness: 41, raisedFaceDiameter: 127, orificeBore: 77.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 18.0 },
+  { size: '4"', nominalDN: 100, pressureClass: '600', outerDiameter: 273, boltCircleDiameter: 215.9, numBolts: 8, boltSize: '7/8"', thickness: 48, raisedFaceDiameter: 157, orificeBore: 102.3, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 32.0 },
+  { size: '6"', nominalDN: 150, pressureClass: '600', outerDiameter: 356, boltCircleDiameter: 292.1, numBolts: 12, boltSize: '1"', thickness: 56, raisedFaceDiameter: 216, orificeBore: 154.1, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 65.0 },
+  { size: '8"', nominalDN: 200, pressureClass: '600', outerDiameter: 419, boltCircleDiameter: 349.2, numBolts: 12, boltSize: '1-1/8"', thickness: 63, raisedFaceDiameter: 270, orificeBore: 202.7, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 110.0 },
+  { size: '10"', nominalDN: 250, pressureClass: '600', outerDiameter: 508, boltCircleDiameter: 431.8, numBolts: 16, boltSize: '1-1/4"', thickness: 70, raisedFaceDiameter: 324, orificeBore: 254.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 180.0 },
+  { size: '12"', nominalDN: 300, pressureClass: '600', outerDiameter: 559, boltCircleDiameter: 489, numBolts: 20, boltSize: '1-1/4"', thickness: 76, raisedFaceDiameter: 381, orificeBore: 304.8, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 250.0 },
+  { size: '14"', nominalDN: 350, pressureClass: '600', outerDiameter: 603, boltCircleDiameter: 527, numBolts: 20, boltSize: '1-3/8"', thickness: 83, raisedFaceDiameter: 432, orificeBore: 336.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 320.0 },
+  { size: '16"', nominalDN: 400, pressureClass: '600', outerDiameter: 686, boltCircleDiameter: 603.2, numBolts: 20, boltSize: '1-1/2"', thickness: 89, raisedFaceDiameter: 495, orificeBore: 387.4, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 430.0 },
+  { size: '18"', nominalDN: 450, pressureClass: '600', outerDiameter: 743, boltCircleDiameter: 654, numBolts: 20, boltSize: '1-5/8"', thickness: 95, raisedFaceDiameter: 546, orificeBore: 438.2, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 540.0 },
+  { size: '20"', nominalDN: 500, pressureClass: '600', outerDiameter: 813, boltCircleDiameter: 723.9, numBolts: 24, boltSize: '1-5/8"', thickness: 102, raisedFaceDiameter: 610, orificeBore: 488.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 680.0 },
+  { size: '24"', nominalDN: 600, pressureClass: '600', outerDiameter: 940, boltCircleDiameter: 838.2, numBolts: 24, boltSize: '1-7/8"', thickness: 114, raisedFaceDiameter: 718, orificeBore: 590.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 980.0 },
+  
+  // ASME B16.36 Orifice Flanges - Class 900 (Flange Taps)
+  { size: '1"', nominalDN: 25, pressureClass: '900', outerDiameter: 152, boltCircleDiameter: 111.1, numBolts: 4, boltSize: '7/8"', thickness: 29, raisedFaceDiameter: 54, orificeBore: 26.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 5.5 },
+  { size: '1-1/2"', nominalDN: 40, pressureClass: '900', outerDiameter: 178, boltCircleDiameter: 133.3, numBolts: 4, boltSize: '1"', thickness: 35, raisedFaceDiameter: 79, orificeBore: 40.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 8.5 },
+  { size: '2"', nominalDN: 50, pressureClass: '900', outerDiameter: 216, boltCircleDiameter: 165.1, numBolts: 8, boltSize: '7/8"', thickness: 41, raisedFaceDiameter: 92, orificeBore: 52.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 13.5 },
+  { size: '3"', nominalDN: 80, pressureClass: '900', outerDiameter: 241, boltCircleDiameter: 190.5, numBolts: 8, boltSize: '7/8"', thickness: 48, raisedFaceDiameter: 127, orificeBore: 77.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 24.0 },
+  { size: '4"', nominalDN: 100, pressureClass: '900', outerDiameter: 292, boltCircleDiameter: 235, numBolts: 8, boltSize: '1"', thickness: 57, raisedFaceDiameter: 157, orificeBore: 102.3, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 45.0 },
+  { size: '6"', nominalDN: 150, pressureClass: '900', outerDiameter: 381, boltCircleDiameter: 317.5, numBolts: 12, boltSize: '1-1/8"', thickness: 73, raisedFaceDiameter: 216, orificeBore: 154.1, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 95.0 },
+  { size: '8"', nominalDN: 200, pressureClass: '900', outerDiameter: 470, boltCircleDiameter: 393.7, numBolts: 12, boltSize: '1-3/8"', thickness: 86, raisedFaceDiameter: 270, orificeBore: 202.7, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 175.0 },
+  { size: '10"', nominalDN: 250, pressureClass: '900', outerDiameter: 546, boltCircleDiameter: 469.9, numBolts: 16, boltSize: '1-3/8"', thickness: 95, raisedFaceDiameter: 324, orificeBore: 254.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 285.0 },
+  { size: '12"', nominalDN: 300, pressureClass: '900', outerDiameter: 610, boltCircleDiameter: 533.4, numBolts: 20, boltSize: '1-3/8"', thickness: 105, raisedFaceDiameter: 381, orificeBore: 304.8, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 395.0 },
+  
+  // ASME B16.36 Orifice Flanges - Class 1500 (Flange Taps)
+  { size: '1"', nominalDN: 25, pressureClass: '1500', outerDiameter: 152, boltCircleDiameter: 111.1, numBolts: 4, boltSize: '7/8"', thickness: 35, raisedFaceDiameter: 54, orificeBore: 26.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 7.0 },
+  { size: '1-1/2"', nominalDN: 40, pressureClass: '1500', outerDiameter: 178, boltCircleDiameter: 133.3, numBolts: 4, boltSize: '1"', thickness: 44, raisedFaceDiameter: 79, orificeBore: 40.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 11.0 },
+  { size: '2"', nominalDN: 50, pressureClass: '1500', outerDiameter: 216, boltCircleDiameter: 165.1, numBolts: 8, boltSize: '7/8"', thickness: 54, raisedFaceDiameter: 92, orificeBore: 52.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 18.0 },
+  { size: '3"', nominalDN: 80, pressureClass: '1500', outerDiameter: 241, boltCircleDiameter: 190.5, numBolts: 8, boltSize: '1"', thickness: 64, raisedFaceDiameter: 127, orificeBore: 77.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 35.0 },
+  { size: '4"', nominalDN: 100, pressureClass: '1500', outerDiameter: 292, boltCircleDiameter: 235, numBolts: 8, boltSize: '1-1/8"', thickness: 76, raisedFaceDiameter: 157, orificeBore: 102.3, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 65.0 },
+  { size: '6"', nominalDN: 150, pressureClass: '1500', outerDiameter: 403, boltCircleDiameter: 336.5, numBolts: 12, boltSize: '1-1/4"', thickness: 98, raisedFaceDiameter: 216, orificeBore: 154.1, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 145.0 },
+  { size: '8"', nominalDN: 200, pressureClass: '1500', outerDiameter: 483, boltCircleDiameter: 406.4, numBolts: 12, boltSize: '1-1/2"', thickness: 117, raisedFaceDiameter: 270, orificeBore: 202.7, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 265.0 },
+  { size: '10"', nominalDN: 250, pressureClass: '1500', outerDiameter: 584, boltCircleDiameter: 495.3, numBolts: 12, boltSize: '1-3/4"', thickness: 133, raisedFaceDiameter: 324, orificeBore: 254.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 430.0 },
+  { size: '12"', nominalDN: 300, pressureClass: '1500', outerDiameter: 673, boltCircleDiameter: 571.5, numBolts: 16, boltSize: '1-3/4"', thickness: 149, raisedFaceDiameter: 381, orificeBore: 304.8, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 620.0 },
+  
+  // ASME B16.36 Orifice Flanges - Class 2500 (Flange Taps)
+  { size: '1"', nominalDN: 25, pressureClass: '2500', outerDiameter: 175, boltCircleDiameter: 130.2, numBolts: 4, boltSize: '1"', thickness: 44, raisedFaceDiameter: 54, orificeBore: 26.6, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 10.0 },
+  { size: '1-1/2"', nominalDN: 40, pressureClass: '2500', outerDiameter: 216, boltCircleDiameter: 165.1, numBolts: 4, boltSize: '1-1/8"', thickness: 57, raisedFaceDiameter: 79, orificeBore: 40.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 16.5 },
+  { size: '2"', nominalDN: 50, pressureClass: '2500', outerDiameter: 267, boltCircleDiameter: 203.2, numBolts: 8, boltSize: '1"', thickness: 73, raisedFaceDiameter: 92, orificeBore: 52.5, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 28.0 },
+  { size: '3"', nominalDN: 80, pressureClass: '2500', outerDiameter: 305, boltCircleDiameter: 241.3, numBolts: 8, boltSize: '1-1/8"', thickness: 92, raisedFaceDiameter: 127, orificeBore: 77.9, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 55.0 },
+  { size: '4"', nominalDN: 100, pressureClass: '2500', outerDiameter: 368, boltCircleDiameter: 292.1, numBolts: 8, boltSize: '1-1/4"', thickness: 111, raisedFaceDiameter: 157, orificeBore: 102.3, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 100.0 },
+  { size: '6"', nominalDN: 150, pressureClass: '2500', outerDiameter: 483, boltCircleDiameter: 393.7, numBolts: 8, boltSize: '1-5/8"', thickness: 143, raisedFaceDiameter: 216, orificeBore: 154.1, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 230.0 },
+  { size: '8"', nominalDN: 200, pressureClass: '2500', outerDiameter: 584, boltCircleDiameter: 482.6, numBolts: 12, boltSize: '1-5/8"', thickness: 175, raisedFaceDiameter: 270, orificeBore: 202.7, tapSpacing: 25.4, tapSize: '1/2" NPT', tapLocation: 'Flange Taps', weight: 420.0 },
+];
+
+export function getOrificeFlangesByClass(pressureClass: string): OrificeFlangeData[] {
+  return orificeFlangeData.filter(f => f.pressureClass === pressureClass);
+}
+
+export function getOrificeFlangesSizes(): string[] {
+  return [...new Set(orificeFlangeData.map(f => f.size))];
+}
+
+export function getOrificeFlangesClasses(): string[] {
+  return [...new Set(orificeFlangeData.map(f => f.pressureClass))];
+}
 
 export interface FlangeData {
   size: string;
@@ -517,56 +613,278 @@ export const gasketTypes = [
 
 // ============= VALVES =============
 
+// ============= VALVES (ASME B16.10 / B16.34) =============
+
+export type ValveEndType = 'Flanged' | 'Buttweld' | 'Threaded' | 'Socket Weld';
+
 export interface ValveData {
   size: string;
   nominalDN: number;
   type: string;
+  endType: ValveEndType;
   pressureClass: string;
-  faceToFace: number;
-  height: number;
-  weight: number;
+  faceToFace: number;      // mm - per ASME B16.10
+  faceToEnd?: number;      // mm - for buttweld valves
+  height: number;          // mm - handwheel/operator top
+  stemDiameter?: number;   // mm
+  weight: number;          // kg
 }
 
 export const valveData: ValveData[] = [
-  { size: '1/2"', nominalDN: 15, type: 'Gate', pressureClass: '150', faceToFace: 108, height: 175, weight: 2.0 },
-  { size: '3/4"', nominalDN: 20, type: 'Gate', pressureClass: '150', faceToFace: 117, height: 195, weight: 2.8 },
-  { size: '1"', nominalDN: 25, type: 'Gate', pressureClass: '150', faceToFace: 127, height: 220, weight: 3.5 },
-  { size: '1-1/2"', nominalDN: 40, type: 'Gate', pressureClass: '150', faceToFace: 165, height: 280, weight: 6.5 },
-  { size: '2"', nominalDN: 50, type: 'Gate', pressureClass: '150', faceToFace: 178, height: 320, weight: 9.5 },
-  { size: '3"', nominalDN: 80, type: 'Gate', pressureClass: '150', faceToFace: 203, height: 400, weight: 18 },
-  { size: '4"', nominalDN: 100, type: 'Gate', pressureClass: '150', faceToFace: 229, height: 465, weight: 28 },
-  { size: '6"', nominalDN: 150, type: 'Gate', pressureClass: '150', faceToFace: 267, height: 580, weight: 55 },
-  { size: '8"', nominalDN: 200, type: 'Gate', pressureClass: '150', faceToFace: 292, height: 710, weight: 95 },
-  { size: '10"', nominalDN: 250, type: 'Gate', pressureClass: '150', faceToFace: 330, height: 850, weight: 155 },
-  { size: '12"', nominalDN: 300, type: 'Gate', pressureClass: '150', faceToFace: 356, height: 980, weight: 230 },
-  { size: '1/2"', nominalDN: 15, type: 'Globe', pressureClass: '150', faceToFace: 150, height: 215, weight: 3.0 },
-  { size: '1"', nominalDN: 25, type: 'Globe', pressureClass: '150', faceToFace: 180, height: 270, weight: 5.5 },
-  { size: '2"', nominalDN: 50, type: 'Globe', pressureClass: '150', faceToFace: 230, height: 390, weight: 16 },
-  { size: '3"', nominalDN: 80, type: 'Globe', pressureClass: '150', faceToFace: 280, height: 500, weight: 30 },
-  { size: '4"', nominalDN: 100, type: 'Globe', pressureClass: '150', faceToFace: 310, height: 590, weight: 48 },
-  { size: '6"', nominalDN: 150, type: 'Globe', pressureClass: '150', faceToFace: 400, height: 760, weight: 100 },
-  { size: '1/2"', nominalDN: 15, type: 'Ball', pressureClass: '150', faceToFace: 108, height: 75, weight: 1.8 },
-  { size: '1"', nominalDN: 25, type: 'Ball', pressureClass: '150', faceToFace: 127, height: 100, weight: 3.2 },
-  { size: '2"', nominalDN: 50, type: 'Ball', pressureClass: '150', faceToFace: 178, height: 150, weight: 9.0 },
-  { size: '3"', nominalDN: 80, type: 'Ball', pressureClass: '150', faceToFace: 203, height: 190, weight: 16 },
-  { size: '4"', nominalDN: 100, type: 'Ball', pressureClass: '150', faceToFace: 229, height: 225, weight: 26 },
-  { size: '6"', nominalDN: 150, type: 'Ball', pressureClass: '150', faceToFace: 267, height: 290, weight: 52 },
-  { size: '8"', nominalDN: 200, type: 'Ball', pressureClass: '150', faceToFace: 292, height: 355, weight: 90 },
-  { size: '1/2"', nominalDN: 15, type: 'Check', pressureClass: '150', faceToFace: 108, height: 115, weight: 1.5 },
-  { size: '1"', nominalDN: 25, type: 'Check', pressureClass: '150', faceToFace: 127, height: 150, weight: 2.8 },
-  { size: '2"', nominalDN: 50, type: 'Check', pressureClass: '150', faceToFace: 178, height: 210, weight: 7.0 },
-  { size: '4"', nominalDN: 100, type: 'Check', pressureClass: '150', faceToFace: 229, height: 340, weight: 22 },
-  { size: '6"', nominalDN: 150, type: 'Check', pressureClass: '150', faceToFace: 267, height: 430, weight: 45 },
+  // ============= GATE VALVES - FLANGED (ASME B16.10) =============
+  // Class 150
+  { size: '1/2"', nominalDN: 15, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 108, height: 175, stemDiameter: 10, weight: 2.0 },
+  { size: '3/4"', nominalDN: 20, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 117, height: 195, stemDiameter: 12, weight: 2.8 },
+  { size: '1"', nominalDN: 25, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 127, height: 220, stemDiameter: 14, weight: 3.5 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 165, height: 280, stemDiameter: 18, weight: 6.5 },
+  { size: '2"', nominalDN: 50, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 178, height: 320, stemDiameter: 20, weight: 9.5 },
+  { size: '3"', nominalDN: 80, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 203, height: 400, stemDiameter: 25, weight: 18 },
+  { size: '4"', nominalDN: 100, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 229, height: 465, stemDiameter: 30, weight: 28 },
+  { size: '6"', nominalDN: 150, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 267, height: 580, stemDiameter: 38, weight: 55 },
+  { size: '8"', nominalDN: 200, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 292, height: 710, stemDiameter: 45, weight: 95 },
+  { size: '10"', nominalDN: 250, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 330, height: 850, stemDiameter: 55, weight: 155 },
+  { size: '12"', nominalDN: 300, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 356, height: 980, stemDiameter: 65, weight: 230 },
+  { size: '14"', nominalDN: 350, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 381, height: 1100, stemDiameter: 70, weight: 310 },
+  { size: '16"', nominalDN: 400, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 406, height: 1220, stemDiameter: 80, weight: 420 },
+  { size: '18"', nominalDN: 450, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 432, height: 1350, stemDiameter: 90, weight: 550 },
+  { size: '20"', nominalDN: 500, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 457, height: 1480, stemDiameter: 100, weight: 720 },
+  { size: '24"', nominalDN: 600, type: 'Gate', endType: 'Flanged', pressureClass: '150', faceToFace: 508, height: 1750, stemDiameter: 110, weight: 1050 },
+  // Class 300
+  { size: '1/2"', nominalDN: 15, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 140, height: 200, stemDiameter: 12, weight: 3.5 },
+  { size: '3/4"', nominalDN: 20, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 152, height: 220, stemDiameter: 14, weight: 4.5 },
+  { size: '1"', nominalDN: 25, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 165, height: 250, stemDiameter: 16, weight: 6.0 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 190, height: 320, stemDiameter: 20, weight: 10.5 },
+  { size: '2"', nominalDN: 50, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 216, height: 370, stemDiameter: 22, weight: 15 },
+  { size: '3"', nominalDN: 80, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 241, height: 460, stemDiameter: 28, weight: 28 },
+  { size: '4"', nominalDN: 100, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 292, height: 550, stemDiameter: 35, weight: 45 },
+  { size: '6"', nominalDN: 150, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 356, height: 700, stemDiameter: 45, weight: 95 },
+  { size: '8"', nominalDN: 200, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 419, height: 870, stemDiameter: 55, weight: 165 },
+  { size: '10"', nominalDN: 250, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 457, height: 1020, stemDiameter: 65, weight: 270 },
+  { size: '12"', nominalDN: 300, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 502, height: 1180, stemDiameter: 75, weight: 400 },
+  { size: '14"', nominalDN: 350, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 572, height: 1320, stemDiameter: 85, weight: 530 },
+  { size: '16"', nominalDN: 400, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 610, height: 1470, stemDiameter: 95, weight: 720 },
+  { size: '18"', nominalDN: 450, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 660, height: 1620, stemDiameter: 105, weight: 950 },
+  { size: '20"', nominalDN: 500, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 711, height: 1780, stemDiameter: 115, weight: 1220 },
+  { size: '24"', nominalDN: 600, type: 'Gate', endType: 'Flanged', pressureClass: '300', faceToFace: 813, height: 2100, stemDiameter: 130, weight: 1850 },
+  // Class 600
+  { size: '2"', nominalDN: 50, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 292, height: 420, stemDiameter: 25, weight: 28 },
+  { size: '3"', nominalDN: 80, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 318, height: 530, stemDiameter: 32, weight: 48 },
+  { size: '4"', nominalDN: 100, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 356, height: 640, stemDiameter: 40, weight: 78 },
+  { size: '6"', nominalDN: 150, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 444, height: 820, stemDiameter: 52, weight: 165 },
+  { size: '8"', nominalDN: 200, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 559, height: 1020, stemDiameter: 65, weight: 290 },
+  { size: '10"', nominalDN: 250, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 622, height: 1200, stemDiameter: 75, weight: 450 },
+  { size: '12"', nominalDN: 300, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 711, height: 1400, stemDiameter: 88, weight: 680 },
+  { size: '14"', nominalDN: 350, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 838, height: 1580, stemDiameter: 100, weight: 920 },
+  { size: '16"', nominalDN: 400, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 864, height: 1780, stemDiameter: 110, weight: 1250 },
+  { size: '18"', nominalDN: 450, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 914, height: 1980, stemDiameter: 120, weight: 1650 },
+  { size: '20"', nominalDN: 500, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 991, height: 2180, stemDiameter: 130, weight: 2150 },
+  { size: '24"', nominalDN: 600, type: 'Gate', endType: 'Flanged', pressureClass: '600', faceToFace: 1143, height: 2580, stemDiameter: 150, weight: 3200 },
+  
+  // ============= GATE VALVES - BUTTWELD (ASME B16.10) =============
+  { size: '2"', nominalDN: 50, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 178, faceToEnd: 89, height: 310, stemDiameter: 20, weight: 8.5 },
+  { size: '3"', nominalDN: 80, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 203, faceToEnd: 102, height: 385, stemDiameter: 25, weight: 16 },
+  { size: '4"', nominalDN: 100, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 229, faceToEnd: 114, height: 450, stemDiameter: 30, weight: 25 },
+  { size: '6"', nominalDN: 150, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 267, faceToEnd: 133, height: 560, stemDiameter: 38, weight: 50 },
+  { size: '8"', nominalDN: 200, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 292, faceToEnd: 146, height: 690, stemDiameter: 45, weight: 88 },
+  { size: '10"', nominalDN: 250, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 330, faceToEnd: 165, height: 830, stemDiameter: 55, weight: 145 },
+  { size: '12"', nominalDN: 300, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 356, faceToEnd: 178, height: 960, stemDiameter: 65, weight: 215 },
+  { size: '14"', nominalDN: 350, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 381, faceToEnd: 191, height: 1080, stemDiameter: 70, weight: 295 },
+  { size: '16"', nominalDN: 400, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 406, faceToEnd: 203, height: 1200, stemDiameter: 80, weight: 395 },
+  { size: '20"', nominalDN: 500, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 457, faceToEnd: 229, height: 1460, stemDiameter: 100, weight: 680 },
+  { size: '24"', nominalDN: 600, type: 'Gate', endType: 'Buttweld', pressureClass: '150', faceToFace: 508, faceToEnd: 254, height: 1720, stemDiameter: 110, weight: 1000 },
+  
+  // ============= GLOBE VALVES - FLANGED (ASME B16.10) =============
+  // Class 150
+  { size: '1/2"', nominalDN: 15, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 150, height: 215, stemDiameter: 10, weight: 3.0 },
+  { size: '3/4"', nominalDN: 20, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 165, height: 240, stemDiameter: 12, weight: 4.2 },
+  { size: '1"', nominalDN: 25, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 180, height: 270, stemDiameter: 14, weight: 5.5 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 203, height: 330, stemDiameter: 18, weight: 10 },
+  { size: '2"', nominalDN: 50, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 230, height: 390, stemDiameter: 20, weight: 16 },
+  { size: '3"', nominalDN: 80, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 280, height: 500, stemDiameter: 25, weight: 30 },
+  { size: '4"', nominalDN: 100, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 310, height: 590, stemDiameter: 30, weight: 48 },
+  { size: '6"', nominalDN: 150, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 400, height: 760, stemDiameter: 38, weight: 100 },
+  { size: '8"', nominalDN: 200, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 440, height: 920, stemDiameter: 45, weight: 175 },
+  { size: '10"', nominalDN: 250, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 490, height: 1080, stemDiameter: 55, weight: 280 },
+  { size: '12"', nominalDN: 300, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 560, height: 1240, stemDiameter: 65, weight: 420 },
+  { size: '14"', nominalDN: 350, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 610, height: 1400, stemDiameter: 70, weight: 580 },
+  { size: '16"', nominalDN: 400, type: 'Globe', endType: 'Flanged', pressureClass: '150', faceToFace: 660, height: 1560, stemDiameter: 80, weight: 780 },
+  // Class 300
+  { size: '2"', nominalDN: 50, type: 'Globe', endType: 'Flanged', pressureClass: '300', faceToFace: 267, height: 430, stemDiameter: 22, weight: 24 },
+  { size: '3"', nominalDN: 80, type: 'Globe', endType: 'Flanged', pressureClass: '300', faceToFace: 318, height: 560, stemDiameter: 28, weight: 45 },
+  { size: '4"', nominalDN: 100, type: 'Globe', endType: 'Flanged', pressureClass: '300', faceToFace: 356, height: 670, stemDiameter: 35, weight: 75 },
+  { size: '6"', nominalDN: 150, type: 'Globe', endType: 'Flanged', pressureClass: '300', faceToFace: 457, height: 870, stemDiameter: 45, weight: 160 },
+  { size: '8"', nominalDN: 200, type: 'Globe', endType: 'Flanged', pressureClass: '300', faceToFace: 521, height: 1050, stemDiameter: 55, weight: 290 },
+  { size: '10"', nominalDN: 250, type: 'Globe', endType: 'Flanged', pressureClass: '300', faceToFace: 584, height: 1240, stemDiameter: 65, weight: 470 },
+  { size: '12"', nominalDN: 300, type: 'Globe', endType: 'Flanged', pressureClass: '300', faceToFace: 660, height: 1440, stemDiameter: 75, weight: 710 },
+  
+  // ============= BALL VALVES - FLANGED (ASME B16.10) =============
+  // Class 150 - Full Bore
+  { size: '1/2"', nominalDN: 15, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 108, height: 75, stemDiameter: 10, weight: 1.8 },
+  { size: '3/4"', nominalDN: 20, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 117, height: 85, stemDiameter: 12, weight: 2.5 },
+  { size: '1"', nominalDN: 25, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 127, height: 100, stemDiameter: 14, weight: 3.2 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 165, height: 130, stemDiameter: 18, weight: 6.0 },
+  { size: '2"', nominalDN: 50, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 178, height: 150, stemDiameter: 20, weight: 9.0 },
+  { size: '3"', nominalDN: 80, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 203, height: 190, stemDiameter: 25, weight: 16 },
+  { size: '4"', nominalDN: 100, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 229, height: 225, stemDiameter: 30, weight: 26 },
+  { size: '6"', nominalDN: 150, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 267, height: 290, stemDiameter: 38, weight: 52 },
+  { size: '8"', nominalDN: 200, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 292, height: 355, stemDiameter: 45, weight: 90 },
+  { size: '10"', nominalDN: 250, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 330, height: 425, stemDiameter: 55, weight: 150 },
+  { size: '12"', nominalDN: 300, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 356, height: 500, stemDiameter: 65, weight: 225 },
+  { size: '14"', nominalDN: 350, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 381, height: 560, stemDiameter: 70, weight: 305 },
+  { size: '16"', nominalDN: 400, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 406, height: 635, stemDiameter: 80, weight: 415 },
+  { size: '18"', nominalDN: 450, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 432, height: 710, stemDiameter: 90, weight: 545 },
+  { size: '20"', nominalDN: 500, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 457, height: 780, stemDiameter: 100, weight: 695 },
+  { size: '24"', nominalDN: 600, type: 'Ball', endType: 'Flanged', pressureClass: '150', faceToFace: 508, height: 920, stemDiameter: 110, weight: 1020 },
+  // Class 300
+  { size: '2"', nominalDN: 50, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 216, height: 175, stemDiameter: 22, weight: 14 },
+  { size: '3"', nominalDN: 80, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 241, height: 220, stemDiameter: 28, weight: 26 },
+  { size: '4"', nominalDN: 100, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 292, height: 270, stemDiameter: 35, weight: 45 },
+  { size: '6"', nominalDN: 150, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 356, height: 350, stemDiameter: 45, weight: 95 },
+  { size: '8"', nominalDN: 200, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 419, height: 440, stemDiameter: 55, weight: 170 },
+  { size: '10"', nominalDN: 250, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 457, height: 530, stemDiameter: 65, weight: 280 },
+  { size: '12"', nominalDN: 300, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 502, height: 625, stemDiameter: 75, weight: 420 },
+  { size: '14"', nominalDN: 350, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 572, height: 710, stemDiameter: 85, weight: 570 },
+  { size: '16"', nominalDN: 400, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 610, height: 795, stemDiameter: 95, weight: 760 },
+  { size: '20"', nominalDN: 500, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 711, height: 960, stemDiameter: 115, weight: 1280 },
+  { size: '24"', nominalDN: 600, type: 'Ball', endType: 'Flanged', pressureClass: '300', faceToFace: 813, height: 1140, stemDiameter: 130, weight: 1980 },
+  
+  // ============= CHECK VALVES - FLANGED (ASME B16.10) - Swing Type =============
+  // Class 150
+  { size: '1/2"', nominalDN: 15, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 108, height: 115, weight: 1.5 },
+  { size: '3/4"', nominalDN: 20, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 117, height: 130, weight: 2.2 },
+  { size: '1"', nominalDN: 25, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 127, height: 150, weight: 2.8 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 165, height: 195, weight: 5.5 },
+  { size: '2"', nominalDN: 50, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 178, height: 210, weight: 7.0 },
+  { size: '3"', nominalDN: 80, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 203, height: 280, weight: 14 },
+  { size: '4"', nominalDN: 100, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 229, height: 340, weight: 22 },
+  { size: '6"', nominalDN: 150, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 267, height: 430, weight: 45 },
+  { size: '8"', nominalDN: 200, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 292, height: 530, weight: 78 },
+  { size: '10"', nominalDN: 250, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 330, height: 640, weight: 125 },
+  { size: '12"', nominalDN: 300, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 356, height: 750, weight: 185 },
+  { size: '14"', nominalDN: 350, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 381, height: 850, weight: 250 },
+  { size: '16"', nominalDN: 400, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 406, height: 960, weight: 340 },
+  { size: '18"', nominalDN: 450, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 432, height: 1070, weight: 450 },
+  { size: '20"', nominalDN: 500, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 457, height: 1180, weight: 580 },
+  { size: '24"', nominalDN: 600, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '150', faceToFace: 508, height: 1400, weight: 850 },
+  // Class 300
+  { size: '2"', nominalDN: 50, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '300', faceToFace: 216, height: 245, weight: 11 },
+  { size: '3"', nominalDN: 80, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '300', faceToFace: 241, height: 320, weight: 22 },
+  { size: '4"', nominalDN: 100, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '300', faceToFace: 292, height: 400, weight: 38 },
+  { size: '6"', nominalDN: 150, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '300', faceToFace: 356, height: 520, weight: 80 },
+  { size: '8"', nominalDN: 200, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '300', faceToFace: 419, height: 640, weight: 140 },
+  { size: '10"', nominalDN: 250, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '300', faceToFace: 457, height: 770, weight: 225 },
+  { size: '12"', nominalDN: 300, type: 'Check (Swing)', endType: 'Flanged', pressureClass: '300', faceToFace: 502, height: 900, weight: 340 },
+  
+  // ============= BUTTERFLY VALVES - WAFER (ASME B16.10) =============
+  // Class 150
+  { size: '2"', nominalDN: 50, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 43, height: 145, stemDiameter: 14, weight: 3.5 },
+  { size: '3"', nominalDN: 80, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 46, height: 175, stemDiameter: 16, weight: 5.5 },
+  { size: '4"', nominalDN: 100, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 52, height: 205, stemDiameter: 20, weight: 8.5 },
+  { size: '6"', nominalDN: 150, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 56, height: 260, stemDiameter: 25, weight: 14 },
+  { size: '8"', nominalDN: 200, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 60, height: 320, stemDiameter: 30, weight: 22 },
+  { size: '10"', nominalDN: 250, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 68, height: 380, stemDiameter: 35, weight: 32 },
+  { size: '12"', nominalDN: 300, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 78, height: 440, stemDiameter: 40, weight: 48 },
+  { size: '14"', nominalDN: 350, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 84, height: 495, stemDiameter: 45, weight: 62 },
+  { size: '16"', nominalDN: 400, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 92, height: 555, stemDiameter: 52, weight: 82 },
+  { size: '18"', nominalDN: 450, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 100, height: 615, stemDiameter: 58, weight: 105 },
+  { size: '20"', nominalDN: 500, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 108, height: 680, stemDiameter: 65, weight: 130 },
+  { size: '24"', nominalDN: 600, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 127, height: 800, stemDiameter: 75, weight: 195 },
+  { size: '30"', nominalDN: 750, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 154, height: 980, stemDiameter: 90, weight: 310 },
+  { size: '36"', nominalDN: 900, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 181, height: 1160, stemDiameter: 105, weight: 460 },
+  { size: '42"', nominalDN: 1050, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 211, height: 1350, stemDiameter: 120, weight: 650 },
+  { size: '48"', nominalDN: 1200, type: 'Butterfly', endType: 'Flanged', pressureClass: '150', faceToFace: 241, height: 1540, stemDiameter: 135, weight: 880 },
+  
+  // ============= PLUG VALVES - FLANGED (API 599) =============
+  // Class 150 - Lubricated Plug
+  { size: '2"', nominalDN: 50, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 178, height: 185, weight: 11 },
+  { size: '3"', nominalDN: 80, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 203, height: 230, weight: 20 },
+  { size: '4"', nominalDN: 100, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 229, height: 280, weight: 32 },
+  { size: '6"', nominalDN: 150, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 267, height: 360, weight: 60 },
+  { size: '8"', nominalDN: 200, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 292, height: 440, weight: 105 },
+  { size: '10"', nominalDN: 250, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 330, height: 530, weight: 165 },
+  { size: '12"', nominalDN: 300, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 356, height: 620, weight: 250 },
+  { size: '14"', nominalDN: 350, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 381, height: 700, weight: 340 },
+  { size: '16"', nominalDN: 400, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 406, height: 790, weight: 450 },
+  { size: '18"', nominalDN: 450, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 432, height: 880, weight: 580 },
+  { size: '20"', nominalDN: 500, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 457, height: 970, weight: 740 },
+  { size: '24"', nominalDN: 600, type: 'Plug', endType: 'Flanged', pressureClass: '150', faceToFace: 508, height: 1150, weight: 1080 },
+  
+  // ============= THREADED VALVES (ASME B16.34) =============
+  // Gate - Class 800
+  { size: '1/2"', nominalDN: 15, type: 'Gate', endType: 'Threaded', pressureClass: '800', faceToFace: 55, height: 85, stemDiameter: 8, weight: 0.5 },
+  { size: '3/4"', nominalDN: 20, type: 'Gate', endType: 'Threaded', pressureClass: '800', faceToFace: 65, height: 95, stemDiameter: 10, weight: 0.8 },
+  { size: '1"', nominalDN: 25, type: 'Gate', endType: 'Threaded', pressureClass: '800', faceToFace: 75, height: 110, stemDiameter: 12, weight: 1.2 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Gate', endType: 'Threaded', pressureClass: '800', faceToFace: 95, height: 140, stemDiameter: 14, weight: 2.2 },
+  { size: '2"', nominalDN: 50, type: 'Gate', endType: 'Threaded', pressureClass: '800', faceToFace: 105, height: 160, stemDiameter: 16, weight: 3.5 },
+  // Globe - Class 800
+  { size: '1/2"', nominalDN: 15, type: 'Globe', endType: 'Threaded', pressureClass: '800', faceToFace: 55, height: 95, stemDiameter: 8, weight: 0.6 },
+  { size: '3/4"', nominalDN: 20, type: 'Globe', endType: 'Threaded', pressureClass: '800', faceToFace: 65, height: 108, stemDiameter: 10, weight: 0.9 },
+  { size: '1"', nominalDN: 25, type: 'Globe', endType: 'Threaded', pressureClass: '800', faceToFace: 75, height: 125, stemDiameter: 12, weight: 1.4 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Globe', endType: 'Threaded', pressureClass: '800', faceToFace: 95, height: 160, stemDiameter: 14, weight: 2.6 },
+  { size: '2"', nominalDN: 50, type: 'Globe', endType: 'Threaded', pressureClass: '800', faceToFace: 105, height: 185, stemDiameter: 16, weight: 4.2 },
+  // Check - Class 800
+  { size: '1/2"', nominalDN: 15, type: 'Check (Lift)', endType: 'Threaded', pressureClass: '800', faceToFace: 55, height: 48, weight: 0.4 },
+  { size: '3/4"', nominalDN: 20, type: 'Check (Lift)', endType: 'Threaded', pressureClass: '800', faceToFace: 65, height: 55, weight: 0.6 },
+  { size: '1"', nominalDN: 25, type: 'Check (Lift)', endType: 'Threaded', pressureClass: '800', faceToFace: 75, height: 65, weight: 0.9 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Check (Lift)', endType: 'Threaded', pressureClass: '800', faceToFace: 95, height: 85, weight: 1.6 },
+  { size: '2"', nominalDN: 50, type: 'Check (Lift)', endType: 'Threaded', pressureClass: '800', faceToFace: 105, height: 100, weight: 2.5 },
+  
+  // ============= SOCKET WELD VALVES (ASME B16.34) =============
+  // Gate - Class 800
+  { size: '1/2"', nominalDN: 15, type: 'Gate', endType: 'Socket Weld', pressureClass: '800', faceToFace: 55, height: 85, stemDiameter: 8, weight: 0.55 },
+  { size: '3/4"', nominalDN: 20, type: 'Gate', endType: 'Socket Weld', pressureClass: '800', faceToFace: 65, height: 95, stemDiameter: 10, weight: 0.85 },
+  { size: '1"', nominalDN: 25, type: 'Gate', endType: 'Socket Weld', pressureClass: '800', faceToFace: 75, height: 110, stemDiameter: 12, weight: 1.3 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Gate', endType: 'Socket Weld', pressureClass: '800', faceToFace: 95, height: 140, stemDiameter: 14, weight: 2.4 },
+  { size: '2"', nominalDN: 50, type: 'Gate', endType: 'Socket Weld', pressureClass: '800', faceToFace: 105, height: 160, stemDiameter: 16, weight: 3.8 },
+  // Globe - Class 800
+  { size: '1/2"', nominalDN: 15, type: 'Globe', endType: 'Socket Weld', pressureClass: '800', faceToFace: 55, height: 95, stemDiameter: 8, weight: 0.65 },
+  { size: '3/4"', nominalDN: 20, type: 'Globe', endType: 'Socket Weld', pressureClass: '800', faceToFace: 65, height: 108, stemDiameter: 10, weight: 0.95 },
+  { size: '1"', nominalDN: 25, type: 'Globe', endType: 'Socket Weld', pressureClass: '800', faceToFace: 75, height: 125, stemDiameter: 12, weight: 1.5 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Globe', endType: 'Socket Weld', pressureClass: '800', faceToFace: 95, height: 160, stemDiameter: 14, weight: 2.8 },
+  { size: '2"', nominalDN: 50, type: 'Globe', endType: 'Socket Weld', pressureClass: '800', faceToFace: 105, height: 185, stemDiameter: 16, weight: 4.5 },
+  // Check - Class 800
+  { size: '1/2"', nominalDN: 15, type: 'Check (Piston)', endType: 'Socket Weld', pressureClass: '800', faceToFace: 55, height: 48, weight: 0.45 },
+  { size: '3/4"', nominalDN: 20, type: 'Check (Piston)', endType: 'Socket Weld', pressureClass: '800', faceToFace: 65, height: 55, weight: 0.65 },
+  { size: '1"', nominalDN: 25, type: 'Check (Piston)', endType: 'Socket Weld', pressureClass: '800', faceToFace: 75, height: 65, weight: 1.0 },
+  { size: '1-1/2"', nominalDN: 40, type: 'Check (Piston)', endType: 'Socket Weld', pressureClass: '800', faceToFace: 95, height: 85, weight: 1.8 },
+  { size: '2"', nominalDN: 50, type: 'Check (Piston)', endType: 'Socket Weld', pressureClass: '800', faceToFace: 105, height: 100, weight: 2.8 },
 ];
 
 export const valveTypes = [
-  { id: 'gate', name: 'Gate Valve', abbr: 'GV' },
-  { id: 'globe', name: 'Globe Valve', abbr: 'GLV' },
-  { id: 'ball', name: 'Ball Valve', abbr: 'BV' },
-  { id: 'check', name: 'Check Valve', abbr: 'CV' },
-  { id: 'butterfly', name: 'Butterfly Valve', abbr: 'BFV' },
-  { id: 'plug', name: 'Plug Valve', abbr: 'PV' },
+  { id: 'Gate', name: 'Gate Valve', abbr: 'GV', standard: 'ASME B16.10/B16.34' },
+  { id: 'Globe', name: 'Globe Valve', abbr: 'GLV', standard: 'ASME B16.10/B16.34' },
+  { id: 'Ball', name: 'Ball Valve', abbr: 'BV', standard: 'ASME B16.10/B16.34' },
+  { id: 'Check (Swing)', name: 'Swing Check Valve', abbr: 'CV-S', standard: 'ASME B16.10' },
+  { id: 'Check (Lift)', name: 'Lift Check Valve', abbr: 'CV-L', standard: 'ASME B16.34' },
+  { id: 'Check (Piston)', name: 'Piston Check Valve', abbr: 'CV-P', standard: 'ASME B16.34' },
+  { id: 'Butterfly', name: 'Butterfly Valve', abbr: 'BFV', standard: 'ASME B16.10' },
+  { id: 'Plug', name: 'Plug Valve', abbr: 'PV', standard: 'API 599' },
 ];
+
+export const valveEndTypes: ValveEndType[] = ['Flanged', 'Buttweld', 'Threaded', 'Socket Weld'];
+
+export function getValvesByType(type: string): ValveData[] {
+  return valveData.filter(v => v.type === type);
+}
+
+export function getValvesByEndType(endType: ValveEndType): ValveData[] {
+  return valveData.filter(v => v.endType === endType);
+}
+
+export function getValveSizes(type?: string, endType?: ValveEndType, pressureClass?: string): string[] {
+  let filtered = valveData;
+  if (type) filtered = filtered.filter(v => v.type === type);
+  if (endType) filtered = filtered.filter(v => v.endType === endType);
+  if (pressureClass) filtered = filtered.filter(v => v.pressureClass === pressureClass);
+  return [...new Set(filtered.map(v => v.size))];
+}
+
+export function getValvePressureClasses(type?: string, endType?: ValveEndType): string[] {
+  let filtered = valveData;
+  if (type) filtered = filtered.filter(v => v.type === type);
+  if (endType) filtered = filtered.filter(v => v.endType === endType);
+  return [...new Set(filtered.map(v => v.pressureClass))];
+}
 
 // ============= LINE BLANKS =============
 
