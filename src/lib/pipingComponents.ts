@@ -1,7 +1,153 @@
 /**
  * Piping Components Database - ASME B36.10M / B16 Series
- * Comprehensive dimensional data for flanges, fittings, gaskets, valves, and more
+ * Comprehensive dimensional data for pipe, flanges, fittings, gaskets, valves, and more
  */
+
+// ============= PIPE DATA (ASME B36.10M) =============
+
+export interface PipeData {
+  size: string;
+  nominalDN: number;
+  outerDiameter: number;      // mm
+  schedule: string;
+  wallThickness: number;      // mm
+  insideDiameter: number;     // mm
+  crossSectionArea: number;   // mm²
+  internalArea: number;       // mm²
+  weightPerMeter: number;     // kg/m (empty steel pipe)
+  waterCapacity: number;      // L/m
+}
+
+export const pipeData: PipeData[] = [
+  // 1/2" pipe
+  { size: '1/2"', nominalDN: 15, outerDiameter: 21.3, schedule: '5S', wallThickness: 1.65, insideDiameter: 18.0, crossSectionArea: 102, internalArea: 254, weightPerMeter: 0.80, waterCapacity: 0.254 },
+  { size: '1/2"', nominalDN: 15, outerDiameter: 21.3, schedule: '10S', wallThickness: 2.11, insideDiameter: 17.08, crossSectionArea: 127, internalArea: 229, weightPerMeter: 1.00, waterCapacity: 0.229 },
+  { size: '1/2"', nominalDN: 15, outerDiameter: 21.3, schedule: '40/STD', wallThickness: 2.77, insideDiameter: 15.76, crossSectionArea: 162, internalArea: 195, weightPerMeter: 1.27, waterCapacity: 0.195 },
+  { size: '1/2"', nominalDN: 15, outerDiameter: 21.3, schedule: '80/XS', wallThickness: 3.73, insideDiameter: 13.84, crossSectionArea: 206, internalArea: 150, weightPerMeter: 1.62, waterCapacity: 0.150 },
+  { size: '1/2"', nominalDN: 15, outerDiameter: 21.3, schedule: '160', wallThickness: 4.78, insideDiameter: 11.74, crossSectionArea: 248, internalArea: 108, weightPerMeter: 1.95, waterCapacity: 0.108 },
+  
+  // 3/4" pipe
+  { size: '3/4"', nominalDN: 20, outerDiameter: 26.7, schedule: '5S', wallThickness: 1.65, insideDiameter: 23.4, crossSectionArea: 130, internalArea: 430, weightPerMeter: 1.02, waterCapacity: 0.430 },
+  { size: '3/4"', nominalDN: 20, outerDiameter: 26.7, schedule: '10S', wallThickness: 2.11, insideDiameter: 22.48, crossSectionArea: 163, internalArea: 397, weightPerMeter: 1.28, waterCapacity: 0.397 },
+  { size: '3/4"', nominalDN: 20, outerDiameter: 26.7, schedule: '40/STD', wallThickness: 2.87, insideDiameter: 20.96, crossSectionArea: 215, internalArea: 345, weightPerMeter: 1.69, waterCapacity: 0.345 },
+  { size: '3/4"', nominalDN: 20, outerDiameter: 26.7, schedule: '80/XS', wallThickness: 3.91, insideDiameter: 18.88, crossSectionArea: 280, internalArea: 280, weightPerMeter: 2.20, waterCapacity: 0.280 },
+  
+  // 1" pipe
+  { size: '1"', nominalDN: 25, outerDiameter: 33.4, schedule: '5S', wallThickness: 1.65, insideDiameter: 30.1, crossSectionArea: 165, internalArea: 711, weightPerMeter: 1.29, waterCapacity: 0.711 },
+  { size: '1"', nominalDN: 25, outerDiameter: 33.4, schedule: '10S', wallThickness: 2.77, insideDiameter: 27.86, crossSectionArea: 267, internalArea: 610, weightPerMeter: 2.09, waterCapacity: 0.610 },
+  { size: '1"', nominalDN: 25, outerDiameter: 33.4, schedule: '40/STD', wallThickness: 3.38, insideDiameter: 26.64, crossSectionArea: 319, internalArea: 557, weightPerMeter: 2.50, waterCapacity: 0.557 },
+  { size: '1"', nominalDN: 25, outerDiameter: 33.4, schedule: '80/XS', wallThickness: 4.55, insideDiameter: 24.3, crossSectionArea: 413, internalArea: 464, weightPerMeter: 3.24, waterCapacity: 0.464 },
+  { size: '1"', nominalDN: 25, outerDiameter: 33.4, schedule: '160', wallThickness: 6.35, insideDiameter: 20.7, crossSectionArea: 540, internalArea: 336, weightPerMeter: 4.24, waterCapacity: 0.336 },
+  
+  // 1-1/2" pipe
+  { size: '1-1/2"', nominalDN: 40, outerDiameter: 48.3, schedule: '5S', wallThickness: 1.65, insideDiameter: 45.0, crossSectionArea: 242, internalArea: 1590, weightPerMeter: 1.90, waterCapacity: 1.590 },
+  { size: '1-1/2"', nominalDN: 40, outerDiameter: 48.3, schedule: '10S', wallThickness: 2.77, insideDiameter: 42.76, crossSectionArea: 397, internalArea: 1436, weightPerMeter: 3.11, waterCapacity: 1.436 },
+  { size: '1-1/2"', nominalDN: 40, outerDiameter: 48.3, schedule: '40/STD', wallThickness: 3.68, insideDiameter: 40.94, crossSectionArea: 516, internalArea: 1316, weightPerMeter: 4.05, waterCapacity: 1.316 },
+  { size: '1-1/2"', nominalDN: 40, outerDiameter: 48.3, schedule: '80/XS', wallThickness: 5.08, insideDiameter: 38.14, crossSectionArea: 690, internalArea: 1143, weightPerMeter: 5.41, waterCapacity: 1.143 },
+  
+  // 2" pipe
+  { size: '2"', nominalDN: 50, outerDiameter: 60.3, schedule: '5S', wallThickness: 1.65, insideDiameter: 57.0, crossSectionArea: 304, internalArea: 2552, weightPerMeter: 2.39, waterCapacity: 2.552 },
+  { size: '2"', nominalDN: 50, outerDiameter: 60.3, schedule: '10S', wallThickness: 2.77, insideDiameter: 54.76, crossSectionArea: 502, internalArea: 2355, weightPerMeter: 3.93, waterCapacity: 2.355 },
+  { size: '2"', nominalDN: 50, outerDiameter: 60.3, schedule: '40/STD', wallThickness: 3.91, insideDiameter: 52.48, crossSectionArea: 693, internalArea: 2163, weightPerMeter: 5.44, waterCapacity: 2.163 },
+  { size: '2"', nominalDN: 50, outerDiameter: 60.3, schedule: '80/XS', wallThickness: 5.54, insideDiameter: 49.22, crossSectionArea: 954, internalArea: 1902, weightPerMeter: 7.48, waterCapacity: 1.902 },
+  { size: '2"', nominalDN: 50, outerDiameter: 60.3, schedule: '160', wallThickness: 8.74, insideDiameter: 42.82, crossSectionArea: 1416, internalArea: 1440, weightPerMeter: 11.11, waterCapacity: 1.440 },
+  
+  // 3" pipe
+  { size: '3"', nominalDN: 80, outerDiameter: 88.9, schedule: '5S', wallThickness: 1.65, insideDiameter: 85.6, crossSectionArea: 453, internalArea: 5755, weightPerMeter: 3.55, waterCapacity: 5.755 },
+  { size: '3"', nominalDN: 80, outerDiameter: 88.9, schedule: '10S', wallThickness: 2.77, insideDiameter: 83.36, crossSectionArea: 749, internalArea: 5457, weightPerMeter: 5.88, waterCapacity: 5.457 },
+  { size: '3"', nominalDN: 80, outerDiameter: 88.9, schedule: '40/STD', wallThickness: 5.49, insideDiameter: 77.92, crossSectionArea: 1438, internalArea: 4768, weightPerMeter: 11.29, waterCapacity: 4.768 },
+  { size: '3"', nominalDN: 80, outerDiameter: 88.9, schedule: '80/XS', wallThickness: 7.62, insideDiameter: 73.66, crossSectionArea: 1946, internalArea: 4261, weightPerMeter: 15.27, waterCapacity: 4.261 },
+  
+  // 4" pipe
+  { size: '4"', nominalDN: 100, outerDiameter: 114.3, schedule: '5S', wallThickness: 1.65, insideDiameter: 111.0, crossSectionArea: 585, internalArea: 9677, weightPerMeter: 4.59, waterCapacity: 9.677 },
+  { size: '4"', nominalDN: 100, outerDiameter: 114.3, schedule: '10S', wallThickness: 2.77, insideDiameter: 108.76, crossSectionArea: 971, internalArea: 9290, weightPerMeter: 7.62, waterCapacity: 9.290 },
+  { size: '4"', nominalDN: 100, outerDiameter: 114.3, schedule: '40/STD', wallThickness: 6.02, insideDiameter: 102.26, crossSectionArea: 2048, internalArea: 8213, weightPerMeter: 16.07, waterCapacity: 8.213 },
+  { size: '4"', nominalDN: 100, outerDiameter: 114.3, schedule: '80/XS', wallThickness: 8.56, insideDiameter: 97.18, crossSectionArea: 2843, internalArea: 7417, weightPerMeter: 22.32, waterCapacity: 7.417 },
+  { size: '4"', nominalDN: 100, outerDiameter: 114.3, schedule: '120', wallThickness: 11.13, insideDiameter: 92.04, crossSectionArea: 3605, internalArea: 6654, weightPerMeter: 28.30, waterCapacity: 6.654 },
+  { size: '4"', nominalDN: 100, outerDiameter: 114.3, schedule: '160', wallThickness: 13.49, insideDiameter: 87.32, crossSectionArea: 4273, internalArea: 5988, weightPerMeter: 33.54, waterCapacity: 5.988 },
+  
+  // 6" pipe
+  { size: '6"', nominalDN: 150, outerDiameter: 168.3, schedule: '5S', wallThickness: 2.77, insideDiameter: 162.76, crossSectionArea: 1442, internalArea: 20816, weightPerMeter: 11.31, waterCapacity: 20.816 },
+  { size: '6"', nominalDN: 150, outerDiameter: 168.3, schedule: '10S', wallThickness: 3.40, insideDiameter: 161.5, crossSectionArea: 1762, internalArea: 20483, weightPerMeter: 13.83, waterCapacity: 20.483 },
+  { size: '6"', nominalDN: 150, outerDiameter: 168.3, schedule: '40/STD', wallThickness: 7.11, insideDiameter: 154.08, crossSectionArea: 3601, internalArea: 18644, weightPerMeter: 28.26, waterCapacity: 18.644 },
+  { size: '6"', nominalDN: 150, outerDiameter: 168.3, schedule: '80/XS', wallThickness: 10.97, insideDiameter: 146.36, crossSectionArea: 5420, internalArea: 16827, weightPerMeter: 42.56, waterCapacity: 16.827 },
+  { size: '6"', nominalDN: 150, outerDiameter: 168.3, schedule: '120', wallThickness: 14.27, insideDiameter: 139.76, crossSectionArea: 6908, internalArea: 15341, weightPerMeter: 54.20, waterCapacity: 15.341 },
+  { size: '6"', nominalDN: 150, outerDiameter: 168.3, schedule: '160', wallThickness: 18.26, insideDiameter: 131.78, crossSectionArea: 8605, internalArea: 13636, weightPerMeter: 67.56, waterCapacity: 13.636 },
+  
+  // 8" pipe
+  { size: '8"', nominalDN: 200, outerDiameter: 219.1, schedule: '5S', wallThickness: 2.77, insideDiameter: 213.56, crossSectionArea: 1886, internalArea: 35807, weightPerMeter: 14.80, waterCapacity: 35.807 },
+  { size: '8"', nominalDN: 200, outerDiameter: 219.1, schedule: '10S', wallThickness: 3.76, insideDiameter: 211.58, crossSectionArea: 2547, internalArea: 35171, weightPerMeter: 19.99, waterCapacity: 35.171 },
+  { size: '8"', nominalDN: 200, outerDiameter: 219.1, schedule: '20', wallThickness: 6.35, insideDiameter: 206.4, crossSectionArea: 4245, internalArea: 33450, weightPerMeter: 33.31, waterCapacity: 33.450 },
+  { size: '8"', nominalDN: 200, outerDiameter: 219.1, schedule: '40/STD', wallThickness: 8.18, insideDiameter: 202.74, crossSectionArea: 5417, internalArea: 32275, weightPerMeter: 42.55, waterCapacity: 32.275 },
+  { size: '8"', nominalDN: 200, outerDiameter: 219.1, schedule: '80/XS', wallThickness: 12.70, insideDiameter: 193.7, crossSectionArea: 8230, internalArea: 29466, weightPerMeter: 64.64, waterCapacity: 29.466 },
+  { size: '8"', nominalDN: 200, outerDiameter: 219.1, schedule: '120', wallThickness: 18.26, insideDiameter: 182.58, crossSectionArea: 11515, internalArea: 26186, weightPerMeter: 90.44, waterCapacity: 26.186 },
+  { size: '8"', nominalDN: 200, outerDiameter: 219.1, schedule: '160', wallThickness: 23.01, insideDiameter: 173.08, crossSectionArea: 14171, internalArea: 23530, weightPerMeter: 111.27, waterCapacity: 23.530 },
+  
+  // 10" pipe
+  { size: '10"', nominalDN: 250, outerDiameter: 273.1, schedule: '5S', wallThickness: 3.40, insideDiameter: 266.3, crossSectionArea: 2881, internalArea: 55697, weightPerMeter: 22.61, waterCapacity: 55.697 },
+  { size: '10"', nominalDN: 250, outerDiameter: 273.1, schedule: '10S', wallThickness: 4.19, insideDiameter: 264.72, crossSectionArea: 3539, internalArea: 55058, weightPerMeter: 27.78, waterCapacity: 55.058 },
+  { size: '10"', nominalDN: 250, outerDiameter: 273.1, schedule: '20', wallThickness: 6.35, insideDiameter: 260.4, crossSectionArea: 5323, internalArea: 53257, weightPerMeter: 41.77, waterCapacity: 53.257 },
+  { size: '10"', nominalDN: 250, outerDiameter: 273.1, schedule: '40/STD', wallThickness: 9.27, insideDiameter: 254.56, crossSectionArea: 7686, internalArea: 50894, weightPerMeter: 60.31, waterCapacity: 50.894 },
+  { size: '10"', nominalDN: 250, outerDiameter: 273.1, schedule: '80/XS', wallThickness: 15.06, insideDiameter: 242.98, crossSectionArea: 12213, internalArea: 46375, weightPerMeter: 95.80, waterCapacity: 46.375 },
+  { size: '10"', nominalDN: 250, outerDiameter: 273.1, schedule: '120', wallThickness: 21.44, insideDiameter: 230.22, crossSectionArea: 16963, internalArea: 41625, weightPerMeter: 133.10, waterCapacity: 41.625 },
+  
+  // 12" pipe
+  { size: '12"', nominalDN: 300, outerDiameter: 323.9, schedule: '5S', wallThickness: 3.96, insideDiameter: 315.98, crossSectionArea: 3983, internalArea: 78388, weightPerMeter: 31.25, waterCapacity: 78.388 },
+  { size: '12"', nominalDN: 300, outerDiameter: 323.9, schedule: '10S', wallThickness: 4.57, insideDiameter: 314.76, crossSectionArea: 4582, internalArea: 77840, weightPerMeter: 35.97, waterCapacity: 77.840 },
+  { size: '12"', nominalDN: 300, outerDiameter: 323.9, schedule: '20', wallThickness: 6.35, insideDiameter: 311.2, crossSectionArea: 6336, internalArea: 76048, weightPerMeter: 49.73, waterCapacity: 76.048 },
+  { size: '12"', nominalDN: 300, outerDiameter: 323.9, schedule: 'STD', wallThickness: 9.52, insideDiameter: 304.86, crossSectionArea: 9402, internalArea: 73001, weightPerMeter: 73.88, waterCapacity: 73.001 },
+  { size: '12"', nominalDN: 300, outerDiameter: 323.9, schedule: '40', wallThickness: 10.31, insideDiameter: 303.28, crossSectionArea: 10152, internalArea: 72228, weightPerMeter: 79.73, waterCapacity: 72.228 },
+  { size: '12"', nominalDN: 300, outerDiameter: 323.9, schedule: 'XS', wallThickness: 12.70, insideDiameter: 298.5, crossSectionArea: 12415, internalArea: 69963, weightPerMeter: 97.46, waterCapacity: 69.963 },
+  { size: '12"', nominalDN: 300, outerDiameter: 323.9, schedule: '80', wallThickness: 17.48, insideDiameter: 288.94, crossSectionArea: 16839, internalArea: 65603, weightPerMeter: 132.08, waterCapacity: 65.603 },
+  
+  // 14" pipe
+  { size: '14"', nominalDN: 350, outerDiameter: 355.6, schedule: '5S', wallThickness: 3.96, insideDiameter: 347.68, crossSectionArea: 4377, internalArea: 94953, weightPerMeter: 34.35, waterCapacity: 94.953 },
+  { size: '14"', nominalDN: 350, outerDiameter: 355.6, schedule: '10S', wallThickness: 4.78, insideDiameter: 346.04, crossSectionArea: 5270, internalArea: 94058, weightPerMeter: 41.36, waterCapacity: 94.058 },
+  { size: '14"', nominalDN: 350, outerDiameter: 355.6, schedule: 'STD', wallThickness: 9.52, insideDiameter: 336.56, crossSectionArea: 10348, internalArea: 88966, weightPerMeter: 81.25, waterCapacity: 88.966 },
+  { size: '14"', nominalDN: 350, outerDiameter: 355.6, schedule: 'XS', wallThickness: 11.13, insideDiameter: 333.34, crossSectionArea: 12039, internalArea: 87280, weightPerMeter: 94.50, waterCapacity: 87.280 },
+  { size: '14"', nominalDN: 350, outerDiameter: 355.6, schedule: '40', wallThickness: 11.13, insideDiameter: 333.34, crossSectionArea: 12039, internalArea: 87280, weightPerMeter: 94.50, waterCapacity: 87.280 },
+  { size: '14"', nominalDN: 350, outerDiameter: 355.6, schedule: '80', wallThickness: 19.05, insideDiameter: 317.5, crossSectionArea: 20154, internalArea: 79174, weightPerMeter: 158.11, waterCapacity: 79.174 },
+  
+  // 16" pipe
+  { size: '16"', nominalDN: 400, outerDiameter: 406.4, schedule: '5S', wallThickness: 4.19, insideDiameter: 398.02, crossSectionArea: 5292, internalArea: 124406, weightPerMeter: 41.56, waterCapacity: 124.406 },
+  { size: '16"', nominalDN: 400, outerDiameter: 406.4, schedule: '10S', wallThickness: 4.78, insideDiameter: 396.84, crossSectionArea: 6036, internalArea: 123682, weightPerMeter: 47.39, waterCapacity: 123.682 },
+  { size: '16"', nominalDN: 400, outerDiameter: 406.4, schedule: 'STD', wallThickness: 9.52, insideDiameter: 387.36, crossSectionArea: 11867, internalArea: 117839, weightPerMeter: 93.17, waterCapacity: 117.839 },
+  { size: '16"', nominalDN: 400, outerDiameter: 406.4, schedule: 'XS', wallThickness: 12.70, insideDiameter: 381.0, crossSectionArea: 15706, internalArea: 113986, weightPerMeter: 123.30, waterCapacity: 113.986 },
+  { size: '16"', nominalDN: 400, outerDiameter: 406.4, schedule: '40', wallThickness: 12.70, insideDiameter: 381.0, crossSectionArea: 15706, internalArea: 113986, weightPerMeter: 123.30, waterCapacity: 113.986 },
+  { size: '16"', nominalDN: 400, outerDiameter: 406.4, schedule: '80', wallThickness: 21.44, insideDiameter: 363.52, crossSectionArea: 25950, internalArea: 103823, weightPerMeter: 203.53, waterCapacity: 103.823 },
+  
+  // 18" pipe
+  { size: '18"', nominalDN: 450, outerDiameter: 457.2, schedule: '5S', wallThickness: 4.19, insideDiameter: 448.82, crossSectionArea: 5959, internalArea: 158192, weightPerMeter: 46.77, waterCapacity: 158.192 },
+  { size: '18"', nominalDN: 450, outerDiameter: 457.2, schedule: '10S', wallThickness: 4.78, insideDiameter: 447.64, crossSectionArea: 6794, internalArea: 157355, weightPerMeter: 53.33, waterCapacity: 157.355 },
+  { size: '18"', nominalDN: 450, outerDiameter: 457.2, schedule: 'STD', wallThickness: 9.52, insideDiameter: 438.16, crossSectionArea: 13387, internalArea: 150795, weightPerMeter: 105.09, waterCapacity: 150.795 },
+  { size: '18"', nominalDN: 450, outerDiameter: 457.2, schedule: 'XS', wallThickness: 11.13, insideDiameter: 434.94, crossSectionArea: 15582, internalArea: 148571, weightPerMeter: 122.38, waterCapacity: 148.571 },
+  
+  // 20" pipe
+  { size: '20"', nominalDN: 500, outerDiameter: 508.0, schedule: '5S', wallThickness: 4.78, insideDiameter: 498.44, crossSectionArea: 7555, internalArea: 195129, weightPerMeter: 59.32, waterCapacity: 195.129 },
+  { size: '20"', nominalDN: 500, outerDiameter: 508.0, schedule: '10S', wallThickness: 5.54, insideDiameter: 496.92, crossSectionArea: 8739, internalArea: 193901, weightPerMeter: 68.60, waterCapacity: 193.901 },
+  { size: '20"', nominalDN: 500, outerDiameter: 508.0, schedule: 'STD', wallThickness: 9.52, insideDiameter: 488.96, crossSectionArea: 14907, internalArea: 187746, weightPerMeter: 117.02, waterCapacity: 187.746 },
+  { size: '20"', nominalDN: 500, outerDiameter: 508.0, schedule: 'XS', wallThickness: 12.70, insideDiameter: 482.6, crossSectionArea: 19764, internalArea: 182891, weightPerMeter: 155.12, waterCapacity: 182.891 },
+  
+  // 24" pipe
+  { size: '24"', nominalDN: 600, outerDiameter: 609.6, schedule: '5S', wallThickness: 5.54, insideDiameter: 598.52, crossSectionArea: 10523, internalArea: 281364, weightPerMeter: 82.60, waterCapacity: 281.364 },
+  { size: '24"', nominalDN: 600, outerDiameter: 609.6, schedule: '10S', wallThickness: 6.35, insideDiameter: 596.9, crossSectionArea: 12035, internalArea: 279843, weightPerMeter: 94.46, waterCapacity: 279.843 },
+  { size: '24"', nominalDN: 600, outerDiameter: 609.6, schedule: 'STD', wallThickness: 9.52, insideDiameter: 590.56, crossSectionArea: 17945, internalArea: 273886, weightPerMeter: 140.88, waterCapacity: 273.886 },
+  { size: '24"', nominalDN: 600, outerDiameter: 609.6, schedule: 'XS', wallThickness: 14.27, insideDiameter: 581.06, crossSectionArea: 26688, internalArea: 265144, weightPerMeter: 209.57, waterCapacity: 265.144 },
+  { size: '24"', nominalDN: 600, outerDiameter: 609.6, schedule: '40', wallThickness: 17.48, insideDiameter: 574.64, crossSectionArea: 32537, internalArea: 259404, weightPerMeter: 255.41, waterCapacity: 259.404 },
+  { size: '24"', nominalDN: 600, outerDiameter: 609.6, schedule: '80', wallThickness: 30.96, insideDiameter: 547.68, crossSectionArea: 56308, internalArea: 235595, weightPerMeter: 441.49, waterCapacity: 235.595 },
+];
+
+export function getUniquePipeSizes(): string[] {
+  return [...new Set(pipeData.map(p => p.size))];
+}
+
+export function getSchedulesForPipeSize(size: string): string[] {
+  return pipeData.filter(p => p.size === size).map(p => p.schedule);
+}
+
+export function getPipeBySchedule(size: string, schedule: string): PipeData | undefined {
+  return pipeData.find(p => p.size === size && p.schedule === schedule);
+}
 
 // ============= FLANGES (ASME B16.5 / B16.47) =============
 
@@ -9,16 +155,16 @@ export interface FlangeData {
   size: string;
   nominalDN: number;
   pressureClass: string;
-  outerDiameter: number;      // mm
-  boltCircleDiameter: number; // mm
+  outerDiameter: number;
+  boltCircleDiameter: number;
   numBolts: number;
   boltSize: string;
-  hubDiameter: number;        // mm (raised face diameter for WN)
-  thickness: number;          // mm (flange thickness)
-  raisedFaceHeight: number;   // mm
-  raisedFaceDiameter: number; // mm
-  neckOD: number;             // mm (for weld neck)
-  weight: number;             // kg (approximate)
+  hubDiameter: number;
+  thickness: number;
+  raisedFaceHeight: number;
+  raisedFaceDiameter: number;
+  neckOD: number;
+  weight: number;
 }
 
 export const flangeData: FlangeData[] = [
@@ -41,7 +187,6 @@ export const flangeData: FlangeData[] = [
   { size: '18"', nominalDN: 450, pressureClass: '150', outerDiameter: 635, boltCircleDiameter: 577.8, numBolts: 16, boltSize: '1-1/8"', hubDiameter: 533, thickness: 40, raisedFaceHeight: 2, raisedFaceDiameter: 533, neckOD: 457.2, weight: 70 },
   { size: '20"', nominalDN: 500, pressureClass: '150', outerDiameter: 699, boltCircleDiameter: 635, numBolts: 20, boltSize: '1-1/8"', hubDiameter: 584, thickness: 43, raisedFaceHeight: 2, raisedFaceDiameter: 584, neckOD: 508, weight: 90 },
   { size: '24"', nominalDN: 600, pressureClass: '150', outerDiameter: 813, boltCircleDiameter: 749.3, numBolts: 20, boltSize: '1-1/4"', hubDiameter: 692, thickness: 48, raisedFaceHeight: 2, raisedFaceDiameter: 692, neckOD: 609.6, weight: 130 },
-  
   // Class 300
   { size: '1/2"', nominalDN: 15, pressureClass: '300', outerDiameter: 95, boltCircleDiameter: 66.7, numBolts: 4, boltSize: '1/2"', hubDiameter: 38, thickness: 14, raisedFaceHeight: 2, raisedFaceDiameter: 38, neckOD: 21.3, weight: 0.7 },
   { size: '3/4"', nominalDN: 20, pressureClass: '300', outerDiameter: 117, boltCircleDiameter: 82.6, numBolts: 4, boltSize: '5/8"', hubDiameter: 48, thickness: 16, raisedFaceHeight: 2, raisedFaceDiameter: 48, neckOD: 26.7, weight: 1.0 },
@@ -54,7 +199,6 @@ export const flangeData: FlangeData[] = [
   { size: '8"', nominalDN: 200, pressureClass: '300', outerDiameter: 381, boltCircleDiameter: 330.2, numBolts: 12, boltSize: '7/8"', hubDiameter: 270, thickness: 41, raisedFaceHeight: 2, raisedFaceDiameter: 270, neckOD: 219.1, weight: 29 },
   { size: '10"', nominalDN: 250, pressureClass: '300', outerDiameter: 445, boltCircleDiameter: 387.4, numBolts: 16, boltSize: '1"', hubDiameter: 324, thickness: 48, raisedFaceHeight: 2, raisedFaceDiameter: 324, neckOD: 273.1, weight: 45 },
   { size: '12"', nominalDN: 300, pressureClass: '300', outerDiameter: 521, boltCircleDiameter: 450.8, numBolts: 16, boltSize: '1-1/8"', hubDiameter: 381, thickness: 51, raisedFaceHeight: 2, raisedFaceDiameter: 381, neckOD: 323.9, weight: 65 },
-  
   // Class 600
   { size: '1/2"', nominalDN: 15, pressureClass: '600', outerDiameter: 95, boltCircleDiameter: 66.7, numBolts: 4, boltSize: '1/2"', hubDiameter: 38, thickness: 14, raisedFaceHeight: 7, raisedFaceDiameter: 38, neckOD: 21.3, weight: 0.8 },
   { size: '1"', nominalDN: 25, pressureClass: '600', outerDiameter: 124, boltCircleDiameter: 88.9, numBolts: 4, boltSize: '5/8"', hubDiameter: 54, thickness: 22, raisedFaceHeight: 7, raisedFaceDiameter: 54, neckOD: 33.4, weight: 1.6 },
@@ -68,12 +212,12 @@ export const flangeData: FlangeData[] = [
 ];
 
 export const flangeTypes = [
-  { id: 'wn', name: 'Weld Neck', abbr: 'WN' },
-  { id: 'so', name: 'Slip-On', abbr: 'SO' },
-  { id: 'sw', name: 'Socket Weld', abbr: 'SW' },
-  { id: 'th', name: 'Threaded', abbr: 'TH' },
-  { id: 'bl', name: 'Blind', abbr: 'BL' },
-  { id: 'lj', name: 'Lap Joint', abbr: 'LJ' },
+  { id: 'wn', name: 'Weld Neck', abbr: 'WN', description: 'Best for high pressure and temperature' },
+  { id: 'so', name: 'Slip-On', abbr: 'SO', description: 'Economical, slides over pipe' },
+  { id: 'sw', name: 'Socket Weld', abbr: 'SW', description: 'For small bore high pressure' },
+  { id: 'th', name: 'Threaded', abbr: 'TH', description: 'No welding required' },
+  { id: 'bl', name: 'Blind', abbr: 'BL', description: 'Closes pipe ends' },
+  { id: 'lj', name: 'Lap Joint', abbr: 'LJ', description: 'Easy alignment, used with stub ends' },
 ];
 
 export const pressureClasses = ['150', '300', '600', '900', '1500', '2500'];
@@ -85,14 +229,12 @@ export interface FittingData {
   nominalDN: number;
   type: string;
   schedule: string;
-  centerToEnd: number;      // A dimension (mm)
-  centerToCenter?: number;  // C dimension for tees (mm)
-  outerDiameter: number;    // mm
-  weight: number;           // kg
+  centerToEnd: number;
+  outerDiameter: number;
+  weight: number;
 }
 
 export const elbowData: FittingData[] = [
-  // 90° Long Radius Elbows (Sch 40)
   { size: '1/2"', nominalDN: 15, type: '90LR', schedule: '40', centerToEnd: 22, outerDiameter: 21.3, weight: 0.08 },
   { size: '3/4"', nominalDN: 20, type: '90LR', schedule: '40', centerToEnd: 29, outerDiameter: 26.7, weight: 0.12 },
   { size: '1"', nominalDN: 25, type: '90LR', schedule: '40', centerToEnd: 38, outerDiameter: 33.4, weight: 0.2 },
@@ -109,8 +251,6 @@ export const elbowData: FittingData[] = [
   { size: '18"', nominalDN: 450, type: '90LR', schedule: '40', centerToEnd: 686, outerDiameter: 457.2, weight: 175 },
   { size: '20"', nominalDN: 500, type: '90LR', schedule: '40', centerToEnd: 762, outerDiameter: 508, weight: 230 },
   { size: '24"', nominalDN: 600, type: '90LR', schedule: '40', centerToEnd: 914, outerDiameter: 609.6, weight: 380 },
-  
-  // 45° Long Radius Elbows (Sch 40)
   { size: '1/2"', nominalDN: 15, type: '45LR', schedule: '40', centerToEnd: 16, outerDiameter: 21.3, weight: 0.05 },
   { size: '3/4"', nominalDN: 20, type: '45LR', schedule: '40', centerToEnd: 19, outerDiameter: 26.7, weight: 0.07 },
   { size: '1"', nominalDN: 25, type: '45LR', schedule: '40', centerToEnd: 22, outerDiameter: 33.4, weight: 0.11 },
@@ -129,10 +269,10 @@ export interface TeeData {
   nominalDN: number;
   type: string;
   schedule: string;
-  centerToEnd: number;      // C (run) dimension (mm)
-  centerToBranch: number;   // M (branch) dimension (mm)
-  outerDiameter: number;    // mm
-  weight: number;           // kg
+  centerToEnd: number;
+  centerToBranch: number;
+  outerDiameter: number;
+  weight: number;
 }
 
 export const teeData: TeeData[] = [
@@ -154,10 +294,10 @@ export interface ReducerData {
   sizeTo: string;
   type: string;
   schedule: string;
-  length: number;         // H dimension (mm)
-  largeEndOD: number;     // mm
-  smallEndOD: number;     // mm
-  weight: number;         // kg
+  length: number;
+  largeEndOD: number;
+  smallEndOD: number;
+  weight: number;
 }
 
 export const reducerData: ReducerData[] = [
@@ -194,13 +334,12 @@ export interface GasketData {
   nominalDN: number;
   pressureClass: string;
   type: string;
-  innerDiameter: number;   // mm
-  outerDiameter: number;   // mm
-  thickness: number;       // mm
+  innerDiameter: number;
+  outerDiameter: number;
+  thickness: number;
 }
 
 export const gasketData: GasketData[] = [
-  // Ring Joint Gaskets (RTJ)
   { size: '1/2"', nominalDN: 15, pressureClass: '150', type: 'Spiral Wound', innerDiameter: 21.5, outerDiameter: 34, thickness: 4.5 },
   { size: '3/4"', nominalDN: 20, pressureClass: '150', type: 'Spiral Wound', innerDiameter: 27, outerDiameter: 42, thickness: 4.5 },
   { size: '1"', nominalDN: 25, pressureClass: '150', type: 'Spiral Wound', innerDiameter: 34, outerDiameter: 50, thickness: 4.5 },
@@ -229,14 +368,12 @@ export interface ValveData {
   nominalDN: number;
   type: string;
   pressureClass: string;
-  faceToFace: number;       // mm (short pattern)
-  faceToFaceLong?: number;  // mm (long pattern if applicable)
-  height: number;           // mm (centerline to top of handwheel)
-  weight: number;           // kg (approximate)
+  faceToFace: number;
+  height: number;
+  weight: number;
 }
 
 export const valveData: ValveData[] = [
-  // Gate Valves (Class 150)
   { size: '1/2"', nominalDN: 15, type: 'Gate', pressureClass: '150', faceToFace: 108, height: 175, weight: 2.0 },
   { size: '3/4"', nominalDN: 20, type: 'Gate', pressureClass: '150', faceToFace: 117, height: 195, weight: 2.8 },
   { size: '1"', nominalDN: 25, type: 'Gate', pressureClass: '150', faceToFace: 127, height: 220, weight: 3.5 },
@@ -248,36 +385,24 @@ export const valveData: ValveData[] = [
   { size: '8"', nominalDN: 200, type: 'Gate', pressureClass: '150', faceToFace: 292, height: 710, weight: 95 },
   { size: '10"', nominalDN: 250, type: 'Gate', pressureClass: '150', faceToFace: 330, height: 850, weight: 155 },
   { size: '12"', nominalDN: 300, type: 'Gate', pressureClass: '150', faceToFace: 356, height: 980, weight: 230 },
-  
-  // Globe Valves (Class 150)
   { size: '1/2"', nominalDN: 15, type: 'Globe', pressureClass: '150', faceToFace: 150, height: 215, weight: 3.0 },
-  { size: '3/4"', nominalDN: 20, type: 'Globe', pressureClass: '150', faceToFace: 165, height: 240, weight: 4.2 },
   { size: '1"', nominalDN: 25, type: 'Globe', pressureClass: '150', faceToFace: 180, height: 270, weight: 5.5 },
-  { size: '1-1/2"', nominalDN: 40, type: 'Globe', pressureClass: '150', faceToFace: 210, height: 340, weight: 11 },
   { size: '2"', nominalDN: 50, type: 'Globe', pressureClass: '150', faceToFace: 230, height: 390, weight: 16 },
   { size: '3"', nominalDN: 80, type: 'Globe', pressureClass: '150', faceToFace: 280, height: 500, weight: 30 },
   { size: '4"', nominalDN: 100, type: 'Globe', pressureClass: '150', faceToFace: 310, height: 590, weight: 48 },
   { size: '6"', nominalDN: 150, type: 'Globe', pressureClass: '150', faceToFace: 400, height: 760, weight: 100 },
-  
-  // Ball Valves (Class 150)
   { size: '1/2"', nominalDN: 15, type: 'Ball', pressureClass: '150', faceToFace: 108, height: 75, weight: 1.8 },
-  { size: '3/4"', nominalDN: 20, type: 'Ball', pressureClass: '150', faceToFace: 117, height: 85, weight: 2.5 },
   { size: '1"', nominalDN: 25, type: 'Ball', pressureClass: '150', faceToFace: 127, height: 100, weight: 3.2 },
-  { size: '1-1/2"', nominalDN: 40, type: 'Ball', pressureClass: '150', faceToFace: 165, height: 125, weight: 6.0 },
   { size: '2"', nominalDN: 50, type: 'Ball', pressureClass: '150', faceToFace: 178, height: 150, weight: 9.0 },
   { size: '3"', nominalDN: 80, type: 'Ball', pressureClass: '150', faceToFace: 203, height: 190, weight: 16 },
   { size: '4"', nominalDN: 100, type: 'Ball', pressureClass: '150', faceToFace: 229, height: 225, weight: 26 },
   { size: '6"', nominalDN: 150, type: 'Ball', pressureClass: '150', faceToFace: 267, height: 290, weight: 52 },
   { size: '8"', nominalDN: 200, type: 'Ball', pressureClass: '150', faceToFace: 292, height: 355, weight: 90 },
-  
-  // Check Valves (Class 150)
   { size: '1/2"', nominalDN: 15, type: 'Check', pressureClass: '150', faceToFace: 108, height: 115, weight: 1.5 },
   { size: '1"', nominalDN: 25, type: 'Check', pressureClass: '150', faceToFace: 127, height: 150, weight: 2.8 },
   { size: '2"', nominalDN: 50, type: 'Check', pressureClass: '150', faceToFace: 178, height: 210, weight: 7.0 },
-  { size: '3"', nominalDN: 80, type: 'Check', pressureClass: '150', faceToFace: 203, height: 280, weight: 14 },
   { size: '4"', nominalDN: 100, type: 'Check', pressureClass: '150', faceToFace: 229, height: 340, weight: 22 },
   { size: '6"', nominalDN: 150, type: 'Check', pressureClass: '150', faceToFace: 267, height: 430, weight: 45 },
-  { size: '8"', nominalDN: 200, type: 'Check', pressureClass: '150', faceToFace: 292, height: 530, weight: 75 },
 ];
 
 export const valveTypes = [
@@ -289,22 +414,21 @@ export const valveTypes = [
   { id: 'plug', name: 'Plug Valve', abbr: 'PV' },
 ];
 
-// ============= LINE BLANKS (Spectacle Blinds) =============
+// ============= LINE BLANKS =============
 
 export interface LineBlankData {
   size: string;
   nominalDN: number;
   pressureClass: string;
   type: string;
-  outerDiameter: number;    // mm
-  thickness: number;        // mm
-  handleLength: number;     // mm
-  handleWidth: number;      // mm
-  weight: number;           // kg
+  outerDiameter: number;
+  thickness: number;
+  handleLength: number;
+  handleWidth: number;
+  weight: number;
 }
 
 export const lineBlankData: LineBlankData[] = [
-  // Spectacle Blinds Class 150
   { size: '2"', nominalDN: 50, pressureClass: '150', type: 'Spectacle', outerDiameter: 152, thickness: 9.5, handleLength: 360, handleWidth: 75, weight: 3.2 },
   { size: '3"', nominalDN: 80, pressureClass: '150', type: 'Spectacle', outerDiameter: 190, thickness: 9.5, handleLength: 450, handleWidth: 90, weight: 5.0 },
   { size: '4"', nominalDN: 100, pressureClass: '150', type: 'Spectacle', outerDiameter: 229, thickness: 11, handleLength: 540, handleWidth: 110, weight: 8.5 },
@@ -312,17 +436,10 @@ export const lineBlankData: LineBlankData[] = [
   { size: '8"', nominalDN: 200, pressureClass: '150', type: 'Spectacle', outerDiameter: 343, thickness: 14, handleLength: 830, handleWidth: 165, weight: 28 },
   { size: '10"', nominalDN: 250, pressureClass: '150', type: 'Spectacle', outerDiameter: 406, thickness: 16, handleLength: 980, handleWidth: 200, weight: 45 },
   { size: '12"', nominalDN: 300, pressureClass: '150', type: 'Spectacle', outerDiameter: 483, thickness: 17, handleLength: 1150, handleWidth: 230, weight: 70 },
-  { size: '14"', nominalDN: 350, pressureClass: '150', type: 'Spectacle', outerDiameter: 533, thickness: 19, handleLength: 1280, handleWidth: 255, weight: 95 },
-  { size: '16"', nominalDN: 400, pressureClass: '150', type: 'Spectacle', outerDiameter: 597, thickness: 21, handleLength: 1430, handleWidth: 285, weight: 130 },
-  
-  // Spectacle Blinds Class 300
   { size: '2"', nominalDN: 50, pressureClass: '300', type: 'Spectacle', outerDiameter: 165, thickness: 13, handleLength: 395, handleWidth: 80, weight: 4.5 },
-  { size: '3"', nominalDN: 80, pressureClass: '300', type: 'Spectacle', outerDiameter: 210, thickness: 14, handleLength: 500, handleWidth: 100, weight: 7.5 },
   { size: '4"', nominalDN: 100, pressureClass: '300', type: 'Spectacle', outerDiameter: 254, thickness: 16, handleLength: 600, handleWidth: 120, weight: 13 },
   { size: '6"', nominalDN: 150, pressureClass: '300', type: 'Spectacle', outerDiameter: 318, thickness: 19, handleLength: 765, handleWidth: 155, weight: 25 },
   { size: '8"', nominalDN: 200, pressureClass: '300', type: 'Spectacle', outerDiameter: 381, thickness: 22, handleLength: 920, handleWidth: 185, weight: 45 },
-  { size: '10"', nominalDN: 250, pressureClass: '300', type: 'Spectacle', outerDiameter: 445, thickness: 25, handleLength: 1070, handleWidth: 215, weight: 72 },
-  { size: '12"', nominalDN: 300, pressureClass: '300', type: 'Spectacle', outerDiameter: 521, thickness: 27, handleLength: 1250, handleWidth: 250, weight: 110 },
 ];
 
 export const lineBlankTypes = [
@@ -331,27 +448,23 @@ export const lineBlankTypes = [
   { id: 'spacer', name: 'Spacer Ring', abbr: 'SPC' },
 ];
 
-// ============= OLETS (Branch Connections) =============
+// ============= OLETS =============
 
 export interface OletData {
   headerSize: string;
   branchSize: string;
   type: string;
   schedule: string;
-  length: number;           // L dimension (mm) - insertion length
-  width: number;            // W dimension (mm) - width at base
-  weight: number;           // kg
+  length: number;
+  width: number;
+  weight: number;
 }
 
 export const oletData: OletData[] = [
-  // Weldolets (Branch on Run - BW)
   { headerSize: '2"', branchSize: '1/2"', type: 'Weldolet', schedule: 'STD', length: 25, width: 35, weight: 0.08 },
   { headerSize: '2"', branchSize: '3/4"', type: 'Weldolet', schedule: 'STD', length: 30, width: 40, weight: 0.12 },
-  { headerSize: '2"', branchSize: '1"', type: 'Weldolet', schedule: 'STD', length: 35, width: 45, weight: 0.18 },
   { headerSize: '3"', branchSize: '1/2"', type: 'Weldolet', schedule: 'STD', length: 30, width: 38, weight: 0.10 },
   { headerSize: '3"', branchSize: '1"', type: 'Weldolet', schedule: 'STD', length: 38, width: 48, weight: 0.22 },
-  { headerSize: '3"', branchSize: '1-1/2"', type: 'Weldolet', schedule: 'STD', length: 45, width: 58, weight: 0.35 },
-  { headerSize: '4"', branchSize: '1/2"', type: 'Weldolet', schedule: 'STD', length: 32, width: 40, weight: 0.12 },
   { headerSize: '4"', branchSize: '1"', type: 'Weldolet', schedule: 'STD', length: 42, width: 52, weight: 0.28 },
   { headerSize: '4"', branchSize: '2"', type: 'Weldolet', schedule: 'STD', length: 55, width: 72, weight: 0.55 },
   { headerSize: '6"', branchSize: '1"', type: 'Weldolet', schedule: 'STD', length: 48, width: 58, weight: 0.42 },
@@ -361,27 +474,15 @@ export const oletData: OletData[] = [
   { headerSize: '8"', branchSize: '4"', type: 'Weldolet', schedule: 'STD', length: 88, width: 125, weight: 2.8 },
   { headerSize: '10"', branchSize: '2"', type: 'Weldolet', schedule: 'STD', length: 75, width: 95, weight: 1.8 },
   { headerSize: '10"', branchSize: '4"', type: 'Weldolet', schedule: 'STD', length: 95, width: 135, weight: 3.8 },
-  { headerSize: '12"', branchSize: '2"', type: 'Weldolet', schedule: 'STD', length: 80, width: 102, weight: 2.2 },
   { headerSize: '12"', branchSize: '4"', type: 'Weldolet', schedule: 'STD', length: 102, width: 145, weight: 4.8 },
   { headerSize: '12"', branchSize: '6"', type: 'Weldolet', schedule: 'STD', length: 125, width: 185, weight: 8.5 },
-  
-  // Sockolets (Socket Weld Branch)
   { headerSize: '2"', branchSize: '1/2"', type: 'Sockolet', schedule: '3000', length: 32, width: 32, weight: 0.12 },
-  { headerSize: '2"', branchSize: '3/4"', type: 'Sockolet', schedule: '3000', length: 35, width: 38, weight: 0.18 },
   { headerSize: '3"', branchSize: '1/2"', type: 'Sockolet', schedule: '3000', length: 35, width: 35, weight: 0.15 },
-  { headerSize: '3"', branchSize: '1"', type: 'Sockolet', schedule: '3000', length: 42, width: 45, weight: 0.28 },
-  { headerSize: '4"', branchSize: '1/2"', type: 'Sockolet', schedule: '3000', length: 38, width: 38, weight: 0.18 },
   { headerSize: '4"', branchSize: '1"', type: 'Sockolet', schedule: '3000', length: 48, width: 50, weight: 0.35 },
   { headerSize: '6"', branchSize: '1"', type: 'Sockolet', schedule: '3000', length: 52, width: 55, weight: 0.48 },
-  { headerSize: '6"', branchSize: '2"', type: 'Sockolet', schedule: '3000', length: 65, width: 75, weight: 0.95 },
-  
-  // Threadolets (Threaded Branch)
   { headerSize: '2"', branchSize: '1/2"', type: 'Threadolet', schedule: '3000', length: 28, width: 32, weight: 0.10 },
-  { headerSize: '2"', branchSize: '3/4"', type: 'Threadolet', schedule: '3000', length: 32, width: 38, weight: 0.15 },
-  { headerSize: '3"', branchSize: '1/2"', type: 'Threadolet', schedule: '3000', length: 32, width: 35, weight: 0.12 },
   { headerSize: '3"', branchSize: '1"', type: 'Threadolet', schedule: '3000', length: 40, width: 45, weight: 0.25 },
   { headerSize: '4"', branchSize: '1"', type: 'Threadolet', schedule: '3000', length: 45, width: 50, weight: 0.32 },
-  { headerSize: '6"', branchSize: '1"', type: 'Threadolet', schedule: '3000', length: 50, width: 55, weight: 0.45 },
 ];
 
 export const oletTypes = [
@@ -390,135 +491,45 @@ export const oletTypes = [
   { id: 'threadolet', name: 'Threadolet', abbr: 'TOL' },
   { id: 'elbolet', name: 'Elbolet', abbr: 'EOL' },
   { id: 'latrolet', name: 'Latrolet', abbr: 'LOL' },
-  { id: 'nipolet', name: 'Nipolet', abbr: 'NOL' },
 ];
 
-// ============= PIPE FLEXIBILITY (SIF - Stress Intensification Factors) =============
+// ============= FLEXIBILITY (SIF) =============
 
 export interface FlexibilityData {
   component: string;
   type: string;
-  sifIn: string;            // In-plane SIF formula
-  sifOut: string;           // Out-plane SIF formula
-  kFactor: string;          // Flexibility factor formula
+  sifIn: string;
+  sifOut: string;
+  kFactor: string;
   description: string;
 }
 
 export const flexibilityData: FlexibilityData[] = [
-  {
-    component: '90° Long Radius Elbow',
-    type: 'Butt Weld',
-    sifIn: '0.9 / h^(2/3)',
-    sifOut: '0.75 / h^(2/3)',
-    kFactor: '1.65 / h',
-    description: 'h = tR/r², where t = wall thickness, R = bend radius, r = mean pipe radius'
-  },
-  {
-    component: '90° Short Radius Elbow',
-    type: 'Butt Weld',
-    sifIn: '0.9 / h^(2/3)',
-    sifOut: '0.75 / h^(2/3)',
-    kFactor: '1.65 / h',
-    description: 'Same formula as LR, but R = 1.0D instead of 1.5D'
-  },
-  {
-    component: '45° Elbow',
-    type: 'Butt Weld',
-    sifIn: '0.9 / h^(2/3)',
-    sifOut: '0.75 / h^(2/3)',
-    kFactor: '1.65 / h',
-    description: 'Reduced effective angle, same flexibility characteristic'
-  },
-  {
-    component: 'Miter Bend (1 weld)',
-    type: 'Welded',
-    sifIn: '0.9 / h^(2/3)',
-    sifOut: '0.75 / h^(2/3)',
-    kFactor: '1.52 / h^(5/6)',
-    description: 'θ = miter angle, s = miter spacing'
-  },
-  {
-    component: 'Miter Bend (2+ welds)',
-    type: 'Welded',
-    sifIn: '0.9 / h^(2/3)',
-    sifOut: '0.75 / h^(2/3)',
-    kFactor: '1.52 / h^(5/6)',
-    description: 'Multiple closely spaced miters'
-  },
-  {
-    component: 'Welding Tee (Equal)',
-    type: 'Butt Weld',
-    sifIn: '0.9 / h^(2/3)',
-    sifOut: '0.75 / h^(2/3)',
-    kFactor: '1.0',
-    description: 'Per ASME B31.3 Table D300'
-  },
-  {
-    component: 'Reinforced Branch',
-    type: 'Welded',
-    sifIn: '(0.9 / h^(2/3)) × Cᵢ',
-    sifOut: '(0.75 / h^(2/3)) × Cₒ',
-    kFactor: '1.0',
-    description: 'C factors depend on pad/saddle reinforcement ratio'
-  },
-  {
-    component: 'Unreinforced Branch',
-    type: 'Welded',
-    sifIn: '(0.9 / h^(2/3)) × Cᵢ',
-    sifOut: '(0.75 / h^(2/3)) × Cₒ',
-    kFactor: '1.0',
-    description: 'Higher SIF than reinforced connections'
-  },
-  {
-    component: 'Weldolet',
-    type: 'Welded',
-    sifIn: '0.9 / h^(2/3)',
-    sifOut: '0.75 / h^(2/3)',
-    kFactor: '1.0',
-    description: 'Integrally reinforced branch connection'
-  },
-  {
-    component: 'Reducer (Concentric)',
-    type: 'Butt Weld',
-    sifIn: '1.0',
-    sifOut: '1.0',
-    kFactor: '1.0',
-    description: 'Minimal stress intensification'
-  },
-  {
-    component: 'Socket Weld Fitting',
-    type: 'Socket Weld',
-    sifIn: '2.1',
-    sifOut: '2.1',
-    kFactor: '1.0',
-    description: 'Fixed value per B31.3'
-  },
-  {
-    component: 'Threaded Fitting',
-    type: 'Threaded',
-    sifIn: '2.3',
-    sifOut: '2.3',
-    kFactor: '1.0',
-    description: 'Fixed value per B31.3'
-  },
+  { component: '90° Long Radius Elbow', type: 'Butt Weld', sifIn: '0.9 / h^(2/3)', sifOut: '0.75 / h^(2/3)', kFactor: '1.65 / h', description: 'h = tR/r², t=wall, R=bend radius, r=mean radius' },
+  { component: '90° Short Radius Elbow', type: 'Butt Weld', sifIn: '0.9 / h^(2/3)', sifOut: '0.75 / h^(2/3)', kFactor: '1.65 / h', description: 'Same formula, R = 1.0D instead of 1.5D' },
+  { component: '45° Elbow', type: 'Butt Weld', sifIn: '0.9 / h^(2/3)', sifOut: '0.75 / h^(2/3)', kFactor: '1.65 / h', description: 'Reduced effective angle' },
+  { component: 'Welding Tee (Equal)', type: 'Butt Weld', sifIn: '0.9 / h^(2/3)', sifOut: '0.75 / h^(2/3)', kFactor: '1.0', description: 'Per ASME B31.3 Table D300' },
+  { component: 'Weldolet', type: 'Welded', sifIn: '0.9 / h^(2/3)', sifOut: '0.75 / h^(2/3)', kFactor: '1.0', description: 'Integrally reinforced branch' },
+  { component: 'Reducer (Concentric)', type: 'Butt Weld', sifIn: '1.0', sifOut: '1.0', kFactor: '1.0', description: 'Minimal stress intensification' },
+  { component: 'Socket Weld Fitting', type: 'Socket Weld', sifIn: '2.1', sifOut: '2.1', kFactor: '1.0', description: 'Fixed value per B31.3' },
+  { component: 'Threaded Fitting', type: 'Threaded', sifIn: '2.3', sifOut: '2.3', kFactor: '1.0', description: 'Fixed value per B31.3' },
 ];
 
-// ============= SAFE SPANS (Pipe Support Spacing) =============
+// ============= SAFE SPANS =============
 
 export interface SafeSpanData {
   size: string;
   nominalDN: number;
   schedule: string;
   material: string;
-  contentDensity: number;   // kg/m³ (water = 1000)
-  maxSpan: number;          // m (for simply supported)
-  maxSpanFixed: number;     // m (for fixed-fixed)
-  naturalFrequency: number; // Hz (at max span)
-  deflection: number;       // mm (at max span)
+  contentDensity: number;
+  maxSpan: number;
+  maxSpanFixed: number;
+  naturalFrequency: number;
+  deflection: number;
 }
 
 export const safeSpanData: SafeSpanData[] = [
-  // Carbon Steel, Sch 40, Water-filled
   { size: '1/2"', nominalDN: 15, schedule: '40', material: 'CS', contentDensity: 1000, maxSpan: 2.1, maxSpanFixed: 2.6, naturalFrequency: 8.0, deflection: 3.8 },
   { size: '3/4"', nominalDN: 20, schedule: '40', material: 'CS', contentDensity: 1000, maxSpan: 2.4, maxSpanFixed: 3.0, naturalFrequency: 7.5, deflection: 4.2 },
   { size: '1"', nominalDN: 25, schedule: '40', material: 'CS', contentDensity: 1000, maxSpan: 2.7, maxSpanFixed: 3.4, naturalFrequency: 7.2, deflection: 4.5 },
@@ -535,66 +546,22 @@ export const safeSpanData: SafeSpanData[] = [
   { size: '18"', nominalDN: 450, schedule: '40', material: 'CS', contentDensity: 1000, maxSpan: 9.1, maxSpanFixed: 11.4, naturalFrequency: 3.3, deflection: 9.5 },
   { size: '20"', nominalDN: 500, schedule: '40', material: 'CS', contentDensity: 1000, maxSpan: 9.5, maxSpanFixed: 11.9, naturalFrequency: 3.2, deflection: 10.0 },
   { size: '24"', nominalDN: 600, schedule: '40', material: 'CS', contentDensity: 1000, maxSpan: 10.4, maxSpanFixed: 13.0, naturalFrequency: 3.0, deflection: 10.5 },
-  
-  // Carbon Steel, Sch 40, Empty (Gas)
   { size: '2"', nominalDN: 50, schedule: '40', material: 'CS', contentDensity: 0, maxSpan: 4.6, maxSpanFixed: 5.7, naturalFrequency: 8.5, deflection: 3.5 },
   { size: '4"', nominalDN: 100, schedule: '40', material: 'CS', contentDensity: 0, maxSpan: 6.1, maxSpanFixed: 7.6, naturalFrequency: 7.0, deflection: 4.5 },
   { size: '6"', nominalDN: 150, schedule: '40', material: 'CS', contentDensity: 0, maxSpan: 7.3, maxSpanFixed: 9.1, naturalFrequency: 6.2, deflection: 5.0 },
   { size: '8"', nominalDN: 200, schedule: '40', material: 'CS', contentDensity: 0, maxSpan: 8.2, maxSpanFixed: 10.3, naturalFrequency: 5.5, deflection: 5.5 },
-  { size: '10"', nominalDN: 250, schedule: '40', material: 'CS', contentDensity: 0, maxSpan: 9.1, maxSpanFixed: 11.4, naturalFrequency: 5.0, deflection: 6.0 },
-  { size: '12"', nominalDN: 300, schedule: '40', material: 'CS', contentDensity: 0, maxSpan: 9.8, maxSpanFixed: 12.2, naturalFrequency: 4.6, deflection: 6.5 },
 ];
 
 // ============= UTILITY FUNCTIONS =============
-
-export function getFlangesBySize(size: string): FlangeData[] {
-  return flangeData.filter(f => f.size === size);
-}
-
-export function getFlangesByClass(pressureClass: string): FlangeData[] {
-  return flangeData.filter(f => f.pressureClass === pressureClass);
-}
 
 export function getFlange(size: string, pressureClass: string): FlangeData | undefined {
   return flangeData.find(f => f.size === size && f.pressureClass === pressureClass);
 }
 
-export function getElbow(size: string, type: string): FittingData | undefined {
-  return elbowData.find(e => e.size === size && e.type === type);
-}
-
-export function getTee(size: string): TeeData | undefined {
-  return teeData.find(t => t.size === size);
-}
-
-export function getReducer(sizeFrom: string, sizeTo: string): ReducerData | undefined {
-  return reducerData.find(r => r.sizeFrom === sizeFrom && r.sizeTo === sizeTo);
-}
-
-export function getValve(size: string, type: string, pressureClass: string): ValveData | undefined {
-  return valveData.find(v => v.size === size && v.type === type && v.pressureClass === pressureClass);
-}
-
-export function getLineBlank(size: string, pressureClass: string): LineBlankData | undefined {
-  return lineBlankData.find(lb => lb.size === size && lb.pressureClass === pressureClass);
-}
-
-export function getOlet(headerSize: string, branchSize: string, type: string): OletData | undefined {
-  return oletData.find(o => o.headerSize === headerSize && o.branchSize === branchSize && o.type === type);
-}
-
-export function getSafeSpan(size: string, contentDensity: number): SafeSpanData | undefined {
-  return safeSpanData.find(s => s.size === size && s.contentDensity === contentDensity);
-}
-
 export function getUniqueSizes(): string[] {
-  const sizes = new Set<string>();
-  flangeData.forEach(f => sizes.add(f.size));
-  return Array.from(sizes);
+  return [...new Set(flangeData.map(f => f.size))];
 }
 
 export function getUniqueHeaderSizes(): string[] {
-  const sizes = new Set<string>();
-  oletData.forEach(o => sizes.add(o.headerSize));
-  return Array.from(sizes);
+  return [...new Set(oletData.map(o => o.headerSize))];
 }
