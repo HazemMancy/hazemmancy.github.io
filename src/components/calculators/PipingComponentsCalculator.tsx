@@ -11,15 +11,18 @@ import {
   pipeData, getUniquePipeSizes, getSchedulesForPipeSize, getPipeBySchedule,
   flangeData, flangeTypes, pressureClasses, getFlange,
   getFlangesByStandard, getFlangeSizesByStandard, getPressureClassesByStandard,
+  orificeFlangeData, getOrificeFlangesByClass, getOrificeFlangesSizes, getOrificeFlangesClasses,
   elbowData, teeData, reducerData,
   gasketData,
-  valveData, valveTypes,
+  valveData, valveTypes, valveEndTypes,
+  getValvesByType, getValvesByEndType, getValveSizes, getValvePressureClasses,
   lineBlankData,
   oletData, oletTypes,
   flexibilityData,
   safeSpanData,
   getUniqueSizes,
-  type FlangeStandard as FlangeStandardType
+  type FlangeStandard as FlangeStandardType,
+  type ValveEndType as ValveEndTypeLib
 } from "@/lib/pipingComponents";
 import { Circle, Cylinder, CornerDownRight, Settings2, GitBranch, Disc, Gauge, Ban, Activity, Ruler, Globe, Thermometer, Scale } from "lucide-react";
 
@@ -30,7 +33,7 @@ type PipeSizeUnit = 'inch' | 'mm';
 type FlangeStandard = 'B16.5' | 'B16.47A' | 'B16.47B' | 'B16.36';
 type FittingStandard = 'B16.9' | 'B16.11-THD' | 'B16.11-SW';
 type GasketType = 'flat' | 'spiral' | 'rtj';
-type ValveEndType = 'flanged' | 'buttweld' | 'threaded' | 'socketweld';
+type ValveEndType = 'Flanged' | 'Buttweld' | 'Threaded' | 'Socket Weld';
 type PipeSelectionMode = 'schedule' | 'wallThickness';
 
 interface UnitSettings {
@@ -927,7 +930,7 @@ const GasketVisualization = ({
 // ==================== VALVE VISUALIZATION ====================
 const ValveVisualization = ({ 
   valve, 
-  endType = 'flanged',
+  endType = 'Flanged',
   units 
 }: { 
   valve: typeof valveData[0] | undefined;
@@ -950,13 +953,14 @@ const ValveVisualization = ({
   const wtVal = convertWeight(valve.weight, units.length);
   
   const endInfo: Record<ValveEndType, { name: string; std: string }> = {
-    'flanged': { name: 'Flanged', std: 'ASME B16.10' },
-    'buttweld': { name: 'Butt Weld', std: 'ASME B16.10' },
-    'threaded': { name: 'Threaded', std: 'ASME B1.20.1' },
-    'socketweld': { name: 'Socket Weld', std: 'ASME B16.11' },
+    'Flanged': { name: 'Flanged', std: 'ASME B16.10' },
+    'Buttweld': { name: 'Butt Weld', std: 'ASME B16.10' },
+    'Threaded': { name: 'Threaded', std: 'ASME B16.34' },
+    'Socket Weld': { name: 'Socket Weld', std: 'ASME B16.34' },
   };
   
   const info = endInfo[endType];
+  const isFlanged = endType === 'Flanged';
   
   return (
     <div className="space-y-3">
@@ -975,7 +979,7 @@ const ValveVisualization = ({
           {valve.type === 'Gate' && (
             <>
               <path d="M 65,165 L 65,110 L 115,95 L 175,95 L 225,110 L 225,165 L 175,175 L 115,175 Z" fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
-              {endType === 'flanged' && (
+              {isFlanged && (
                 <>
                   <rect x={40} y={120} width={28} height={35} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
                   <rect x={222} y={120} width={28} height={35} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
@@ -991,7 +995,7 @@ const ValveVisualization = ({
           {valve.type === 'Globe' && (
             <>
               <ellipse cx={145} cy={140} rx={68} ry={42} fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
-              {endType === 'flanged' && (
+              {isFlanged && (
                 <>
                   <rect x={52} y={120} width={28} height={38} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
                   <rect x={210} y={120} width={28} height={38} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
@@ -1009,7 +1013,7 @@ const ValveVisualization = ({
               <rect x={75} y={105} width={140} height={65} rx={10} fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
               <circle cx={145} cy={138} r={26} fill="hsl(var(--primary)/0.15)" stroke="hsl(var(--primary))" strokeWidth="2"/>
               <rect x={140} y={112} width={10} height={52} fill="hsl(var(--background))" stroke="none"/>
-              {endType === 'flanged' && (
+              {isFlanged && (
                 <>
                   <rect x={50} y={112} width={28} height={48} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
                   <rect x={212} y={112} width={28} height={48} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
@@ -1020,17 +1024,41 @@ const ValveVisualization = ({
             </>
           )}
           
-          {valve.type === 'Check' && (
+          {(valve.type.includes('Check') || valve.type === 'Check') && (
             <>
               <path d="M 70,165 L 70,115 L 145,95 L 220,115 L 220,165 L 145,180 Z" fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
               <ellipse cx={160} cy={140} rx={20} ry={32} fill="hsl(var(--primary)/0.2)" stroke="hsl(var(--primary))" strokeWidth="1.5" transform="rotate(12 160 140)"/>
-              {endType === 'flanged' && (
+              {isFlanged && (
                 <>
                   <rect x={45} y={120} width={28} height={35} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
                   <rect x={217} y={120} width={28} height={35} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
                 </>
               )}
               <path d="M 90,140 L 125,140 M 118,132 L 128,140 L 118,148" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"/>
+            </>
+          )}
+          
+          {valve.type === 'Butterfly' && (
+            <>
+              <rect x={120} y={90} width={50} height={95} rx={5} fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              <ellipse cx={145} cy={138} rx={4} ry={38} fill="hsl(var(--primary)/0.3)" stroke="hsl(var(--primary))" strokeWidth="1.5" transform="rotate(15 145 138)"/>
+              <line x1={145} y1={90} x2={145} y2={60} stroke="hsl(var(--foreground))" strokeWidth="2"/>
+              <rect x={120} y={55} width={50} height={10} rx={2} fill="hsl(var(--chart-5)/0.25)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+            </>
+          )}
+          
+          {valve.type === 'Plug' && (
+            <>
+              <rect x={75} y={100} width={140} height={75} rx={8} fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              <ellipse cx={145} cy={138} rx={25} ry={28} fill="hsl(var(--primary)/0.15)" stroke="hsl(var(--primary))" strokeWidth="2"/>
+              {isFlanged && (
+                <>
+                  <rect x={50} y={115} width={28} height={45} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                  <rect x={212} y={115} width={28} height={45} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                </>
+              )}
+              <rect x={140} y={65} width={10} height={40} fill="hsl(var(--foreground)/0.25)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
+              <rect x={115} y={55} width={60} height={14} rx={3} fill="hsl(var(--chart-5)/0.25)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
             </>
           )}
           
@@ -1469,7 +1497,8 @@ export default function PipingComponentsCalculator() {
   const [selectedGasketType, setSelectedGasketType] = useState<GasketType>('spiral');
   
   // Valve states
-  const [selectedValveEndType, setSelectedValveEndType] = useState<ValveEndType>('flanged');
+  const [selectedValveEndType, setSelectedValveEndType] = useState<ValveEndTypeLib>('Flanged');
+  const [selectedValvePressureClass, setSelectedValvePressureClass] = useState('150');
   const [selectedValveType, setSelectedValveType] = useState("Gate");
   
   // Olet states
@@ -1524,7 +1553,37 @@ export default function PipingComponentsCalculator() {
   const selectedReducer = useMemo(() => reducerData.find(r => r.sizeFrom === selectedFittingSize), [selectedFittingSize]);
   
   const selectedGasket = useMemo(() => gasketData.find(g => g.size === selectedSize && g.pressureClass === selectedClass), [selectedSize, selectedClass]);
-  const selectedValve = useMemo(() => valveData.find(v => v.size === selectedSize && v.type === selectedValveType), [selectedSize, selectedValveType]);
+  
+  // Valve filtering
+  const valveTypesForEndType = useMemo(() => {
+    const types = [...new Set(valveData.filter(v => v.endType === selectedValveEndType).map(v => v.type))];
+    return types;
+  }, [selectedValveEndType]);
+  
+  const valvePressureClasses = useMemo(() => {
+    return getValvePressureClasses(selectedValveType, selectedValveEndType);
+  }, [selectedValveType, selectedValveEndType]);
+  
+  const valveSizesFiltered = useMemo(() => {
+    return getValveSizes(selectedValveType, selectedValveEndType, selectedValvePressureClass);
+  }, [selectedValveType, selectedValveEndType, selectedValvePressureClass]);
+  
+  const filteredValves = useMemo(() => {
+    return valveData.filter(v => 
+      v.endType === selectedValveEndType && 
+      v.type === selectedValveType &&
+      v.pressureClass === selectedValvePressureClass
+    );
+  }, [selectedValveEndType, selectedValveType, selectedValvePressureClass]);
+  
+  const selectedValve = useMemo(() => {
+    return filteredValves.find(v => v.size === selectedSize);
+  }, [filteredValves, selectedSize]);
+  
+  // Orifice flanges
+  const orificeFlangesFiltered = useMemo(() => {
+    return orificeFlangeData.filter(f => f.size === selectedSize);
+  }, [selectedSize]);
   const selectedBlank = useMemo(() => lineBlankData.find(lb => lb.size === selectedSize && lb.pressureClass === selectedClass), [selectedSize, selectedClass]);
   const selectedOlet = useMemo(() => oletData.find(o => o.type === selectedOletType), [selectedOletType]);
   const selectedSIF = useMemo(() => flexibilityData.find(f => f.component === selectedSIFComponent), [selectedSIFComponent]);
@@ -1939,59 +1998,96 @@ export default function PipingComponentsCalculator() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <CardTitle className="flex items-center gap-2"><Settings2 className="w-5 h-5 text-primary" />Valve Dimensions</CardTitle>
-                  <CardDescription>Gate, Globe, Ball, Check per API 600 / ASME B16.10</CardDescription>
+                  <CardDescription>Gate, Globe, Ball, Check, Butterfly, Plug per ASME B16.10/B16.34</CardDescription>
                 </div>
                 <div className="flex gap-1.5 flex-wrap">
-                  {([{id: 'flanged', name: 'Flanged'}, {id: 'buttweld', name: 'Butt Weld'}, {id: 'threaded', name: 'Threaded'}, {id: 'socketweld', name: 'Socket Weld'}] as {id: ValveEndType; name: string}[]).map(e => (
+                  {(['Flanged', 'Buttweld', 'Threaded', 'Socket Weld'] as ValveEndType[]).map(e => (
                     <Badge 
-                      key={e.id}
-                      variant={selectedValveEndType === e.id ? 'default' : 'outline'} 
+                      key={e}
+                      variant={selectedValveEndType === e ? 'default' : 'outline'} 
                       className="cursor-pointer text-[10px]"
-                      onClick={() => setSelectedValveEndType(e.id)}
-                    >{e.name}</Badge>
+                      onClick={() => setSelectedValveEndType(e)}
+                    >{e}</Badge>
                   ))}
                 </div>
+              </div>
+              <div className="mt-3 p-3 bg-muted/50 rounded-lg border text-sm">
+                {selectedValveEndType === 'Flanged' && <p><strong>Flanged Valves</strong> — Face-to-face dimensions per ASME B16.10</p>}
+                {selectedValveEndType === 'Buttweld' && <p><strong>Buttweld Valves</strong> — End-to-end dimensions per ASME B16.10</p>}
+                {selectedValveEndType === 'Threaded' && <p><strong>Threaded Valves</strong> — Compact valves per ASME B16.34 (Class 800, sizes ≤2")</p>}
+                {selectedValveEndType === 'Socket Weld' && <p><strong>Socket Weld Valves</strong> — Compact valves per ASME B16.34 (Class 800, sizes ≤2")</p>}
               </div>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="grid lg:grid-cols-2 gap-8">
                 <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-2">
-                      <Label>Size</Label>
-                      <Select value={selectedSize} onValueChange={setSelectedSize}>
-                        <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-popover border shadow-lg z-50">{sizes.map(s => <SelectItem key={s} value={s}>{formatPipeSize(s, units.pipeSize)}</SelectItem>)}</SelectContent>
+                      <Label className="text-xs font-medium">Type</Label>
+                      <Select value={selectedValveType} onValueChange={setSelectedValveType}>
+                        <SelectTrigger className="bg-background h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-popover border shadow-lg z-50">
+                          {valveTypesForEndType.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Type</Label>
-                      <Select value={selectedValveType} onValueChange={setSelectedValveType}>
-                        <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                      <Label className="text-xs font-medium">Class</Label>
+                      <Select value={selectedValvePressureClass} onValueChange={setSelectedValvePressureClass}>
+                        <SelectTrigger className="bg-background h-9"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-popover border shadow-lg z-50">
-                          {valveTypes.map(t => <SelectItem key={t.id} value={t.name.split(' ')[0]}>{t.name}</SelectItem>)}
+                          {valvePressureClasses.map(c => <SelectItem key={c} value={c}>{c}#</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Size</Label>
+                      <Select value={valveSizesFiltered.includes(selectedSize) ? selectedSize : valveSizesFiltered[0] || ''} onValueChange={setSelectedSize}>
+                        <SelectTrigger className="bg-background h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-popover border shadow-lg z-50">
+                          {valveSizesFiltered.map(s => <SelectItem key={s} value={s}>{formatPipeSize(s, units.pipeSize)}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
+                  
+                  <div className="flex flex-wrap gap-1.5">
+                    {valveTypesForEndType.map(t => (
+                      <Badge 
+                        key={t} 
+                        variant={t === selectedValveType ? "default" : "secondary"} 
+                        className={`text-xs cursor-pointer transition-all ${t === selectedValveType ? 'ring-2 ring-primary/30' : 'hover:bg-muted'}`}
+                        onClick={() => setSelectedValveType(t)}
+                      >
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                  
                   <ValveVisualization valve={selectedValve} endType={selectedValveEndType} units={units} />
                 </div>
-                <ScrollArea className="h-[480px] rounded-xl border-2">
+                <ScrollArea className="h-[520px] rounded-xl border-2">
                   <Table>
                     <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur z-10">
                       <TableRow>
-                        <TableHead className="text-xs">Size</TableHead>
+                        <TableHead className="font-semibold text-xs">Size</TableHead>
                         <TableHead className="text-xs">Type</TableHead>
-                        <TableHead className="text-xs">F-F</TableHead>
-                        <TableHead className="text-xs">Height</TableHead>
-                        <TableHead className="text-xs">Wt</TableHead>
+                        <TableHead className="text-xs">Class</TableHead>
+                        <TableHead className="text-xs">F-F ({getLengthUnit(units.length)})</TableHead>
+                        <TableHead className="text-xs">Height ({getLengthUnit(units.length)})</TableHead>
+                        <TableHead className="text-xs">Wt ({getWeightUnit(units.length)})</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {valveData.filter(v => v.type === selectedValveType).map((v, i) => (
-                        <TableRow key={i} className={v.size === selectedSize ? "bg-primary/15" : ""}>
+                      {filteredValves.map((v, i) => (
+                        <TableRow 
+                          key={i} 
+                          className={`cursor-pointer transition-all ${v.size === selectedSize ? "bg-primary/15 border-l-4 border-l-primary" : "hover:bg-muted/50"}`}
+                          onClick={() => setSelectedSize(v.size)}
+                        >
                           <TableCell className="font-medium text-xs">{formatPipeSize(v.size, units.pipeSize)}</TableCell>
-                          <TableCell><Badge variant="outline" className="text-[10px]">{v.type}</Badge></TableCell>
+                          <TableCell><Badge variant={v.type === selectedValveType ? "default" : "outline"} className="text-[10px]">{v.type}</Badge></TableCell>
+                          <TableCell className="text-xs">{v.pressureClass}#</TableCell>
                           <TableCell className="text-xs">{convertLength(v.faceToFace, units.length).toFixed(units.length === 'imperial' ? 2 : 0)}</TableCell>
                           <TableCell className="text-xs">{convertLength(v.height, units.length).toFixed(units.length === 'imperial' ? 2 : 0)}</TableCell>
                           <TableCell className="text-xs">{convertWeight(v.weight, units.length).toFixed(1)}</TableCell>
