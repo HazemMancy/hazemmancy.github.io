@@ -158,7 +158,7 @@ const ReynoldsFrictionCalculator: React.FC = () => {
         const fluidKey = key === 'selectedFluid' ? value as string : prev.selectedFluid;
         const temp = key === 'fluidTemperature' ? value as number : prev.fluidTemperature;
         
-        if (fluidKey) {
+        if (fluidKey && fluidKey !== '__manual__' && !fluidKey.startsWith('__category_')) {
           const props = getFluidProperties(fluidKey, temp);
           if (props) {
             // Convert density to current unit
@@ -472,7 +472,7 @@ const ReynoldsFrictionCalculator: React.FC = () => {
                   <SelectValue placeholder="Choose a fluid..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Manual Entry</SelectItem>
+                  <SelectItem value="__manual__">Manual Entry</SelectItem>
                   {Object.entries(fluidCategories).map(([category, fluids]) => (
                     <React.Fragment key={category}>
                       <SelectItem value={`__category_${category}`} disabled className="font-semibold text-primary">
@@ -490,7 +490,7 @@ const ReynoldsFrictionCalculator: React.FC = () => {
             </div>
 
             {/* Temperature Slider */}
-            {inputs.selectedFluid && (
+            {inputs.selectedFluid && inputs.selectedFluid !== '__manual__' && !inputs.selectedFluid.startsWith('__category_') && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="flex items-center gap-2">
