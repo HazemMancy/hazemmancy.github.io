@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container, Shield, Activity } from "lucide-react";
+import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container, Shield, Activity, Wrench } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -94,6 +94,15 @@ const calculators: CalculatorCard[] = [
     route: "/calculators/reynolds-friction",
     status: "available",
     category: "Fluid Mechanics"
+  },
+  {
+    id: "piping-components",
+    title: "Piping Components Data",
+    description: "ASME B36.10M dimensional data for flanges, fittings, gaskets, valves, olets, blanks, flexibility & safe spans",
+    icon: <Wrench className="w-8 h-8" />,
+    route: "/calculators/piping-components",
+    status: "available",
+    category: "Piping"
   }
 ];
 
