@@ -14,6 +14,7 @@ import GasMixingPage from "./pages/calculators/GasMixingPage";
 import API2000Page from "./pages/calculators/API2000Page";
 import API520Page from "./pages/calculators/API520Page";
 import ReynoldsFrictionPage from "./pages/calculators/ReynoldsFrictionPage";
+import PipingComponentsPage from "./pages/calculators/PipingComponentsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
           <Route path="/calculators/api-2000" element={<API2000Page />} />
           <Route path="/calculators/api-520" element={<API520Page />} />
           <Route path="/calculators/reynolds-friction" element={<ReynoldsFrictionPage />} />
+          <Route path="/calculators/piping-components" element={<PipingComponentsPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
