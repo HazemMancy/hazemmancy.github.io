@@ -18,6 +18,10 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  ScatterChart,
+  Scatter,
+  ComposedChart,
+  ReferenceArea,
 } from 'recharts';
 import { getFluidProperties, getFluidsByCategory, fluidDatabase } from '@/lib/fluidProperties';
 import { getNominalSizes, getSchedulesForSize, getInsideDiameter } from '@/lib/pipeSchedule';
@@ -367,62 +371,93 @@ const ReynoldsFrictionCalculator: React.FC = () => {
     };
   }, [inputs]);
 
-  // Generate Moody diagram data
+  // Generate Moody diagram data with multiple roughness curves
   const moodyData = useMemo(() => {
-    const data: Array<{
-      Re: number;
-      logRe: number;
-      smooth: number;
-      current: number | null;
-      currentRoughness: number | null;
-    }> = [];
+    // Relative roughness values for different curves (ε/D)
+    const roughnessValues = [0, 0.00001, 0.00005, 0.0001, 0.0002, 0.0004, 0.001, 0.002, 0.004, 0.01, 0.02, 0.05];
     
-    const reValues = [];
-    for (let exp = 3; exp <= 8; exp += 0.1) {
+    const data: Array<Record<string, number | null>> = [];
+    
+    // Generate Re values with finer resolution
+    const reValues: number[] = [];
+    // Laminar region
+    for (let exp = 2.5; exp <= 3.4; exp += 0.05) {
+      reValues.push(Math.pow(10, exp));
+    }
+    // Transitional gap
+    for (let exp = 3.4; exp <= 3.7; exp += 0.1) {
+      reValues.push(Math.pow(10, exp));
+    }
+    // Turbulent region with finer resolution
+    for (let exp = 3.7; exp <= 8; exp += 0.05) {
       reValues.push(Math.pow(10, exp));
     }
     
     const currentRelRoughness = results.relativeRoughness;
     
     for (const Re of reValues) {
-      // Smooth pipe (Blasius for turbulent, 64/Re for laminar)
-      let smooth: number;
-      if (Re < 2300) {
-        smooth = 64 / Re;
+      const point: Record<string, number | null> = { Re };
+      
+      // Laminar flow (64/Re)
+      if (Re <= 2300) {
+        point.laminar = 64 / Re;
       } else {
-        // Prandtl's smooth pipe formula
-        let f = 0.02;
-        for (let i = 0; i < 20; i++) {
-          f = Math.pow(2 * Math.log10(Re * Math.sqrt(f)) - 0.8, -2);
-        }
-        smooth = f;
+        point.laminar = null;
       }
       
-      // Current roughness line
-      let currentRoughness: number | null = null;
+      // Turbulent curves for each roughness
       if (Re >= 4000) {
-        // Colebrook-White for current roughness
+        for (const epsD of roughnessValues) {
+          const key = epsD === 0 ? 'smooth' : `r_${epsD}`;
+          
+          if (epsD === 0) {
+            // Smooth pipe - Prandtl-von Karman
+            let f = 0.02;
+            for (let i = 0; i < 30; i++) {
+              const newF = Math.pow(2 * Math.log10(Re * Math.sqrt(f)) - 0.8, -2);
+              if (Math.abs(newF - f) < 1e-10) break;
+              f = newF;
+            }
+            point[key] = f;
+          } else {
+            // Colebrook-White
+            let f = 0.02;
+            for (let i = 0; i < 30; i++) {
+              const sqrtF = Math.sqrt(f);
+              const rhs = -2 * Math.log10((epsD / 3.7) + (2.51 / (Re * sqrtF)));
+              const newF = 1 / Math.pow(rhs, 2);
+              if (Math.abs(newF - f) < 1e-10) break;
+              f = newF;
+            }
+            point[key] = f;
+          }
+        }
+        
+        // Current operating roughness line
         let f = 0.02;
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 30; i++) {
           const sqrtF = Math.sqrt(f);
           const rhs = -2 * Math.log10((currentRelRoughness / 3.7) + (2.51 / (Re * sqrtF)));
-          f = 1 / Math.pow(rhs, 2);
+          const newF = 1 / Math.pow(rhs, 2);
+          if (Math.abs(newF - f) < 1e-10) break;
+          f = newF;
         }
-        currentRoughness = f;
+        point.current = f;
       }
       
-      data.push({
-        Re,
-        logRe: Math.log10(Re),
-        smooth,
-        current: Re === reValues.find(r => Math.abs(Math.log10(r) - Math.log10(results.reynoldsNumber)) < 0.05) 
-          ? results.f_applicable : null,
-        currentRoughness,
-      });
+      data.push(point);
     }
     
-    return data;
-  }, [results]);
+    return { data, roughnessValues };
+  }, [results.relativeRoughness]);
+
+  // Current operating point for the Moody diagram
+  const operatingPoint = useMemo(() => {
+    return [{
+      Re: results.reynoldsNumber,
+      f: results.f_applicable,
+    }];
+  }, [results.reynoldsNumber, results.f_applicable]);
 
   const formatNumber = (value: number, decimals: number = 4): string => {
     if (Math.abs(value) < 0.0001 || Math.abs(value) > 100000) {
@@ -919,53 +954,163 @@ const ReynoldsFrictionCalculator: React.FC = () => {
         <CardHeader>
           <CardTitle>Moody Diagram Visualization</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-80">
+        <CardContent className="space-y-4">
+          <div className="h-[500px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={moodyData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" />
+              <ComposedChart 
+                data={moodyData.data} 
+                margin={{ top: 20, right: 80, left: 20, bottom: 40 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                
+                {/* Transitional zone shading */}
+                <ReferenceArea 
+                  x1={2300} 
+                  x2={4000} 
+                  fill="hsl(var(--muted))" 
+                  fillOpacity={0.4}
+                />
+                
                 <XAxis 
-                  dataKey="logRe" 
+                  dataKey="Re" 
                   type="number"
-                  domain={[3, 8]}
-                  tickFormatter={(v) => `10^${v}`}
-                  label={{ value: 'Reynolds Number (Re)', position: 'bottom', offset: 0 }}
+                  scale="log"
+                  domain={[300, 100000000]}
+                  tickFormatter={(v) => {
+                    const exp = Math.log10(v);
+                    if (exp % 1 === 0) return `10${String.fromCharCode(8304 + exp)}`;
+                    return '';
+                  }}
+                  ticks={[1000, 10000, 100000, 1000000, 10000000, 100000000]}
+                  label={{ value: 'Reynolds Number (Re)', position: 'bottom', offset: 15 }}
                 />
                 <YAxis 
                   scale="log"
-                  domain={[0.008, 0.1]}
+                  domain={[0.006, 0.1]}
                   tickFormatter={(v) => v.toFixed(3)}
-                  label={{ value: 'Friction Factor (f)', angle: -90, position: 'insideLeft' }}
+                  ticks={[0.006, 0.008, 0.01, 0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.1]}
+                  label={{ value: 'Darcy Friction Factor (f)', angle: -90, position: 'insideLeft', offset: 10 }}
                 />
                 <Tooltip 
-                  formatter={(value: number) => value?.toFixed(5)}
-                  labelFormatter={(v) => `Re = ${Math.pow(10, v).toExponential(2)}`}
+                  formatter={(value: number, name: string) => {
+                    if (value === null || value === undefined) return [null, null];
+                    if (name === 'laminar') return [value.toFixed(5), 'Laminar (64/Re)'];
+                    if (name === 'smooth') return [value.toFixed(5), 'Smooth Pipe'];
+                    if (name === 'current') return [value.toFixed(5), `Current (ε/D=${results.relativeRoughness.toExponential(2)})`];
+                    const match = name.match(/r_(.+)/);
+                    if (match) return [value.toFixed(5), `ε/D = ${match[1]}`];
+                    return [value.toFixed(5), name];
+                  }}
+                  labelFormatter={(v) => `Re = ${Number(v).toExponential(2)}`}
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '6px',
+                    fontSize: '12px'
+                  }}
                 />
-                <Legend />
+                
+                {/* Laminar line */}
+                <Line 
+                  type="monotone" 
+                  dataKey="laminar" 
+                  stroke="hsl(var(--chart-3))" 
+                  strokeWidth={2}
+                  dot={false}
+                  name="laminar"
+                  connectNulls={false}
+                />
+                
+                {/* Smooth pipe line */}
                 <Line 
                   type="monotone" 
                   dataKey="smooth" 
                   stroke="hsl(var(--muted-foreground))" 
-                  strokeWidth={1}
+                  strokeWidth={1.5}
                   dot={false}
-                  name="Smooth Pipe"
+                  name="smooth"
+                  connectNulls={false}
                 />
+                
+                {/* Selected roughness curves - show subset for clarity */}
+                {[0.0001, 0.001, 0.01, 0.05].map((epsD, idx) => (
+                  <Line 
+                    key={epsD}
+                    type="monotone" 
+                    dataKey={`r_${epsD}`} 
+                    stroke={`hsl(var(--chart-${(idx % 5) + 1}))`} 
+                    strokeWidth={1}
+                    strokeOpacity={0.5}
+                    dot={false}
+                    name={`r_${epsD}`}
+                    connectNulls={false}
+                  />
+                ))}
+                
+                {/* Current operating roughness - highlighted */}
                 <Line 
                   type="monotone" 
-                  dataKey="currentRoughness" 
+                  dataKey="current" 
                   stroke="hsl(var(--primary))" 
-                  strokeWidth={2}
+                  strokeWidth={3}
                   dot={false}
-                  name={`ε/D = ${results.relativeRoughness.toExponential(2)}`}
+                  name="current"
+                  connectNulls={false}
                 />
+                
+                {/* Current operating point */}
+                <Scatter
+                  data={operatingPoint}
+                  dataKey="f"
+                  fill="hsl(var(--destructive))"
+                  name="Operating Point"
+                >
+                  {operatingPoint.map((_, index) => (
+                    <circle key={index} r={8} />
+                  ))}
+                </Scatter>
+                
+                {/* Vertical reference line at current Re */}
                 <ReferenceLine 
-                  x={Math.log10(results.reynoldsNumber)} 
+                  x={results.reynoldsNumber} 
                   stroke="hsl(var(--destructive))" 
                   strokeDasharray="5 5"
-                  label={{ value: 'Current Re', position: 'top' }}
+                  strokeWidth={1.5}
                 />
-              </LineChart>
+                
+                {/* Horizontal reference line at current f */}
+                <ReferenceLine 
+                  y={results.f_applicable} 
+                  stroke="hsl(var(--destructive))" 
+                  strokeDasharray="5 5"
+                  strokeWidth={1.5}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
+          </div>
+          
+          {/* Legend */}
+          <div className="flex flex-wrap gap-4 justify-center text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-0.5 bg-[hsl(var(--chart-3))]"></div>
+              <span>Laminar (64/Re)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-0.5 bg-muted-foreground"></div>
+              <span>Smooth Pipe</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-1 bg-primary"></div>
+              <span>Current ε/D = {results.relativeRoughness.toExponential(2)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-destructive"></div>
+              <span>Operating Point (Re={results.reynoldsNumber.toExponential(2)}, f={results.f_applicable.toFixed(4)})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-4 bg-muted/50"></div>
+              <span>Transitional Zone</span>
+            </div>
           </div>
         </CardContent>
       </Card>
