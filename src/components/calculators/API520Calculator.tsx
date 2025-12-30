@@ -476,6 +476,22 @@ const calculateCvFlow = (Cv: number, P1: number, P2: number, specificGravity: nu
 // COMPONENTS
 // ============================================
 
+// Get multiple orifice options for comparison
+const getOrificeOptions = (requiredArea: number): { orifice: typeof ORIFICE_SIZES[0]; utilization: number; isSelected: boolean }[] => {
+  const options: { orifice: typeof ORIFICE_SIZES[0]; utilization: number; isSelected: boolean }[] = [];
+  let selectedFound = false;
+  
+  for (const orifice of ORIFICE_SIZES) {
+    if (orifice.area >= requiredArea * 0.5 && options.length < 5) {
+      const utilization = (requiredArea / orifice.area) * 100;
+      const isSelected = !selectedFound && orifice.area >= requiredArea;
+      if (isSelected) selectedFound = true;
+      options.push({ orifice, utilization, isSelected });
+    }
+  }
+  return options;
+};
+
 // Orifice Result Card
 interface OrificeResultProps {
   requiredArea: number;
@@ -553,6 +569,98 @@ const OrificeResultCard: React.FC<OrificeResultProps> = ({ requiredArea, selecte
               </div>
             )}
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Valve Selection Comparison Table
+interface ValveComparisonProps {
+  requiredArea: number;
+  unitSystem: UnitSystem;
+}
+
+const ValveComparisonTable: React.FC<ValveComparisonProps> = ({ requiredArea, unitSystem }) => {
+  const options = getOrificeOptions(requiredArea);
+  const units = getUnits(unitSystem);
+  
+  if (requiredArea <= 0 || options.length === 0) return null;
+  
+  return (
+    <Card className="border-border bg-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2 text-primary">
+          <Gauge className="h-5 w-5" />
+          Valve Selection Comparison (API RP 526)
+        </CardTitle>
+        <CardDescription>Compare multiple orifice options to optimize valve selection</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border">
+                <TableHead className="text-primary whitespace-nowrap">Orifice</TableHead>
+                <TableHead className="text-primary whitespace-nowrap">Area ({units.area})</TableHead>
+                <TableHead className="text-primary whitespace-nowrap">Dia. ({units.length})</TableHead>
+                <TableHead className="text-primary whitespace-nowrap">Inlet × Outlet</TableHead>
+                <TableHead className="text-primary whitespace-nowrap">Utilization</TableHead>
+                <TableHead className="text-primary whitespace-nowrap">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {options.map(({ orifice, utilization, isSelected }) => (
+                <TableRow 
+                  key={orifice.designation} 
+                  className={`border-border ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
+                >
+                  <TableCell className="font-bold">
+                    <Badge variant={isSelected ? 'default' : 'outline'} className={isSelected ? 'bg-primary text-primary-foreground' : 'border-border'}>
+                      {orifice.designation}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono">
+                    {unitSystem === 'metric' ? orifice.areaMetric.toFixed(3) : orifice.area.toFixed(3)}
+                  </TableCell>
+                  <TableCell className="font-mono">
+                    {unitSystem === 'metric' ? orifice.diameterMm.toFixed(2) : orifice.diameter.toFixed(3)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">{orifice.inletSize}" × {orifice.outletSize}"</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 sm:w-24 h-2 bg-secondary rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all ${utilization > 100 ? 'bg-destructive' : utilization > 90 ? 'bg-amber-500' : utilization > 70 ? 'bg-green-500' : 'bg-blue-500'}`} 
+                          style={{ width: `${Math.min(utilization, 100)}%` }} 
+                        />
+                      </div>
+                      <span className={`font-mono text-sm ${utilization > 100 ? 'text-destructive' : utilization > 90 ? 'text-amber-500' : 'text-foreground'}`}>
+                        {utilization.toFixed(1)}%
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {utilization > 100 ? (
+                      <Badge variant="destructive" className="whitespace-nowrap">Undersized</Badge>
+                    ) : isSelected ? (
+                      <Badge className="bg-green-600 whitespace-nowrap">Recommended</Badge>
+                    ) : utilization > 90 ? (
+                      <Badge variant="outline" className="border-amber-500 text-amber-500 whitespace-nowrap">Marginal</Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-blue-500 text-blue-500 whitespace-nowrap">Oversized</Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="mt-4 p-3 bg-muted/30 rounded-lg border border-border">
+          <p className="text-xs text-muted-foreground">
+            <strong className="text-foreground">Note:</strong> Optimal utilization is typically 70-90%. Higher utilization reduces valve cost but limits future capacity. 
+            Lower utilization provides margin for process variations.
+          </p>
         </div>
       </CardContent>
     </Card>
@@ -1130,6 +1238,8 @@ export default function API520Calculator() {
 
           <OrificeResultCard requiredArea={vaporResults.requiredArea} selectedOrifice={vaporResults.selectedOrifice} title="Gas/Vapor Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
 
+          <ValveComparisonTable requiredArea={vaporResults.requiredArea} unitSystem={unitSystem} />
+
           <div className="grid md:grid-cols-3 gap-4">
             <SensitivityChart title="Area vs Set Pressure" data={vaporSensitivityData.pressureData} xLabel="Set Pressure" xUnit={units.pressureGauge} currentValue={vaporInputs.setPresure} selectedOrificeArea={vaporResults.selectedOrifice?.area} />
             <SensitivityChart title="Area vs Mass Flow" data={vaporSensitivityData.flowData} xLabel="Mass Flow" xUnit={units.massFlow} currentValue={vaporInputs.massFlow} selectedOrificeArea={vaporResults.selectedOrifice?.area} />
@@ -1202,6 +1312,8 @@ export default function API520Calculator() {
 
           <OrificeResultCard requiredArea={liquidResults.requiredArea} selectedOrifice={liquidResults.selectedOrifice} title="Liquid Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
 
+          <ValveComparisonTable requiredArea={liquidResults.requiredArea} unitSystem={unitSystem} />
+
           <SensitivityChart title="Area vs Volume Flow Rate" data={liquidSensitivityData} xLabel="Flow Rate" xUnit={units.volFlow} currentValue={liquidInputs.flowRate} selectedOrificeArea={liquidResults.selectedOrifice?.area} />
         </TabsContent>
 
@@ -1264,6 +1376,8 @@ export default function API520Calculator() {
           </div>
 
           <OrificeResultCard requiredArea={twoPhaseResults.area} selectedOrifice={twoPhaseResults.selectedOrifice} title="Two-Phase Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+
+          <ValveComparisonTable requiredArea={twoPhaseResults.area} unitSystem={unitSystem} />
 
           <SensitivityChart title="Area vs Vapor Fraction" data={twoPhaseSensitivityData} xLabel="Vapor Fraction" xUnit="%" currentValue={twoPhaseInputs.vaporFraction * 100} selectedOrificeArea={twoPhaseResults.selectedOrifice?.area} />
         </TabsContent>
@@ -1332,6 +1446,8 @@ export default function API520Calculator() {
           </div>
 
           <OrificeResultCard requiredArea={steamResults.requiredArea} selectedOrifice={steamResults.selectedOrifice} title="Steam Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+
+          <ValveComparisonTable requiredArea={steamResults.requiredArea} unitSystem={unitSystem} />
 
           <SensitivityChart title="Area vs Steam Flow Rate" data={steamSensitivityData} xLabel="Mass Flow" xUnit={units.massFlow} currentValue={steamInputs.massFlow} selectedOrificeArea={steamResults.selectedOrifice?.area} />
         </TabsContent>
@@ -1413,6 +1529,8 @@ export default function API520Calculator() {
           </div>
 
           <OrificeResultCard requiredArea={fireCaseResults.requiredArea} selectedOrifice={fireCaseResults.selectedOrifice} title="Fire Case Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+
+          <ValveComparisonTable requiredArea={fireCaseResults.requiredArea} unitSystem={unitSystem} />
 
           <SensitivityChart title="Area vs Liquid Level" data={fireCaseSensitivityData} xLabel="Liquid Level" xUnit="%" currentValue={fireCaseInputs.liquidLevel} selectedOrificeArea={fireCaseResults.selectedOrifice?.area} />
         </TabsContent>
