@@ -2,11 +2,12 @@ import { API2000Calculator } from "@/components/calculators/API2000Calculator";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
+import Footer from "@/components/Footer";
 
 export default function API2000Page() {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="container mx-auto px-4 py-8 flex-1">
         <div className="mb-6">
           <Link to="/calculators">
             <Button variant="ghost" size="sm">
@@ -26,6 +27,7 @@ export default function API2000Page() {
 
         <API2000Calculator />
       </div>
+      <Footer />
     </div>
   );
 }

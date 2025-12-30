@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container, Shield, Activity, Wrench } from "lucide-react";
+import { ArrowLeft, Calculator, Fuel, Droplet, ArrowLeftRight, Gauge, Fan, FlaskConical, Warehouse, ShieldCheck, Waves, PipetteIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import Footer from "@/components/Footer";
 
 interface CalculatorCard {
   id: string;
@@ -19,7 +20,7 @@ const calculators: CalculatorCard[] = [
     id: "gas-flow-converter",
     title: "Gas Volume Converter",
     description: "Convert gas flow rates between standard and actual conditions with real-time calculations",
-    icon: <Flame className="w-8 h-8" />,
+    icon: <Fuel className="w-8 h-8" />,
     route: "/calculators/gas-flow-converter",
     status: "available",
     category: "Flow"
@@ -37,7 +38,7 @@ const calculators: CalculatorCard[] = [
     id: "heat-exchanger",
     title: "Heat Exchanger Sizing",
     description: "Design and rate shell & tube heat exchangers with LMTD and effectiveness-NTU methods",
-    icon: <Thermometer className="w-8 h-8" />,
+    icon: <ArrowLeftRight className="w-8 h-8" />,
     route: "/calculators/heat-exchanger",
     status: "available",
     category: "Heat Transfer"
@@ -46,7 +47,7 @@ const calculators: CalculatorCard[] = [
     id: "pump-sizing",
     title: "Pump Sizing Calculator",
     description: "Calculate TDH, NPSHa, brake power with Darcy-Weisbach friction and K-factor fittings",
-    icon: <Droplets className="w-8 h-8" />,
+    icon: <Droplet className="w-8 h-8" />,
     route: "/calculators/pump-sizing",
     status: "available",
     category: "Fluid Mechanics"
@@ -55,7 +56,7 @@ const calculators: CalculatorCard[] = [
     id: "compressor-power",
     title: "Compressor Power",
     description: "Calculate compressor power, discharge temperature, and multi-stage compression with gas properties",
-    icon: <Wind className="w-8 h-8" />,
+    icon: <Fan className="w-8 h-8" />,
     route: "/calculators/compressor-power",
     status: "available",
     category: "Thermodynamics"
@@ -64,7 +65,7 @@ const calculators: CalculatorCard[] = [
     id: "gas-mixing",
     title: "Gas Mixing Properties",
     description: "Calculate mixture MW, k, Z, and critical properties from gas compositions using Kay's rules and Peng-Robinson EOS",
-    icon: <Beaker className="w-8 h-8" />,
+    icon: <FlaskConical className="w-8 h-8" />,
     route: "/calculators/gas-mixing",
     status: "available",
     category: "Thermodynamics"
@@ -73,7 +74,7 @@ const calculators: CalculatorCard[] = [
     id: "api-2000",
     title: "API 2000 Tank Venting",
     description: "Calculate tank venting requirements: thermal breathing, emergency fire venting, pump in/out, and P/V valve sizing",
-    icon: <Container className="w-8 h-8" />,
+    icon: <Warehouse className="w-8 h-8" />,
     route: "/calculators/api-2000",
     status: "available",
     category: "Storage Tanks"
@@ -82,7 +83,7 @@ const calculators: CalculatorCard[] = [
     id: "api-520",
     title: "API 520/521 Relief Valve Sizing",
     description: "Size pressure relief valves per API 520/521 for vapor, liquid, two-phase, steam, and fire cases with orifice selection and inlet/outlet piping verification",
-    icon: <Shield className="w-8 h-8" />,
+    icon: <ShieldCheck className="w-8 h-8" />,
     route: "/calculators/api-520",
     status: "available",
     category: "Pressure Relief"
@@ -91,7 +92,7 @@ const calculators: CalculatorCard[] = [
     id: "reynolds-friction",
     title: "Reynolds Number & Friction Factor",
     description: "Calculate Reynolds number, flow regime, and friction factor using Colebrook-White iterative solver",
-    icon: <Activity className="w-8 h-8" />,
+    icon: <Waves className="w-8 h-8" />,
     route: "/calculators/reynolds-friction",
     status: "available",
     category: "Fluid Mechanics"
@@ -100,7 +101,7 @@ const calculators: CalculatorCard[] = [
     id: "piping-components",
     title: "Piping Components Data",
     description: "ASME B36.10M dimensional data for flanges, fittings, gaskets, valves, olets, blanks, flexibility & safe spans",
-    icon: <Wrench className="w-8 h-8" />,
+    icon: <PipetteIcon className="w-8 h-8" />,
     route: "/calculators/piping-components",
     status: "available",
     category: "Piping"
@@ -159,6 +160,8 @@ const Calculators = () => {
           </div>
         </div>
       </section>
+
+      <Footer />
     </main>
   );
 };
