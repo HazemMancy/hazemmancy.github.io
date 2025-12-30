@@ -13,6 +13,7 @@ import CompressorPowerPage from "./pages/calculators/CompressorPowerPage";
 import GasMixingPage from "./pages/calculators/GasMixingPage";
 import API2000Page from "./pages/calculators/API2000Page";
 import API520Page from "./pages/calculators/API520Page";
+import ReynoldsFrictionPage from "./pages/calculators/ReynoldsFrictionPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/calculators/gas-mixing" element={<GasMixingPage />} />
           <Route path="/calculators/api-2000" element={<API2000Page />} />
           <Route path="/calculators/api-520" element={<API520Page />} />
+          <Route path="/calculators/reynolds-friction" element={<ReynoldsFrictionPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
