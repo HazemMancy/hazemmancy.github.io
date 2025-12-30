@@ -20,6 +20,28 @@ interface GasSizingCriteria {
   note?: string;
 }
 
+// API RP 14E Liquid Line Sizing Criteria (Table 8.2.1.1)
+interface LiquidSizingCriteria {
+  service: string;
+  pressureDropBarKm: number | null;
+  velocity: {
+    size2: number | null;      // <= 2"
+    size3to6: number | null;   // 3" to 6"
+    size8to12: number | null;  // 8" to 12"
+    size14to18: number | null; // 14" to 18"
+    size20plus: number | null; // >= 20"
+  } | null;
+  note?: string;
+}
+
+// API RP 14E Mixed-Phase Line Sizing Criteria (Table 8.3.1.1)
+interface MixedPhaseSizingCriteria {
+  service: string;
+  rhoV2: number;
+  mach?: number | null;
+  note?: string;
+}
+
 const gasServiceCriteria: GasSizingCriteria[] = [
   // Continuous service
   { service: "Continuous", pressureRange: "Vacuum", pressureDropBarKm: null, velocityMs: 60, rhoV2: null, mach: null, note: "ΔP = 10% Pop" },
@@ -67,8 +89,39 @@ const gasServiceCriteria: GasSizingCriteria[] = [
   { service: "Fuel Gas", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, rhoV2: 15000, mach: null },
 ];
 
-// Get unique service types
+// Liquid service criteria per API RP 14E Table 8.2.1.1
+const liquidServiceCriteria: LiquidSizingCriteria[] = [
+  { service: "Gravity Flow", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 }, note: "Note 1" },
+  { service: "Pump Suction (Boiling Point)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 }, note: "Note 2, 3, 6, 8" },
+  { service: "Pump Suction (Sub-cooled)", pressureDropBarKm: 1.0, velocity: { size2: 0.7, size3to6: 1.2, size8to12: 1.6, size14to18: 2.1, size20plus: 2.6 }, note: "Note 3, 6, 8" },
+  { service: "Pump Discharge (Pop < 35 barg)", pressureDropBarKm: 4.5, velocity: { size2: 1.4, size3to6: 1.9, size8to12: 3.1, size14to18: 4.1, size20plus: 5.0 }, note: "Note 3, 9" },
+  { service: "Pump Discharge (Pop > 35 barg)", pressureDropBarKm: 6.0, velocity: { size2: 1.5, size3to6: 2.0, size8to12: 3.5, size14to18: 4.6, size20plus: 5.0 }, note: "Note 3, 9" },
+  { service: "Condenser Outlet (Pop < 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 }, note: null },
+  { service: "Condenser Outlet (Pop > 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 }, note: null },
+  { service: "Cooling Water Manifold", pressureDropBarKm: null, velocity: { size2: 3.5, size3to6: 3.5, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 }, note: "Steel: 3.5, FRP: 2.5" },
+  { service: "Cooling Water Sub-manifold", pressureDropBarKm: 1.5, velocity: { size2: 2.0, size3to6: 3.1, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 }, note: null },
+  { service: "Diathermic Oil", pressureDropBarKm: null, velocity: null, note: "Same as pump discharge" },
+  { service: "Liquid Sulphur", pressureDropBarKm: null, velocity: { size2: 1.8, size3to6: 1.8, size8to12: 1.8, size14to18: 1.8, size20plus: 1.8 }, note: "0.9 m/s minimum" },
+  { service: "Column Side-stream Draw-off", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 }, note: "Note 5" },
+];
+
+// Mixed-phase service criteria per API RP 14E Table 8.3.1.1
+const mixedPhaseServiceCriteria: MixedPhaseSizingCriteria[] = [
+  { service: "Continuous P < 7 barg (Limited ΔP)", rhoV2: 6000, note: null },
+  { service: "Continuous P > 7 barg", rhoV2: 15000, note: null },
+  { service: "Discontinuous", rhoV2: 15000, note: null },
+  { service: "Erosive Fluid (Continuous)", rhoV2: 3750, note: null },
+  { service: "Erosive Fluid (Discontinuous)", rhoV2: 6000, note: null },
+  { service: "Partial Condenser Outlet", rhoV2: 6000, note: null },
+  { service: "Reboiler Return (Natural Circulation)", rhoV2: 1500, note: null },
+  { service: "Flare Tail Pipe (Significant Liquids)", rhoV2: 50000, mach: 0.25, note: "Mach < 0.25" },
+  { service: "Flare Header (Significant Liquids)", rhoV2: 50000, mach: 0.25, note: "Mach < 0.25" },
+];
+
+// Get unique service types for each category
 const gasServiceTypes = [...new Set(gasServiceCriteria.map(c => c.service))];
+const liquidServiceTypes = liquidServiceCriteria.map(c => c.service);
+const mixedPhaseServiceTypes = mixedPhaseServiceCriteria.map(c => c.service);
 
 // Get pressure ranges for a service type
 const getPressureRangesForService = (service: string): string[] => {
@@ -78,6 +131,26 @@ const getPressureRangesForService = (service: string): string[] => {
 // Get criteria for a specific service and pressure range
 const getCriteriaForServiceAndPressure = (service: string, pressureRange: string): GasSizingCriteria | undefined => {
   return gasServiceCriteria.find(c => c.service === service && c.pressureRange === pressureRange);
+};
+
+// Get liquid criteria for a service
+const getLiquidCriteriaForService = (service: string): LiquidSizingCriteria | undefined => {
+  return liquidServiceCriteria.find(c => c.service === service);
+};
+
+// Get mixed-phase criteria for a service
+const getMixedPhaseCriteriaForService = (service: string): MixedPhaseSizingCriteria | undefined => {
+  return mixedPhaseServiceCriteria.find(c => c.service === service);
+};
+
+// Get velocity limit based on pipe size for liquid lines
+const getLiquidVelocityLimit = (criteria: LiquidSizingCriteria, nominalSizeInch: number): number | null => {
+  if (!criteria.velocity) return null;
+  if (nominalSizeInch <= 2) return criteria.velocity.size2;
+  if (nominalSizeInch <= 6) return criteria.velocity.size3to6;
+  if (nominalSizeInch <= 12) return criteria.velocity.size8to12;
+  if (nominalSizeInch <= 18) return criteria.velocity.size14to18;
+  return criteria.velocity.size20plus;
 };
 
 // Unit conversion factors to SI
@@ -339,6 +412,20 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [gasServiceType, setGasServiceType] = useState<string>("Continuous");
   const [gasPressureRange, setGasPressureRange] = useState<string>("2 to 7 barg");
 
+  // Liquid service type selection (API RP 14E criteria)
+  const [liquidServiceType, setLiquidServiceType] = useState<string>("Pump Discharge (Pop < 35 barg)");
+
+  // Mixed-phase service type selection (API RP 14E criteria)
+  const [mixedPhaseServiceType, setMixedPhaseServiceType] = useState<string>("Continuous P > 7 barg");
+
+  // Mixed-phase flow inputs
+  const [mixedGasFlowRate, setMixedGasFlowRate] = useState<string>("5");
+  const [mixedGasFlowRateUnit, setMixedGasFlowRateUnit] = useState<string>("MMSCFD");
+  const [mixedLiquidFlowRate, setMixedLiquidFlowRate] = useState<string>("50");
+  const [mixedLiquidFlowRateUnit, setMixedLiquidFlowRateUnit] = useState<string>("m³/h");
+  const [mixedGasDensity, setMixedGasDensity] = useState<string>("30"); // kg/m³ at operating conditions
+  const [mixedLiquidDensity, setMixedLiquidDensity] = useState<string>("800"); // kg/m³
+
   // Get available pressure ranges for selected gas service
   const availableGasPressureRanges = useMemo(() => {
     return getPressureRangesForService(gasServiceType);
@@ -352,6 +439,22 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       setGasPressureRange(ranges[0]);
     }
   };
+
+  // Get current liquid criteria
+  const currentLiquidCriteria = useMemo(() => {
+    return getLiquidCriteriaForService(liquidServiceType);
+  }, [liquidServiceType]);
+
+  // Get current mixed-phase criteria
+  const currentMixedPhaseCriteria = useMemo(() => {
+    return getMixedPhaseCriteriaForService(mixedPhaseServiceType);
+  }, [mixedPhaseServiceType]);
+
+  // Get nominal diameter as number for velocity limit lookup
+  const nominalDiameterNumber = useMemo(() => {
+    const nd = nominalDiameter.replace("-", ".");
+    return parseFloat(nd) || 4;
+  }, [nominalDiameter]);
 
   // Get available schedules for current diameter
   const availableSchedules = useMemo(() => {
@@ -432,13 +535,73 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return (P_Pa * MW) / (Z_std_factor * R_kmol * T_std_K);
   }, [lineType, P_std_bara, MW, T_std_K, Z_std_factor]);
 
-  // Use calculated density for gas, user input for liquid
+  // Mixed-phase calculations
+  const mixedPhaseCalc = useMemo(() => {
+    if (lineType !== "mixed") return null;
+    
+    const rhoG = parseFloat(mixedGasDensity) || 30; // kg/m³ at operating conditions
+    const rhoL = parseFloat(mixedLiquidDensity) || 800; // kg/m³
+    
+    // Convert gas flow to actual m³/s at operating conditions
+    const Qg_std_m3s = parseFloat(mixedGasFlowRate) * (gasVolumetricFlowRateToM3s[mixedGasFlowRateUnit] || 0);
+    // For mixed-phase, we need actual gas flow. Assuming user provides operating density directly.
+    // We'll estimate actual from standard assuming ideal gas behavior: Q_act = Q_std * (P_std/P_op) * (T_op/T_std)
+    // But since user provides operating density directly, we use mass conservation:
+    // Mass flow gas = Q_std * rho_std → but we'll simplify by assuming the flow is already at operating conditions
+    // For more accuracy, user should input gas density at operating conditions
+    const Qg_act_m3s = Qg_std_m3s; // Simplified - actual volumetric at operating
+    
+    // Convert liquid flow to m³/s
+    const Ql_m3s = parseFloat(mixedLiquidFlowRate) * (liquidFlowRateToM3s[mixedLiquidFlowRateUnit] || 0);
+    
+    // Mass flows
+    const massFlowGas = Qg_act_m3s * rhoG; // kg/s
+    const massFlowLiquid = Ql_m3s * rhoL; // kg/s
+    const totalMassFlow = massFlowGas + massFlowLiquid;
+    
+    // Total volumetric flow at operating conditions (gas + liquid)
+    const totalVolumetricFlow = Qg_act_m3s + Ql_m3s; // m³/s
+    
+    // Mixture density (homogeneous model)
+    // ρm = (ρG * QG + ρL * QL) / (QG + QL) - volumetric weighted
+    // OR for ρv² calculation, we use: ρm = total mass flow / total volumetric flow
+    const rhoMixture = totalVolumetricFlow > 0 ? totalMassFlow / totalVolumetricFlow : 0;
+    
+    // Gas volume fraction (no-slip)
+    const lambdaG = totalVolumetricFlow > 0 ? Qg_act_m3s / totalVolumetricFlow : 0;
+    
+    // Liquid volume fraction
+    const lambdaL = 1 - lambdaG;
+    
+    // Gas mass fraction
+    const xG = totalMassFlow > 0 ? massFlowGas / totalMassFlow : 0;
+    
+    return {
+      rhoG,
+      rhoL,
+      rhoMixture,
+      Qg_m3s: Qg_act_m3s,
+      Ql_m3s,
+      totalVolumetricFlow,
+      massFlowGas,
+      massFlowLiquid,
+      totalMassFlow,
+      lambdaG,
+      lambdaL,
+      xG,
+    };
+  }, [lineType, mixedGasDensity, mixedLiquidDensity, mixedGasFlowRate, mixedGasFlowRateUnit, mixedLiquidFlowRate, mixedLiquidFlowRateUnit]);
+
+  // Use calculated density for gas, user input for liquid, mixture for mixed
   const rho = useMemo(() => {
     if (lineType === "gas") {
       return rhoGasOperating;
     }
+    if (lineType === "mixed" && mixedPhaseCalc) {
+      return mixedPhaseCalc.rhoMixture;
+    }
     return parseFloat(density) * densityToKgM3[densityUnit] || 0;
-  }, [lineType, rhoGasOperating, density, densityUnit]);
+  }, [lineType, rhoGasOperating, density, densityUnit, mixedPhaseCalc]);
 
   // For gas calculations we convert the entered volumetric flow (standard OR actual) into a molar flow.
   // Convention used here: for gas, "m³/h" is treated as ACTUAL flow at inlet conditions; other units are treated as STANDARD flow at base/std conditions.
@@ -482,6 +645,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Calculate velocity
   // Gas: velocity is computed from the inlet actual volumetric flow derived from molar flow (HYSYS-style)
   // Liquid: v = Q / A (incompressible)
+  // Mixed: v = (Qg + Ql) / A (total volumetric flow)
   const velocity = useMemo(() => {
     if (D_m <= 0) return 0;
     const area = Math.PI * Math.pow(D_m / 2, 2);
@@ -495,8 +659,12 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       return Q_inlet_actual_m3s / area;
     }
 
+    if (lineType === "mixed" && mixedPhaseCalc) {
+      return mixedPhaseCalc.totalVolumetricFlow / area;
+    }
+
     return Q_m3s / area;
-  }, [D_m, lineType, Q_m3s, molarFlowKmolPerS, P_operating_bara, T_operating_K, Z_factor]);
+  }, [D_m, lineType, Q_m3s, molarFlowKmolPerS, P_operating_bara, T_operating_K, Z_factor, mixedPhaseCalc]);
 
   // Calculate ρv² (rho v squared)
   const rhoVSquared = useMemo(() => {
@@ -726,7 +894,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return getCriteriaForServiceAndPressure(gasServiceType, gasPressureRange);
   }, [gasServiceType, gasPressureRange]);
 
-  // Line Sizing Criteria based on ENI Table 8.1.1.1 for gas, API 14E for liquid
+  // Line Sizing Criteria based on ENI Table 8.1.1.1 for gas, API 14E for liquid/mixed
   const sizingCriteria = useMemo(() => {
     if (lineType === "gas" && currentGasCriteria) {
       // Convert pressure drop from bar/km to bar/100m
@@ -739,25 +907,58 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         maxVelocity: currentGasCriteria.velocityMs, // From ENI table, null if using ρv² instead
         maxRhoVSquared: currentGasCriteria.rhoV2, // From ENI table
         maxPressureDropPer100m: pressureDropBarPer100m, // bar/100m
+        maxPressureDropBarKm: currentGasCriteria.pressureDropBarKm,
         maxMach: currentGasCriteria.mach, // For flare applications
         note: currentGasCriteria.note,
         service: currentGasCriteria.service,
         pressureRange: currentGasCriteria.pressureRange,
       };
-    } else {
-      // Liquid - API 14E criteria
+    } else if (lineType === "liquid" && currentLiquidCriteria) {
+      // Liquid - API RP 14E criteria Table 8.2.1.1
+      const velocityLimit = getLiquidVelocityLimit(currentLiquidCriteria, nominalDiameterNumber);
+      const pressureDropBarPer100m = currentLiquidCriteria.pressureDropBarKm 
+        ? currentLiquidCriteria.pressureDropBarKm / 10 
+        : null;
+      
       return {
-        minVelocity: 0.9, // 3 ft/s - minimum to prevent silt/solids settling
-        maxVelocity: 4.6, // 15 ft/s - maximum to prevent erosion
-        maxRhoVSquared: 15000, // kg/(m·s²) - higher limit for liquids
-        maxPressureDropPer100m: 1.0, // bar/100m
+        minVelocity: liquidServiceType.includes("Sulphur") ? 0.9 : 0.3, // Minimum velocity
+        maxVelocity: velocityLimit,
+        maxRhoVSquared: null, // Not used for liquid
+        maxPressureDropPer100m: pressureDropBarPer100m,
+        maxPressureDropBarKm: currentLiquidCriteria.pressureDropBarKm,
+        maxMach: null,
+        note: currentLiquidCriteria.note,
+        service: currentLiquidCriteria.service,
+        pressureRange: null,
+      };
+    } else if (lineType === "mixed" && currentMixedPhaseCriteria) {
+      // Mixed-phase - API RP 14E criteria Table 8.3.1.1
+      return {
+        minVelocity: 0,
+        maxVelocity: null, // Use ρv² instead
+        maxRhoVSquared: currentMixedPhaseCriteria.rhoV2,
+        maxPressureDropPer100m: null,
+        maxPressureDropBarKm: null,
+        maxMach: currentMixedPhaseCriteria.mach || null,
+        note: currentMixedPhaseCriteria.note,
+        service: currentMixedPhaseCriteria.service,
+        pressureRange: null,
+      };
+    } else {
+      // Default fallback
+      return {
+        minVelocity: 0.9,
+        maxVelocity: 4.6,
+        maxRhoVSquared: 15000,
+        maxPressureDropPer100m: 1.0,
+        maxPressureDropBarKm: 10,
         maxMach: null,
         note: null,
         service: null,
         pressureRange: null,
       };
     }
-  }, [lineType, currentGasCriteria]);
+  }, [lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, nominalDiameterNumber, liquidServiceType]);
 
   // Status check function based on ENI/API 14E criteria
   const getStatusIndicator = () => {
@@ -797,43 +998,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
   };
 
-  if (lineType === "mixed") {
-    return (
-      <div className="space-y-8">
-        <Card className="border-2 border-primary/20 bg-gradient-to-br from-card via-card to-primary/5">
-          <CardContent className="p-6 sm:p-8">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 rounded-xl bg-primary/10">
-                <Waves className="w-8 h-8 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-heading font-bold">
-                  Mixed-Phase <span className="text-primary">Line Sizing</span>
-                </h2>
-                <p className="text-muted-foreground">Beggs & Brill equation for two-phase flow</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-2 border-dashed border-primary/30">
-          <CardContent className="p-12 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <Info className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="text-xl font-heading font-semibold mb-2">Coming Soon</h3>
-            <p className="text-muted-foreground max-w-md">
-              Mixed-phase pressure drop calculations using Beggs & Brill correlation 
-              for two-phase flow are being developed.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const PhaseIcon = lineType === "gas" ? Wind : Droplets;
-  const phaseTitle = lineType === "gas" ? "Gas Line Sizing" : "Liquid Line Sizing";
+  // Determine phase icon and title based on line type
+  const PhaseIcon = lineType === "gas" ? Wind : lineType === "liquid" ? Droplets : Waves;
+  const phaseTitle = lineType === "gas" ? "Gas Line Sizing" : lineType === "liquid" ? "Liquid Line Sizing" : "Mixed-Phase Line Sizing";
+  const phaseSubtitle = lineType === "gas" ? "ENI Design Criteria" : lineType === "liquid" ? "API RP 14E Criteria" : "API RP 14E Two-Phase Criteria";
 
   // Get current calculation method details
   return (
@@ -848,10 +1016,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
               </div>
               <div>
                 <h2 className="text-2xl sm:text-3xl font-heading font-bold">
-                  {lineType === "gas" ? "Gas" : "Liquid"} <span className="text-primary">Line Sizing</span>
+                  {lineType === "gas" ? "Gas" : lineType === "liquid" ? "Liquid" : "Mixed-Phase"} <span className="text-primary">Line Sizing</span>
                 </h2>
                 <p className="text-muted-foreground">
-                  Single-Phase Pipe Flow
+                  {phaseSubtitle}
                 </p>
               </div>
             </div>
@@ -928,6 +1096,83 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   )}
                 </>
               )}
+
+              {/* Liquid Service Type (API RP 14E Criteria) - Only show for liquid lines */}
+              {lineType === "liquid" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Service Type</Label>
+                    <Select value={liquidServiceType} onValueChange={setLiquidServiceType}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {liquidServiceTypes.map((service) => (
+                          <SelectItem key={service} value={service}>
+                            {service}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Show current criteria */}
+                  {currentLiquidCriteria && (
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
+                      <p className="text-xs font-medium text-primary">Recommended Limits (API RP 14E Table 8.2.1.1)</p>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        {currentLiquidCriteria.pressureDropBarKm !== null && (
+                          <p>ΔP: ≤ {currentLiquidCriteria.pressureDropBarKm} bar/km</p>
+                        )}
+                        {sizingCriteria.maxVelocity !== null && (
+                          <p>Velocity ({nominalDiameterNumber <= 2 ? "≤2\"" : nominalDiameterNumber <= 6 ? "3-6\"" : nominalDiameterNumber <= 12 ? "8-12\"" : nominalDiameterNumber <= 18 ? "14-18\"" : "≥20\""}): ≤ {sizingCriteria.maxVelocity} m/s</p>
+                        )}
+                        {currentLiquidCriteria.note && (
+                          <p className="text-xs italic">{currentLiquidCriteria.note}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Mixed-Phase Service Type (API RP 14E Criteria) - Only show for mixed-phase lines */}
+              {lineType === "mixed" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Service Type</Label>
+                    <Select value={mixedPhaseServiceType} onValueChange={setMixedPhaseServiceType}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mixedPhaseServiceTypes.map((service) => (
+                          <SelectItem key={service} value={service}>
+                            {service}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Show current criteria */}
+                  {currentMixedPhaseCriteria && (
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
+                      <p className="text-xs font-medium text-primary">Recommended Limits (API RP 14E Table 8.3.1.1)</p>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <p>ρv²: ≤ {currentMixedPhaseCriteria.rhoV2.toLocaleString()} kg/(m·s²)</p>
+                        {currentMixedPhaseCriteria.mach !== null && (
+                          <p>Mach: ≤ {currentMixedPhaseCriteria.mach}</p>
+                        )}
+                        {currentMixedPhaseCriteria.note && (
+                          <p className="text-xs italic">{currentMixedPhaseCriteria.note}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* Pipe Length */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Pipe Length</Label>
@@ -1083,40 +1328,140 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 />
               </div>
 
-              {/* Flow Rate */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Flow Rate</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    value={flowRate}
-                    onChange={(e) => setFlowRate(e.target.value)}
-                    className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder={lineType === "gas" ? "10" : "50"}
-                  />
-                  <Select value={flowRateUnit} onValueChange={setFlowRateUnit}>
-                    <SelectTrigger className="w-28">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {lineType === "gas" ? (
-                        Object.keys(gasVolumetricFlowRateToM3s).map((unit) => (
-                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                        ))
-                      ) : (
-                        Object.keys(liquidFlowRateToM3s).map((unit) => (
-                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+              {/* Flow Rate - Gas and Liquid lines */}
+              {lineType !== "mixed" && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Flow Rate</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      value={flowRate}
+                      onChange={(e) => setFlowRate(e.target.value)}
+                      className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      placeholder={lineType === "gas" ? "10" : "50"}
+                    />
+                    <Select value={flowRateUnit} onValueChange={setFlowRateUnit}>
+                      <SelectTrigger className="w-28">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lineType === "gas" ? (
+                          Object.keys(gasVolumetricFlowRateToM3s).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))
+                        ) : (
+                          Object.keys(liquidFlowRateToM3s).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {lineType === "gas" && (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-mono">m³/h</span> = actual flow at inlet; other units = standard flow.
+                    </p>
+                  )}
                 </div>
-                {lineType === "gas" && (
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-mono">m³/h</span> = actual flow at inlet; other units = standard flow.
-                  </p>
-                )}
-              </div>
+              )}
+
+              {/* Mixed-Phase Flow Inputs */}
+              {lineType === "mixed" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Gas Flow Rate</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        value={mixedGasFlowRate}
+                        onChange={(e) => setMixedGasFlowRate(e.target.value)}
+                        className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="5"
+                      />
+                      <Select value={mixedGasFlowRateUnit} onValueChange={setMixedGasFlowRateUnit}>
+                        <SelectTrigger className="w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(gasVolumetricFlowRateToM3s).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Liquid Flow Rate</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        value={mixedLiquidFlowRate}
+                        onChange={(e) => setMixedLiquidFlowRate(e.target.value)}
+                        className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="50"
+                      />
+                      <Select value={mixedLiquidFlowRateUnit} onValueChange={setMixedLiquidFlowRateUnit}>
+                        <SelectTrigger className="w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(liquidFlowRateToM3s).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Gas Density @ Operating (kg/m³)</Label>
+                    <Input
+                      type="number"
+                      value={mixedGasDensity}
+                      onChange={(e) => setMixedGasDensity(e.target.value)}
+                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      placeholder="30"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Liquid Density (kg/m³)</Label>
+                    <Input
+                      type="number"
+                      value={mixedLiquidDensity}
+                      onChange={(e) => setMixedLiquidDensity(e.target.value)}
+                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      placeholder="800"
+                    />
+                  </div>
+
+                  {/* Mixed-phase calculated properties */}
+                  {mixedPhaseCalc && (
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+                      <p className="text-xs font-medium text-primary">Calculated Mixture Properties</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">ρ<sub>mix</sub>:</span>
+                          <span className="font-mono ml-1">{mixedPhaseCalc.rhoMixture.toFixed(2)} kg/m³</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">λ<sub>G</sub>:</span>
+                          <span className="font-mono ml-1">{(mixedPhaseCalc.lambdaG * 100).toFixed(1)}%</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">ṁ<sub>total</sub>:</span>
+                          <span className="font-mono ml-1">{(mixedPhaseCalc.totalMassFlow * 3600).toFixed(1)} kg/h</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">x<sub>G</sub>:</span>
+                          <span className="font-mono ml-1">{(mixedPhaseCalc.xG * 100).toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Fluid Density - Only shown for liquid */}
               {lineType === "liquid" && (
