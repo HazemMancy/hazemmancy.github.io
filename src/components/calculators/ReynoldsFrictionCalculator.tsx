@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Info, Droplets, Wind, AlertTriangle } from 'lucide-react';
+import { Info, Droplets, Wind, AlertTriangle, Thermometer, Database } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 import {
   LineChart,
   Line,
@@ -18,6 +19,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
+import { getFluidProperties, getFluidsByCategory, fluidDatabase } from '@/lib/fluidProperties';
+import { getNominalSizes, getSchedulesForSize, getInsideDiameter } from '@/lib/pipeSchedule';
 
 // Unit conversion factors
 const lengthConversions: Record<string, number> = {
@@ -95,6 +98,13 @@ interface CalculatorInputs {
   roughnessMaterial: string;
   roughness: number;
   roughnessUnit: string;
+  // Fluid database
+  selectedFluid: string;
+  fluidTemperature: number;
+  // Pipe schedule
+  useSchedule: boolean;
+  nominalSize: string;
+  schedule: string;
 }
 
 const ReynoldsFrictionCalculator: React.FC = () => {
@@ -113,7 +123,24 @@ const ReynoldsFrictionCalculator: React.FC = () => {
     roughnessMaterial: 'Commercial Steel',
     roughness: 0.045,
     roughnessUnit: 'mm',
+    selectedFluid: '',
+    fluidTemperature: 25,
+    useSchedule: false,
+    nominalSize: '4"',
+    schedule: '40/STD',
   });
+
+  // Get fluid categories for grouped dropdown
+  const fluidCategories = useMemo(() => getFluidsByCategory(), []);
+  
+  // Get available schedules for selected nominal size
+  const availableSchedules = useMemo(() => 
+    getSchedulesForSize(inputs.nominalSize), 
+    [inputs.nominalSize]
+  );
+
+  // Get nominal sizes
+  const nominalSizes = useMemo(() => getNominalSizes(), []);
 
   const updateInput = <K extends keyof CalculatorInputs>(key: K, value: CalculatorInputs[K]) => {
     setInputs(prev => {
@@ -124,6 +151,55 @@ const ReynoldsFrictionCalculator: React.FC = () => {
         const roughnessM = pipeRoughness[value as string];
         const roughnessInUnit = roughnessM / roughnessConversions[prev.roughnessUnit];
         newInputs.roughness = parseFloat(roughnessInUnit.toPrecision(4));
+      }
+      
+      // Auto-update fluid properties when fluid or temperature changes
+      if (key === 'selectedFluid' || key === 'fluidTemperature') {
+        const fluidKey = key === 'selectedFluid' ? value as string : prev.selectedFluid;
+        const temp = key === 'fluidTemperature' ? value as number : prev.fluidTemperature;
+        
+        if (fluidKey) {
+          const props = getFluidProperties(fluidKey, temp);
+          if (props) {
+            // Convert density to current unit
+            const densityInUnit = props.density / densityConversions[prev.densityUnit];
+            newInputs.density = parseFloat(densityInUnit.toPrecision(4));
+            
+            // Viscosity from database is in cP, convert to current unit
+            const viscosityPas = props.viscosity * 0.001; // cP to Pa·s
+            const viscosityInUnit = viscosityPas / viscosityConversions[prev.viscosityUnit];
+            newInputs.viscosity = parseFloat(viscosityInUnit.toPrecision(4));
+          }
+        }
+      }
+      
+      // Auto-update diameter when pipe schedule changes
+      if (key === 'useSchedule' && value === true) {
+        const diameterMM = getInsideDiameter(prev.nominalSize, prev.schedule);
+        if (diameterMM !== null) {
+          const diameterInUnit = (diameterMM * 0.001) / lengthConversions[prev.diameterUnit];
+          newInputs.diameter = parseFloat(diameterInUnit.toPrecision(4));
+        }
+      }
+      
+      if ((key === 'nominalSize' || key === 'schedule') && prev.useSchedule) {
+        const nomSize = key === 'nominalSize' ? value as string : prev.nominalSize;
+        let sched = key === 'schedule' ? value as string : prev.schedule;
+        
+        // If changing nominal size, check if current schedule exists
+        if (key === 'nominalSize') {
+          const availScheds = getSchedulesForSize(nomSize);
+          if (!availScheds.includes(sched)) {
+            sched = availScheds.includes('40/STD') ? '40/STD' : availScheds[0] || sched;
+            newInputs.schedule = sched;
+          }
+        }
+        
+        const diameterMM = getInsideDiameter(nomSize, sched);
+        if (diameterMM !== null) {
+          const diameterInUnit = (diameterMM * 0.001) / lengthConversions[prev.diameterUnit];
+          newInputs.diameter = parseFloat(diameterInUnit.toPrecision(4));
+        }
       }
       
       // Convert values when units change (keep physical value constant)
@@ -378,7 +454,146 @@ const ReynoldsFrictionCalculator: React.FC = () => {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Fluid Database Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Fluid Database
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Fluid Selection */}
+            <div className="space-y-2">
+              <Label>Select Fluid</Label>
+              <Select value={inputs.selectedFluid} onValueChange={(v) => updateInput('selectedFluid', v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a fluid..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Manual Entry</SelectItem>
+                  {Object.entries(fluidCategories).map(([category, fluids]) => (
+                    <React.Fragment key={category}>
+                      <SelectItem value={`__category_${category}`} disabled className="font-semibold text-primary">
+                        ── {category} ──
+                      </SelectItem>
+                      {fluids.map(fluid => (
+                        <SelectItem key={fluid.key} value={fluid.key}>
+                          {fluid.name}
+                        </SelectItem>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Temperature Slider */}
+            {inputs.selectedFluid && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2">
+                    <Thermometer className="h-4 w-4" />
+                    Temperature
+                  </Label>
+                  <span className="text-sm font-mono font-medium">{inputs.fluidTemperature}°C</span>
+                </div>
+                <Slider
+                  value={[inputs.fluidTemperature]}
+                  onValueChange={([v]) => updateInput('fluidTemperature', v)}
+                  min={fluidDatabase[inputs.selectedFluid]?.minTemp ?? -40}
+                  max={fluidDatabase[inputs.selectedFluid]?.maxTemp ?? 300}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{fluidDatabase[inputs.selectedFluid]?.minTemp ?? -40}°C</span>
+                  <span>{fluidDatabase[inputs.selectedFluid]?.maxTemp ?? 300}°C</span>
+                </div>
+              </div>
+            )}
+
+            {/* Fluid Properties Display */}
+            {inputs.selectedFluid && (
+              <div className="p-3 bg-muted rounded-lg space-y-2">
+                <div className="text-sm font-medium">Properties at {inputs.fluidTemperature}°C</div>
+                {(() => {
+                  const props = getFluidProperties(inputs.selectedFluid, inputs.fluidTemperature);
+                  if (!props) return null;
+                  return (
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Density:</span>
+                        <span className="font-mono ml-1">{props.density.toFixed(1)} kg/m³</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Viscosity:</span>
+                        <span className="font-mono ml-1">{props.viscosity.toFixed(3)} cP</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Cp:</span>
+                        <span className="font-mono ml-1">{props.specificHeat.toFixed(2)} kJ/kg·K</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Pr:</span>
+                        <span className="font-mono ml-1">{props.prandtl.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            <Separator />
+
+            {/* Pipe Schedule Section */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={inputs.useSchedule}
+                  onChange={(e) => updateInput('useSchedule', e.target.checked)}
+                  className="rounded"
+                />
+                Use Pipe Schedule
+              </Label>
+            </div>
+
+            {inputs.useSchedule && (
+              <>
+                <div className="space-y-2">
+                  <Label>Nominal Pipe Size</Label>
+                  <Select value={inputs.nominalSize} onValueChange={(v) => updateInput('nominalSize', v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {nominalSizes.map(size => (
+                        <SelectItem key={size.value} value={size.value}>{size.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Schedule</Label>
+                  <Select value={inputs.schedule} onValueChange={(v) => updateInput('schedule', v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSchedules.map(sched => (
+                        <SelectItem key={sched} value={sched}>{sched}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Input Section */}
         <Card>
           <CardHeader>
@@ -456,11 +671,15 @@ const ReynoldsFrictionCalculator: React.FC = () => {
             {/* Pipe Diameter */}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
-                <Label>Pipe Inside Diameter</Label>
+                <Label>Pipe Inside Diameter {inputs.useSchedule && <Badge variant="secondary" className="ml-1 text-xs">Auto</Badge>}</Label>
                 <Input
                   type="number"
                   value={inputs.diameter}
-                  onChange={(e) => updateInput('diameter', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    updateInput('diameter', parseFloat(e.target.value) || 0);
+                    if (inputs.useSchedule) updateInput('useSchedule', false);
+                  }}
+                  className={inputs.useSchedule ? 'bg-muted' : ''}
                 />
               </div>
               <div className="space-y-2">
@@ -483,11 +702,18 @@ const ReynoldsFrictionCalculator: React.FC = () => {
             {/* Fluid Properties */}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
-                <Label>Fluid Density</Label>
+                <Label>
+                  Fluid Density 
+                  {inputs.selectedFluid && <Badge variant="secondary" className="ml-1 text-xs">Auto</Badge>}
+                </Label>
                 <Input
                   type="number"
                   value={inputs.density}
-                  onChange={(e) => updateInput('density', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    updateInput('density', parseFloat(e.target.value) || 0);
+                    if (inputs.selectedFluid) updateInput('selectedFluid', '');
+                  }}
+                  className={inputs.selectedFluid ? 'bg-muted' : ''}
                 />
               </div>
               <div className="space-y-2">
@@ -507,11 +733,18 @@ const ReynoldsFrictionCalculator: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
-                <Label>Dynamic Viscosity</Label>
+                <Label>
+                  Dynamic Viscosity 
+                  {inputs.selectedFluid && <Badge variant="secondary" className="ml-1 text-xs">Auto</Badge>}
+                </Label>
                 <Input
                   type="number"
                   value={inputs.viscosity}
-                  onChange={(e) => updateInput('viscosity', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    updateInput('viscosity', parseFloat(e.target.value) || 0);
+                    if (inputs.selectedFluid) updateInput('selectedFluid', '');
+                  }}
+                  className={inputs.selectedFluid ? 'bg-muted' : ''}
                 />
               </div>
               <div className="space-y-2">
