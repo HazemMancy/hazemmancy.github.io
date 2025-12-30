@@ -20,7 +20,7 @@ interface GasSizingCriteria {
   note?: string;
 }
 
-// API RP 14E Liquid Line Sizing Criteria (Table 8.2.1.1)
+// Eni Liquid Line Sizing Criteria (Table 8.2.1.1)
 interface LiquidSizingCriteria {
   service: string;
   pressureDropBarKm: number | null;
@@ -31,15 +31,13 @@ interface LiquidSizingCriteria {
     size14to18: number | null; // 14" to 18"
     size20plus: number | null; // >= 20"
   } | null;
-  note?: string;
 }
 
-// API RP 14E Mixed-Phase Line Sizing Criteria (Table 8.3.1.1)
+// Eni Mixed-Phase Line Sizing Criteria (Table 8.3.1.1)
 interface MixedPhaseSizingCriteria {
   service: string;
   rhoV2: number;
   mach?: number | null;
-  note?: string;
 }
 
 const gasServiceCriteria: GasSizingCriteria[] = [
@@ -89,33 +87,33 @@ const gasServiceCriteria: GasSizingCriteria[] = [
   { service: "Fuel Gas", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, rhoV2: 15000, mach: null },
 ];
 
-// Liquid service criteria per API RP 14E Table 8.2.1.1
+// Liquid service criteria per Eni Sizing Criteria Table 8.2.1.1
 const liquidServiceCriteria: LiquidSizingCriteria[] = [
-  { service: "Gravity Flow", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 }, note: "Note 1" },
-  { service: "Pump Suction (Boiling Point)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 }, note: "Note 2, 3, 6, 8" },
-  { service: "Pump Suction (Sub-cooled)", pressureDropBarKm: 1.0, velocity: { size2: 0.7, size3to6: 1.2, size8to12: 1.6, size14to18: 2.1, size20plus: 2.6 }, note: "Note 3, 6, 8" },
-  { service: "Pump Discharge (Pop < 35 barg)", pressureDropBarKm: 4.5, velocity: { size2: 1.4, size3to6: 1.9, size8to12: 3.1, size14to18: 4.1, size20plus: 5.0 }, note: "Note 3, 9" },
-  { service: "Pump Discharge (Pop > 35 barg)", pressureDropBarKm: 6.0, velocity: { size2: 1.5, size3to6: 2.0, size8to12: 3.5, size14to18: 4.6, size20plus: 5.0 }, note: "Note 3, 9" },
-  { service: "Condenser Outlet (Pop < 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 }, note: null },
-  { service: "Condenser Outlet (Pop > 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 }, note: null },
-  { service: "Cooling Water Manifold", pressureDropBarKm: null, velocity: { size2: 3.5, size3to6: 3.5, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 }, note: "Steel: 3.5, FRP: 2.5" },
-  { service: "Cooling Water Sub-manifold", pressureDropBarKm: 1.5, velocity: { size2: 2.0, size3to6: 3.1, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 }, note: null },
-  { service: "Diathermic Oil", pressureDropBarKm: null, velocity: null, note: "Same as pump discharge" },
-  { service: "Liquid Sulphur", pressureDropBarKm: null, velocity: { size2: 1.8, size3to6: 1.8, size8to12: 1.8, size14to18: 1.8, size20plus: 1.8 }, note: "0.9 m/s minimum" },
-  { service: "Column Side-stream Draw-off", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 }, note: "Note 5" },
+  { service: "Gravity Flow", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 } },
+  { service: "Pump Suction (Boiling Point)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 } },
+  { service: "Pump Suction (Sub-cooled)", pressureDropBarKm: 1.0, velocity: { size2: 0.7, size3to6: 1.2, size8to12: 1.6, size14to18: 2.1, size20plus: 2.6 } },
+  { service: "Pump Discharge (Pop < 35 barg)", pressureDropBarKm: 4.5, velocity: { size2: 1.4, size3to6: 1.9, size8to12: 3.1, size14to18: 4.1, size20plus: 5.0 } },
+  { service: "Pump Discharge (Pop > 35 barg)", pressureDropBarKm: 6.0, velocity: { size2: 1.5, size3to6: 2.0, size8to12: 3.5, size14to18: 4.6, size20plus: 5.0 } },
+  { service: "Condenser Outlet (Pop < 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 } },
+  { service: "Condenser Outlet (Pop > 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 } },
+  { service: "Cooling Water Manifold", pressureDropBarKm: null, velocity: { size2: 3.5, size3to6: 3.5, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 } },
+  { service: "Cooling Water Sub-manifold", pressureDropBarKm: 1.5, velocity: { size2: 2.0, size3to6: 3.1, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 } },
+  { service: "Diathermic Oil", pressureDropBarKm: null, velocity: null },
+  { service: "Liquid Sulphur", pressureDropBarKm: null, velocity: { size2: 1.8, size3to6: 1.8, size8to12: 1.8, size14to18: 1.8, size20plus: 1.8 } },
+  { service: "Column Side-stream Draw-off", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 } },
 ];
 
-// Mixed-phase service criteria per API RP 14E Table 8.3.1.1
+// Mixed-phase service criteria per Eni Sizing Criteria Table 8.3.1.1
 const mixedPhaseServiceCriteria: MixedPhaseSizingCriteria[] = [
-  { service: "Continuous P < 7 barg (Limited ΔP)", rhoV2: 6000, note: null },
-  { service: "Continuous P > 7 barg", rhoV2: 15000, note: null },
-  { service: "Discontinuous", rhoV2: 15000, note: null },
-  { service: "Erosive Fluid (Continuous)", rhoV2: 3750, note: null },
-  { service: "Erosive Fluid (Discontinuous)", rhoV2: 6000, note: null },
-  { service: "Partial Condenser Outlet", rhoV2: 6000, note: null },
-  { service: "Reboiler Return (Natural Circulation)", rhoV2: 1500, note: null },
-  { service: "Flare Tail Pipe (Significant Liquids)", rhoV2: 50000, mach: 0.25, note: "Mach < 0.25" },
-  { service: "Flare Header (Significant Liquids)", rhoV2: 50000, mach: 0.25, note: "Mach < 0.25" },
+  { service: "Continuous P < 7 barg (Limited ΔP)", rhoV2: 6000 },
+  { service: "Continuous P > 7 barg", rhoV2: 15000 },
+  { service: "Discontinuous", rhoV2: 15000 },
+  { service: "Erosive Fluid (Continuous)", rhoV2: 3750 },
+  { service: "Erosive Fluid (Discontinuous)", rhoV2: 6000 },
+  { service: "Partial Condenser Outlet", rhoV2: 6000 },
+  { service: "Reboiler Return (Natural Circulation)", rhoV2: 1500 },
+  { service: "Flare Tail Pipe (Significant Liquids)", rhoV2: 50000, mach: 0.25 },
+  { service: "Flare Header (Significant Liquids)", rhoV2: 50000, mach: 0.25 },
 ];
 
 // Get unique service types for each category
@@ -927,12 +925,12 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         maxPressureDropPer100m: pressureDropBarPer100m,
         maxPressureDropBarKm: currentLiquidCriteria.pressureDropBarKm,
         maxMach: null,
-        note: currentLiquidCriteria.note,
+        note: null,
         service: currentLiquidCriteria.service,
         pressureRange: null,
       };
     } else if (lineType === "mixed" && currentMixedPhaseCriteria) {
-      // Mixed-phase - API RP 14E criteria Table 8.3.1.1
+      // Mixed-phase - Eni Sizing Criteria Table 8.3.1.1
       return {
         minVelocity: 0,
         maxVelocity: null, // Use ρv² instead
@@ -940,7 +938,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         maxPressureDropPer100m: null,
         maxPressureDropBarKm: null,
         maxMach: currentMixedPhaseCriteria.mach || null,
-        note: currentMixedPhaseCriteria.note,
+        note: null,
         service: currentMixedPhaseCriteria.service,
         pressureRange: null,
       };
@@ -1001,7 +999,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Determine phase icon and title based on line type
   const PhaseIcon = lineType === "gas" ? Wind : lineType === "liquid" ? Droplets : Waves;
   const phaseTitle = lineType === "gas" ? "Gas Line Sizing" : lineType === "liquid" ? "Liquid Line Sizing" : "Mixed-Phase Line Sizing";
-  const phaseSubtitle = lineType === "gas" ? "ENI Design Criteria" : lineType === "liquid" ? "API RP 14E Criteria" : "API RP 14E Two-Phase Criteria";
+  const phaseSubtitle = lineType === "gas" ? "Eni Sizing Criteria" : lineType === "liquid" ? "Eni Sizing Criteria" : "Eni Sizing Criteria";
 
   // Get current calculation method details
   return (
@@ -1119,16 +1117,13 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   {/* Show current criteria */}
                   {currentLiquidCriteria && (
                     <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
-                      <p className="text-xs font-medium text-primary">Recommended Limits (API RP 14E Table 8.2.1.1)</p>
+                      <p className="text-xs font-medium text-primary">Recommended Limits</p>
                       <div className="text-xs text-muted-foreground space-y-0.5">
                         {currentLiquidCriteria.pressureDropBarKm !== null && (
                           <p>ΔP: ≤ {currentLiquidCriteria.pressureDropBarKm} bar/km</p>
                         )}
                         {sizingCriteria.maxVelocity !== null && (
                           <p>Velocity ({nominalDiameterNumber <= 2 ? "≤2\"" : nominalDiameterNumber <= 6 ? "3-6\"" : nominalDiameterNumber <= 12 ? "8-12\"" : nominalDiameterNumber <= 18 ? "14-18\"" : "≥20\""}): ≤ {sizingCriteria.maxVelocity} m/s</p>
-                        )}
-                        {currentLiquidCriteria.note && (
-                          <p className="text-xs italic">{currentLiquidCriteria.note}</p>
                         )}
                       </div>
                     </div>
@@ -1158,14 +1153,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   {/* Show current criteria */}
                   {currentMixedPhaseCriteria && (
                     <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
-                      <p className="text-xs font-medium text-primary">Recommended Limits (API RP 14E Table 8.3.1.1)</p>
+                      <p className="text-xs font-medium text-primary">Recommended Limits</p>
                       <div className="text-xs text-muted-foreground space-y-0.5">
                         <p>ρv²: ≤ {currentMixedPhaseCriteria.rhoV2.toLocaleString()} kg/(m·s²)</p>
-                        {currentMixedPhaseCriteria.mach !== null && (
-                          <p>Mach: ≤ {currentMixedPhaseCriteria.mach}</p>
-                        )}
-                        {currentMixedPhaseCriteria.note && (
-                          <p className="text-xs italic">{currentMixedPhaseCriteria.note}</p>
+                        {currentMixedPhaseCriteria.mach !== null && currentMixedPhaseCriteria.mach !== undefined && (
+                          <p>Mach {"<"} {currentMixedPhaseCriteria.mach}</p>
                         )}
                       </div>
                     </div>
