@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X, Calculator } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navLinks = [
   { href: "#home", label: "Home" },
@@ -79,6 +80,9 @@ const Navigation = () => {
                 <Calculator className="w-4 h-4" />
                 Calculators
               </Link>
+            </li>
+            <li>
+              <ThemeToggle />
             </li>
           </ul>
 

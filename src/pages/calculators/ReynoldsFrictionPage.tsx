@@ -2,11 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import ReynoldsFrictionCalculator from '@/components/calculators/ReynoldsFrictionCalculator';
+import Footer from '@/components/Footer';
 
 const ReynoldsFrictionPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="container mx-auto px-4 py-8 flex-1">
         <div className="mb-6">
           <Link 
             to="/calculators" 
@@ -29,6 +30,7 @@ const ReynoldsFrictionPage: React.FC = () => {
 
         <ReynoldsFrictionCalculator />
       </div>
+      <Footer />
     </div>
   );
 };

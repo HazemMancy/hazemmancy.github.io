@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Flame } from "lucide-react";
+import { ArrowLeft, Fuel } from "lucide-react";
 import GasFlowConverter from "@/components/calculators/GasFlowConverter";
+import Footer from "@/components/Footer";
 
 const GasFlowConverterPage = () => {
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="bg-card/50 backdrop-blur-lg border-b border-border sticky top-0 z-50">
         <div className="container mx-auto px-4 sm:px-6 py-4">
@@ -17,7 +18,7 @@ const GasFlowConverterPage = () => {
               <span className="hidden sm:inline">Back to Calculators</span>
             </Link>
             <div className="flex items-center gap-2">
-              <Flame className="w-5 h-5 text-primary" />
+              <Fuel className="w-5 h-5 text-primary" />
               <h1 className="font-heading text-lg sm:text-xl font-bold">
                 Gas Volume <span className="text-primary">Converter</span>
               </h1>
@@ -27,9 +28,11 @@ const GasFlowConverterPage = () => {
       </header>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 sm:px-6 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-8 flex-1">
         <GasFlowConverter />
       </div>
+
+      <Footer />
     </main>
   );
 };

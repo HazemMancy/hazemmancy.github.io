@@ -1,8 +1,6 @@
 import { Linkedin, Mail, Phone } from "lucide-react";
 
 const Footer = () => {
-  const currentYear = new Date().getFullYear();
-
   return (
     <footer className="py-6 sm:py-8 bg-card border-t border-border">
       <div className="container mx-auto px-4 sm:px-6">
@@ -44,7 +42,7 @@ const Footer = () => {
 
           {/* Copyright */}
           <p className="text-muted-foreground text-xs sm:text-sm text-center order-3 sm:order-none">
-            © {currentYear} Hazem ElMancy. All rights reserved.
+            © 2026 Hazem ElMancy. All rights reserved.
           </p>
         </div>
       </div>

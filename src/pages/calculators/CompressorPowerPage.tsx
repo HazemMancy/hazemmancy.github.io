@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CompressorPowerCalculator from '@/components/calculators/CompressorPowerCalculator';
+import Footer from '@/components/Footer';
 
 const CompressorPowerPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="container mx-auto px-4 py-8 flex-1">
         <div className="mb-6">
           <Link to="/calculators">
             <Button variant="ghost" size="sm" className="gap-2">
@@ -18,6 +19,7 @@ const CompressorPowerPage: React.FC = () => {
         </div>
         <CompressorPowerCalculator />
       </div>
+      <Footer />
     </div>
   );
 };
