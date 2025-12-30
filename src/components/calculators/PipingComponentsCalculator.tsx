@@ -681,307 +681,585 @@ const ReducerVisualization = ({ reducer }: { reducer: typeof reducerData[0] | un
 };
 
 // ==================== GASKET VISUALIZATION ====================
-const GasketVisualization = ({ gasket }: { gasket: typeof gasketData[0] | undefined }) => {
-  if (!gasket) return <div className="flex items-center justify-center h-64 text-muted-foreground">Select gasket</div>;
+type GasketStandard = 'flat' | 'spiral' | 'rtj';
+
+const GasketVisualization = ({ 
+  gasket, 
+  gasketType = 'spiral',
+  unitSystem = 'metric' 
+}: { 
+  gasket: typeof gasketData[0] | undefined;
+  gasketType?: GasketStandard;
+  unitSystem?: UnitSystem;
+}) => {
+  if (!gasket) return (
+    <div className="flex items-center justify-center h-64 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
+      <div className="text-center">
+        <Disc className="w-12 h-12 mx-auto mb-2 opacity-30" />
+        <p>Select size and class</p>
+      </div>
+    </div>
+  );
   
-  const cx = 140, cy = 110;
-  const scale = 0.35;
-  const od = Math.min(gasket.outerDiameter * scale, 80);
+  const u = getLengthUnit(unitSystem);
+  const idVal = convertLength(gasket.innerDiameter, unitSystem);
+  const odVal = convertLength(gasket.outerDiameter, unitSystem);
+  const thkVal = convertLength(gasket.thickness, unitSystem);
+  
+  const cx = 140, cy = 115;
+  const scale = 0.4;
+  const od = Math.min(gasket.outerDiameter * scale, 85);
   const id = (gasket.innerDiameter / gasket.outerDiameter) * od;
   
+  const typeColors: Record<GasketStandard, { accent: string; light: string; name: string; std: string }> = {
+    'flat': { accent: 'hsl(200 60% 50%)', light: 'hsl(200 60% 50% / 0.2)', name: 'Flat (Non-Metallic)', std: 'ASME B16.21' },
+    'spiral': { accent: 'hsl(160 55% 45%)', light: 'hsl(160 55% 45% / 0.2)', name: 'Spiral Wound', std: 'ASME B16.20' },
+    'rtj': { accent: 'hsl(280 50% 55%)', light: 'hsl(280 50% 55% / 0.2)', name: 'Ring Type Joint', std: 'ASME B16.20' },
+  };
+  
+  const colors = typeColors[gasketType];
+  
   return (
-    <div className="space-y-4">
-      <div className="bg-gradient-to-br from-cyan-500/10 via-muted/30 to-teal-500/10 rounded-xl p-6 border border-primary/20">
-        <svg viewBox="0 0 280 220" className="w-full max-w-sm mx-auto">
+    <div className="space-y-3">
+      {/* Front View */}
+      <div className="bg-muted/20 rounded-xl p-3 border">
+        <div className="text-center mb-1">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Front View - {colors.name}</span>
+        </div>
+        <svg viewBox="0 0 280 230" className="w-full max-w-[260px] mx-auto" style={{ fontFamily: 'system-ui, sans-serif' }}>
           <defs>
-            <pattern id="spiralPattern" patternUnits="userSpaceOnUse" width="8" height="8">
-              <path d="M 0,4 Q 2,0 4,4 T 8,4" fill="none" stroke="hsl(var(--chart-1))" strokeWidth="0.5" strokeOpacity="0.5"/>
-            </pattern>
-            <linearGradient id="gasketGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity="0.3"/>
-              <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity="0.1"/>
+            <linearGradient id={`gGrad-${gasketType}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={colors.accent} stopOpacity="0.25"/>
+              <stop offset="100%" stopColor={colors.accent} stopOpacity="0.08"/>
             </linearGradient>
+            {gasketType === 'spiral' && (
+              <pattern id="spiralPattern2" width="4" height="4" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r="0.8" fill={colors.accent} fillOpacity="0.4"/>
+              </pattern>
+            )}
+            <filter id="gShadow">
+              <feDropShadow dx="1" dy="1" stdDeviation="2" floodOpacity="0.15"/>
+            </filter>
           </defs>
           
           {/* Outer ring */}
-          <circle cx={cx} cy={cy} r={od} fill="url(#gasketGrad)" stroke="hsl(var(--chart-1))" strokeWidth="2"/>
-          {/* Spiral wound pattern ring */}
-          <circle cx={cx} cy={cy} r={(od + id) / 2} fill="url(#spiralPattern)" stroke="none" strokeWidth={od - id - 10}/>
-          {/* Inner ring */}
+          <circle cx={cx} cy={cy} r={od} fill={`url(#gGrad-${gasketType})`} stroke={colors.accent} strokeWidth="2" filter="url(#gShadow)"/>
+          
+          {/* Spiral windings pattern */}
+          {gasketType === 'spiral' && (
+            <>
+              <circle cx={cx} cy={cy} r={(od + id) / 2} fill="url(#spiralPattern2)" stroke="none"/>
+              {[...Array(5)].map((_, i) => (
+                <circle key={i} cx={cx} cy={cy} r={id + ((od - id) * (i + 1)) / 6} fill="none" stroke={colors.accent} strokeWidth="0.5" strokeOpacity="0.3"/>
+              ))}
+            </>
+          )}
+          
+          {/* RTJ profile indicator */}
+          {gasketType === 'rtj' && (
+            <circle cx={cx} cy={cy} r={(od + id) / 2} fill="none" stroke={colors.accent} strokeWidth={(od - id) * 0.4} strokeOpacity="0.5"/>
+          )}
+          
+          {/* Inner bore */}
           <circle cx={cx} cy={cy} r={id} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1.5"/>
           
           {/* OD dimension */}
-          <line x1={cx - od} y1={cy + od + 20} x2={cx + od} y2={cy + od + 20} stroke="hsl(var(--destructive))" strokeWidth="1.5"/>
-          <line x1={cx - od} y1={cy + od + 15} x2={cx - od} y2={cy + od + 25} stroke="hsl(var(--destructive))" strokeWidth="1"/>
-          <line x1={cx + od} y1={cy + od + 15} x2={cx + od} y2={cy + od + 25} stroke="hsl(var(--destructive))" strokeWidth="1"/>
-          <text x={cx} y={cy + od + 35} textAnchor="middle" className="text-[10px] fill-destructive font-bold">OD {gasket.outerDiameter} mm</text>
+          <line x1={cx - od} y1={cy + od + 15} x2={cx + od} y2={cy + od + 15} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <line x1={cx - od} y1={cy + od + 10} x2={cx - od} y2={cy + od + 20} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <line x1={cx + od} y1={cy + od + 10} x2={cx + od} y2={cy + od + 20} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <text x={cx} y={cy + od + 30} textAnchor="middle" fill="hsl(var(--destructive))" fontSize="9" fontWeight="bold">
+            OD = {odVal.toFixed(unitSystem === 'imperial' ? 2 : 0)} {u}
+          </text>
           
           {/* ID dimension */}
-          <line x1={cx - id} y1={cy - od - 15} x2={cx + id} y2={cy - od - 15} stroke="hsl(var(--chart-3))" strokeWidth="1.5"/>
-          <text x={cx} y={cy - od - 25} textAnchor="middle" className="text-[10px] fill-chart-3 font-bold">ID {gasket.innerDiameter} mm</text>
+          <line x1={cx - id} y1={cy} x2={cx + id} y2={cy} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
+          <text x={cx} y={cy - 8} textAnchor="middle" fill="hsl(var(--chart-3))" fontSize="8" fontWeight="600">
+            ID = {idVal.toFixed(unitSystem === 'imperial' ? 2 : 0)} {u}
+          </text>
           
-          {/* Thickness indicator */}
-          <rect x={cx + od + 20} y={cy - 15} width={8} height={30} fill="hsl(var(--chart-1)/0.3)" stroke="hsl(var(--chart-1))" strokeWidth="1"/>
-          <text x={cx + od + 45} y={cy + 5} className="text-[10px] fill-chart-1 font-bold">t = {gasket.thickness}</text>
-          
-          {/* Type label */}
-          <text x={cx} y={cy + 5} textAnchor="middle" className="text-[9px] fill-muted-foreground font-medium">SPIRAL WOUND</text>
+          {/* Center mark */}
+          <line x1={cx - 5} y1={cy} x2={cx + 5} y2={cy} stroke={colors.accent} strokeWidth="0.8"/>
+          <line x1={cx} y1={cy - 5} x2={cx} y2={cy + 5} stroke={colors.accent} strokeWidth="0.8"/>
         </svg>
       </div>
+      
+      {/* Cross Section View */}
+      <div className="bg-muted/20 rounded-xl p-3 border">
+        <div className="text-center mb-1">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Cross Section</span>
+        </div>
+        <svg viewBox="0 0 280 80" className="w-full max-w-[260px] mx-auto" style={{ fontFamily: 'system-ui, sans-serif' }}>
+          <defs>
+            <pattern id={`hatch-g-${gasketType}`} width="4" height="4" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="4" stroke={colors.accent} strokeWidth="0.5" strokeOpacity="0.5"/>
+            </pattern>
+          </defs>
+          
+          {/* Flange surfaces (context) */}
+          <rect x={30} y={15} width={220} height={12} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="1"/>
+          <rect x={30} y={53} width={220} height={12} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="1"/>
+          
+          {gasketType === 'flat' && (
+            <rect x={70} y={27} width={140} height={26} fill={`url(#hatch-g-${gasketType})`} stroke={colors.accent} strokeWidth="1.5"/>
+          )}
+          
+          {gasketType === 'spiral' && (
+            <>
+              {/* Inner ring */}
+              <rect x={70} y={30} width={8} height={20} fill="hsl(var(--foreground)/0.3)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
+              {/* Spiral section */}
+              <rect x={78} y={28} width={124} height={24} fill={`url(#hatch-g-${gasketType})`} stroke={colors.accent} strokeWidth="1.5"/>
+              {/* Outer ring */}
+              <rect x={202} y={30} width={8} height={20} fill="hsl(var(--foreground)/0.3)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
+            </>
+          )}
+          
+          {gasketType === 'rtj' && (
+            <ellipse cx={140} cy={40} rx={60} ry={12} fill={colors.light} stroke={colors.accent} strokeWidth="2"/>
+          )}
+          
+          {/* Thickness dimension */}
+          <line x1={225} y1={27} x2={225} y2={53} stroke="hsl(var(--chart-4))" strokeWidth="1.5"/>
+          <line x1={220} y1={27} x2={230} y2={27} stroke="hsl(var(--chart-4))" strokeWidth="1"/>
+          <line x1={220} y1={53} x2={230} y2={53} stroke="hsl(var(--chart-4))" strokeWidth="1"/>
+          <text x={245} y={44} fill="hsl(var(--chart-4))" fontSize="9" fontWeight="bold">
+            t = {thkVal.toFixed(1)} {u}
+          </text>
+        </svg>
+      </div>
+      
+      {/* Data Cards */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-destructive/10 border border-destructive/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">OD</div>
-          <div className="font-bold text-destructive">{gasket.outerDiameter} mm</div>
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2.5 rounded-lg text-center">
+          <div className="text-[9px] text-muted-foreground font-medium uppercase">Inner Dia</div>
+          <div className="text-sm font-bold text-primary">{idVal.toFixed(unitSystem === 'imperial' ? 2 : 0)} <span className="text-[9px] font-normal">{u}</span></div>
         </div>
-        <div className="bg-chart-3/10 border border-chart-3/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">ID</div>
-          <div className="font-bold text-chart-3">{gasket.innerDiameter} mm</div>
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2.5 rounded-lg text-center">
+          <div className="text-[9px] text-muted-foreground font-medium uppercase">Outer Dia</div>
+          <div className="text-sm font-bold text-primary">{odVal.toFixed(unitSystem === 'imperial' ? 2 : 0)} <span className="text-[9px] font-normal">{u}</span></div>
         </div>
-        <div className="bg-chart-1/10 border border-chart-1/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">Thickness</div>
-          <div className="font-bold text-chart-1">{gasket.thickness} mm</div>
+        <div className="bg-muted/50 p-2.5 rounded-lg border text-center">
+          <div className="text-[9px] text-muted-foreground uppercase">Thickness</div>
+          <div className="font-semibold text-sm">{thkVal.toFixed(1)} {u}</div>
         </div>
+      </div>
+      
+      {/* Standard Badge */}
+      <div className="flex justify-center">
+        <Badge variant="outline" className="text-[10px] bg-background/50 px-3">
+          {colors.std} • Class {gasket.pressureClass} • {gasket.size}
+        </Badge>
       </div>
     </div>
   );
 };
 
 // ==================== VALVE VISUALIZATION ====================
-const ValveVisualization = ({ valve }: { valve: typeof valveData[0] | undefined }) => {
-  if (!valve) return <div className="flex items-center justify-center h-64 text-muted-foreground">Select valve</div>;
+type ValveEndType = 'flanged' | 'buttweld' | 'threaded' | 'socketweld';
+
+const ValveVisualization = ({ 
+  valve, 
+  endType = 'flanged',
+  unitSystem = 'metric' 
+}: { 
+  valve: typeof valveData[0] | undefined;
+  endType?: ValveEndType;
+  unitSystem?: UnitSystem;
+}) => {
+  if (!valve) return (
+    <div className="flex items-center justify-center h-64 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
+      <div className="text-center">
+        <Settings2 className="w-12 h-12 mx-auto mb-2 opacity-30" />
+        <p>Select size and type</p>
+      </div>
+    </div>
+  );
+  
+  const u = getLengthUnit(unitSystem);
+  const wu = getWeightUnit(unitSystem);
+  const ffVal = convertLength(valve.faceToFace, unitSystem);
+  const htVal = convertLength(valve.height, unitSystem);
+  const wtVal = convertWeight(valve.weight, unitSystem);
+  
+  const endTypeInfo: Record<ValveEndType, { name: string; std: string }> = {
+    'flanged': { name: 'Flanged', std: 'ASME B16.10' },
+    'buttweld': { name: 'Butt Weld', std: 'ASME B16.10' },
+    'threaded': { name: 'Threaded', std: 'ASME B1.20.1' },
+    'socketweld': { name: 'Socket Weld', std: 'ASME B16.11' },
+  };
+  
+  const info = endTypeInfo[endType];
   
   return (
-    <div className="space-y-4">
-      <div className="bg-gradient-to-br from-rose-500/10 via-muted/30 to-pink-500/10 rounded-xl p-6 border border-primary/20">
-        <svg viewBox="0 0 280 240" className="w-full max-w-sm mx-auto">
+    <div className="space-y-3">
+      <div className="bg-gradient-to-br from-rose-500/10 via-muted/30 to-pink-500/10 rounded-xl p-4 border border-primary/20">
+        <div className="text-center mb-2">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{valve.type} Valve - {info.name} Ends</span>
+        </div>
+        <svg viewBox="0 0 300 240" className="w-full max-w-[280px] mx-auto" style={{ fontFamily: 'system-ui, sans-serif' }}>
           <defs>
-            <linearGradient id="valveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="hsl(var(--chart-5))" stopOpacity="0.3"/>
-              <stop offset="100%" stopColor="hsl(var(--chart-5))" stopOpacity="0.1"/>
+            <linearGradient id="valveGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="hsl(var(--chart-5))" stopOpacity="0.25"/>
+              <stop offset="100%" stopColor="hsl(var(--chart-5))" stopOpacity="0.08"/>
             </linearGradient>
+            <filter id="vShadow">
+              <feDropShadow dx="2" dy="2" stdDeviation="3" floodOpacity="0.15"/>
+            </filter>
           </defs>
           
           {valve.type === 'Gate' && (
             <>
-              {/* Valve body */}
-              <rect x={70} y={120} width={140} height={50} rx={5} fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
-              {/* Flanges */}
-              <rect x={50} y={130} width={25} height={30} rx={3} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-              <rect x={205} y={130} width={25} height={30} rx={3} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-              {/* Bonnet */}
-              <rect x={120} y={70} width={40} height={50} rx={3} fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
-              {/* Stem */}
-              <rect x={135} y={25} width={10} height={50} fill="hsl(var(--foreground)/0.3)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
+              {/* Body */}
+              <path d="M 70,175 L 70,115 L 120,100 L 180,100 L 230,115 L 230,175 L 180,185 L 120,185 Z" 
+                fill="url(#valveGrad2)" stroke="hsl(var(--chart-5))" strokeWidth="2" filter="url(#vShadow)"/>
+              {/* End connections based on type */}
+              {endType === 'flanged' && (
+                <>
+                  <rect x={45} y={125} width={30} height={40} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                  <rect x={225} y={125} width={30} height={40} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                </>
+              )}
+              {endType === 'buttweld' && (
+                <>
+                  <path d="M 55,125 L 70,130 L 70,160 L 55,165" fill="none" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+                  <path d="M 245,125 L 230,130 L 230,160 L 245,165" fill="none" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+                </>
+              )}
+              {(endType === 'threaded' || endType === 'socketweld') && (
+                <>
+                  <rect x={55} y={132} width={18} height={26} rx={3} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5" strokeDasharray={endType === 'threaded' ? "3,2" : "0"}/>
+                  <rect x={227} y={132} width={18} height={26} rx={3} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5" strokeDasharray={endType === 'threaded' ? "3,2" : "0"}/>
+                </>
+              )}
+              {/* Bonnet & Yoke */}
+              <path d="M 130,100 L 130,65 L 170,65 L 170,100" fill="url(#valveGrad2)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              <rect x={140} y={25} width={20} height={45} fill="hsl(var(--foreground)/0.2)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
               {/* Handwheel */}
-              <ellipse cx={140} cy={25} rx={30} ry={8} fill="hsl(var(--chart-5)/0.3)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              <ellipse cx={150} cy={25} rx={35} ry={8} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              {/* Gate/wedge */}
+              <rect x={142} y={75} width={16} height={55} fill="hsl(var(--primary)/0.3)" stroke="hsl(var(--primary))" strokeWidth="1"/>
+            </>
+          )}
+          
+          {valve.type === 'Globe' && (
+            <>
+              {/* Body - globe shape */}
+              <ellipse cx={150} cy={145} rx={70} ry={45} fill="url(#valveGrad2)" stroke="hsl(var(--chart-5))" strokeWidth="2" filter="url(#vShadow)"/>
+              {/* End connections */}
+              {endType === 'flanged' && (
+                <>
+                  <rect x={55} y={125} width={30} height={40} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                  <rect x={215} y={125} width={30} height={40} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                </>
+              )}
+              {/* Bonnet */}
+              <path d="M 130,100 L 130,70 L 170,70 L 170,100" fill="url(#valveGrad2)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              {/* Stem */}
+              <rect x={142} y={25} width={16} height={50} fill="hsl(var(--foreground)/0.2)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
+              {/* Handwheel */}
+              <ellipse cx={150} cy={25} rx={32} ry={7} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              {/* Disc */}
+              <circle cx={150} cy={130} r={12} fill="hsl(var(--primary)/0.3)" stroke="hsl(var(--primary))" strokeWidth="1.5"/>
             </>
           )}
           
           {valve.type === 'Ball' && (
             <>
               {/* Body */}
-              <ellipse cx={140} cy={145} rx={60} ry={40} fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
-              {/* Ball inside */}
-              <circle cx={140} cy={145} r={25} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1"/>
-              <line x1={125} y1={145} x2={155} y2={145} stroke="hsl(var(--primary))" strokeWidth="3"/>
-              {/* Ports */}
-              <rect x={50} y={130} width={35} height={30} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-              <rect x={195} y={130} width={35} height={30} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-              {/* Handle */}
-              <rect x={135} y={90} width={10} height={20} fill="hsl(var(--foreground)/0.3)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
-              <rect x={110} y={75} width={60} height={15} rx={3} fill="hsl(var(--chart-5)/0.3)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-            </>
-          )}
-          
-          {valve.type === 'Globe' && (
-            <>
-              {/* Body */}
-              <ellipse cx={140} cy={145} rx={55} ry={45} fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
-              {/* Ports */}
-              <rect x={50} y={130} width={40} height={30} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-              <rect x={190} y={130} width={40} height={30} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-              {/* Bonnet */}
-              <path d="M 120,100 L 120,70 L 160,70 L 160,100" fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
-              {/* Stem */}
-              <rect x={135} y={25} width={10} height={50} fill="hsl(var(--foreground)/0.3)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
-              {/* Handwheel */}
-              <ellipse cx={140} cy={25} rx={28} ry={7} fill="hsl(var(--chart-5)/0.3)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              <rect x={80} y={110} width={140} height={70} rx={10} fill="url(#valveGrad2)" stroke="hsl(var(--chart-5))" strokeWidth="2" filter="url(#vShadow)"/>
+              {/* Ball */}
+              <circle cx={150} cy={145} r={28} fill="hsl(var(--primary)/0.15)" stroke="hsl(var(--primary))" strokeWidth="2"/>
+              <rect x={145} y={117} width={10} height={56} fill="hsl(var(--background))" stroke="none"/>
+              {/* End connections */}
+              {endType === 'flanged' && (
+                <>
+                  <rect x={55} y={120} width={30} height={50} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                  <rect x={215} y={120} width={30} height={50} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                </>
+              )}
+              {/* Stem & handle */}
+              <rect x={145} y={75} width={10} height={40} fill="hsl(var(--foreground)/0.3)" stroke="hsl(var(--foreground))" strokeWidth="1"/>
+              <rect x={115} y={65} width={70} height={15} rx={3} fill="hsl(var(--chart-5)/0.3)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
             </>
           )}
           
           {valve.type === 'Check' && (
             <>
               {/* Body */}
-              <path d="M 70,170 L 70,120 L 140,100 L 210,120 L 210,170 L 140,190 Z" fill="url(#valveGrad)" stroke="hsl(var(--chart-5))" strokeWidth="2"/>
+              <path d="M 75,175 L 75,120 L 150,100 L 225,120 L 225,175 L 150,190 Z" fill="url(#valveGrad2)" stroke="hsl(var(--chart-5))" strokeWidth="2" filter="url(#vShadow)"/>
               {/* Swing disc */}
-              <line x1={140} y1={110} x2={140} y2={175} stroke="hsl(var(--foreground))" strokeWidth="2"/>
-              <ellipse cx={155} cy={145} rx={20} ry={30} fill="hsl(var(--chart-5)/0.3)" stroke="hsl(var(--foreground))" strokeWidth="1.5" transform="rotate(15 155 145)"/>
-              {/* Ports */}
-              <rect x={45} y={130} width={30} height={30} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-              <rect x={205} y={130} width={30} height={30} fill="hsl(var(--chart-5)/0.2)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
-              {/* Arrow */}
-              <path d="M 100,145 L 180,145 M 170,135 L 180,145 L 170,155" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"/>
+              <line x1={150} y1={105} x2={150} y2={175} stroke="hsl(var(--foreground)/0.5)" strokeWidth="1" strokeDasharray="4,2"/>
+              <ellipse cx={165} cy={145} rx={22} ry={35} fill="hsl(var(--primary)/0.2)" stroke="hsl(var(--primary))" strokeWidth="1.5" transform="rotate(12 165 145)"/>
+              {/* End connections */}
+              {endType === 'flanged' && (
+                <>
+                  <rect x={50} y={125} width={30} height={40} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                  <rect x={220} y={125} width={30} height={40} fill="hsl(var(--chart-5)/0.15)" stroke="hsl(var(--chart-5))" strokeWidth="1.5"/>
+                </>
+              )}
+              {/* Flow arrow */}
+              <path d="M 95,145 L 130,145 M 125,138 L 133,145 L 125,152" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"/>
             </>
           )}
           
-          {/* Face to Face dimension */}
-          <line x1={50} y1={200} x2={230} y2={200} stroke="hsl(var(--destructive))" strokeWidth="1.5"/>
-          <line x1={50} y1={195} x2={50} y2={205} stroke="hsl(var(--destructive))" strokeWidth="1"/>
-          <line x1={230} y1={195} x2={230} y2={205} stroke="hsl(var(--destructive))" strokeWidth="1"/>
-          <text x={140} y={218} textAnchor="middle" className="text-[10px] fill-destructive font-bold">F-F = {valve.faceToFace} mm</text>
+          {/* Face-to-Face dimension */}
+          <line x1={55} y1={205} x2={245} y2={205} stroke="hsl(var(--destructive))" strokeWidth="1.5"/>
+          <line x1={55} y1={200} x2={55} y2={210} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <line x1={245} y1={200} x2={245} y2={210} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <text x={150} y={220} textAnchor="middle" fill="hsl(var(--destructive))" fontSize="10" fontWeight="bold">
+            F-F = {ffVal.toFixed(unitSystem === 'imperial' ? 2 : 0)} {u}
+          </text>
           
           {/* Height dimension */}
-          <line x1={250} y1={25} x2={250} y2={170} stroke="hsl(var(--chart-3))" strokeWidth="1.5"/>
-          <text x={265} y={100} className="text-[10px] fill-chart-3 font-bold" transform="rotate(-90 265 100)">H = {valve.height}</text>
+          <line x1={270} y1={25} x2={270} y2={175} stroke="hsl(var(--chart-3))" strokeWidth="1.5"/>
+          <line x1={265} y1={25} x2={275} y2={25} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
+          <line x1={265} y1={175} x2={275} y2={175} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
+          <text x={280} y={105} fill="hsl(var(--chart-3))" fontSize="9" fontWeight="bold" transform="rotate(-90 280 105)">
+            H = {htVal.toFixed(0)} {u}
+          </text>
         </svg>
       </div>
+      
+      {/* Data Cards */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-destructive/10 border border-destructive/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">Face-Face</div>
-          <div className="font-bold text-destructive">{valve.faceToFace} mm</div>
+        <div className="bg-gradient-to-br from-destructive/10 to-destructive/5 border border-destructive/30 p-2.5 rounded-lg text-center">
+          <div className="text-[9px] text-muted-foreground font-medium uppercase">Face-to-Face</div>
+          <div className="text-sm font-bold text-destructive">{ffVal.toFixed(unitSystem === 'imperial' ? 2 : 0)} <span className="text-[9px] font-normal">{u}</span></div>
         </div>
-        <div className="bg-chart-3/10 border border-chart-3/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">Height</div>
-          <div className="font-bold text-chart-3">{valve.height} mm</div>
+        <div className="bg-gradient-to-br from-chart-3/10 to-chart-3/5 border border-chart-3/30 p-2.5 rounded-lg text-center">
+          <div className="text-[9px] text-muted-foreground font-medium uppercase">Height</div>
+          <div className="text-sm font-bold text-chart-3">{htVal.toFixed(0)} <span className="text-[9px] font-normal">{u}</span></div>
         </div>
-        <div className="bg-muted/50 p-3 rounded-lg text-center border">
-          <div className="text-xs text-muted-foreground">Weight</div>
-          <div className="font-semibold">{valve.weight} kg</div>
+        <div className="bg-muted/50 p-2.5 rounded-lg border text-center">
+          <div className="text-[9px] text-muted-foreground uppercase">Weight</div>
+          <div className="font-semibold text-sm">{wtVal.toFixed(1)} {wu}</div>
         </div>
+      </div>
+      
+      {/* Standard Badge */}
+      <div className="flex justify-center">
+        <Badge variant="outline" className="text-[10px] bg-background/50 px-3">
+          {info.std} • {valve.type} • Class {valve.pressureClass} • {valve.size}
+        </Badge>
       </div>
     </div>
   );
 };
 
 // ==================== SPECTACLE BLIND VISUALIZATION ====================
-const SpectacleBlindVisualization = ({ blank }: { blank: typeof lineBlankData[0] | undefined }) => {
-  if (!blank) return <div className="flex items-center justify-center h-64 text-muted-foreground">Select spectacle blind</div>;
+const SpectacleBlindVisualization = ({ 
+  blank, 
+  unitSystem = 'metric' 
+}: { 
+  blank: typeof lineBlankData[0] | undefined;
+  unitSystem?: UnitSystem;
+}) => {
+  if (!blank) return (
+    <div className="flex items-center justify-center h-64 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
+      <div className="text-center">
+        <Ban className="w-12 h-12 mx-auto mb-2 opacity-30" />
+        <p>Select size and class</p>
+      </div>
+    </div>
+  );
   
-  const scale = 0.18;
-  const od = Math.min(blank.outerDiameter * scale, 50);
+  const u = getLengthUnit(unitSystem);
+  const wu = getWeightUnit(unitSystem);
+  const odVal = convertLength(blank.outerDiameter, unitSystem);
+  const thkVal = convertLength(blank.thickness, unitSystem);
+  const hlVal = convertLength(blank.handleLength, unitSystem);
+  const wtVal = convertWeight(blank.weight, unitSystem);
+  
+  const scale = 0.16;
+  const od = Math.min(blank.outerDiameter * scale, 45);
   
   return (
-    <div className="space-y-4">
-      <div className="bg-gradient-to-br from-slate-500/10 via-muted/30 to-gray-500/10 rounded-xl p-6 border border-primary/20">
-        <svg viewBox="0 0 320 180" className="w-full max-w-md mx-auto">
+    <div className="space-y-3">
+      {/* Plan View */}
+      <div className="bg-gradient-to-br from-slate-500/10 via-muted/30 to-gray-500/10 rounded-xl p-4 border border-primary/20">
+        <div className="text-center mb-2">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Spectacle Blind - ASME B16.48</span>
+        </div>
+        <svg viewBox="0 0 340 160" className="w-full max-w-[320px] mx-auto" style={{ fontFamily: 'system-ui, sans-serif' }}>
           <defs>
-            <linearGradient id="blindGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="hsl(var(--foreground))" stopOpacity="0.15"/>
-              <stop offset="100%" stopColor="hsl(var(--foreground))" stopOpacity="0.05"/>
+            <linearGradient id="blindGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="hsl(var(--foreground))" stopOpacity="0.12"/>
+              <stop offset="100%" stopColor="hsl(var(--foreground))" stopOpacity="0.04"/>
             </linearGradient>
+            <pattern id="blindHatch" width="5" height="5" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="5" stroke="hsl(var(--foreground))" strokeWidth="0.5" strokeOpacity="0.3"/>
+            </pattern>
+            <filter id="bShadow">
+              <feDropShadow dx="2" dy="2" stdDeviation="2" floodOpacity="0.12"/>
+            </filter>
           </defs>
           
           {/* Spacer ring (left) */}
-          <circle cx={80} cy={90} r={od} fill="url(#blindGrad)" stroke="hsl(var(--foreground))" strokeWidth="2"/>
-          <circle cx={80} cy={90} r={od * 0.6} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1.5"/>
-          <text x={80} y={93} textAnchor="middle" className="text-[8px] fill-muted-foreground">SPACER</text>
+          <circle cx={75} cy={80} r={od} fill="url(#blindGrad2)" stroke="hsl(var(--foreground))" strokeWidth="2" filter="url(#bShadow)"/>
+          <circle cx={75} cy={80} r={od * 0.55} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1.5"/>
+          <text x={75} y={83} textAnchor="middle" fontSize="8" fill="hsl(var(--muted-foreground))" fontWeight="500">SPACER</text>
           
           {/* Handle bar */}
-          <rect x={120} y={75} width={80} height={30} rx={5} fill="url(#blindGrad)" stroke="hsl(var(--foreground))" strokeWidth="1.5"/>
+          <rect x={115} y={65} width={110} height={30} rx={4} fill="url(#blindGrad2)" stroke="hsl(var(--foreground))" strokeWidth="1.5"/>
           
           {/* Blind disc (right) */}
-          <circle cx={240} cy={90} r={od} fill="hsl(var(--foreground)/0.2)" stroke="hsl(var(--foreground))" strokeWidth="2"/>
-          <text x={240} y={93} textAnchor="middle" className="text-[8px] fill-muted-foreground">BLIND</text>
+          <circle cx={265} cy={80} r={od} fill="url(#blindHatch)" stroke="hsl(var(--foreground))" strokeWidth="2" filter="url(#bShadow)"/>
+          <text x={265} y={83} textAnchor="middle" fontSize="8" fill="hsl(var(--muted-foreground))" fontWeight="500">BLIND</text>
           
           {/* OD dimension */}
-          <line x1={240 - od} y1={145} x2={240 + od} y2={145} stroke="hsl(var(--destructive))" strokeWidth="1"/>
-          <text x={240} y={160} textAnchor="middle" className="text-[9px] fill-destructive font-bold">OD {blank.outerDiameter}</text>
+          <line x1={265 - od} y1={130} x2={265 + od} y2={130} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <line x1={265 - od} y1={125} x2={265 - od} y2={135} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <line x1={265 + od} y1={125} x2={265 + od} y2={135} stroke="hsl(var(--destructive))" strokeWidth="1"/>
+          <text x={265} y={145} textAnchor="middle" fontSize="9" fill="hsl(var(--destructive))" fontWeight="bold">
+            OD = {odVal.toFixed(unitSystem === 'imperial' ? 2 : 0)} {u}
+          </text>
           
           {/* Handle length */}
-          <line x1={80 - od} y1={30} x2={240 + od} y2={30} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
-          <text x={160} y={22} textAnchor="middle" className="text-[9px] fill-chart-3 font-bold">L = {blank.handleLength} mm</text>
-          
-          {/* Thickness */}
-          <rect x={280} y={75} width={15} height={30} fill="hsl(var(--chart-1)/0.3)" stroke="hsl(var(--chart-1))" strokeWidth="1"/>
-          <text x={305} y={95} className="text-[9px] fill-chart-1 font-bold">t={blank.thickness}</text>
+          <line x1={75 - od} y1={25} x2={265 + od} y2={25} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
+          <line x1={75 - od} y1={20} x2={75 - od} y2={30} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
+          <line x1={265 + od} y1={20} x2={265 + od} y2={30} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
+          <text x={170} y={18} textAnchor="middle" fontSize="9" fill="hsl(var(--chart-3))" fontWeight="bold">
+            L = {hlVal.toFixed(unitSystem === 'imperial' ? 2 : 0)} {u}
+          </text>
         </svg>
       </div>
+      
+      {/* Cross Section */}
+      <div className="bg-muted/20 rounded-xl p-3 border">
+        <div className="text-center mb-1">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Cross Section</span>
+        </div>
+        <svg viewBox="0 0 280 60" className="w-full max-w-[260px] mx-auto" style={{ fontFamily: 'system-ui, sans-serif' }}>
+          {/* Flange context */}
+          <rect x={30} y={8} width={90} height={14} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="1"/>
+          <rect x={160} y={8} width={90} height={14} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="1"/>
+          <rect x={30} y={38} width={90} height={14} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="1"/>
+          <rect x={160} y={38} width={90} height={14} fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="1"/>
+          
+          {/* Blind plate */}
+          <rect x={120} y={22} width={40} height={16} fill="hsl(var(--foreground)/0.2)" stroke="hsl(var(--foreground))" strokeWidth="1.5"/>
+          
+          {/* Thickness dimension */}
+          <line x1={165} y1={22} x2={165} y2={38} stroke="hsl(var(--chart-4))" strokeWidth="1.5"/>
+          <text x={175} y={33} fontSize="8" fill="hsl(var(--chart-4))" fontWeight="bold">t = {thkVal.toFixed(1)} {u}</text>
+        </svg>
+      </div>
+      
+      {/* Data Cards */}
       <div className="grid grid-cols-4 gap-2">
-        <div className="bg-destructive/10 border border-destructive/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">OD</div>
-          <div className="font-bold text-destructive">{blank.outerDiameter}</div>
+        <div className="bg-gradient-to-br from-destructive/10 to-destructive/5 border border-destructive/30 p-2 rounded-lg text-center">
+          <div className="text-[8px] text-muted-foreground font-medium uppercase">OD</div>
+          <div className="text-xs font-bold text-destructive">{odVal.toFixed(0)}</div>
         </div>
-        <div className="bg-chart-3/10 border border-chart-3/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">Length</div>
-          <div className="font-bold text-chart-3">{blank.handleLength}</div>
+        <div className="bg-gradient-to-br from-chart-3/10 to-chart-3/5 border border-chart-3/30 p-2 rounded-lg text-center">
+          <div className="text-[8px] text-muted-foreground font-medium uppercase">Length</div>
+          <div className="text-xs font-bold text-chart-3">{hlVal.toFixed(0)}</div>
         </div>
-        <div className="bg-chart-1/10 border border-chart-1/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">Thick</div>
-          <div className="font-bold text-chart-1">{blank.thickness}</div>
+        <div className="bg-gradient-to-br from-chart-4/10 to-chart-4/5 border border-chart-4/30 p-2 rounded-lg text-center">
+          <div className="text-[8px] text-muted-foreground font-medium uppercase">Thick</div>
+          <div className="text-xs font-bold text-chart-4">{thkVal.toFixed(1)}</div>
         </div>
-        <div className="bg-muted/50 p-3 rounded-lg text-center border">
-          <div className="text-xs text-muted-foreground">Weight</div>
-          <div className="font-semibold">{blank.weight} kg</div>
+        <div className="bg-muted/50 p-2 rounded-lg border text-center">
+          <div className="text-[8px] text-muted-foreground uppercase">Weight</div>
+          <div className="text-xs font-semibold">{wtVal.toFixed(1)} {wu}</div>
         </div>
+      </div>
+      
+      {/* Standard Badge */}
+      <div className="flex justify-center">
+        <Badge variant="outline" className="text-[10px] bg-background/50 px-3">
+          ASME B16.48 • Class {blank.pressureClass} • {blank.size}
+        </Badge>
       </div>
     </div>
   );
 };
 
 // ==================== OLET VISUALIZATION ====================
-const OletVisualization = ({ olet }: { olet: typeof oletData[0] | undefined }) => {
-  if (!olet) return <div className="flex items-center justify-center h-64 text-muted-foreground">Select olet</div>;
+const OletVisualization = ({ 
+  olet, 
+  unitSystem = 'metric' 
+}: { 
+  olet: typeof oletData[0] | undefined;
+  unitSystem?: UnitSystem;
+}) => {
+  if (!olet) return (
+    <div className="flex items-center justify-center h-64 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
+      <div className="text-center">
+        <GitBranch className="w-12 h-12 mx-auto mb-2 opacity-30" />
+        <p>Select olet type</p>
+      </div>
+    </div>
+  );
+  
+  const u = getLengthUnit(unitSystem);
+  const wu = getWeightUnit(unitSystem);
+  const lVal = convertLength(olet.length, unitSystem);
+  const wVal = convertLength(olet.width, unitSystem);
+  const wtVal = convertWeight(olet.weight, unitSystem);
   
   return (
-    <div className="space-y-4">
-      <div className="bg-gradient-to-br from-indigo-500/10 via-muted/30 to-blue-500/10 rounded-xl p-6 border border-primary/20">
-        <svg viewBox="0 0 280 200" className="w-full max-w-sm mx-auto">
+    <div className="space-y-3">
+      <div className="bg-gradient-to-br from-indigo-500/10 via-muted/30 to-blue-500/10 rounded-xl p-4 border border-primary/20">
+        <div className="text-center mb-2">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{olet.type} - MSS SP-97</span>
+        </div>
+        <svg viewBox="0 0 280 200" className="w-full max-w-[260px] mx-auto" style={{ fontFamily: 'system-ui, sans-serif' }}>
           <defs>
-            <linearGradient id="oletGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity="0.3"/>
-              <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity="0.1"/>
+            <linearGradient id="oletGrad2" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity="0.25"/>
+              <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity="0.08"/>
             </linearGradient>
           </defs>
           
-          {/* Header pipe (horizontal) */}
-          <ellipse cx={140} cy={150} rx={120} ry={30} fill="url(#oletGrad)" stroke="hsl(var(--chart-2))" strokeWidth="2"/>
-          <text x={140} y={155} textAnchor="middle" className="text-[9px] fill-muted-foreground font-medium">HEADER {olet.headerSize}</text>
+          {/* Header pipe */}
+          <ellipse cx={140} cy={150} rx={115} ry={28} fill="url(#oletGrad2)" stroke="hsl(var(--chart-2))" strokeWidth="2"/>
+          <text x={140} y={155} textAnchor="middle" fontSize="9" fill="hsl(var(--muted-foreground))" fontWeight="500">HEADER {olet.headerSize}</text>
           
           {/* Olet body */}
           <path d="M 115,120 L 115,70 Q 115,55 130,55 L 150,55 Q 165,55 165,70 L 165,120" 
-            fill="url(#oletGrad)" stroke="hsl(var(--chart-2))" strokeWidth="2"/>
+            fill="url(#oletGrad2)" stroke="hsl(var(--chart-2))" strokeWidth="2"/>
           
           {/* Branch bore */}
           <ellipse cx={140} cy={55} rx={15} ry={5} fill="hsl(var(--background))" stroke="hsl(var(--foreground))" strokeWidth="1"/>
           
-          {/* Weld prep */}
-          <path d="M 110,125 Q 115,140 120,130" fill="none" stroke="hsl(var(--destructive))" strokeWidth="1.5"/>
-          <path d="M 170,125 Q 165,140 160,130" fill="none" stroke="hsl(var(--destructive))" strokeWidth="1.5"/>
-          
           {/* L dimension */}
           <line x1={175} y1={55} x2={175} y2={140} stroke="hsl(var(--chart-3))" strokeWidth="1.5"/>
-          <line x1={170} y1={55} x2={180} y2={55} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
-          <line x1={170} y1={140} x2={180} y2={140} stroke="hsl(var(--chart-3))" strokeWidth="1"/>
-          <text x={190} y={100} className="text-[10px] fill-chart-3 font-bold">L={olet.length}</text>
+          <text x={190} y={100} fontSize="9" fill="hsl(var(--chart-3))" fontWeight="bold">L = {lVal.toFixed(0)} {u}</text>
           
           {/* W dimension */}
           <line x1={115} y1={40} x2={165} y2={40} stroke="hsl(var(--destructive))" strokeWidth="1.5"/>
-          <text x={140} y={32} textAnchor="middle" className="text-[10px] fill-destructive font-bold">W={olet.width}</text>
+          <text x={140} y={32} textAnchor="middle" fontSize="9" fill="hsl(var(--destructive))" fontWeight="bold">W = {wVal.toFixed(0)} {u}</text>
           
           {/* Branch label */}
-          <text x={140} y={75} textAnchor="middle" className="text-[9px] fill-muted-foreground">{olet.branchSize}</text>
-          
-          {/* Type label */}
-          <text x={60} y={100} className="text-[11px] fill-chart-2 font-bold">{olet.type}</text>
+          <text x={140} y={75} textAnchor="middle" fontSize="9" fill="hsl(var(--muted-foreground))">{olet.branchSize}</text>
         </svg>
       </div>
+      
+      {/* Data Cards */}
       <div className="grid grid-cols-4 gap-2">
-        <div className="bg-chart-2/10 border border-chart-2/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">Header</div>
-          <div className="font-bold text-chart-2">{olet.headerSize}</div>
+        <div className="bg-chart-2/10 border border-chart-2/30 p-2 rounded-lg text-center">
+          <div className="text-[8px] text-muted-foreground uppercase">Header</div>
+          <div className="text-xs font-bold text-chart-2">{olet.headerSize}</div>
         </div>
-        <div className="bg-primary/10 border border-primary/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">Branch</div>
-          <div className="font-bold text-primary">{olet.branchSize}</div>
+        <div className="bg-primary/10 border border-primary/30 p-2 rounded-lg text-center">
+          <div className="text-[8px] text-muted-foreground uppercase">Branch</div>
+          <div className="text-xs font-bold text-primary">{olet.branchSize}</div>
         </div>
-        <div className="bg-chart-3/10 border border-chart-3/30 p-3 rounded-lg text-center">
-          <div className="text-xs text-muted-foreground">Length</div>
-          <div className="font-bold text-chart-3">{olet.length} mm</div>
+        <div className="bg-chart-3/10 border border-chart-3/30 p-2 rounded-lg text-center">
+          <div className="text-[8px] text-muted-foreground uppercase">Length</div>
+          <div className="text-xs font-bold text-chart-3">{lVal.toFixed(0)}</div>
         </div>
-        <div className="bg-muted/50 p-3 rounded-lg text-center border">
-          <div className="text-xs text-muted-foreground">Weight</div>
-          <div className="font-semibold">{olet.weight} kg</div>
+        <div className="bg-muted/50 p-2 rounded-lg border text-center">
+          <div className="text-[8px] text-muted-foreground uppercase">Weight</div>
+          <div className="text-xs font-semibold">{wtVal.toFixed(1)} {wu}</div>
         </div>
+      </div>
+      
+      <div className="flex justify-center">
+        <Badge variant="outline" className="text-[10px] bg-background/50 px-3">
+          MSS SP-97 • {olet.type} • {olet.headerSize} × {olet.branchSize}
+        </Badge>
       </div>
     </div>
   );
