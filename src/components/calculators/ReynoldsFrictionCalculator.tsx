@@ -959,7 +959,7 @@ const ReynoldsFrictionCalculator: React.FC = () => {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart 
                 data={moodyData.data} 
-                margin={{ top: 20, right: 80, left: 20, bottom: 40 }}
+                margin={{ top: 20, right: 80, left: 60, bottom: 50 }}
               >
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 
@@ -978,18 +978,21 @@ const ReynoldsFrictionCalculator: React.FC = () => {
                   domain={[300, 100000000]}
                   tickFormatter={(v) => {
                     const exp = Math.log10(v);
-                    if (exp % 1 === 0) return `10${String.fromCharCode(8304 + exp)}`;
+                    if (exp % 1 === 0) return `10^${Math.round(exp)}`;
                     return '';
                   }}
                   ticks={[1000, 10000, 100000, 1000000, 10000000, 100000000]}
-                  label={{ value: 'Reynolds Number (Re)', position: 'bottom', offset: 15 }}
+                  tick={{ fontSize: 12 }}
+                  label={{ value: 'Reynolds Number (Re)', position: 'bottom', offset: 20, style: { fontSize: 13 } }}
                 />
                 <YAxis 
                   scale="log"
                   domain={[0.006, 0.1]}
                   tickFormatter={(v) => v.toFixed(3)}
-                  ticks={[0.006, 0.008, 0.01, 0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.1]}
-                  label={{ value: 'Darcy Friction Factor (f)', angle: -90, position: 'insideLeft', offset: 10 }}
+                  ticks={[0.008, 0.01, 0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.1]}
+                  tick={{ fontSize: 12 }}
+                  width={50}
+                  label={{ value: 'Friction Factor (f)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 13 }, dx: -10 }}
                 />
                 <Tooltip 
                   formatter={(value: number, name: string) => {
