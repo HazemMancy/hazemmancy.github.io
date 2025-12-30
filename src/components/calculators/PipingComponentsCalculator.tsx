@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   pipeData, getUniquePipeSizes, getSchedulesForPipeSize, getPipeBySchedule,
   flangeData, flangeTypes, pressureClasses, getFlange,
+  getFlangesByStandard, getFlangeSizesByStandard, getPressureClassesByStandard,
   elbowData, teeData, reducerData,
   gasketData,
   valveData, valveTypes,
@@ -17,7 +18,8 @@ import {
   oletData, oletTypes,
   flexibilityData,
   safeSpanData,
-  getUniqueSizes
+  getUniqueSizes,
+  type FlangeStandard as FlangeStandardType
 } from "@/lib/pipingComponents";
 import { Circle, Cylinder, CornerDownRight, Settings2, GitBranch, Disc, Gauge, Ban, Activity, Ruler, Globe, Thermometer, Scale } from "lucide-react";
 
@@ -60,7 +62,9 @@ const formatPipeSize = (sizeInch: string, unit: PipeSizeUnit): string => {
       '1/2"': 'DN15', '3/4"': 'DN20', '1"': 'DN25', '1-1/4"': 'DN32', '1-1/2"': 'DN40',
       '2"': 'DN50', '2-1/2"': 'DN65', '3"': 'DN80', '4"': 'DN100', '5"': 'DN125',
       '6"': 'DN150', '8"': 'DN200', '10"': 'DN250', '12"': 'DN300', '14"': 'DN350',
-      '16"': 'DN400', '18"': 'DN450', '20"': 'DN500', '24"': 'DN600'
+      '16"': 'DN400', '18"': 'DN450', '20"': 'DN500', '24"': 'DN600',
+      '26"': 'DN650', '28"': 'DN700', '30"': 'DN750', '32"': 'DN800', '34"': 'DN850',
+      '36"': 'DN900', '42"': 'DN1050', '48"': 'DN1200', '54"': 'DN1350', '60"': 'DN1500'
     };
     return dnMap[sizeInch] || sizeInch;
   }
@@ -276,20 +280,30 @@ const PipeVisualization = ({
       {/* Data Cards */}
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2.5 rounded-lg">
-          <div className="text-[9px] text-muted-foreground font-medium uppercase">Wall Thickness</div>
+          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Wall Thickness</div>
           <div className="text-base font-bold text-primary">{wt.toFixed(units.length === 'imperial' ? 3 : 2)} <span className="text-[10px] font-normal">{u}</span></div>
         </div>
         <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2.5 rounded-lg">
-          <div className="text-[9px] text-muted-foreground font-medium uppercase">Weight</div>
+          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Weight</div>
           <div className="text-base font-bold text-primary">{wpm.toFixed(2)} <span className="text-[10px] font-normal">{wu}/{units.length === 'imperial' ? 'ft' : 'm'}</span></div>
         </div>
         <div className="bg-muted/50 p-2.5 rounded-lg border">
-          <div className="text-[9px] text-muted-foreground uppercase">Internal Area</div>
-          <div className="font-semibold text-sm">{pipe.internalArea.toLocaleString()} mm²</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Internal Area</div>
+          <div className="font-semibold text-sm">
+            {units.length === 'imperial' 
+              ? (pipe.internalArea / 645.16).toFixed(3) 
+              : pipe.internalArea.toLocaleString()
+            } <span className="text-[10px] text-muted-foreground">{units.length === 'imperial' ? 'in²' : 'mm²'}</span>
+          </div>
         </div>
         <div className="bg-muted/50 p-2.5 rounded-lg border">
-          <div className="text-[9px] text-muted-foreground uppercase">Water Capacity</div>
-          <div className="font-semibold text-sm">{pipe.waterCapacity} L/m</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Water Capacity</div>
+          <div className="font-semibold text-sm">
+            {units.length === 'imperial' 
+              ? (pipe.waterCapacity * 0.264172).toFixed(3) 
+              : pipe.waterCapacity
+            } <span className="text-[10px] text-muted-foreground">{units.length === 'imperial' ? 'gal/ft' : 'L/m'}</span>
+          </div>
         </div>
       </div>
       
@@ -477,21 +491,25 @@ const FlangeVisualization = ({
       
       {/* Data Cards */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2 rounded-lg">
-          <div className="text-[9px] text-muted-foreground font-medium uppercase">Outer Diameter</div>
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2.5 rounded-lg">
+          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Outer Diameter</div>
           <div className="text-sm font-bold text-primary">{odVal.toFixed(units.length === 'imperial' ? 2 : 0)} <span className="text-[10px] font-normal">{u}</span></div>
         </div>
-        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2 rounded-lg">
-          <div className="text-[9px] text-muted-foreground font-medium uppercase">Bolt Circle</div>
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2.5 rounded-lg">
+          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Bolt Circle</div>
           <div className="text-sm font-bold text-primary">{bcdVal.toFixed(units.length === 'imperial' ? 2 : 0)} <span className="text-[10px] font-normal">{u}</span></div>
         </div>
-        <div className="bg-muted/50 p-2 rounded-lg border">
-          <div className="text-[9px] text-muted-foreground uppercase">Bolting</div>
+        <div className="bg-muted/50 p-2.5 rounded-lg border">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Bolting</div>
           <div className="font-semibold text-sm">{flange.numBolts} × {flange.boltSize}</div>
         </div>
-        <div className="bg-muted/50 p-2 rounded-lg border">
-          <div className="text-[9px] text-muted-foreground uppercase">Thickness</div>
+        <div className="bg-muted/50 p-2.5 rounded-lg border">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Thickness</div>
           <div className="font-semibold text-sm">{thkVal.toFixed(units.length === 'imperial' ? 2 : 0)} {u}</div>
+        </div>
+        <div className="bg-muted/50 p-2.5 rounded-lg border col-span-2">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Weight (approx)</div>
+          <div className="font-semibold text-sm">{convertWeight(flange.weight, units.length).toFixed(1)} {getWeightUnit(units.length)}</div>
         </div>
       </div>
       
@@ -1340,14 +1358,17 @@ const SafeSpanVisualization = ({
     <div className="flex items-center justify-center h-64 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
       <div className="text-center">
         <Ruler className="w-12 h-12 mx-auto mb-2 opacity-30" />
-        <p>Select pipe size</p>
+        <p className="text-sm">Select pipe size</p>
       </div>
     </div>
   );
   
-  const u = getLengthUnit(units.length);
-  const spanVal = convertLength(span.maxSpan * 1000, units.length) / (units.length === 'imperial' ? 12 : 1000); // Convert to ft or m
-  const spanFixedVal = convertLength(span.maxSpanFixed * 1000, units.length) / (units.length === 'imperial' ? 12 : 1000);
+  // Convert spans: data is in meters
+  const spanVal = units.length === 'imperial' ? (span.maxSpan * 3.28084) : span.maxSpan;
+  const spanFixedVal = units.length === 'imperial' ? (span.maxSpanFixed * 3.28084) : span.maxSpanFixed;
+  const deflVal = units.length === 'imperial' ? (span.deflection / 25.4) : span.deflection;
+  const spanUnit = units.length === 'imperial' ? 'ft' : 'm';
+  const deflUnit = units.length === 'imperial' ? 'in' : 'mm';
   
   return (
     <div className="space-y-3">
@@ -1374,36 +1395,38 @@ const SafeSpanVisualization = ({
           
           {/* Deflection indicator */}
           <line x1={155} y1={72} x2={155} y2={88} stroke="hsl(var(--destructive))" strokeWidth="1.5" strokeDasharray="3,2"/>
-          <text x={168} y={85} fontSize="8" fill="hsl(var(--destructive))" fontWeight="bold">δ = {span.deflection}</text>
+          <text x={168} y={85} fontSize="9" fill="hsl(var(--destructive))" fontWeight="bold">δ = {deflVal.toFixed(2)} {deflUnit}</text>
           
           {/* Span dimension */}
           <line x1={35} y1={115} x2={275} y2={115} stroke="hsl(var(--primary))" strokeWidth="1.5"/>
-          <text x={155} y={130} textAnchor="middle" fontSize="9" fill="hsl(var(--primary))" fontWeight="bold">
-            Max Span = {span.maxSpan} {units.length === 'imperial' ? 'ft' : 'm'}
+          <line x1={35} y1={110} x2={35} y2={120} stroke="hsl(var(--primary))" strokeWidth="1"/>
+          <line x1={275} y1={110} x2={275} y2={120} stroke="hsl(var(--primary))" strokeWidth="1"/>
+          <text x={155} y={130} textAnchor="middle" fontSize="10" fill="hsl(var(--primary))" fontWeight="bold">
+            Max Span = {spanVal.toFixed(1)} {spanUnit}
           </text>
           
           {/* Support labels */}
-          <text x={35} y={65} textAnchor="middle" fontSize="7" fill="hsl(var(--muted-foreground))">SUPPORT</text>
-          <text x={275} y={65} textAnchor="middle" fontSize="7" fill="hsl(var(--muted-foreground))">SUPPORT</text>
+          <text x={35} y={65} textAnchor="middle" fontSize="8" fill="hsl(var(--muted-foreground))">SUPPORT</text>
+          <text x={275} y={65} textAnchor="middle" fontSize="8" fill="hsl(var(--muted-foreground))">SUPPORT</text>
         </svg>
       </div>
       
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 p-2.5 rounded-lg">
-          <div className="text-[9px] text-muted-foreground font-medium uppercase">Simple Support</div>
-          <div className="text-base font-bold text-primary">{span.maxSpan} <span className="text-[10px] font-normal">{units.length === 'imperial' ? 'ft' : 'm'}</span></div>
+          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Simple Support</div>
+          <div className="text-base font-bold text-primary">{spanVal.toFixed(1)} <span className="text-[10px] font-normal">{spanUnit}</span></div>
         </div>
         <div className="bg-gradient-to-br from-chart-3/10 to-chart-3/5 border border-chart-3/30 p-2.5 rounded-lg">
-          <div className="text-[9px] text-muted-foreground font-medium uppercase">Fixed Support</div>
-          <div className="text-base font-bold text-chart-3">{span.maxSpanFixed} <span className="text-[10px] font-normal">{units.length === 'imperial' ? 'ft' : 'm'}</span></div>
+          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Fixed Support</div>
+          <div className="text-base font-bold text-chart-3">{spanFixedVal.toFixed(1)} <span className="text-[10px] font-normal">{spanUnit}</span></div>
         </div>
         <div className="bg-muted/50 p-2.5 rounded-lg border">
-          <div className="text-[9px] text-muted-foreground uppercase">Natural Frequency</div>
-          <div className="font-semibold text-sm">{span.naturalFrequency} Hz</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Natural Frequency</div>
+          <div className="font-semibold text-sm">{span.naturalFrequency} <span className="text-[10px] text-muted-foreground">Hz</span></div>
         </div>
         <div className="bg-muted/50 p-2.5 rounded-lg border">
-          <div className="text-[9px] text-muted-foreground uppercase">Max Deflection</div>
-          <div className="font-semibold text-sm">{span.deflection} mm</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Max Deflection</div>
+          <div className="font-semibold text-sm">{deflVal.toFixed(2)} <span className="text-[10px] text-muted-foreground">{deflUnit}</span></div>
         </div>
       </div>
       
@@ -1464,7 +1487,37 @@ export default function PipingComponentsCalculator() {
   const selectedPipe = useMemo(() => getPipeBySchedule(pipeSize, pipeSchedule), [pipeSize, pipeSchedule]);
   
   const sizes = useMemo(() => getUniqueSizes(), []);
-  const selectedFlange = useMemo(() => getFlange(selectedSize, selectedClass), [selectedSize, selectedClass]);
+  
+  // Flange sizes and classes based on selected standard
+  const flangeSizes = useMemo(() => {
+    const standardKey = selectedFlangeStandard === 'B16.36' ? 'B16.5' : selectedFlangeStandard;
+    return getFlangeSizesByStandard(standardKey as FlangeStandardType);
+  }, [selectedFlangeStandard]);
+  
+  const flangeClasses = useMemo(() => {
+    const standardKey = selectedFlangeStandard === 'B16.36' ? 'B16.5' : selectedFlangeStandard;
+    return getPressureClassesByStandard(standardKey as FlangeStandardType);
+  }, [selectedFlangeStandard]);
+  
+  // Filter flanges by selected standard
+  const filteredFlanges = useMemo(() => {
+    const standardKey = selectedFlangeStandard === 'B16.36' ? 'B16.5' : selectedFlangeStandard;
+    return getFlangesByStandard(standardKey as FlangeStandardType);
+  }, [selectedFlangeStandard]);
+  
+  const selectedFlange = useMemo(() => {
+    return filteredFlanges.find(f => f.size === selectedSize && f.pressureClass === selectedClass);
+  }, [filteredFlanges, selectedSize, selectedClass]);
+  
+  // Reset size/class when standard changes if current selection is invalid
+  useMemo(() => {
+    if (!flangeSizes.includes(selectedSize)) {
+      setSelectedSize(flangeSizes[0] || '4"');
+    }
+    if (!flangeClasses.includes(selectedClass)) {
+      setSelectedClass(flangeClasses[0] || '150');
+    }
+  }, [selectedFlangeStandard, flangeSizes, flangeClasses]);
   
   const selectedElbow = useMemo(() => elbowData.find(e => e.size === selectedFittingSize && e.type === '90LR'), [selectedFittingSize]);
   const selectedTee = useMemo(() => teeData.find(t => t.size === selectedFittingSize), [selectedFittingSize]);
@@ -1476,15 +1529,6 @@ export default function PipingComponentsCalculator() {
   const selectedOlet = useMemo(() => oletData.find(o => o.type === selectedOletType), [selectedOletType]);
   const selectedSIF = useMemo(() => flexibilityData.find(f => f.component === selectedSIFComponent), [selectedSIFComponent]);
   const selectedSpan = useMemo(() => safeSpanData.find(s => s.size === selectedSpanSize), [selectedSpanSize]);
-  
-  const getAvailableClasses = () => {
-    switch (selectedFlangeStandard) {
-      case 'B16.47A': return pressureClassesB1647A;
-      case 'B16.47B': return pressureClassesB1647B;
-      case 'B16.36': return pressureClassesB1636;
-      default: return pressureClassesB165;
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -1652,14 +1696,14 @@ export default function PipingComponentsCalculator() {
                       <Label className="text-xs font-medium">Size</Label>
                       <Select value={selectedSize} onValueChange={setSelectedSize}>
                         <SelectTrigger className="bg-background h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-popover border shadow-lg z-50">{sizes.map(s => <SelectItem key={s} value={s}>{formatPipeSize(s, units.pipeSize)}</SelectItem>)}</SelectContent>
+                        <SelectContent className="bg-popover border shadow-lg z-50">{flangeSizes.map(s => <SelectItem key={s} value={s}>{formatPipeSize(s, units.pipeSize)}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-medium">Class</Label>
                       <Select value={selectedClass} onValueChange={setSelectedClass}>
                         <SelectTrigger className="bg-background h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-popover border shadow-lg z-50">{getAvailableClasses().map(c => <SelectItem key={c} value={c}>{c}#</SelectItem>)}</SelectContent>
+                        <SelectContent className="bg-popover border shadow-lg z-50">{flangeClasses.map(c => <SelectItem key={c} value={c}>{c}#</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
@@ -1695,14 +1739,15 @@ export default function PipingComponentsCalculator() {
                       <TableRow>
                         <TableHead className="font-semibold text-xs">Size</TableHead>
                         <TableHead className="text-xs">Class</TableHead>
-                        <TableHead className="text-xs">OD</TableHead>
-                        <TableHead className="text-xs">BCD</TableHead>
+                        <TableHead className="text-xs">OD ({getLengthUnit(units.length)})</TableHead>
+                        <TableHead className="text-xs">BCD ({getLengthUnit(units.length)})</TableHead>
                         <TableHead className="text-xs">Bolts</TableHead>
-                        <TableHead className="text-xs">Thk</TableHead>
+                        <TableHead className="text-xs">Thk ({getLengthUnit(units.length)})</TableHead>
+                        <TableHead className="text-xs">Wt ({getWeightUnit(units.length)})</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {flangeData.filter(f => f.size === selectedSize).map((f, i) => (
+                      {filteredFlanges.filter(f => f.size === selectedSize).map((f, i) => (
                         <TableRow 
                           key={i} 
                           className={`cursor-pointer transition-all ${f.pressureClass === selectedClass ? "bg-primary/15 border-l-4 border-l-primary" : "hover:bg-muted/50"}`} 
@@ -1714,6 +1759,7 @@ export default function PipingComponentsCalculator() {
                           <TableCell className="text-xs">{convertLength(f.boltCircleDiameter, units.length).toFixed(units.length === 'imperial' ? 2 : 0)}</TableCell>
                           <TableCell className="text-xs font-mono">{f.numBolts}×{f.boltSize}</TableCell>
                           <TableCell className="text-xs">{convertLength(f.thickness, units.length).toFixed(units.length === 'imperial' ? 2 : 0)}</TableCell>
+                          <TableCell className="text-xs">{convertWeight(f.weight, units.length).toFixed(1)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
