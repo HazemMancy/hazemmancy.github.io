@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container, Shield } from "lucide-react";
+import { ArrowLeft, Calculator, Flame, Droplets, Thermometer, Gauge, Wind, Beaker, Container, Shield, Activity } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -85,6 +85,15 @@ const calculators: CalculatorCard[] = [
     route: "/calculators/api-520",
     status: "available",
     category: "Pressure Relief"
+  },
+  {
+    id: "reynolds-friction",
+    title: "Reynolds Number & Friction Factor",
+    description: "Calculate Reynolds number, flow regime, and friction factor using Colebrook-White iterative solver",
+    icon: <Activity className="w-8 h-8" />,
+    route: "/calculators/reynolds-friction",
+    status: "available",
+    category: "Fluid Mechanics"
   }
 ];
 
