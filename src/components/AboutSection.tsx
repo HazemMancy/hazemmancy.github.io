@@ -21,9 +21,9 @@ const AboutSection = () => {
             <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
               Process Engineer specializing in <span className="text-foreground font-medium">Oil & Gas FEED and detailed design</span>, 
               with expertise in process simulation (Aspen HYSYS, EDR, HTRI), equipment sizing, and hydraulic calculations. 
-              Proven track record in developing <span className="text-primary">PFDs, P&IDs, H&MBs, and process philosophies</span> for 
-              EPC projects in compliance with API & ASME standards. Adept at cross-disciplinary coordination and data-driven 
-              optimization, leveraging strong analytical skills to translate complex technical concepts for non-technical stakeholders.
+              Proven track record in developing <span className="text-primary">PFDs, P&IDs, UFDs, H&MBs, BODs, C&E Diagrams, Equipment Datasheets, Equipment Lists, and Studies Reports</span> for 
+              EPC projects in compliance with API & ASME standards. Skilled in process philosophies and cross-disciplinary coordination, 
+              leveraging strong analytical skills to translate complex technical concepts for stakeholders.
             </p>
           </div>
 
@@ -44,9 +44,17 @@ const AboutSection = () => {
               <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-primary/20 transition-colors">
                 <Award className="w-5 sm:w-6 h-5 sm:h-6 text-primary" />
               </div>
-              <h3 className="font-heading font-semibold text-base sm:text-lg text-foreground mb-2">Certifications</h3>
-              <p className="text-muted-foreground text-sm mb-1">Aspen Certified Expert User in Aspen HYSYS</p>
-              <p className="text-primary text-sm font-medium">Google Data Analytics Certificate</p>
+              <h3 className="font-heading font-semibold text-base sm:text-lg text-foreground mb-3">Certifications</h3>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                  <p className="text-muted-foreground text-sm">Aspen Certified Expert User in Aspen HYSYS</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                  <p className="text-muted-foreground text-sm">Google Data Analytics Certificate</p>
+                </div>
+              </div>
             </div>
 
             {/* Experience */}
