@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { AlertTriangle, CheckCircle, Info, Gauge, Thermometer, Wind, Zap, TrendingUp, HelpCircle } from 'lucide-react';
 import CompressorPerformanceCurves from './CompressorPerformanceCurves';
 import CompressorSelectionGuide from './CompressorSelectionGuide';
+import CompressorGuide from './guides/CompressorGuide';
 
 // Gas properties database
 const gasDatabase: Record<string, { name: string; mw: number; k: number; z: number; cp: number }> = {
@@ -785,24 +786,9 @@ const CompressorPowerCalculator: React.FC = () => {
               )}
             </TabsContent>
 
-            {/* Selection Guide Tab */}
+            {/* Guide Tab */}
             <TabsContent value="guide" className="space-y-4">
-              {results && (
-                <CompressorSelectionGuide
-                  flowRate={results.actualFlow}
-                  compressionRatio={results.compressionRatio}
-                  molecularWeight={inputs.molecularWeight}
-                  dischargePressure={convertPressure(inputs.dischargePressure, inputs.pressureUnit, 'bara')}
-                  gasType={inputs.gasType}
-                />
-              )}
-              {!results && (
-                <Card>
-                  <CardContent className="py-8 text-center text-muted-foreground">
-                    Enter operating conditions to see selection recommendations
-                  </CardContent>
-                </Card>
-              )}
+              <CompressorGuide />
             </TabsContent>
           </Tabs>
         </div>
