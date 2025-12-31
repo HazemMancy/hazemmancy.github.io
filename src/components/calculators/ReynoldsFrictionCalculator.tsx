@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Info, Droplets, Wind, AlertTriangle, Thermometer, Database } from 'lucide-react';
+import { Info, Droplets, Wind, AlertTriangle, Thermometer, Database, HelpCircle } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import {
   LineChart,
@@ -25,6 +25,7 @@ import {
 } from 'recharts';
 import { getFluidProperties, getFluidsByCategory, fluidDatabase } from '@/lib/fluidProperties';
 import { getNominalSizes, getSchedulesForSize, getInsideDiameter } from '@/lib/pipeSchedule';
+import ReynoldsGuide from './guides/ReynoldsGuide';
 
 // Unit conversion factors
 const lengthConversions: Record<string, number> = {
@@ -71,19 +72,30 @@ const flowRateConversions: Record<string, number> = {
   'bbl/d': 0.00000184013,
 };
 
-// Standard pipe roughness values (in meters)
+// Standard pipe roughness values (in meters) - comprehensive list per API/ASME standards
 const pipeRoughness: Record<string, number> = {
-  'Commercial Steel': 0.000045,
-  'Stainless Steel': 0.000015,
   'Carbon Steel (new)': 0.000046,
-  'Carbon Steel (corroded)': 0.00015,
+  'Carbon Steel (moderately corroded)': 0.00015,
+  'Carbon Steel (severely corroded)': 0.0009,
+  'Commercial Steel': 0.000045,
+  'Stainless Steel (304/316)': 0.000015,
+  'Duplex Stainless Steel': 0.000015,
   'Cast Iron': 0.00026,
+  'Ductile Iron': 0.00012,
   'Galvanized Iron': 0.00015,
   'PVC': 0.0000015,
   'HDPE': 0.000007,
   'Copper': 0.0000015,
+  'Brass': 0.0000015,
   'Concrete': 0.003,
   'Glass': 0.0000015,
+  'Fiberglass (FRP)': 0.000005,
+  'Lined Pipe (Epoxy)': 0.000006,
+  'Lined Pipe (Rubber)': 0.00015,
+  'Titanium': 0.000015,
+  'Inconel': 0.000015,
+  'Monel': 0.000015,
+  'Hastelloy': 0.000015,
   'Custom': 0,
 };
 
@@ -124,8 +136,8 @@ const ReynoldsFrictionCalculator: React.FC = () => {
     densityUnit: 'kg/m³',
     viscosity: 1.0,
     viscosityUnit: 'cP',
-    roughnessMaterial: 'Commercial Steel',
-    roughness: 0.045,
+    roughnessMaterial: 'Carbon Steel (new)',
+    roughness: 0.046,
     roughnessUnit: 'mm',
     selectedFluid: '',
     fluidTemperature: 25,
@@ -133,6 +145,8 @@ const ReynoldsFrictionCalculator: React.FC = () => {
     nominalSize: '4"',
     schedule: '40/STD',
   });
+
+  const [activeTab, setActiveTab] = useState('calculator');
 
   // Get fluid categories for grouped dropdown
   const fluidCategories = useMemo(() => getFluidsByCategory(), []);
@@ -467,7 +481,23 @@ const ReynoldsFrictionCalculator: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsTrigger value="calculator" className="flex items-center gap-2">
+          <Wind className="h-4 w-4" />
+          Calculator
+        </TabsTrigger>
+        <TabsTrigger value="guide" className="flex items-center gap-2">
+          <HelpCircle className="h-4 w-4" />
+          Guide
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="guide">
+        <ReynoldsGuide />
+      </TabsContent>
+
+      <TabsContent value="calculator" className="space-y-6">
       {/* Theory Overview */}
       <Card className="border-primary/20 bg-primary/5">
         <CardHeader className="pb-3">
@@ -1104,7 +1134,7 @@ const ReynoldsFrictionCalculator: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <div className="w-6 h-1 bg-primary"></div>
-              <span>Current ε/D = {results.relativeRoughness.toExponential(2)}</span>
+              <span>{inputs.roughnessMaterial} (ε/D = {results.relativeRoughness.toExponential(2)})</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-destructive"></div>
@@ -1113,6 +1143,22 @@ const ReynoldsFrictionCalculator: React.FC = () => {
             <div className="flex items-center gap-2">
               <div className="w-6 h-4 bg-muted/50"></div>
               <span>Transitional Zone</span>
+            </div>
+          </div>
+          
+          {/* Pipe Material Reference Table */}
+          <div className="mt-4 p-4 bg-muted/30 rounded-lg">
+            <h4 className="text-sm font-medium mb-3">Pipe Material Roughness Reference (ε in meters)</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              {Object.entries(pipeRoughness).filter(([key]) => key !== 'Custom').slice(0, 12).map(([material, roughness]) => (
+                <div 
+                  key={material} 
+                  className={`p-2 rounded ${inputs.roughnessMaterial === material ? 'bg-primary/20 border border-primary' : 'bg-background/50'}`}
+                >
+                  <span className="text-muted-foreground block truncate">{material}</span>
+                  <span className="font-mono">{roughness.toExponential(2)} m</span>
+                </div>
+              ))}
             </div>
           </div>
         </CardContent>
@@ -1182,7 +1228,8 @@ const ReynoldsFrictionCalculator: React.FC = () => {
           </Tabs>
         </CardContent>
       </Card>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 };
 
