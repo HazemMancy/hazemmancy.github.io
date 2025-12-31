@@ -5,7 +5,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Gauge, ArrowRight, AlertTriangle, Info, CheckCircle2, Wind, Droplets, Waves } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Gauge, ArrowRight, AlertTriangle, Info, CheckCircle2, Wind, Droplets, Waves, Ruler } from "lucide-react";
+
+// ================== TYPE DEFINITIONS ==================
+type UnitSystem = 'metric' | 'imperial';
 
 // Darcy-Weisbach is the only method used - matching HYSYS calculations
 
@@ -376,6 +380,20 @@ interface HydraulicSizingCalculatorProps {
 }
 
 const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps) => {
+  // Unit system state
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>('metric');
+
+  // Get unit options based on system
+  const flowRateUnits = unitSystem === 'metric' 
+    ? (lineType === "gas" ? ["MMSCFD", "Nm³/h", "Sm³/h", "m³/h"] : ["m³/h", "m³/s", "L/min", "L/s"])
+    : (lineType === "gas" ? ["MMSCFD", "SCFM"] : ["gpm", "bbl/d", "ft³/min"]);
+  
+  const lengthUnits = unitSystem === 'metric' ? ["m", "km"] : ["ft", "mi"];
+  const diameterUnits = unitSystem === 'metric' ? ["mm"] : ["in"];
+  const densityUnits = unitSystem === 'metric' ? ["kg/m³", "g/cm³"] : ["lb/ft³", "lb/gal"];
+  const pressureUnits = unitSystem === 'metric' ? ["bar", "kPa", "Pa"] : ["psi", "psia"];
+  const roughnessUnits = unitSystem === 'metric' ? ["mm", "μm"] : ["in"];
+
   // Input states
   const [pipeLength, setPipeLength] = useState<string>("18");
   const [lengthUnit, setLengthUnit] = useState<string>("km");
@@ -394,6 +412,36 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [roughnessUnit, setRoughnessUnit] = useState<string>("mm");
   const [pressureUnit, setPressureUnit] = useState<string>("bar");
   const [fluidTemperature, setFluidTemperature] = useState<string>("15");
+
+  // Handle unit system change
+  const handleUnitSystemChange = (isImperial: boolean) => {
+    const newSystem = isImperial ? 'imperial' : 'metric';
+    setUnitSystem(newSystem);
+    
+    if (newSystem === 'imperial') {
+      setLengthUnit("ft");
+      setDiameterUnit("in");
+      setDensityUnit("lb/ft³");
+      setPressureUnit("psi");
+      setRoughnessUnit("in");
+      if (lineType === "gas") {
+        setFlowRateUnit("MMSCFD");
+      } else {
+        setFlowRateUnit("gpm");
+      }
+    } else {
+      setLengthUnit("km");
+      setDiameterUnit("mm");
+      setDensityUnit("kg/m³");
+      setPressureUnit("bar");
+      setRoughnessUnit("mm");
+      if (lineType === "gas") {
+        setFlowRateUnit("MMSCFD");
+      } else {
+        setFlowRateUnit("m³/h");
+      }
+    }
+  };
   
   // Operating conditions for gas (editable)
   const [inletPressure, setInletPressure] = useState<string>("12"); // barg (user enters gauge pressure)
@@ -1021,6 +1069,21 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 </p>
               </div>
             </div>
+            
+            {/* Unit System Toggle */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+              <Ruler className="w-4 h-4 text-muted-foreground" />
+              <span className={`text-sm font-medium ${unitSystem === 'metric' ? 'text-primary' : 'text-muted-foreground'}`}>
+                Metric
+              </span>
+              <Switch
+                checked={unitSystem === 'imperial'}
+                onCheckedChange={handleUnitSystemChange}
+              />
+              <span className={`text-sm font-medium ${unitSystem === 'imperial' ? 'text-primary' : 'text-muted-foreground'}`}>
+                Imperial
+              </span>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1181,8 +1244,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="m">m</SelectItem>
-                      <SelectItem value="km">km</SelectItem>
+                      {lengthUnits.map((unit) => (
+                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1231,8 +1295,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="mm">mm</SelectItem>
-                      <SelectItem value="in">in</SelectItem>
+                      {diameterUnits.map((unit) => (
+                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1277,9 +1342,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="mm">mm</SelectItem>
-                        <SelectItem value="μm">μm</SelectItem>
-                        <SelectItem value="in">in</SelectItem>
+                        {roughnessUnits.map((unit) => (
+                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1337,15 +1402,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {lineType === "gas" ? (
-                          Object.keys(gasVolumetricFlowRateToM3s).map((unit) => (
-                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                          ))
-                        ) : (
-                          Object.keys(liquidFlowRateToM3s).map((unit) => (
-                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                          ))
-                        )}
+                        {flowRateUnits.map((unit) => (
+                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

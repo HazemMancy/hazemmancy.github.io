@@ -5,6 +5,8 @@ const responsibilities = [
   "Performing hydraulic calculation & line sizing",
   "Equipment sizing and specifications",
   "Developing PFDs, P&IDs, UFDs, and process philosophies",
+  "Developing BOD, C&E Diagrams, and Equipment Datasheets",
+  "Preparing Equipment Lists and Studies Reports",
   "Process simulation using Aspen HYSYS, EDR, and HTRI",
   "Relief valve sizing and safety analysis",
   "Cross-disciplinary coordination with engineering teams",
