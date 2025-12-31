@@ -16,20 +16,20 @@ const LATENT_HEAT_HEXANE = 334; // kJ/kg (reference fluid)
 
 // Standard PVRV sizes per API RP 526 (for tank venting applications)
 const PVRV_STANDARD_SIZES = [
-  { designation: 'D', orificeArea: 71, effectiveArea: 50, inletSize: '1"', outletSize: '2"', capacitySCFH: 2500 },
-  { designation: 'E', orificeArea: 126, effectiveArea: 90, inletSize: '1"', outletSize: '2"', capacitySCFH: 4000 },
-  { designation: 'F', orificeArea: 198, effectiveArea: 140, inletSize: '1.5"', outletSize: '2.5"', capacitySCFH: 6500 },
-  { designation: 'G', orificeArea: 325, effectiveArea: 230, inletSize: '2"', outletSize: '3"', capacitySCFH: 10500 },
-  { designation: 'H', orificeArea: 506, effectiveArea: 360, inletSize: '2.5"', outletSize: '4"', capacitySCFH: 16500 },
-  { designation: 'J', orificeArea: 830, effectiveArea: 590, inletSize: '3"', outletSize: '4"', capacitySCFH: 27000 },
-  { designation: 'K', orificeArea: 1186, effectiveArea: 840, inletSize: '3"', outletSize: '6"', capacitySCFH: 38500 },
-  { designation: 'L', orificeArea: 1841, effectiveArea: 1300, inletSize: '4"', outletSize: '6"', capacitySCFH: 60000 },
-  { designation: 'M', orificeArea: 2323, effectiveArea: 1650, inletSize: '4"', outletSize: '6"', capacitySCFH: 75500 },
-  { designation: 'N', orificeArea: 2800, effectiveArea: 2000, inletSize: '4"', outletSize: '6"', capacitySCFH: 91000 },
-  { designation: 'P', orificeArea: 4116, effectiveArea: 2900, inletSize: '6"', outletSize: '8"', capacitySCFH: 134000 },
-  { designation: 'Q', orificeArea: 7129, effectiveArea: 5050, inletSize: '6"', outletSize: '10"', capacitySCFH: 232000 },
-  { designation: 'R', orificeArea: 10323, effectiveArea: 7300, inletSize: '8"', outletSize: '10"', capacitySCFH: 335000 },
-  { designation: 'T', orificeArea: 16774, effectiveArea: 11900, inletSize: '8"', outletSize: '12"', capacitySCFH: 545000 },
+  { designation: 'D', orificeArea: 71, effectiveArea: 50, inletSize: '1"', inletSizeMM: 25, outletSize: '2"', outletSizeMM: 50, capacitySCFH: 2500 },
+  { designation: 'E', orificeArea: 126, effectiveArea: 90, inletSize: '1"', inletSizeMM: 25, outletSize: '2"', outletSizeMM: 50, capacitySCFH: 4000 },
+  { designation: 'F', orificeArea: 198, effectiveArea: 140, inletSize: '1.5"', inletSizeMM: 40, outletSize: '2.5"', outletSizeMM: 65, capacitySCFH: 6500 },
+  { designation: 'G', orificeArea: 325, effectiveArea: 230, inletSize: '2"', inletSizeMM: 50, outletSize: '3"', outletSizeMM: 80, capacitySCFH: 10500 },
+  { designation: 'H', orificeArea: 506, effectiveArea: 360, inletSize: '2.5"', inletSizeMM: 65, outletSize: '4"', outletSizeMM: 100, capacitySCFH: 16500 },
+  { designation: 'J', orificeArea: 830, effectiveArea: 590, inletSize: '3"', inletSizeMM: 80, outletSize: '4"', outletSizeMM: 100, capacitySCFH: 27000 },
+  { designation: 'K', orificeArea: 1186, effectiveArea: 840, inletSize: '3"', inletSizeMM: 80, outletSize: '6"', outletSizeMM: 150, capacitySCFH: 38500 },
+  { designation: 'L', orificeArea: 1841, effectiveArea: 1300, inletSize: '4"', inletSizeMM: 100, outletSize: '6"', outletSizeMM: 150, capacitySCFH: 60000 },
+  { designation: 'M', orificeArea: 2323, effectiveArea: 1650, inletSize: '4"', inletSizeMM: 100, outletSize: '6"', outletSizeMM: 150, capacitySCFH: 75500 },
+  { designation: 'N', orificeArea: 2800, effectiveArea: 2000, inletSize: '4"', inletSizeMM: 100, outletSize: '6"', outletSizeMM: 150, capacitySCFH: 91000 },
+  { designation: 'P', orificeArea: 4116, effectiveArea: 2900, inletSize: '6"', inletSizeMM: 150, outletSize: '8"', outletSizeMM: 200, capacitySCFH: 134000 },
+  { designation: 'Q', orificeArea: 7129, effectiveArea: 5050, inletSize: '6"', inletSizeMM: 150, outletSize: '10"', outletSizeMM: 250, capacitySCFH: 232000 },
+  { designation: 'R', orificeArea: 10323, effectiveArea: 7300, inletSize: '8"', inletSizeMM: 200, outletSize: '10"', outletSizeMM: 250, capacitySCFH: 335000 },
+  { designation: 'T', orificeArea: 16774, effectiveArea: 11900, inletSize: '8"', inletSizeMM: 200, outletSize: '12"', outletSizeMM: 300, capacitySCFH: 545000 },
 ];
 
 const selectPVRVSize = (requiredCapacitySCFH: number) => {
@@ -894,7 +894,7 @@ function ValveSizingCalculator() {
                         </Badge>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div><span className="text-muted-foreground">Inlet × Outlet:</span> <span className="font-medium">{results.selectedPressureSize.inletSize} × {results.selectedPressureSize.outletSize}</span></div>
+                        <div><span className="text-muted-foreground">Inlet × Outlet:</span> <span className="font-medium">{results.selectedPressureSize.inletSize} ({results.selectedPressureSize.inletSizeMM}mm) × {results.selectedPressureSize.outletSize} ({results.selectedPressureSize.outletSizeMM}mm)</span></div>
                         <div><span className="text-muted-foreground">Capacity:</span> <span className="font-medium">{results.selectedPressureSize.capacitySCFH.toLocaleString()} SCFH</span></div>
                         <div><span className="text-muted-foreground">Orifice Area:</span> <span className="font-medium">{results.selectedPressureSize.orificeArea} mm²</span></div>
                         <div><span className="text-muted-foreground">Utilization:</span> <span className={`font-bold ${results.pressureUtilization > 90 ? 'text-amber-500' : 'text-green-500'}`}>{results.pressureUtilization.toFixed(1)}%</span></div>
@@ -942,7 +942,7 @@ function ValveSizingCalculator() {
                         </Badge>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div><span className="text-muted-foreground">Inlet × Outlet:</span> <span className="font-medium">{results.selectedVacuumSize.inletSize} × {results.selectedVacuumSize.outletSize}</span></div>
+                        <div><span className="text-muted-foreground">Inlet × Outlet:</span> <span className="font-medium">{results.selectedVacuumSize.inletSize} ({results.selectedVacuumSize.inletSizeMM}mm) × {results.selectedVacuumSize.outletSize} ({results.selectedVacuumSize.outletSizeMM}mm)</span></div>
                         <div><span className="text-muted-foreground">Capacity:</span> <span className="font-medium">{results.selectedVacuumSize.capacitySCFH.toLocaleString()} SCFH</span></div>
                         <div><span className="text-muted-foreground">Orifice Area:</span> <span className="font-medium">{results.selectedVacuumSize.orificeArea} mm²</span></div>
                         <div><span className="text-muted-foreground">Utilization:</span> <span className={`font-bold ${results.vacuumUtilization > 90 ? 'text-amber-500' : 'text-green-500'}`}>{results.vacuumUtilization.toFixed(1)}%</span></div>
@@ -971,7 +971,8 @@ function ValveSizingCalculator() {
                 <TableRow>
                   <TableHead>Size</TableHead>
                   <TableHead>Orifice Area (mm²)</TableHead>
-                  <TableHead>Inlet × Outlet</TableHead>
+                  <TableHead>Inlet (in / mm)</TableHead>
+                  <TableHead>Outlet (in / mm)</TableHead>
                   <TableHead>Capacity (SCFH)</TableHead>
                   <TableHead>Utilization</TableHead>
                   <TableHead>Status</TableHead>
@@ -992,7 +993,8 @@ function ValveSizingCalculator() {
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono">{size.orificeArea}</TableCell>
-                      <TableCell>{size.inletSize} × {size.outletSize}</TableCell>
+                      <TableCell>{size.inletSize} / {size.inletSizeMM}mm</TableCell>
+                      <TableCell>{size.outletSize} / {size.outletSizeMM}mm</TableCell>
                       <TableCell className="font-mono">{size.capacitySCFH.toLocaleString()}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

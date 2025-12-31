@@ -6,8 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Gauge, AlertTriangle, CheckCircle2, Info, Zap, Droplets, ArrowUpCircle, Activity, Ruler, Thermometer } from "lucide-react";
+import { Gauge, AlertTriangle, CheckCircle2, Info, Zap, Droplets, ArrowUpCircle, Activity, Ruler, Thermometer, TrendingUp, HelpCircle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import PumpPerformanceCurves from "./PumpPerformanceCurves";
+import PumpGuide from "./guides/PumpGuide";
 
 // ================== TYPE DEFINITIONS ==================
 
@@ -903,10 +905,10 @@ const PumpSizingCalculator = () => {
 
       {/* Input Tabs */}
       <Tabs defaultValue="flow" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="flow" className="text-xs sm:text-sm">
             <Droplets className="w-4 h-4 mr-1 hidden sm:inline" />
-            Flow & Fluid
+            Flow
           </TabsTrigger>
           <TabsTrigger value="suction" className="text-xs sm:text-sm">
             <ArrowUpCircle className="w-4 h-4 mr-1 hidden sm:inline rotate-180" />
@@ -923,6 +925,14 @@ const PumpSizingCalculator = () => {
           <TabsTrigger value="pump" className="text-xs sm:text-sm">
             <Gauge className="w-4 h-4 mr-1 hidden sm:inline" />
             Pump
+          </TabsTrigger>
+          <TabsTrigger value="curves" className="text-xs sm:text-sm">
+            <TrendingUp className="w-4 h-4 mr-1 hidden sm:inline" />
+            Curves
+          </TabsTrigger>
+          <TabsTrigger value="guide" className="text-xs sm:text-sm">
+            <HelpCircle className="w-4 h-4 mr-1 hidden sm:inline" />
+            Guide
           </TabsTrigger>
         </TabsList>
 
@@ -1755,6 +1765,24 @@ const PumpSizingCalculator = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Pump Curves Tab */}
+        <TabsContent value="curves">
+          <PumpPerformanceCurves
+            operatingFlow={calculations.flowRate_m3h}
+            operatingHead={calculations.totalHead}
+            operatingEfficiency={parseFloat(pumpEfficiency) || 75}
+            operatingPower={calculations.brakePower_kW}
+            npshr={parseFloat(npshrMargin) || 3}
+            npsha={calculations.npshaValue}
+            pumpType={selectedPumpInfo?.name || 'centrifugal'}
+          />
+        </TabsContent>
+
+        {/* Guide Tab */}
+        <TabsContent value="guide">
+          <PumpGuide />
         </TabsContent>
       </Tabs>
 

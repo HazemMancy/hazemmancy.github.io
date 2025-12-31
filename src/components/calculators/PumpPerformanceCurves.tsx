@@ -17,12 +17,14 @@ import {
 } from 'recharts';
 import { TrendingUp, AlertTriangle, Target } from 'lucide-react';
 
-interface PerformanceCurvesProps {
-  operatingFlow: number; // Actual flow m³/h
-  operatingHead: number; // kJ/kg
+interface PumpPerformanceCurvesProps {
+  operatingFlow: number; // m³/h
+  operatingHead: number; // m
   operatingEfficiency: number; // %
-  compressionRatio: number;
-  compressorType: string;
+  operatingPower: number; // kW
+  npshr: number; // m
+  npsha: number; // m
+  pumpType: string;
 }
 
 interface CurvePoint {
@@ -30,117 +32,109 @@ interface CurvePoint {
   head: number;
   efficiency: number;
   power: number;
-  surge?: number;
-  stonewall?: number;
+  npshr: number;
 }
 
-const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
+const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
   operatingFlow,
   operatingHead,
   operatingEfficiency,
-  compressionRatio,
-  compressorType
+  operatingPower,
+  npshr,
+  npsha,
+  pumpType
 }) => {
-  // Generate performance curve data based on operating point
+  // Generate pump performance curve data based on operating point
   const curveData = useMemo(() => {
     const points: CurvePoint[] = [];
     const designFlow = operatingFlow;
     const designHead = operatingHead;
     
-    // Flow range: 40% to 130% of design flow
-    const minFlow = designFlow * 0.4;
-    const maxFlow = designFlow * 1.3;
-    const flowStep = (maxFlow - minFlow) / 30;
+    // Flow range: 0% to 140% of design flow
+    const minFlow = 0;
+    const maxFlow = designFlow * 1.4;
+    const flowStep = maxFlow / 30;
     
-    // Surge point typically at 50-70% of design flow for centrifugal
-    const surgeFlowRatio = compressorType === 'axial' ? 0.75 : 
-                           compressorType === 'centrifugal' ? 0.6 : 0.5;
-    const surgeFlow = designFlow * surgeFlowRatio;
+    // Determine head-flow characteristic based on pump type
+    let shutoffHeadRatio: number;
+    let steepness: number;
     
-    // Stonewall (choke) typically at 110-120% of design flow
-    const stonewallFlow = designFlow * 1.15;
+    if (pumpType.includes('axial') || pumpType.includes('mixed')) {
+      shutoffHeadRatio = 1.15; // Flatter curve
+      steepness = 1.5;
+    } else if (pumpType.includes('radial')) {
+      shutoffHeadRatio = 1.30; // Steeper curve
+      steepness = 2.2;
+    } else {
+      shutoffHeadRatio = 1.20; // Typical centrifugal
+      steepness = 2.0;
+    }
+    
+    const shutoffHead = designHead * shutoffHeadRatio;
     
     for (let i = 0; i <= 30; i++) {
       const flow = minFlow + (i * flowStep);
       const flowRatio = flow / designFlow;
       
-      // Head-flow curve (parabolic characteristic)
-      // H = H_design * (1 + a*(1 - Q/Q_design)^2) where a depends on compressor type
-      let headCoeff: number;
-      switch (compressorType) {
-        case 'centrifugal':
-          headCoeff = 0.3; // Relatively flat curve
-          break;
-        case 'axial':
-          headCoeff = 0.15; // Flatter curve
-          break;
-        case 'reciprocating':
-          headCoeff = 0.5; // Steeper curve
-          break;
-        default:
-          headCoeff = 0.35;
+      // Head-flow curve: H = Hso - k * Q^n
+      // Normalized: H/Hdesign = (Hso/Hdesign) - ((Hso/Hdesign - 1) * (Q/Qdesign)^n)
+      const head = Math.max(0, shutoffHead - (shutoffHead - designHead) * Math.pow(flowRatio, steepness));
+      
+      // Efficiency curve (bell-shaped, peaks near BEP)
+      const effPeak = operatingEfficiency;
+      let efficiency: number;
+      if (flowRatio < 0.1) {
+        efficiency = 0;
+      } else {
+        const effWidth = 0.5; // Width of efficiency curve
+        efficiency = Math.max(0, effPeak * Math.exp(-Math.pow((flowRatio - 1) / effWidth, 2)));
       }
       
-      const head = designHead * (1 + headCoeff * Math.pow(1 - flowRatio, 2) - 0.2 * Math.pow(flowRatio - 1, 2));
+      // Power curve: P = ρgQH/η (approximately proportional to Q for centrifugal)
+      const power = flow > 0 && efficiency > 0 
+        ? (flow / 3600) * head * 9.81 * 1000 / (efficiency / 100) / 1000 
+        : operatingPower * 0.3; // Shutoff power (about 30% for centrifugal)
       
-      // Efficiency curve (bell-shaped, peaks near design point)
-      const effPeak = operatingEfficiency;
-      const effDropoff = compressorType === 'axial' ? 15 : 20;
-      const efficiency = Math.max(0, effPeak - effDropoff * Math.pow(flowRatio - 1, 2) * 100);
-      
-      // Power curve (roughly proportional to flow * head / efficiency)
-      const power = (flow * head) / (efficiency > 0 ? efficiency / 100 : 0.5) * 0.001;
-      
-      // Surge line (increases with flow, intersects head curve at surge point)
-      const surgeHead = designHead * 1.1 * Math.pow(flow / surgeFlow, 2);
-      
-      // Only show surge region for dynamic compressors
-      const showSurge = ['centrifugal', 'axial'].includes(compressorType);
+      // NPSHr curve (increases with flow squared)
+      const npshrValue = npshr * Math.pow(flowRatio, 2) * 0.8 + npshr * 0.2;
       
       points.push({
-        flow: Math.round(flow),
+        flow: Math.round(flow * 10) / 10,
         head: Math.max(0, head),
         efficiency: Math.max(0, Math.min(100, efficiency)),
         power: Math.max(0, power),
-        surge: showSurge ? surgeHead : undefined,
-        stonewall: flow >= stonewallFlow ? head * 0.3 : undefined
+        npshr: Math.max(0.5, npshrValue)
       });
     }
     
     return points;
-  }, [operatingFlow, operatingHead, operatingEfficiency, compressorType]);
+  }, [operatingFlow, operatingHead, operatingEfficiency, operatingPower, npshr, pumpType]);
 
-  // Calculate surge margin
-  const surgeMargin = useMemo(() => {
-    const surgeFlowRatio = compressorType === 'axial' ? 0.75 : 
-                           compressorType === 'centrifugal' ? 0.6 : 0.5;
-    const surgeFlow = operatingFlow * surgeFlowRatio;
-    return ((operatingFlow - surgeFlow) / operatingFlow) * 100;
-  }, [operatingFlow, compressorType]);
-
+  // Calculate NPSH margin
+  const npshMargin = ((npsha - npshr) / npshr) * 100;
+  
   // Determine operating status
   const getOperatingStatus = () => {
-    if (surgeMargin < 10) {
-      return { status: 'danger', message: 'Close to surge line', color: 'text-red-500' };
+    if (npsha < npshr) {
+      return { status: 'danger', message: 'NPSH margin insufficient', color: 'text-red-500' };
     }
-    if (surgeMargin < 20) {
-      return { status: 'warning', message: 'Low surge margin', color: 'text-yellow-500' };
+    if (npshMargin < 15) {
+      return { status: 'warning', message: 'Low NPSH margin', color: 'text-yellow-500' };
     }
     return { status: 'good', message: 'Stable operation', color: 'text-green-500' };
   };
 
   const operatingStatus = getOperatingStatus();
-  const isDynamic = ['centrifugal', 'axial'].includes(compressorType);
 
   return (
     <div className="space-y-4">
-      {/* Head-Flow Curve */}
+      {/* Head-Flow and Efficiency Curve */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base sm:text-lg flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Performance Curves
+              Pump Performance Curves
             </CardTitle>
             <Badge variant={operatingStatus.status === 'good' ? 'default' : 'destructive'}>
               {operatingStatus.message}
@@ -160,7 +154,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                 />
                 <YAxis 
                   yAxisId="head"
-                  label={{ value: 'Head (kJ/kg)', angle: -90, position: 'insideLeft', fontSize: 10, offset: 15 }}
+                  label={{ value: 'Head (m)', angle: -90, position: 'insideLeft', fontSize: 10, offset: 15 }}
                   tick={{ fontSize: 9 }}
                   domain={['auto', 'auto']}
                   width={45}
@@ -181,25 +175,12 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                     fontSize: '11px'
                   }}
                   formatter={(value: number, name: string) => {
-                    if (name === 'head') return [value.toFixed(1) + ' kJ/kg', 'Head'];
+                    if (name === 'head') return [value.toFixed(1) + ' m', 'Head'];
                     if (name === 'efficiency') return [value.toFixed(1) + '%', 'Efficiency'];
-                    if (name === 'surge') return [value.toFixed(1) + ' kJ/kg', 'Surge Line'];
                     return [value, name];
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
-                
-                {/* Surge region fill */}
-                {isDynamic && (
-                  <Area
-                    yAxisId="head"
-                    dataKey="surge"
-                    fill="hsl(var(--destructive))"
-                    fillOpacity={0.1}
-                    stroke="none"
-                    name="Surge Region"
-                  />
-                )}
                 
                 {/* Head curve */}
                 <Line
@@ -211,20 +192,6 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   dot={false}
                   name="Head"
                 />
-                
-                {/* Surge line */}
-                {isDynamic && (
-                  <Line
-                    yAxisId="head"
-                    type="monotone"
-                    dataKey="surge"
-                    stroke="hsl(var(--destructive))"
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="Surge Line"
-                  />
-                )}
                 
                 {/* Efficiency curve */}
                 <Line
@@ -239,7 +206,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                 
                 {/* Operating point marker */}
                 <ReferenceDot
-                  x={Math.round(operatingFlow)}
+                  x={Math.round(operatingFlow * 10) / 10}
                   y={operatingHead}
                   yAxisId="head"
                   r={8}
@@ -250,7 +217,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                 
                 {/* Operating flow reference line */}
                 <ReferenceLine
-                  x={Math.round(operatingFlow)}
+                  x={Math.round(operatingFlow * 10) / 10}
                   yAxisId="head"
                   stroke="hsl(var(--primary))"
                   strokeDasharray="3 3"
@@ -267,40 +234,38 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                 <Target className="h-3 w-3 text-primary" />
                 <span className="text-[10px] sm:text-xs text-muted-foreground">Operating</span>
               </div>
-              <p className="text-xs sm:text-sm font-medium">{operatingFlow.toFixed(0)} m³/h</p>
+              <p className="text-xs sm:text-sm font-medium">{operatingFlow.toFixed(1)} m³/h</p>
             </div>
             <div className="p-2 bg-muted/50 rounded-lg text-center">
               <span className="text-[10px] sm:text-xs text-muted-foreground">Head</span>
-              <p className="text-xs sm:text-sm font-medium">{operatingHead.toFixed(1)} kJ/kg</p>
+              <p className="text-xs sm:text-sm font-medium">{operatingHead.toFixed(1)} m</p>
             </div>
             <div className="p-2 bg-muted/50 rounded-lg text-center">
               <span className="text-[10px] sm:text-xs text-muted-foreground">Efficiency</span>
               <p className="text-xs sm:text-sm font-medium">{operatingEfficiency.toFixed(1)}%</p>
             </div>
-            {isDynamic && (
-              <div className={`p-2 rounded-lg text-center ${
-                surgeMargin < 10 ? 'bg-red-500/10' : 
-                surgeMargin < 20 ? 'bg-yellow-500/10' : 'bg-green-500/10'
-              }`}>
-                <span className="text-[10px] sm:text-xs text-muted-foreground">Surge Margin</span>
-                <p className={`text-xs sm:text-sm font-medium ${operatingStatus.color}`}>
-                  {surgeMargin.toFixed(0)}%
-                </p>
-              </div>
-            )}
+            <div className={`p-2 rounded-lg text-center ${
+              npshMargin < 0 ? 'bg-red-500/10' : 
+              npshMargin < 15 ? 'bg-yellow-500/10' : 'bg-green-500/10'
+            }`}>
+              <span className="text-[10px] sm:text-xs text-muted-foreground">NPSH Margin</span>
+              <p className={`text-xs sm:text-sm font-medium ${operatingStatus.color}`}>
+                {npshMargin.toFixed(0)}%
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Power Curve */}
+      {/* Power and NPSHr Curve */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base sm:text-lg">Power Curve</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Power & NPSHr Curves</CardTitle>
         </CardHeader>
         <CardContent className="p-2 sm:p-6">
-          <div className="h-[180px] sm:h-[200px]">
+          <div className="h-[200px] sm:h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={curveData} margin={{ top: 10, right: 10, left: -10, bottom: 30 }}>
+              <ComposedChart data={curveData} margin={{ top: 10, right: 10, left: -10, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis 
                   dataKey="flow" 
@@ -313,6 +278,13 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   tick={{ fontSize: 9 }}
                   width={45}
                 />
+                <YAxis 
+                  yAxisId="npshr"
+                  orientation="right"
+                  label={{ value: 'NPSHr (m)', angle: 90, position: 'insideRight', fontSize: 10, offset: 10 }}
+                  tick={{ fontSize: 9 }}
+                  width={35}
+                />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--card))', 
@@ -320,8 +292,14 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                     borderRadius: '8px',
                     fontSize: '11px'
                   }}
-                  formatter={(value: number) => [value.toFixed(1) + ' kW', 'Power']}
+                  formatter={(value: number, name: string) => {
+                    if (name === 'power') return [value.toFixed(1) + ' kW', 'Power'];
+                    if (name === 'npshr') return [value.toFixed(2) + ' m', 'NPSHr'];
+                    return [value, name];
+                  }}
                 />
+                <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                
                 <Line
                   yAxisId="power"
                   type="monotone"
@@ -331,33 +309,53 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   dot={false}
                   name="Power"
                 />
+                <Line
+                  yAxisId="npshr"
+                  type="monotone"
+                  dataKey="npshr"
+                  stroke="hsl(var(--chart-4))"
+                  strokeWidth={2}
+                  dot={false}
+                  name="NPSHr"
+                />
+                
+                {/* NPSHa reference line */}
                 <ReferenceLine
-                  x={Math.round(operatingFlow)}
+                  y={npsha}
+                  yAxisId="npshr"
+                  stroke="hsl(var(--chart-4))"
+                  strokeDasharray="5 5"
+                  label={{ value: `NPSHa: ${npsha.toFixed(1)}m`, position: 'right', fontSize: 9 }}
+                />
+                
+                <ReferenceLine
+                  x={Math.round(operatingFlow * 10) / 10}
                   yAxisId="power"
                   stroke="hsl(var(--primary))"
                   strokeDasharray="3 3"
                   label={{ value: 'Op', position: 'top', fontSize: 9 }}
                 />
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
 
-      {/* Surge Warning */}
-      {isDynamic && surgeMargin < 20 && (
+      {/* NPSH Warning */}
+      {npshMargin < 15 && (
         <Card className="border-yellow-500/50 bg-yellow-500/5">
           <CardContent className="pt-4">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5" />
               <div>
                 <p className="font-medium text-yellow-700 dark:text-yellow-400">
-                  Low Surge Margin Warning
+                  {npsha < npshr ? 'Insufficient NPSHa' : 'Low NPSH Margin Warning'}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Operating point is {surgeMargin.toFixed(0)}% above surge line. 
-                  Consider increasing flow rate or reducing discharge pressure to maintain stable operation.
-                  Recommended surge margin is typically 10-20%.
+                  {npsha < npshr 
+                    ? `NPSHa (${npsha.toFixed(2)} m) is less than NPSHr (${npshr.toFixed(2)} m). Cavitation will occur.`
+                    : `NPSH margin is ${npshMargin.toFixed(0)}%. API 610 recommends minimum 10% margin or 0.9m (whichever is greater).`
+                  }
                 </p>
               </div>
             </div>
@@ -368,13 +366,12 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
       {/* Curve Legend Info */}
       <div className="p-3 bg-muted/30 rounded-lg">
         <p className="text-xs text-muted-foreground">
-          <strong>Note:</strong> Performance curves are generated based on typical {compressorType} compressor 
-          characteristics. Actual manufacturer curves may vary. The surge line represents the minimum stable 
-          flow limit below which flow reversal and mechanical damage can occur.
+          <strong>Note:</strong> Performance curves are generated based on typical {pumpType} pump 
+          characteristics. Actual manufacturer curves may vary. Operating point shown at Best Efficiency Point (BEP).
         </p>
       </div>
     </div>
   );
 };
 
-export default CompressorPerformanceCurves;
+export default PumpPerformanceCurves;
