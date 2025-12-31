@@ -13,7 +13,8 @@ import {
   ReferenceLine,
   ReferenceDot,
   Area,
-  ComposedChart
+  ComposedChart,
+  Label
 } from 'recharts';
 import { TrendingUp, AlertTriangle, Target } from 'lucide-react';
 
@@ -148,32 +149,35 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
           </div>
         </CardHeader>
         <CardContent className="p-2 sm:p-6">
-          <div className="h-[280px] sm:h-[320px]">
+          <div className="h-[320px] sm:h-[380px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={curveData} margin={{ top: 10, right: 10, left: -10, bottom: 30 }}>
+              <ComposedChart data={curveData} margin={{ top: 15, right: 50, left: 10, bottom: 45 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis 
                   dataKey="flow" 
-                  label={{ value: 'Flow (m³/h)', position: 'bottom', offset: 10, fontSize: 10 }}
-                  tick={{ fontSize: 9 }}
+                  tick={{ fontSize: 10 }}
                   className="text-muted-foreground"
-                />
+                >
+                  <Label value="Flow (m³/h)" position="bottom" offset={25} style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                </XAxis>
                 <YAxis 
                   yAxisId="head"
-                  label={{ value: 'Head (kJ/kg)', angle: -90, position: 'insideLeft', fontSize: 10, offset: 15 }}
-                  tick={{ fontSize: 9 }}
+                  tick={{ fontSize: 10 }}
                   domain={['auto', 'auto']}
-                  width={45}
-                />
+                  width={55}
+                >
+                  <Label value="Head (kJ/kg)" angle={-90} position="insideLeft" offset={5} style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }} />
+                </YAxis>
                 <YAxis 
                   yAxisId="efficiency"
                   orientation="right"
-                  label={{ value: 'Eff (%)', angle: 90, position: 'insideRight', fontSize: 10, offset: 10 }}
-                  tick={{ fontSize: 9 }}
+                  tick={{ fontSize: 10 }}
                   domain={[0, 100]}
-                  width={35}
-                />
-                <Tooltip 
+                  width={45}
+                >
+                  <Label value="Efficiency (%)" angle={90} position="insideRight" offset={10} style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }} />
+                </YAxis>
+                <Tooltip
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--card))', 
                     border: '1px solid hsl(var(--border))',
@@ -187,7 +191,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                     return [value, name];
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '15px' }} verticalAlign="top" />
                 
                 {/* Surge region fill */}
                 {isDynamic && (
@@ -298,24 +302,26 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
           <CardTitle className="text-base sm:text-lg">Power Curve</CardTitle>
         </CardHeader>
         <CardContent className="p-2 sm:p-6">
-          <div className="h-[180px] sm:h-[200px]">
+          <div className="h-[200px] sm:h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={curveData} margin={{ top: 10, right: 10, left: -10, bottom: 30 }}>
+              <LineChart data={curveData} margin={{ top: 15, right: 20, left: 10, bottom: 45 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis 
                   dataKey="flow" 
-                  label={{ value: 'Flow (m³/h)', position: 'bottom', offset: 10, fontSize: 10 }}
-                  tick={{ fontSize: 9 }}
-                />
+                  tick={{ fontSize: 10 }}
+                >
+                  <Label value="Flow (m³/h)" position="bottom" offset={25} style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                </XAxis>
                 <YAxis 
                   yAxisId="power"
-                  label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft', fontSize: 10, offset: 15 }}
-                  tick={{ fontSize: 9 }}
-                  width={45}
-                />
+                  tick={{ fontSize: 10 }}
+                  width={55}
+                >
+                  <Label value="Power (kW)" angle={-90} position="insideLeft" offset={5} style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }} />
+                </YAxis>
                 <Tooltip 
                   contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
+                    backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px',
                     fontSize: '11px'
@@ -335,8 +341,8 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   x={Math.round(operatingFlow)}
                   yAxisId="power"
                   stroke="hsl(var(--primary))"
+                  strokeWidth={2}
                   strokeDasharray="3 3"
-                  label={{ value: 'Op', position: 'top', fontSize: 9 }}
                 />
               </LineChart>
             </ResponsiveContainer>

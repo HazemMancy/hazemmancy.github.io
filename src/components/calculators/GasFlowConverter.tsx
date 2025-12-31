@@ -430,4 +430,5 @@ const GasFlowConverter = () => {
   );
 };
 
+export { GasFlowConverter };
 export default GasFlowConverter;
