@@ -1702,6 +1702,8 @@ export default function API520Calculator() {
           </div>
 
           <OrificeResultCard requiredArea={thermalResults.requiredArea} selectedOrifice={thermalResults.selectedOrifice} title="Thermal Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+          
+          <ValveComparisonTable requiredArea={thermalResults.requiredArea} unitSystem={unitSystem} />
         </TabsContent>
 
         {/* FAILURE TAB */}
@@ -1782,6 +1784,8 @@ export default function API520Calculator() {
           </div>
 
           <OrificeResultCard requiredArea={failureResults.requiredArea} selectedOrifice={failureResults.selectedOrifice} title="Failure Scenario Relief Valve Selection (API RP 526)" unitSystem={unitSystem} />
+          
+          <ValveComparisonTable requiredArea={failureResults.requiredArea} unitSystem={unitSystem} />
         </TabsContent>
 
         {/* PIPING TAB - API 520 Part II */}

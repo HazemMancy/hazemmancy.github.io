@@ -6,20 +6,51 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info, Flame, Wind, Thermometer, Gauge, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Info, Flame, Wind, Thermometer, Gauge, AlertTriangle, HelpCircle, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import API2000Guide from "./guides/API2000Guide";
 
 // API 2000 Constants
 const LATENT_HEAT_HEXANE = 334; // kJ/kg (reference fluid)
 
+// Standard PVRV sizes per API RP 526 (for tank venting applications)
+const PVRV_STANDARD_SIZES = [
+  { designation: 'D', orificeArea: 71, effectiveArea: 50, inletSize: '1"', outletSize: '2"', capacitySCFH: 2500 },
+  { designation: 'E', orificeArea: 126, effectiveArea: 90, inletSize: '1"', outletSize: '2"', capacitySCFH: 4000 },
+  { designation: 'F', orificeArea: 198, effectiveArea: 140, inletSize: '1.5"', outletSize: '2.5"', capacitySCFH: 6500 },
+  { designation: 'G', orificeArea: 325, effectiveArea: 230, inletSize: '2"', outletSize: '3"', capacitySCFH: 10500 },
+  { designation: 'H', orificeArea: 506, effectiveArea: 360, inletSize: '2.5"', outletSize: '4"', capacitySCFH: 16500 },
+  { designation: 'J', orificeArea: 830, effectiveArea: 590, inletSize: '3"', outletSize: '4"', capacitySCFH: 27000 },
+  { designation: 'K', orificeArea: 1186, effectiveArea: 840, inletSize: '3"', outletSize: '6"', capacitySCFH: 38500 },
+  { designation: 'L', orificeArea: 1841, effectiveArea: 1300, inletSize: '4"', outletSize: '6"', capacitySCFH: 60000 },
+  { designation: 'M', orificeArea: 2323, effectiveArea: 1650, inletSize: '4"', outletSize: '6"', capacitySCFH: 75500 },
+  { designation: 'N', orificeArea: 2800, effectiveArea: 2000, inletSize: '4"', outletSize: '6"', capacitySCFH: 91000 },
+  { designation: 'P', orificeArea: 4116, effectiveArea: 2900, inletSize: '6"', outletSize: '8"', capacitySCFH: 134000 },
+  { designation: 'Q', orificeArea: 7129, effectiveArea: 5050, inletSize: '6"', outletSize: '10"', capacitySCFH: 232000 },
+  { designation: 'R', orificeArea: 10323, effectiveArea: 7300, inletSize: '8"', outletSize: '10"', capacitySCFH: 335000 },
+  { designation: 'T', orificeArea: 16774, effectiveArea: 11900, inletSize: '8"', outletSize: '12"', capacitySCFH: 545000 },
+];
+
+const selectPVRVSize = (requiredCapacitySCFH: number) => {
+  for (const size of PVRV_STANDARD_SIZES) {
+    if (size.capacitySCFH >= requiredCapacitySCFH) return size;
+  }
+  return null;
+};
+
 export function API2000Calculator() {
   return (
     <Tabs defaultValue="thermal" className="space-y-6">
-      <TabsList className="grid w-full grid-cols-4">
-        <TabsTrigger value="thermal">Thermal Breathing</TabsTrigger>
-        <TabsTrigger value="emergency">Emergency Venting</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-5">
+        <TabsTrigger value="thermal">Thermal</TabsTrigger>
+        <TabsTrigger value="emergency">Emergency</TabsTrigger>
         <TabsTrigger value="pump">Pump In/Out</TabsTrigger>
         <TabsTrigger value="sizing">Valve Sizing</TabsTrigger>
+        <TabsTrigger value="guide" className="flex items-center gap-1">
+          <HelpCircle className="h-3 w-3" />
+          Guide
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="thermal">
@@ -33,6 +64,9 @@ export function API2000Calculator() {
       </TabsContent>
       <TabsContent value="sizing">
         <ValveSizingCalculator />
+      </TabsContent>
+      <TabsContent value="guide">
+        <API2000Guide />
       </TabsContent>
     </Tabs>
   );
@@ -692,6 +726,9 @@ function ValveSizingCalculator() {
     const tempCorrection = Math.sqrt(T_K / 288.15);
     const correctedFlow = requiredFlow * mwCorrection * tempCorrection;
     
+    // Convert m³/h to SCFH (1 m³/h ≈ 35.31 SCFH)
+    const requiredFlowSCFH = requiredFlow * 35.31;
+    
     // Pressure valve sizing (simplified approach)
     // Cv calculation for gas flow
     // Q = 963 * Cv * P1 * sqrt((ΔP/P1) / (T * SG))
@@ -718,6 +755,15 @@ function ValveSizingCalculator() {
     const pressureDiameter = Math.sqrt(4 * pressureOrifice / Math.PI);
     const vacuumDiameter = Math.sqrt(4 * vacuumOrifice / Math.PI);
     
+    // Select standard PVRV size (based on total required flow)
+    const selectedPressureSize = selectPVRVSize(requiredFlowSCFH);
+    const selectedVacuumSize = selectPVRVSize(requiredFlowSCFH);
+    const selectedPVRVSize = selectPVRVSize(requiredFlowSCFH);
+    
+    // Calculate utilization percentages
+    const pressureUtilization = selectedPressureSize ? (requiredFlowSCFH / selectedPressureSize.capacitySCFH) * 100 : 0;
+    const vacuumUtilization = selectedVacuumSize ? (requiredFlowSCFH / selectedVacuumSize.capacitySCFH) * 100 : 0;
+    
     return {
       correctedFlow,
       mwCorrection,
@@ -727,7 +773,13 @@ function ValveSizingCalculator() {
       pressureOrifice: isFinite(pressureOrifice) ? pressureOrifice : 0,
       vacuumOrifice: isFinite(vacuumOrifice) ? vacuumOrifice : 0,
       pressureDiameter: isFinite(pressureDiameter) ? pressureDiameter : 0,
-      vacuumDiameter: isFinite(vacuumDiameter) ? vacuumDiameter : 0
+      vacuumDiameter: isFinite(vacuumDiameter) ? vacuumDiameter : 0,
+      requiredFlowSCFH,
+      selectedPressureSize,
+      selectedVacuumSize,
+      selectedPVRVSize,
+      pressureUtilization,
+      vacuumUtilization
     };
   }, [requiredFlow, setPressure, setVacuum, gasMW, gasTemp, valveType]);
 
@@ -831,6 +883,25 @@ function ValveSizingCalculator() {
                     <p className="font-semibold">{results.pressureDiameter.toFixed(1)} mm</p>
                   </div>
                 </div>
+                {results.selectedPressureSize && (
+                  <>
+                    <Separator />
+                    <div className="p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">Standard Size (API RP 526)</span>
+                        <Badge variant="outline" className="text-lg font-bold border-orange-500 text-orange-600 px-3">
+                          {results.selectedPressureSize.designation}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div><span className="text-muted-foreground">Inlet × Outlet:</span> <span className="font-medium">{results.selectedPressureSize.inletSize} × {results.selectedPressureSize.outletSize}</span></div>
+                        <div><span className="text-muted-foreground">Capacity:</span> <span className="font-medium">{results.selectedPressureSize.capacitySCFH.toLocaleString()} SCFH</span></div>
+                        <div><span className="text-muted-foreground">Orifice Area:</span> <span className="font-medium">{results.selectedPressureSize.orificeArea} mm²</span></div>
+                        <div><span className="text-muted-foreground">Utilization:</span> <span className={`font-bold ${results.pressureUtilization > 90 ? 'text-amber-500' : 'text-green-500'}`}>{results.pressureUtilization.toFixed(1)}%</span></div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -860,11 +931,105 @@ function ValveSizingCalculator() {
                     <p className="font-semibold">{results.vacuumDiameter.toFixed(1)} mm</p>
                   </div>
                 </div>
+                {results.selectedVacuumSize && (
+                  <>
+                    <Separator />
+                    <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">Standard Size (API RP 526)</span>
+                        <Badge variant="outline" className="text-lg font-bold border-blue-500 text-blue-600 px-3">
+                          {results.selectedVacuumSize.designation}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div><span className="text-muted-foreground">Inlet × Outlet:</span> <span className="font-medium">{results.selectedVacuumSize.inletSize} × {results.selectedVacuumSize.outletSize}</span></div>
+                        <div><span className="text-muted-foreground">Capacity:</span> <span className="font-medium">{results.selectedVacuumSize.capacitySCFH.toLocaleString()} SCFH</span></div>
+                        <div><span className="text-muted-foreground">Orifice Area:</span> <span className="font-medium">{results.selectedVacuumSize.orificeArea} mm²</span></div>
+                        <div><span className="text-muted-foreground">Utilization:</span> <span className={`font-bold ${results.vacuumUtilization > 90 ? 'text-amber-500' : 'text-green-500'}`}>{results.vacuumUtilization.toFixed(1)}%</span></div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
         )}
       </div>
+
+      {/* Standard PVRV Size Comparison Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Gauge className="h-5 w-5" />
+            Standard PVRV Size Comparison (API RP 526)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Size</TableHead>
+                  <TableHead>Orifice Area (mm²)</TableHead>
+                  <TableHead>Inlet × Outlet</TableHead>
+                  <TableHead>Capacity (SCFH)</TableHead>
+                  <TableHead>Utilization</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {PVRV_STANDARD_SIZES.filter(size => 
+                  size.capacitySCFH >= results.requiredFlowSCFH * 0.5 && 
+                  PVRV_STANDARD_SIZES.indexOf(size) < PVRV_STANDARD_SIZES.findIndex(s => s.capacitySCFH >= results.requiredFlowSCFH) + 4
+                ).slice(0, 5).map((size) => {
+                  const utilization = (results.requiredFlowSCFH / size.capacitySCFH) * 100;
+                  const isSelected = size.designation === results.selectedPVRVSize?.designation;
+                  return (
+                    <TableRow key={size.designation} className={isSelected ? 'bg-primary/10' : ''}>
+                      <TableCell>
+                        <Badge variant={isSelected ? 'default' : 'outline'} className={isSelected ? 'bg-primary' : ''}>
+                          {size.designation}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono">{size.orificeArea}</TableCell>
+                      <TableCell>{size.inletSize} × {size.outletSize}</TableCell>
+                      <TableCell className="font-mono">{size.capacitySCFH.toLocaleString()}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${utilization > 100 ? 'bg-destructive' : utilization > 90 ? 'bg-amber-500' : 'bg-green-500'}`}
+                              style={{ width: `${Math.min(utilization, 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono">{utilization.toFixed(1)}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {utilization > 100 ? (
+                          <Badge variant="destructive">Undersized</Badge>
+                        ) : isSelected ? (
+                          <Badge className="bg-green-600">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Recommended
+                          </Badge>
+                        ) : utilization > 90 ? (
+                          <Badge variant="outline" className="border-amber-500 text-amber-500">Marginal</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">Oversized</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            <strong>Note:</strong> Capacities shown are based on air at standard conditions. Actual capacity depends on set pressure, temperature, and gas properties.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="pt-6">
