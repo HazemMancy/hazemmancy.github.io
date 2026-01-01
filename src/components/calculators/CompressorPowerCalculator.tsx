@@ -12,29 +12,46 @@ import CompressorPerformanceCurves from './CompressorPerformanceCurves';
 import CompressorSelectionGuide from './CompressorSelectionGuide';
 import CompressorGuide from './guides/CompressorGuide';
 
-// Gas properties database
-const gasDatabase: Record<string, { name: string; mw: number; k: number; z: number; cp: number }> = {
-  air: { name: 'Air', mw: 28.97, k: 1.4, z: 1.0, cp: 1.005 },
-  nitrogen: { name: 'Nitrogen', mw: 28.01, k: 1.4, z: 1.0, cp: 1.04 },
-  oxygen: { name: 'Oxygen', mw: 32.0, k: 1.4, z: 1.0, cp: 0.918 },
-  hydrogen: { name: 'Hydrogen', mw: 2.016, k: 1.41, z: 1.0, cp: 14.3 },
-  methane: { name: 'Methane', mw: 16.04, k: 1.31, z: 0.998, cp: 2.22 },
-  ethane: { name: 'Ethane', mw: 30.07, k: 1.19, z: 0.99, cp: 1.75 },
-  propane: { name: 'Propane', mw: 44.1, k: 1.13, z: 0.98, cp: 1.67 },
-  co2: { name: 'Carbon Dioxide', mw: 44.01, k: 1.29, z: 0.995, cp: 0.846 },
-  ammonia: { name: 'Ammonia', mw: 17.03, k: 1.31, z: 0.99, cp: 2.06 },
-  naturalGas: { name: 'Natural Gas (Typical)', mw: 18.5, k: 1.27, z: 0.95, cp: 2.1 },
-  refGas: { name: 'Refinery Gas', mw: 22.0, k: 1.25, z: 0.92, cp: 1.9 },
-  custom: { name: 'Custom Gas', mw: 28.97, k: 1.4, z: 1.0, cp: 1.005 }
+// Gas properties database with critical properties for real gas calculations
+const gasDatabase: Record<string, { 
+  name: string; 
+  mw: number; 
+  k: number; 
+  z: number; 
+  cp: number;
+  Tc: number;  // Critical temperature (K)
+  Pc: number;  // Critical pressure (bar)
+}> = {
+  air: { name: 'Air', mw: 28.97, k: 1.4, z: 1.0, cp: 1.005, Tc: 132.5, Pc: 37.7 },
+  nitrogen: { name: 'Nitrogen', mw: 28.01, k: 1.4, z: 1.0, cp: 1.04, Tc: 126.2, Pc: 33.9 },
+  oxygen: { name: 'Oxygen', mw: 32.0, k: 1.4, z: 1.0, cp: 0.918, Tc: 154.6, Pc: 50.4 },
+  hydrogen: { name: 'Hydrogen', mw: 2.016, k: 1.41, z: 1.0, cp: 14.3, Tc: 33.2, Pc: 13.0 },
+  methane: { name: 'Methane', mw: 16.04, k: 1.31, z: 0.998, cp: 2.22, Tc: 190.6, Pc: 46.0 },
+  ethane: { name: 'Ethane', mw: 30.07, k: 1.19, z: 0.99, cp: 1.75, Tc: 305.4, Pc: 48.8 },
+  propane: { name: 'Propane', mw: 44.1, k: 1.13, z: 0.98, cp: 1.67, Tc: 369.8, Pc: 42.5 },
+  co2: { name: 'Carbon Dioxide', mw: 44.01, k: 1.29, z: 0.995, cp: 0.846, Tc: 304.2, Pc: 73.8 },
+  ammonia: { name: 'Ammonia', mw: 17.03, k: 1.31, z: 0.99, cp: 2.06, Tc: 405.5, Pc: 113.5 },
+  naturalGas: { name: 'Natural Gas (Typical)', mw: 18.5, k: 1.27, z: 0.95, cp: 2.1, Tc: 200.0, Pc: 45.0 },
+  refGas: { name: 'Refinery Gas', mw: 22.0, k: 1.25, z: 0.92, cp: 1.9, Tc: 250.0, Pc: 42.0 },
+  custom: { name: 'Custom Gas', mw: 28.97, k: 1.4, z: 1.0, cp: 1.005, Tc: 200.0, Pc: 40.0 }
 };
 
-// Compressor types with typical efficiencies
-const compressorTypes: Record<string, { name: string; etaIsen: number; etaPoly: number; maxRatio: number; maxFlow: number }> = {
-  centrifugal: { name: 'Centrifugal', etaIsen: 0.78, etaPoly: 0.82, maxRatio: 4.0, maxFlow: 500000 },
-  axial: { name: 'Axial', etaIsen: 0.88, etaPoly: 0.90, maxRatio: 2.0, maxFlow: 1000000 },
-  reciprocating: { name: 'Reciprocating', etaIsen: 0.82, etaPoly: 0.85, maxRatio: 10.0, maxFlow: 50000 },
-  screw: { name: 'Screw (Rotary)', etaIsen: 0.75, etaPoly: 0.78, maxRatio: 6.0, maxFlow: 30000 },
-  diaphragm: { name: 'Diaphragm', etaIsen: 0.70, etaPoly: 0.73, maxRatio: 10.0, maxFlow: 5000 }
+// Compressor types per API 617 (Centrifugal/Axial) and API 618 (Reciprocating)
+const compressorTypes: Record<string, { 
+  name: string; 
+  etaIsen: number; 
+  etaPoly: number; 
+  maxRatio: number; 
+  maxFlow: number;
+  standard: string;
+  volumetricEff?: number; // For reciprocating (API 618)
+  clearanceVol?: number;  // Typical clearance volume fraction
+}> = {
+  centrifugal: { name: 'Centrifugal (API 617)', etaIsen: 0.78, etaPoly: 0.82, maxRatio: 4.0, maxFlow: 500000, standard: 'API 617' },
+  axial: { name: 'Axial (API 617)', etaIsen: 0.88, etaPoly: 0.90, maxRatio: 2.0, maxFlow: 1000000, standard: 'API 617' },
+  reciprocating: { name: 'Reciprocating (API 618)', etaIsen: 0.82, etaPoly: 0.85, maxRatio: 10.0, maxFlow: 50000, standard: 'API 618', volumetricEff: 0.85, clearanceVol: 0.08 },
+  screw: { name: 'Screw (Rotary)', etaIsen: 0.75, etaPoly: 0.78, maxRatio: 6.0, maxFlow: 30000, standard: 'API 619' },
+  diaphragm: { name: 'Diaphragm (API 618)', etaIsen: 0.70, etaPoly: 0.73, maxRatio: 10.0, maxFlow: 5000, standard: 'API 618', volumetricEff: 0.90, clearanceVol: 0.05 }
 };
 
 interface CompressorInputs {
@@ -81,6 +98,15 @@ interface CalculationResults {
   inletDensity: number;
   dischargeDensity: number;
   isentropicExponent: number;
+  // API 618 specific for reciprocating
+  volumetricEfficiency: number;
+  pistonDisplacement: number;
+  rodLoad: number;
+  // Performance curve parameters
+  surgeFlow: number;
+  stonewallFlow: number;
+  designHead: number;
+  designPower: number;
 }
 
 const CompressorPowerCalculator: React.FC = () => {
@@ -190,189 +216,272 @@ const CompressorPowerCalculator: React.FC = () => {
     const etaMotor = inputs.motorEfficiency / 100;
     const numStages = inputs.numberOfStages;
     
+    // Get gas critical properties (use actual values from database)
+    const gasProps = gasDatabase[inputs.gasType] || gasDatabase.air;
+    const Tc = gasProps.Tc;
+    const Pc = gasProps.Pc;
+    
     // ============================================
-    // API 617 / ASME PTC 10 / ISO 5389 Calculations
+    // API 617 / API 618 / ASME PTC 10 / ISO 5389 Calculations
     // Reference: Schultz, J.M. (1962) "The Polytropic Analysis of Centrifugal Compressors"
+    // API 617 for Centrifugal/Axial, API 618 for Reciprocating
     // ============================================
     
     // Compression ratio
     const compressionRatio = P2 / P1;
     const ratioPerStage = Math.pow(compressionRatio, 1 / numStages);
     
-    // Check compression ratio limits
+    // Get compressor type properties
     const compressor = compressorTypes[inputs.compressorType];
+    const isReciprocating = ['reciprocating', 'diaphragm'].includes(inputs.compressorType);
+    
+    // Check compression ratio limits per applicable standard
     if (ratioPerStage > compressor.maxRatio) {
-      newWarnings.push(`Compression ratio per stage (${ratioPerStage.toFixed(2)}) exceeds typical limit for ${compressor.name} (${compressor.maxRatio})`);
+      newWarnings.push(`Compression ratio per stage (${ratioPerStage.toFixed(2)}) exceeds ${compressor.standard} limit for ${compressor.name} (${compressor.maxRatio})`);
     }
     
-    // Inlet density per API 617 (kg/m³)
-    // ρ₁ = P₁ / (Z₁ × R × T₁)
+    // ============================================
+    // Real Gas Properties per ASME PTC 10
+    // Using Lee-Kesler correlation for improved accuracy
+    // ============================================
     const P1_Pa = P1 * 1e5; // Convert bar to Pa
-    const rho1 = P1_Pa / (Z1 * Rgas * T1);
+    
+    // Reduced properties for compressibility calculations
+    const Tr1 = T1 / Tc;
+    const Pr1 = P1 / Pc;
+    
+    // Lee-Kesler simple fluid compressibility (improved over simplified method)
+    // Z = 1 + B × Pr / Tr where B = 0.083 - 0.422/Tr^1.6
+    const B0_1 = 0.083 - 0.422 / Math.pow(Tr1, 1.6);
+    const Z1_calc = 1 + B0_1 * Pr1 / Tr1;
+    const Z1_used = Z1 < 0.99 ? Z1 : Math.max(0.5, Math.min(1.1, Z1_calc));
+    
+    // Inlet density per API 617/618 (kg/m³)
+    // ρ₁ = P₁ / (Z₁ × R × T₁)
+    const rho1 = P1_Pa / (Z1_used * Rgas * T1);
     
     // Inlet specific volume (m³/kg)
     const v1 = 1 / rho1;
     
     // ============================================
     // Schultz Compressibility Functions (X and Y)
-    // Per ASME PTC 10 and API 617
-    // For ideal gas: X = 0, Y = 1
-    // For real gas, these account for non-ideal behavior
+    // Per ASME PTC 10 - Exact definitions
+    // X = (T/Z)(∂Z/∂T)_P = T × d(ln Z)/dT at constant P
+    // Y = 1 - (P/Z)(∂Z/∂P)_T = 1 - P × d(ln Z)/dP at constant T
     // ============================================
     
-    // Reduced temperature and pressure for compressibility estimation
-    // Using generalized correlations (simplified Lee-Kesler)
-    const Pc_approx = 4.6 * MW; // Approximate critical pressure (bar) - rough estimate
-    const Tc_approx = 1.2 * MW + 150; // Approximate critical temperature (K) - rough estimate
-    const Tr1 = T1 / Tc_approx;
-    const Pr1 = P1 / Pc_approx;
+    // Derivative approximations from Lee-Kesler
+    // dB/dT = 0.422 × 1.6 / (Tc × Tr^2.6)
+    const dBdT = 0.422 * 1.6 / (Tc * Math.pow(Tr1, 2.6));
+    const dZdT = Pr1 * (dBdT / Tr1 - B0_1 / (Tc * Tr1 * Tr1));
+    const X = (T1 / Z1_used) * dZdT;
     
-    // Schultz X function: X = (T/v)(∂v/∂T)_P - 1
-    // For real gas with compressibility: X ≈ T × (∂Z/∂T)_P / Z
-    // Simplified correlation based on reduced properties
-    const X = Z1 < 0.99 ? (Tr1 - 1) * (1 - Z1) * 0.5 : 0;
+    // dZ/dP at constant T
+    const dZdP = B0_1 / (Pc * Tr1);
+    const Y = 1 - (P1 / Z1_used) * dZdP;
     
-    // Schultz Y function: Y = -(P/v)(∂v/∂P)_T
-    // For ideal gas Y = 1, for real gas Y = 1 + P × (∂Z/∂P)_T / Z
-    const Y = 1 + Pr1 * (1 - Z1) * 0.1;
+    // Bound X and Y to physical limits
+    const X_bounded = Math.max(-0.5, Math.min(0.5, X));
+    const Y_bounded = Math.max(0.8, Math.min(1.2, Y));
     
     // ============================================
     // Polytropic Exponent per API 617 / ASME PTC 10
-    // n = (k/Y) × [1 - ((k-1)/(X+1)) × ((1-ηp)/ηp)]
+    // For dynamic compressors:
+    // n / (n-1) = (k / (k-1)) × (1 / ηp) × (Y / (1 + X))
+    // Rearranged: n = 1 / (1 - (k-1)/k × ηp × (1+X)/Y)
     // ============================================
-    const nPoly = (k / Y) * (1 - ((k - 1) / (X + 1)) * ((1 - etaPoly) / etaPoly));
+    const nDenominator = 1 - ((k - 1) / k) * etaPoly * ((1 + X_bounded) / Y_bounded);
+    const nPoly = Math.max(1.01, 1 / nDenominator);
     
     // Isentropic exponent (accounting for real gas effects)
-    // For ideal gas: ns = k, for real gas: ns = k × Y / (1 + X)
-    const ns = k * Y / (1 + X);
+    // For real gas: ns = k × Y / (1 + X)
+    const ns = k * Y_bounded / (1 + X_bounded);
     
     // ============================================
-    // Discharge Temperature per API 617
-    // T₂ = T₁ × (P₂/P₁)^m where m = (n-1)/n × (1+X)/Y
+    // Discharge Temperature Calculation
+    // API 617: T₂/T₁ = (P₂/P₁)^((n-1)/n × (1+X)/Y)
+    // API 618 (Reciprocating): Uses isentropic + losses
     // ============================================
-    const m = ((nPoly - 1) / nPoly) * ((1 + X) / Y);
-    
-    // Calculate discharge temperatures for each stage
-    const dischargeTempPerStage: number[] = [];
-    let T_in = T1;
-    for (let i = 0; i < numStages; i++) {
-      const T_out = T_in * Math.pow(ratioPerStage, m);
-      dischargeTempPerStage.push(T_out - 273.15);
-      // Apply intercooler for next stage (except last stage)
-      if (i < numStages - 1) {
-        T_in = T1 + inputs.intercoolerApproach;
-      }
-    }
-    
-    // Final discharge temperature
+    let dischargeTemp: number;
     let T2: number;
-    if (numStages > 1) {
-      // Multi-stage with intercooling
+    const dischargeTempPerStage: number[] = [];
+    
+    if (isReciprocating) {
+      // API 618 Method for reciprocating compressors
+      // T₂ = T₁ × (P₂/P₁)^((k-1)/(k×ηisen))
+      const tempExponent = (k - 1) / (k * etaIsen);
+      
       let T_current = T1;
       for (let i = 0; i < numStages; i++) {
-        T_current = T_current * Math.pow(ratioPerStage, m);
+        const T_out = T_current * Math.pow(ratioPerStage, tempExponent);
+        dischargeTempPerStage.push(T_out - 273.15);
         if (i < numStages - 1) {
           T_current = T1 + inputs.intercoolerApproach;
+        } else {
+          T2 = T_out;
         }
       }
-      T2 = T_current;
+      dischargeTemp = (T2! || dischargeTempPerStage[dischargeTempPerStage.length - 1] + 273.15) - 273.15;
+      T2 = dischargeTemp + 273.15;
     } else {
-      T2 = T1 * Math.pow(compressionRatio, m);
+      // API 617 Method for dynamic compressors (centrifugal/axial)
+      const m = ((nPoly - 1) / nPoly) * ((1 + X_bounded) / Y_bounded);
+      
+      let T_current = T1;
+      for (let i = 0; i < numStages; i++) {
+        const T_out = T_current * Math.pow(ratioPerStage, m);
+        dischargeTempPerStage.push(T_out - 273.15);
+        if (i < numStages - 1) {
+          T_current = T1 + inputs.intercoolerApproach;
+        } else {
+          T2 = T_out;
+        }
+      }
+      dischargeTemp = (T2! || dischargeTempPerStage[dischargeTempPerStage.length - 1] + 273.15) - 273.15;
+      T2 = dischargeTemp + 273.15;
     }
-    const dischargeTemp = T2 - 273.15;
     
-    // Discharge compressibility (estimated)
-    const Tr2 = T2 / Tc_approx;
-    const Pr2 = P2 / Pc_approx;
-    const Z2 = Z1 * (1 + 0.1 * (Pr2 - Pr1) - 0.05 * (Tr2 - Tr1)); // Simplified correlation
-    const Z2_bounded = Math.max(0.5, Math.min(1.1, Z2));
+    // ============================================
+    // Discharge Compressibility (Lee-Kesler)
+    // ============================================
+    const Tr2 = T2 / Tc;
+    const Pr2 = P2 / Pc;
+    const B0_2 = 0.083 - 0.422 / Math.pow(Tr2, 1.6);
+    const Z2_calc = 1 + B0_2 * Pr2 / Tr2;
+    const Z2 = Math.max(0.5, Math.min(1.1, Z2_calc));
     
     // Discharge density (kg/m³)
     const P2_Pa = P2 * 1e5;
-    const rho2 = P2_Pa / (Z2_bounded * Rgas * T2);
-    
-    // Discharge specific volume (m³/kg)
+    const rho2 = P2_Pa / (Z2 * Rgas * T2);
     const v2 = 1 / rho2;
     
     // ============================================
     // Schultz Head Factor (f) per ASME PTC 10
-    // Corrects polytropic head for real gas behavior
     // f = ln(P₂/P₁) × (Z₂v₂ - Z₁v₁) / (Z₂v₂ × ln(Z₂v₂/Z₁v₁))
-    // For ideal gas f → 1
     // ============================================
-    const Z1v1 = Z1 * v1;
-    const Z2v2 = Z2_bounded * v2;
+    const Z1v1 = Z1_used * v1;
+    const Z2v2 = Z2 * v2;
     let schultzF: number;
     
     if (Math.abs(Z2v2 - Z1v1) < 0.001 * Z1v1) {
-      // Nearly ideal gas behavior
       schultzF = 1.0;
     } else {
       const lnPratio = Math.log(P2 / P1);
       const lnZvRatio = Math.log(Z2v2 / Z1v1);
-      schultzF = lnPratio * (Z2v2 - Z1v1) / (Z2v2 * lnZvRatio);
+      if (Math.abs(lnZvRatio) < 1e-10) {
+        schultzF = 1.0;
+      } else {
+        schultzF = lnPratio * (Z2v2 - Z1v1) / (Z2v2 * lnZvRatio);
+      }
     }
-    // Bound Schultz factor to reasonable range
-    schultzF = Math.max(0.9, Math.min(1.1, schultzF));
+    schultzF = Math.max(0.85, Math.min(1.15, schultzF));
     
     // ============================================
-    // Isentropic Head per API 617 (J/kg)
-    // Hs = (Z₁ × R × T₁ × k / (k-1)) × [(P₂/P₁)^((k-1)/k) - 1]
+    // Head Calculations
+    // Isentropic Head (API 617): Hs = (Z₁ × R × T₁ × k/(k-1)) × [(P₂/P₁)^((k-1)/k) - 1]
+    // Polytropic Head (API 617): Hp = f × (Z₁ × R × T₁ × n/(n-1)) × [(P₂/P₁)^((n-1)/n) - 1]
     // ============================================
-    const isentropicHead = (Z1 * Rgas * T1 * k / (k - 1)) * (Math.pow(compressionRatio, (k - 1) / k) - 1);
+    const isentropicHead = (Z1_used * Rgas * T1 * k / (k - 1)) * (Math.pow(compressionRatio, (k - 1) / k) - 1);
+    const polytropicHead = schultzF * (Z1_used * Rgas * T1 * nPoly / (nPoly - 1)) * (Math.pow(compressionRatio, (nPoly - 1) / nPoly) - 1);
     
     // ============================================
-    // Polytropic Head per API 617 / ASME PTC 10 (J/kg)
-    // Hp = f × (Z₁ × R × T₁ × n / (n-1)) × [(P₂/P₁)^((n-1)/n) - 1]
-    // Including Schultz correction factor
+    // Power Calculations
+    // API 617: Gas Power = ṁ × Hp (polytropic work)
+    // API 618: Indicated Power with volumetric efficiency
     // ============================================
-    const polytropicHead = schultzF * (Z1 * Rgas * T1 * nPoly / (nPoly - 1)) * (Math.pow(compressionRatio, (nPoly - 1) / nPoly) - 1);
+    let isentropicPower: number;
+    let polytropicPower: number;
+    let shaftPower: number;
+    let volumetricEfficiency = 1.0;
+    let pistonDisplacement = 0;
+    let rodLoad = 0;
     
-    // ============================================
-    // Power Calculations per API 617
-    // Gas Power = ṁ × Hp / ηp (for polytropic)
-    // Shaft Power = Gas Power / ηmech
-    // Motor Power = Shaft Power / ηmotor
-    // ============================================
-    const isentropicPower = (massFlow * isentropicHead) / 1000; // kW
-    const polytropicPower = (massFlow * polytropicHead) / 1000; // kW
-    const shaftPower = polytropicPower / etaMech;
+    if (isReciprocating) {
+      // API 618 Volumetric Efficiency
+      // ηv = 1 - c × ((P₂/P₁)^(1/k) - 1) - losses
+      const clearance = compressor.clearanceVol || 0.08;
+      const reExpansionLoss = clearance * (Math.pow(compressionRatio, 1/k) - 1);
+      const leakageLoss = 0.02;
+      const heatingLoss = 0.02;
+      volumetricEfficiency = Math.max(0.4, 1 - reExpansionLoss - leakageLoss - heatingLoss);
+      
+      // Indicated power per API 618
+      // Pind = (P₁ × V₁ × k/(k-1)) × [(P₂/P₁)^((k-1)/k) - 1] / ηv
+      const actualVolumetricFlow = (massFlow / rho1); // m³/s at inlet
+      pistonDisplacement = actualVolumetricFlow / volumetricEfficiency * 3600; // m³/h
+      
+      isentropicPower = (massFlow * isentropicHead) / 1000;
+      polytropicPower = isentropicPower / etaIsen; // Use isentropic for recip
+      shaftPower = polytropicPower / etaMech;
+      
+      // Rod load calculation (simplified)
+      // F_rod = P₂ × A_piston - P₁ × A_rod_side
+      const cylinderArea = 0.1; // Assumed 0.1 m² (typical)
+      rodLoad = (P2 - P1) * 1e5 * cylinderArea / 1000; // kN
+    } else {
+      // API 617 for dynamic compressors
+      isentropicPower = (massFlow * isentropicHead) / 1000;
+      polytropicPower = (massFlow * polytropicHead) / 1000;
+      shaftPower = polytropicPower / etaMech;
+    }
+    
     const motorPower = shaftPower / etaMotor;
     
     // Actual volumetric flow at inlet conditions (m³/h)
     const actualFlow = (massFlow / rho1) * 3600;
     
     // Specific power (kW per 100 Nm³/h)
-    // Normal conditions: 0°C (273.15 K), 101.325 kPa
     const nm3hFlow = (massFlow * 3600 * 8314.46 * 273.15) / (MW * 101325);
     const specificPower = nm3hFlow > 0 ? (motorPower / nm3hFlow) * 100 : 0;
     
     // ============================================
-    // Warnings per API 617 Guidelines
+    // Performance Curve Parameters (for dynamic compressors)
+    // Surge and stonewall limits per API 617
+    // ============================================
+    let surgeFlow = 0;
+    let stonewallFlow = 0;
+    
+    if (!isReciprocating) {
+      // Surge flow typically 50-70% of design for centrifugal, 70-80% for axial
+      const surgeRatio = inputs.compressorType === 'axial' ? 0.75 : 0.55;
+      surgeFlow = actualFlow * surgeRatio;
+      
+      // Stonewall at 110-120% of design
+      stonewallFlow = actualFlow * 1.15;
+    }
+    
+    // ============================================
+    // Warnings per API 617 and API 618
     // ============================================
     if (dischargeTemp > 200) {
-      newWarnings.push(`High discharge temperature (${dischargeTemp.toFixed(0)}°C) exceeds API 617 limit of 200°C - consider adding intercooling or stages`);
+      newWarnings.push(`Discharge temperature (${dischargeTemp.toFixed(0)}°C) exceeds ${compressor.standard} limit of 200°C`);
     }
-    if (dischargeTemp > 150 && inputs.compressorType === 'centrifugal') {
-      newWarnings.push('Discharge temperature exceeds 150°C - verify seal and bearing design ratings');
+    if (dischargeTemp > 150 && ['centrifugal', 'axial'].includes(inputs.compressorType)) {
+      newWarnings.push('Discharge temperature exceeds 150°C - verify seal/bearing ratings per API 617');
+    }
+    if (isReciprocating && dischargeTemp > 135) {
+      newWarnings.push('Discharge temperature exceeds 135°C - API 618 limit for cylinder cooling');
     }
     if (compressionRatio > 10 && numStages === 1) {
-      newWarnings.push('High compression ratio - multi-stage compression recommended per API 617');
+      newWarnings.push(`High compression ratio - multi-stage recommended per ${compressor.standard}`);
     }
     if (P1 < 0.5) {
-      newWarnings.push('Very low suction pressure may cause surge or cavitation issues');
+      newWarnings.push('Very low suction pressure - check for surge/cavitation');
     }
     if (Z1 < 0.85) {
-      newWarnings.push('Low compressibility factor indicates significant real gas effects - verify Z-factor with equation of state');
+      newWarnings.push('Low Z-factor - verify with equation of state calculation');
     }
-    if (schultzF < 0.95 || schultzF > 1.05) {
-      newWarnings.push(`Schultz factor (${schultzF.toFixed(3)}) indicates significant real gas deviation - consider detailed thermodynamic analysis`);
+    if (schultzF < 0.9 || schultzF > 1.1) {
+      newWarnings.push(`Schultz factor (${schultzF.toFixed(3)}) indicates significant real gas effects`);
+    }
+    if (isReciprocating && volumetricEfficiency < 0.7) {
+      newWarnings.push(`Low volumetric efficiency (${(volumetricEfficiency*100).toFixed(0)}%) - verify clearance volume per API 618`);
     }
     
     setResults({
       compressionRatio,
       ratioPerStage,
-      isentropicHead: isentropicHead / 1000, // Convert to kJ/kg
+      isentropicHead: isentropicHead / 1000,
       polytropicHead: polytropicHead / 1000,
       dischargeTemp,
       dischargeTempPerStage,
@@ -381,17 +490,23 @@ const CompressorPowerCalculator: React.FC = () => {
       shaftPower,
       motorPower,
       actualFlow,
-      massFlow: massFlow * 3600, // kg/h
+      massFlow: massFlow * 3600,
       specificPower,
       adiabaticEfficiency: etaIsen * 100,
-      // API 617 / ASME PTC 10 parameters
       polytropicExponent: nPoly,
       schultzFactor: schultzF,
-      compressibilityX: X,
-      compressibilityY: Y,
+      compressibilityX: X_bounded,
+      compressibilityY: Y_bounded,
       inletDensity: rho1,
       dischargeDensity: rho2,
-      isentropicExponent: ns
+      isentropicExponent: ns,
+      volumetricEfficiency,
+      pistonDisplacement,
+      rodLoad,
+      surgeFlow,
+      stonewallFlow,
+      designHead: polytropicHead / 1000,
+      designPower: motorPower
     });
     
     setWarnings(newWarnings);
