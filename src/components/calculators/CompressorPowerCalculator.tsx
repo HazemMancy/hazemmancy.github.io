@@ -64,6 +64,7 @@ interface CompressorInputs {
   dischargePressure: number;
   flowRate: number;
   flowUnit: string;
+  standardCondition: string;
   pressureUnit: string;
   tempUnit: string;
   compressorType: string;
@@ -120,6 +121,7 @@ const CompressorPowerCalculator: React.FC = () => {
     dischargePressure: 5.0,
     flowRate: 1000,
     flowUnit: 'nm3h',
+    standardCondition: 'NTP',
     pressureUnit: 'bara',
     tempUnit: 'C',
     compressorType: 'centrifugal',
@@ -136,11 +138,47 @@ const CompressorPowerCalculator: React.FC = () => {
 
   // Unit conversion functions
   const convertPressure = (value: number, from: string, to: string): number => {
-    const toBar: Record<string, number> = {
-      bara: 1, barg: 1, psia: 0.0689476, psig: 0.0689476, kPa: 0.01, MPa: 10, atm: 1.01325
+    const barAbsFrom = () => {
+      switch (from) {
+        case 'bara':
+          return value;
+        case 'barg':
+          return value + 1.01325;
+        case 'psia':
+          return value * 0.0689476;
+        case 'psig':
+          return (value + 14.696) * 0.0689476;
+        case 'kPa':
+          return value * 0.01;
+        case 'MPa':
+          return value * 10;
+        case 'atm':
+          return value * 1.01325;
+        default:
+          return value;
+      }
     };
-    const barValue = value * toBar[from];
-    return barValue / toBar[to];
+
+    const barValue = barAbsFrom();
+
+    switch (to) {
+      case 'bara':
+        return barValue;
+      case 'barg':
+        return barValue - 1.01325;
+      case 'psia':
+        return barValue / 0.0689476;
+      case 'psig':
+        return barValue / 0.0689476 - 14.696;
+      case 'kPa':
+        return barValue / 0.01;
+      case 'MPa':
+        return barValue / 10;
+      case 'atm':
+        return barValue / 1.01325;
+      default:
+        return barValue;
+    }
   };
 
   const convertTemp = (value: number, from: string, to: string): number => {
@@ -154,11 +192,28 @@ const CompressorPowerCalculator: React.FC = () => {
     return kelvin;
   };
 
-  const convertFlow = (value: number, from: string, mw: number, T: number, P: number): number => {
+  const getStandardConditions = (standardCondition: string) => {
+    switch (standardCondition) {
+      case 'ISO':
+        return { Tstd: 273.15, Pstd: 101325 };
+      case 'SCFM':
+        return { Tstd: (60 - 32) * 5/9 + 273.15, Pstd: 101325 };
+      case 'NTP':
+      default:
+        return { Tstd: 273.15 + 15, Pstd: 101325 };
+    }
+  };
+
+  const convertFlow = (
+    value: number,
+    from: string,
+    mw: number,
+    T: number,
+    P: number,
+    standardCondition: string
+  ): number => {
     // Convert to kg/s as base unit
-    const R = 8314.46 / mw; // J/(kg·K)
-    const Tstd = 273.15 + 15; // Standard temp 15°C
-    const Pstd = 101325; // Standard pressure Pa
+    const { Tstd, Pstd } = getStandardConditions(standardCondition);
 
     switch (from) {
       case 'nm3h': return (value * Pstd * mw) / (Tstd * 8314.46 * 3600);
@@ -204,7 +259,14 @@ const CompressorPowerCalculator: React.FC = () => {
     const P1 = convertPressure(inputs.inletPressure, inputs.pressureUnit, 'bara');
     const P2 = convertPressure(inputs.dischargePressure, inputs.pressureUnit, 'bara');
     const T1 = convertTemp(inputs.inletTemperature, inputs.tempUnit, 'K');
-    const massFlow = convertFlow(inputs.flowRate, inputs.flowUnit, inputs.molecularWeight, inputs.inletTemperature, P1);
+    const massFlow = convertFlow(
+      inputs.flowRate,
+      inputs.flowUnit,
+      inputs.molecularWeight,
+      inputs.inletTemperature,
+      P1,
+      inputs.standardCondition
+    );
     
     const k = inputs.specificHeatRatio;
     const Z1 = inputs.compressibilityFactor;
@@ -429,9 +491,10 @@ const CompressorPowerCalculator: React.FC = () => {
     
     // Actual volumetric flow at inlet conditions (m³/h)
     const actualFlow = (massFlow / rho1) * 3600;
-    
+
     // Specific power (kW per 100 Nm³/h)
-    const nm3hFlow = (massFlow * 3600 * 8314.46 * 273.15) / (MW * 101325);
+    const { Tstd, Pstd } = getStandardConditions(inputs.standardCondition);
+    const nm3hFlow = (massFlow * 3600 * 8314.46 * Tstd) / (MW * Pstd);
     const specificPower = nm3hFlow > 0 ? (motorPower / nm3hFlow) * 100 : 0;
     
     // ============================================
@@ -527,6 +590,10 @@ const CompressorPowerCalculator: React.FC = () => {
           <h2 className="text-2xl font-bold text-foreground">Compressor Power Calculator</h2>
           <p className="text-muted-foreground">Gas compression power and discharge temperature analysis</p>
         </div>
+      </div>
+      <div className="p-3 bg-muted/40 rounded-lg text-xs text-muted-foreground">
+        Screening-level calculations based on standard correlations. For design-grade sizing, verify with
+        manufacturer data and EOS-based property packages.
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -671,6 +738,28 @@ const CompressorPowerCalculator: React.FC = () => {
                           <SelectItem value="kgs">kg/s</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Standard Conditions</Label>
+                      <Select
+                        value={inputs.standardCondition}
+                        onValueChange={(v) => handleInputChange('standardCondition', v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ISO">ISO (0°C, 1 atm)</SelectItem>
+                          <SelectItem value="NTP">NTP (15°C, 1 atm)</SelectItem>
+                          <SelectItem value="SCFM">SCFM (60°F, 14.696 psia)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Used for standard volumetric flow units (Nm³/h, Sm³/h, SCFM).
+                      </p>
                     </div>
                   </div>
 
