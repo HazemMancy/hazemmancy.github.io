@@ -8,8 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Gauge, AlertTriangle, CheckCircle2, Info, Zap, Droplets, ArrowUpCircle, Activity, Ruler, Thermometer, TrendingUp, HelpCircle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import PumpPerformanceCurves from "./PumpPerformanceCurves";
-import PumpGuide from "./guides/PumpGuide";
+import { generatePumpPDF, PumpDatasheetData } from "@/lib/pumpPdfDatasheet";
+import { generatePumpExcelDatasheet, PumpExcelData } from "@/lib/pumpExcelDatasheet";
+import { toast } from "@/components/ui/use-toast";
 
 // ================== TYPE DEFINITIONS ==================
 
@@ -209,39 +212,39 @@ const fittingsDatabase: Record<string, FittingData> = {
   "elbow_45": { name: "45° Elbow", K: 0.35, LeD: 16, category: "Elbows" },
   "elbow_45_mitered": { name: "45° Mitered Elbow", K: 0.30, LeD: 15, category: "Elbows" },
   "elbow_180": { name: "180° Return Bend", K: 1.5, LeD: 60, category: "Elbows" },
-  
+
   // Tees
   "tee_straight": { name: "Tee (Straight Through)", K: 0.4, LeD: 20, category: "Tees" },
   "tee_branch_90": { name: "Tee (Branch Flow 90°)", K: 1.3, LeD: 60, category: "Tees" },
   "tee_branch_45": { name: "Tee (Branch Flow 45°)", K: 0.8, LeD: 35, category: "Tees" },
   "tee_dividing": { name: "Tee (Dividing Flow)", K: 1.0, LeD: 50, category: "Tees" },
-  
+
   // Gate Valves
   "gate_valve_full": { name: "Gate Valve (Full Open)", K: 0.17, LeD: 8, category: "Gate Valves" },
   "gate_valve_3_4": { name: "Gate Valve (3/4 Open)", K: 0.9, LeD: 35, category: "Gate Valves" },
   "gate_valve_half": { name: "Gate Valve (1/2 Open)", K: 4.5, LeD: 160, category: "Gate Valves" },
   "gate_valve_1_4": { name: "Gate Valve (1/4 Open)", K: 24.0, LeD: 900, category: "Gate Valves" },
-  
+
   // Globe Valves
   "globe_valve_full": { name: "Globe Valve (Full Open)", K: 6.0, LeD: 340, category: "Globe Valves" },
   "globe_valve_half": { name: "Globe Valve (1/2 Open)", K: 9.5, LeD: 500, category: "Globe Valves" },
   "globe_valve_angle": { name: "Angle Valve (Full Open)", K: 2.0, LeD: 145, category: "Globe Valves" },
   "globe_valve_y": { name: "Y-Pattern Globe (Full Open)", K: 3.0, LeD: 160, category: "Globe Valves" },
-  
+
   // Ball Valves
   "ball_valve_full": { name: "Ball Valve (Full Open)", K: 0.05, LeD: 3, category: "Ball Valves" },
   "ball_valve_reduced": { name: "Ball Valve (Reduced Port)", K: 0.15, LeD: 8, category: "Ball Valves" },
   "ball_valve_v_port": { name: "Ball Valve (V-Port)", K: 0.25, LeD: 12, category: "Ball Valves" },
-  
+
   // Butterfly Valves
   "butterfly_valve_full": { name: "Butterfly Valve (Full Open)", K: 0.25, LeD: 12, category: "Butterfly Valves" },
   "butterfly_valve_30": { name: "Butterfly Valve (30° Open)", K: 6.5, LeD: 300, category: "Butterfly Valves" },
   "butterfly_valve_60": { name: "Butterfly Valve (60° Open)", K: 1.5, LeD: 70, category: "Butterfly Valves" },
-  
+
   // Plug Valves
   "plug_valve_full": { name: "Plug Valve (Full Open)", K: 0.4, LeD: 18, category: "Plug Valves" },
   "plug_valve_3_way": { name: "3-Way Plug Valve (Straight)", K: 0.6, LeD: 25, category: "Plug Valves" },
-  
+
   // Check Valves
   "check_valve_swing": { name: "Swing Check Valve", K: 2.0, LeD: 100, category: "Check Valves" },
   "check_valve_lift": { name: "Lift Check Valve", K: 10.0, LeD: 600, category: "Check Valves" },
@@ -249,7 +252,7 @@ const fittingsDatabase: Record<string, FittingData> = {
   "check_valve_tilting": { name: "Tilting Disc Check Valve", K: 1.0, LeD: 50, category: "Check Valves" },
   "check_valve_wafer": { name: "Wafer Check Valve", K: 2.5, LeD: 120, category: "Check Valves" },
   "check_valve_nozzle": { name: "Nozzle Check Valve", K: 1.5, LeD: 75, category: "Check Valves" },
-  
+
   // Reducers & Expanders
   "reducer_concentric": { name: "Concentric Reducer", K: 0.5, LeD: 25, category: "Reducers" },
   "reducer_eccentric": { name: "Eccentric Reducer", K: 0.6, LeD: 30, category: "Reducers" },
@@ -257,13 +260,13 @@ const fittingsDatabase: Record<string, FittingData> = {
   "expander_sudden": { name: "Sudden Expansion", K: 1.0, LeD: 40, category: "Reducers" },
   "contraction_gradual": { name: "Gradual Contraction", K: 0.1, LeD: 5, category: "Reducers" },
   "contraction_sudden": { name: "Sudden Contraction", K: 0.5, LeD: 25, category: "Reducers" },
-  
+
   // Strainers & Filters
   "strainer_y": { name: "Y-Strainer", K: 2.0, LeD: 100, category: "Strainers" },
   "strainer_basket": { name: "Basket Strainer", K: 3.5, LeD: 175, category: "Strainers" },
   "strainer_duplex": { name: "Duplex Strainer", K: 3.0, LeD: 150, category: "Strainers" },
   "filter": { name: "In-line Filter", K: 4.0, LeD: 200, category: "Strainers" },
-  
+
   // Entrance & Exit
   "entrance_bellmouth": { name: "Pipe Entrance (Bellmouth)", K: 0.04, LeD: 2, category: "Entrance/Exit" },
   "entrance_rounded": { name: "Pipe Entrance (Rounded)", K: 0.25, LeD: 12, category: "Entrance/Exit" },
@@ -271,7 +274,7 @@ const fittingsDatabase: Record<string, FittingData> = {
   "entrance_projecting": { name: "Pipe Entrance (Projecting)", K: 0.8, LeD: 40, category: "Entrance/Exit" },
   "exit_sharp": { name: "Pipe Exit (Sharp)", K: 1.0, LeD: 50, category: "Entrance/Exit" },
   "exit_submerged": { name: "Pipe Exit (Submerged)", K: 1.0, LeD: 50, category: "Entrance/Exit" },
-  
+
   // Miscellaneous
   "flowmeter_orifice": { name: "Orifice Flowmeter", K: 2.5, LeD: 125, category: "Miscellaneous" },
   "flowmeter_venturi": { name: "Venturi Flowmeter", K: 0.5, LeD: 25, category: "Miscellaneous" },
@@ -464,7 +467,7 @@ const calculateColebrook = (Re: number, eD: number): number => {
 
 const calculateFrictionFactor = (Re: number, roughness: number, diameter: number): number => {
   const relativeRoughness = roughness / diameter;
-  
+
   if (Re < 2300) {
     // Laminar flow - Hagen-Poiseuille
     return 64 / Re;
@@ -509,7 +512,7 @@ const calculateNPSHa = (
 const PumpSizingCalculator = () => {
   // ========== UNIT SYSTEM ==========
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("metric");
-  
+
   // Get current unit sets based on unit system
   const flowRateUnits = unitSystem === 'metric' ? metricFlowRateToM3s : imperialFlowRateToM3s;
   const headUnits = unitSystem === 'metric' ? metricHeadToMeters : imperialHeadToMeters;
@@ -519,11 +522,11 @@ const PumpSizingCalculator = () => {
   const powerUnits = unitSystem === 'metric' ? metricPowerToKW : imperialPowerToKW;
 
   // ========== STATE MANAGEMENT ==========
-  
+
   // Flow conditions
   const [flowRate, setFlowRate] = useState<string>("100");
   const [flowRateUnit, setFlowRateUnit] = useState<string>(unitSystem === 'metric' ? "m³/h" : "gpm");
-  
+
   // Fluid properties
   const [density, setDensity] = useState<string>("1000");
   const [densityUnit, setDensityUnit] = useState<string>(unitSystem === 'metric' ? "kg/m³" : "lb/ft³");
@@ -532,7 +535,7 @@ const PumpSizingCalculator = () => {
   const [vaporPressure, setVaporPressure] = useState<string>(unitSystem === 'metric' ? "2.34" : "0.34");
   const [vaporPressureUnit, setVaporPressureUnit] = useState<string>(unitSystem === 'metric' ? "kPa" : "psia");
   const [fluidTemp, setFluidTemp] = useState<string>(unitSystem === 'metric' ? "20" : "68");
-  
+
   // Suction system
   const [suctionPressure, setSuctionPressure] = useState<string>(unitSystem === 'metric' ? "101.325" : "14.7"); // Absolute
   const [suctionPressureUnit, setSuctionPressureUnit] = useState<string>(unitSystem === 'metric' ? "kPa(a)" : "psia");
@@ -543,7 +546,7 @@ const PumpSizingCalculator = () => {
   const [suctionNominalDia, setSuctionNominalDia] = useState<string>("6");
   const [suctionSchedule, setSuctionSchedule] = useState<string>("40");
   const [suctionServiceType, setSuctionServiceType] = useState<string>("Pump Suction (Sub-cooled)");
-  
+
   // Discharge system
   const [dischargeStaticHead, setDischargeStaticHead] = useState<string>("25");
   const [dischargeHeadUnit, setDischargeHeadUnit] = useState<string>(unitSystem === 'metric' ? "m" : "ft");
@@ -554,11 +557,11 @@ const PumpSizingCalculator = () => {
   const [dischargeEndPressure, setDischargeEndPressure] = useState<string>(unitSystem === 'metric' ? "2" : "29");
   const [dischargeEndPressureUnit, setDischargeEndPressureUnit] = useState<string>(unitSystem === 'metric' ? "bar" : "psig");
   const [dischargeServiceType, setDischargeServiceType] = useState<string>("Pump Discharge (Pop < 35 barg)");
-  
+
   // Pipe properties
   const [pipeMaterial, setPipeMaterial] = useState<string>("Carbon Steel (New)");
   const [customRoughness, setCustomRoughness] = useState<string>("0.0457");
-  
+
   // Fittings - using dynamic state for all fittings
   const [suctionFittings, setSuctionFittings] = useState<Record<string, number>>({
     "elbow_90_long": 1,
@@ -566,20 +569,20 @@ const PumpSizingCalculator = () => {
     "strainer_y": 1,
     "entrance_bellmouth": 1,
   });
-  
+
   const [dischargeFittings, setDischargeFittings] = useState<Record<string, number>>({
     "elbow_90_long": 4,
     "gate_valve_full": 2,
     "check_valve_swing": 1,
     "exit_sharp": 1,
   });
-  
+
   // Pump selection
   const [pumpType, setPumpType] = useState<string>("centrifugal_oh2");
   const [pumpEfficiency, setPumpEfficiency] = useState<string>("75");
   const [motorEfficiency, setMotorEfficiency] = useState<string>("95");
   const [npshrMargin, setNpshrMargin] = useState<string>(unitSystem === 'metric' ? "0.5" : "1.6");
-  
+
   // Display units
   const [headDisplayUnit, setHeadDisplayUnit] = useState<string>(unitSystem === 'metric' ? "m" : "ft");
   const [powerDisplayUnit, setPowerDisplayUnit] = useState<string>(unitSystem === 'metric' ? "kW" : "hp");
@@ -619,60 +622,60 @@ const PumpSizingCalculator = () => {
   const dischargeCriteria = liquidServiceCriteria.find(c => c.service === dischargeServiceType);
 
   // ========== CALCULATIONS ==========
-  
+
   const calculations = useMemo(() => {
     const g = 9.81; // m/s²
-    
+
     // Convert inputs to SI units
     const allFlowRateUnits = { ...metricFlowRateToM3s, ...imperialFlowRateToM3s };
     const allDensityUnits = { ...metricDensityToKgM3, ...imperialDensityToKgM3 };
     const allPressureUnits = { ...metricPressureToKPa, ...imperialPressureToKPa };
     const allHeadUnits = { ...metricHeadToMeters, ...imperialHeadToMeters };
     const allLengthUnits = { ...metricLengthToMeters, ...imperialLengthToMeters };
-    
+
     const Q_m3s = parseFloat(flowRate) * (allFlowRateUnits[flowRateUnit] || 1 / 3600);
     const rho = parseFloat(density) * (allDensityUnits[densityUnit] || 1);
     const mu = parseFloat(viscosity) * (viscosityToPas[viscosityUnit] || 0.001);
     const Pv = parseFloat(vaporPressure) * (allPressureUnits[vaporPressureUnit] || 1) * 1000; // to Pa
     const Ps = parseFloat(suctionPressure) * (allPressureUnits[suctionPressureUnit] || 1) * 1000; // to Pa
-    
+
     // Pipe roughness
-    const roughness_m = pipeMaterial === "Custom" 
-      ? parseFloat(customRoughness) * 0.001 
+    const roughness_m = pipeMaterial === "Custom"
+      ? parseFloat(customRoughness) * 0.001
       : (pipeRoughness[pipeMaterial] || 0.0457) * 0.001;
-    
+
     // Suction pipe geometry
     const suctionDia_mm = pipeScheduleData[suctionNominalDia]?.[suctionSchedule] || 154.05;
     const suctionDia_m = suctionDia_mm * 0.001;
     const suctionLength_m = parseFloat(suctionPipeLength) * (allLengthUnits[suctionLengthUnit] || 1);
     const suctionStaticHead_m = parseFloat(suctionStaticHead) * (allHeadUnits[suctionHeadUnit] || 1);
     const suctionNominalSizeInch = parseNominalDiameter(suctionNominalDia);
-    
+
     // Discharge pipe geometry
     const dischargeDia_mm = pipeScheduleData[dischargeNominalDia]?.[dischargeSchedule] || 102.26;
     const dischargeDia_m = dischargeDia_mm * 0.001;
     const dischargeLength_m = parseFloat(dischargePipeLength) * (allLengthUnits[dischargeLengthUnit] || 1);
     const dischargeStaticHead_m = parseFloat(dischargeStaticHead) * (allHeadUnits[dischargeHeadUnit] || 1);
     const dischargeNominalSizeInch = parseNominalDiameter(dischargeNominalDia);
-    
+
     // Discharge end pressure - handle gauge vs absolute
     let dischargeEndPressure_Pa = parseFloat(dischargeEndPressure) * (allPressureUnits[dischargeEndPressureUnit] || 100) * 1000;
     if (dischargeEndPressureUnit.includes("g")) { // gauge pressure
       dischargeEndPressure_Pa += Ps; // Add suction absolute pressure as reference
     }
-    
+
     // Velocities
     const suctionVelocity = calculateVelocity(Q_m3s, suctionDia_m);
     const dischargeVelocity = calculateVelocity(Q_m3s, dischargeDia_m);
-    
+
     // Reynolds numbers
     const suctionRe = calculateReynolds(suctionVelocity, suctionDia_m, rho, mu);
     const dischargeRe = calculateReynolds(dischargeVelocity, dischargeDia_m, rho, mu);
-    
+
     // Friction factors (Darcy-Weisbach)
     const suctionFf = calculateFrictionFactor(suctionRe, roughness_m, suctionDia_m);
     const dischargeFf = calculateFrictionFactor(dischargeRe, roughness_m, dischargeDia_m);
-    
+
     // Suction fitting losses (K-factors)
     let suctionKTotal = 0;
     Object.entries(suctionFittings).forEach(([key, count]) => {
@@ -680,7 +683,7 @@ const PumpSizingCalculator = () => {
         suctionKTotal += count * fittingsDatabase[key].K;
       }
     });
-    
+
     // Discharge fitting losses (K-factors)
     let dischargeKTotal = 0;
     Object.entries(dischargeFittings).forEach(([key, count]) => {
@@ -688,100 +691,100 @@ const PumpSizingCalculator = () => {
         dischargeKTotal += count * fittingsDatabase[key].K;
       }
     });
-    
+
     // Suction friction loss (Darcy-Weisbach: hf = f * L/D * v²/2g)
     const suctionPipeLoss = suctionFf * (suctionLength_m / suctionDia_m) * (Math.pow(suctionVelocity, 2) / (2 * g));
     const suctionFittingLoss = suctionKTotal * (Math.pow(suctionVelocity, 2) / (2 * g));
     const suctionTotalLoss = suctionPipeLoss + suctionFittingLoss;
-    
+
     // Discharge friction loss
     const dischargePipeLoss = dischargeFf * (dischargeLength_m / dischargeDia_m) * (Math.pow(dischargeVelocity, 2) / (2 * g));
     const dischargeFittingLoss = dischargeKTotal * (Math.pow(dischargeVelocity, 2) / (2 * g));
     const dischargeTotalLoss = dischargePipeLoss + dischargeFittingLoss;
-    
+
     // Total friction loss
     const totalFrictionLoss = suctionTotalLoss + dischargeTotalLoss;
-    
+
     // Static head (discharge - suction)
     const totalStaticHead = dischargeStaticHead_m - suctionStaticHead_m;
-    
+
     // Pressure head at discharge (convert discharge pressure to head)
     const pressureHead = (dischargeEndPressure_Pa - Ps) / (rho * g);
-    
+
     // Velocity head
     const suctionVelocityHead = Math.pow(suctionVelocity, 2) / (2 * g);
     const dischargeVelocityHead = Math.pow(dischargeVelocity, 2) / (2 * g);
     const velocityHeadDiff = dischargeVelocityHead - suctionVelocityHead;
-    
+
     // Total Dynamic Head (TDH) per API 610 / HI
     // TDH = (Pd - Ps)/(ρg) + (Zd - Zs) + (Vd² - Vs²)/(2g) + hf_total
     const totalHead = totalStaticHead + totalFrictionLoss + pressureHead + velocityHeadDiff;
-    
+
     // NPSHa calculation per API 610
     const npshaValue = calculateNPSHa(Ps, Pv, suctionStaticHead_m, suctionTotalLoss, suctionVelocityHead, rho);
-    
+
     // Power calculations per API 610
     const eta_pump = parseFloat(pumpEfficiency) / 100;
     const eta_motor = parseFloat(motorEfficiency) / 100;
-    
+
     // Hydraulic power: Ph = ρ * g * Q * H
     const hydraulicPower_kW = (rho * g * Q_m3s * totalHead) / 1000;
     // Brake power: Pb = Ph / η_pump
     const brakePower_kW = hydraulicPower_kW / eta_pump;
     // Motor power: Pm = Pb / η_motor
     const motorPower_kW = brakePower_kW / eta_motor;
-    
+
     // Specific speed (for pump selection) - API 610 / HI
     const Q_m3min = Q_m3s * 60;
     const n = 2950; // Typical 2-pole motor speed at 50Hz (rpm)
     // Ns = n * √Q / H^0.75 (metric specific speed)
     const Ns = n * Math.sqrt(Q_m3min) / Math.pow(totalHead, 0.75);
-    
+
     // Suction specific speed
     const Nss = n * Math.sqrt(Q_m3min) / Math.pow(Math.max(npshaValue, 0.1), 0.75);
-    
+
     // Flow regime
     const flowRegime = suctionRe < 2300 ? "Laminar" : suctionRe < 4000 ? "Transition" : "Turbulent";
-    
+
     // Get Eni velocity limits
     const suctionCriteriaData = liquidServiceCriteria.find(c => c.service === suctionServiceType);
     const dischargeCriteriaData = liquidServiceCriteria.find(c => c.service === dischargeServiceType);
-    
+
     const suctionVelLimit = suctionCriteriaData ? getLiquidVelocityLimit(suctionCriteriaData, suctionNominalSizeInch) : null;
     const dischargeVelLimit = dischargeCriteriaData ? getLiquidVelocityLimit(dischargeCriteriaData, dischargeNominalSizeInch) : null;
-    
+
     // Calculate pressure drop per km
     const suctionDpBarKm = suctionLength_m > 0 ? (suctionTotalLoss * rho * g / 100000) / (suctionLength_m / 1000) : 0;
     const dischargeDpBarKm = dischargeLength_m > 0 ? (dischargeTotalLoss * rho * g / 100000) / (dischargeLength_m / 1000) : 0;
-    
+
     return {
       // Flow
       flowRate_m3h: Q_m3s * 3600,
       flowRate_gpm: Q_m3s / 0.0000630902,
-      
+
       // Velocities
       suctionVelocity,
       dischargeVelocity,
-      
+
       // Velocity limits (Eni criteria)
       suctionVelLimit,
       dischargeVelLimit,
-      
+
       // Pressure drop
       suctionDpBarKm,
       dischargeDpBarKm,
       suctionDpLimit: suctionCriteriaData?.pressureDropBarKm || null,
       dischargeDpLimit: dischargeCriteriaData?.pressureDropBarKm || null,
-      
+
       // Reynolds numbers
       suctionRe,
       dischargeRe,
       flowRegime,
-      
+
       // Friction factors
       suctionFf,
       dischargeFf,
-      
+
       // Losses breakdown
       suctionPipeLoss,
       suctionFittingLoss,
@@ -790,7 +793,7 @@ const PumpSizingCalculator = () => {
       dischargeFittingLoss,
       dischargeTotalLoss,
       totalFrictionLoss,
-      
+
       // Head components
       totalStaticHead,
       pressureHead,
@@ -798,26 +801,26 @@ const PumpSizingCalculator = () => {
       suctionVelocityHead,
       dischargeVelocityHead,
       totalHead,
-      
+
       // NPSH
       npshaValue,
       npshrEstimate: npshaValue - parseFloat(npshrMargin) * (headUnits[headDisplayUnit] || 1),
-      
+
       // Power
       hydraulicPower_kW,
       brakePower_kW,
       motorPower_kW,
-      
+
       // Pump selection parameters
       specificSpeed: Ns,
       suctionSpecificSpeed: Nss,
-      
+
       // Pipe diameters for display
       suctionDia_mm,
       dischargeDia_mm,
       suctionNominalSizeInch,
       dischargeNominalSizeInch,
-      
+
       // Validity checks
       isValid: !isNaN(totalHead) && totalHead > 0 && Q_m3s > 0,
       suctionVelocityOk: suctionVelLimit ? suctionVelocity <= suctionVelLimit : suctionVelocity <= 2.0,
@@ -837,6 +840,123 @@ const PumpSizingCalculator = () => {
     dischargeEndPressure, dischargeEndPressureUnit,
     pumpEfficiency, motorEfficiency, npshrMargin, headDisplayUnit, headUnits
   ]);
+
+  // ========== METADATA STATE ==========
+  const [companyName, setCompanyName] = useState("Company Name");
+  const [projectName, setProjectName] = useState("Project Name");
+  const [itemNumber, setItemNumber] = useState("P-101");
+  const [serviceName, setServiceName] = useState("Water Transfer");
+
+  // ========== EXPORT HANDLERS ==========
+  const handleExportPDF = () => {
+    const data: PumpDatasheetData = {
+      title: "Pump Sizing Datasheet",
+      companyName,
+      projectName,
+      itemNumber,
+      service: serviceName,
+      date: new Date().toLocaleDateString(),
+      unitSystem: unitSystem === 'metric' ? "Metric" : "Imperial",
+
+      // Process Data
+      flowRate: flowRate,
+      flowUnit: flowRateUnit,
+      head: calculations.totalHead.toFixed(2),
+      headUnit: unitSystem === 'metric' ? "m" : "ft",
+      liquidName: "Process Fluid",
+      temp: fluidTemp,
+      density: density,
+      densityUnit: densityUnit,
+      viscosity: viscosity,
+      viscosityUnit: viscosityUnit,
+      vaporPressure: vaporPressure,
+      vaporPressureUnit: vaporPressureUnit,
+
+      // Pump
+      type: pumpTypes[pumpType].name,
+      standard: pumpTypes[pumpType].standard,
+      efficiency: pumpEfficiency,
+      motorEfficiency: motorEfficiency,
+
+      // Results
+      suctionPress: suctionPressure,
+      suctionPressUnit: suctionPressureUnit,
+      dischargePress: dischargeEndPressure,
+      dischargePressUnit: dischargeEndPressureUnit,
+      tdh: calculations.totalHead.toFixed(2),
+      tdhUnit: unitSystem === 'metric' ? "m" : "ft",
+      npsha: calculations.npshaValue.toFixed(2),
+      npshaMargin: npshrMargin,
+      npshaUnit: unitSystem === 'metric' ? "m" : "ft",
+      hydPower: calculations.hydraulicPower_kW.toFixed(2),
+      brakePower: calculations.brakePower_kW.toFixed(2),
+      motorPower: calculations.motorPower_kW.toFixed(2),
+      powerUnit: unitSystem === 'metric' ? "kW" : "hp",
+      suctionVel: calculations.suctionVelocity.toFixed(2),
+      dischargeVel: calculations.dischargeVelocity.toFixed(2),
+      velUnit: unitSystem === 'metric' ? "m/s" : "ft/s"
+    };
+
+    generatePumpPDF(data);
+    toast({ title: "Export Successful", description: "PDF Datasheet generated." });
+  };
+
+  const handleExportExcel = () => {
+    const data: PumpExcelData = {
+      pdfTitle: "Pump Process Datasheet",
+      companyName,
+      projectName,
+      itemNumber,
+      service: serviceName,
+      date: new Date().toLocaleDateString(),
+      unitSystem: unitSystem === 'metric' ? "Metric" : "Imperial",
+
+      // Conditions
+      flowRate,
+      flowRateUnit,
+      head: calculations.totalHead.toFixed(2),
+      headUnit: unitSystem === 'metric' ? "m" : "ft",
+      temperature: fluidTemp,
+
+      // Liquid
+      liquid: "Process Fluid",
+      density,
+      densityUnit,
+      viscosity,
+      viscosityUnit,
+      vaporPressure,
+      vaporPressureUnit,
+
+      // Pump
+      pumpType: pumpTypes[pumpType].name,
+      standard: pumpTypes[pumpType].standard,
+      efficiency: pumpEfficiency,
+      motorEfficiency: motorEfficiency,
+
+      // Results
+      hydraulicPower: calculations.hydraulicPower_kW.toFixed(2),
+      brakePower: calculations.brakePower_kW.toFixed(2),
+      motorPower: calculations.motorPower_kW.toFixed(2),
+      powerUnit: unitSystem === 'metric' ? "kW" : "hp",
+      npsha: calculations.npshaValue.toFixed(2),
+      npshaMargin: npshrMargin,
+      npshaUnit: unitSystem === 'metric' ? "m" : "ft",
+
+      // Hydraulics
+      suctionPressure,
+      suctionPressureUnit,
+      dischargePressure: dischargeEndPressure,
+      dischargePressureUnit: dischargeEndPressureUnit,
+      totalHead: calculations.totalHead.toFixed(2),
+      totalHeadUnit: unitSystem === 'metric' ? "m" : "ft",
+      suctionVelocity: calculations.suctionVelocity.toFixed(2),
+      dischargeVelocity: calculations.dischargeVelocity.toFixed(2),
+      velocityUnit: unitSystem === 'metric' ? "m/s" : "ft/s"
+    };
+
+    generatePumpExcelDatasheet(data);
+    toast({ title: "Export Successful", description: "Excel Datasheet generated." });
+  };
 
   // Helper function for head unit conversion display
   const convertHead = (headM: number): number => {
@@ -859,7 +979,7 @@ const PumpSizingCalculator = () => {
   const updateSuctionFitting = (key: string, count: number) => {
     setSuctionFittings(prev => ({ ...prev, [key]: Math.max(0, count) }));
   };
-  
+
   const updateDischargeFitting = (key: string, count: number) => {
     setDischargeFittings(prev => ({ ...prev, [key]: Math.max(0, count) }));
   };
@@ -888,887 +1008,1128 @@ const PumpSizingCalculator = () => {
               </span>
             </div>
           </div>
-          
+
           <div className="hidden lg:block h-8 w-px bg-border" />
-          
+
           <div className="flex items-center gap-2">
             <Thermometer className="w-4 h-4 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Temperature:</span>
             <Badge variant="outline" className="text-xs">{fluidTemp} {unitSystem === 'metric' ? '°C' : '°F'}</Badge>
           </div>
-          
+
           <Badge variant="secondary" className="text-xs">
             API 610 / API 674 / API 676
           </Badge>
         </div>
       </div>
 
-      {/* Input Tabs */}
-      <Tabs defaultValue="flow" className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="flow" className="text-xs sm:text-sm">
-            <Droplets className="w-4 h-4 mr-1 hidden sm:inline" />
-            Flow
-          </TabsTrigger>
-          <TabsTrigger value="suction" className="text-xs sm:text-sm">
-            <ArrowUpCircle className="w-4 h-4 mr-1 hidden sm:inline rotate-180" />
-            Suction
-          </TabsTrigger>
-          <TabsTrigger value="discharge" className="text-xs sm:text-sm">
-            <ArrowUpCircle className="w-4 h-4 mr-1 hidden sm:inline" />
-            Discharge
-          </TabsTrigger>
-          <TabsTrigger value="fittings" className="text-xs sm:text-sm">
-            <Activity className="w-4 h-4 mr-1 hidden sm:inline" />
-            Fittings
-          </TabsTrigger>
-          <TabsTrigger value="pump" className="text-xs sm:text-sm">
-            <Gauge className="w-4 h-4 mr-1 hidden sm:inline" />
-            Pump
-          </TabsTrigger>
-          <TabsTrigger value="curves" className="text-xs sm:text-sm">
-            <TrendingUp className="w-4 h-4 mr-1 hidden sm:inline" />
-            Curves
-          </TabsTrigger>
-          <TabsTrigger value="guide" className="text-xs sm:text-sm">
-            <HelpCircle className="w-4 h-4 mr-1 hidden sm:inline" />
-            Guide
-          </TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="calculator" className="w-full">
+        <div className="flex justify-center mb-6">
+          <TabsList className="grid w-full max-w-md grid-cols-3 h-12 bg-secondary/30 p-1 rounded-full">
+            <TabsTrigger value="calculator" className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+              Calculator
+            </TabsTrigger>
+            <TabsTrigger value="curves" className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+              Performance Curves
+            </TabsTrigger>
+            <TabsTrigger value="guide" className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+              Standards Guide
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        {/* Flow & Fluid Properties Tab */}
-        <TabsContent value="flow">
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Droplets className="w-5 h-5 text-primary" />
-                Flow Rate & Fluid Properties
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Flow Rate */}
-              <div className="space-y-2">
-                <Label htmlFor="flowRate">Flow Rate</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="flowRate"
-                    type="number"
-                    value={flowRate}
-                    onChange={(e) => setFlowRate(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={flowRateUnit} onValueChange={setFlowRateUnit}>
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(flowRateUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+        {/* Input Tabs - Wrapped in Calculator Tab Content */}
+        <TabsContent value="calculator" className="space-y-6">
+          <Tabs defaultValue="flow" className="w-full">
+            <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/50 rounded-lg mb-4">
+              <TabsTrigger value="flow" className="text-xs sm:text-sm py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Droplets className="w-4 h-4 mr-2 hidden sm:inline" />
+                Flow
+              </TabsTrigger>
+              <TabsTrigger value="suction" className="text-xs sm:text-sm py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <ArrowUpCircle className="w-4 h-4 mr-2 hidden sm:inline rotate-180" />
+                Suction
+              </TabsTrigger>
+              <TabsTrigger value="discharge" className="text-xs sm:text-sm py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <ArrowUpCircle className="w-4 h-4 mr-2 hidden sm:inline" />
+                Discharge
+              </TabsTrigger>
+              <TabsTrigger value="fittings" className="text-xs sm:text-sm py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Activity className="w-4 h-4 mr-2 hidden sm:inline" />
+                Fittings
+              </TabsTrigger>
+              <TabsTrigger value="pump" className="text-xs sm:text-sm py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Gauge className="w-4 h-4 mr-2 hidden sm:inline" />
+                Pump
+              </TabsTrigger>
+            </TabsList>
 
-              {/* Density */}
-              <div className="space-y-2">
-                <Label htmlFor="density">Density</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="density"
-                    type="number"
-                    value={density}
-                    onChange={(e) => setDensity(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={densityUnit} onValueChange={setDensityUnit}>
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(densityUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Viscosity */}
-              <div className="space-y-2">
-                <Label htmlFor="viscosity">Dynamic Viscosity</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="viscosity"
-                    type="number"
-                    value={viscosity}
-                    onChange={(e) => setViscosity(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={viscosityUnit} onValueChange={setViscosityUnit}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(viscosityToPas).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Vapor Pressure */}
-              <div className="space-y-2">
-                <Label htmlFor="vaporPressure" className="flex items-center gap-1">
-                  Vapor Pressure
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Info className="w-3 h-3 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Vapor pressure at operating temperature</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="vaporPressure"
-                    type="number"
-                    step="0.01"
-                    value={vaporPressure}
-                    onChange={(e) => setVaporPressure(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={vaporPressureUnit} onValueChange={setVaporPressureUnit}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(pressureUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Fluid Temperature */}
-              <div className="space-y-2">
-                <Label htmlFor="fluidTemp">Fluid Temperature ({unitSystem === 'metric' ? '°C' : '°F'})</Label>
-                <Input
-                  id="fluidTemp"
-                  type="number"
-                  value={fluidTemp}
-                  onChange={(e) => setFluidTemp(e.target.value)}
-                />
-              </div>
-
-              {/* Pipe Material */}
-              <div className="space-y-2">
-                <Label htmlFor="pipeMaterial">Pipe Material</Label>
-                <Select value={pipeMaterial} onValueChange={setPipeMaterial}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(pipeRoughness).map((mat) => (
-                      <SelectItem key={mat} value={mat}>{mat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {pipeMaterial === "Custom" && (
-                <div className="space-y-2">
-                  <Label htmlFor="customRoughness">Custom Roughness (mm)</Label>
-                  <Input
-                    id="customRoughness"
-                    type="number"
-                    step="0.001"
-                    value={customRoughness}
-                    onChange={(e) => setCustomRoughness(e.target.value)}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Suction Side Tab */}
-        <TabsContent value="suction">
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ArrowUpCircle className="w-5 h-5 text-blue-500 rotate-180" />
-                  Suction Side Geometry
-                </CardTitle>
-                {/* Eni Sizing Criteria */}
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs">Eni Sizing Criteria:</Label>
-                  <Select value={suctionServiceType} onValueChange={setSuctionServiceType}>
-                    <SelectTrigger className="w-[220px] h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {liquidServiceCriteria.filter(c => c.service.toLowerCase().includes('suction') || c.service.toLowerCase().includes('gravity')).map((c) => (
-                        <SelectItem key={c.service} value={c.service} className="text-xs">{c.service}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Recommended Limits */}
-              {suctionCriteria && (
-                <div className="mt-2 p-2 bg-muted/50 rounded-lg">
-                  <p className="text-xs font-medium mb-1">Recommended Limits</p>
-                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                    {suctionCriteria.pressureDropBarKm && (
-                      <span>ΔP ≤ {suctionCriteria.pressureDropBarKm} bar/km</span>
-                    )}
-                    {suctionCriteria.velocity && (
-                      <span>
-                        v ≤ {getLiquidVelocityLimit(suctionCriteria, calculations.suctionNominalSizeInch)} m/s
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Suction Pressure */}
-              <div className="space-y-2">
-                <Label htmlFor="suctionPressure" className="flex items-center gap-1">
-                  Suction Pressure (Absolute)
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Info className="w-3 h-3 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Absolute pressure at suction source<br/>Typically vessel pressure or atmospheric</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="suctionPressure"
-                    type="number"
-                    value={suctionPressure}
-                    onChange={(e) => setSuctionPressure(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={suctionPressureUnit} onValueChange={setSuctionPressureUnit}>
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(pressureUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Suction Static Head */}
-              <div className="space-y-2">
-                <Label htmlFor="suctionHead" className="flex items-center gap-1">
-                  Static Suction Head
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Info className="w-3 h-3 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Positive: liquid level above pump centerline<br/>Negative: liquid level below pump (suction lift)</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="suctionHead"
-                    type="number"
-                    value={suctionStaticHead}
-                    onChange={(e) => setSuctionStaticHead(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={suctionHeadUnit} onValueChange={setSuctionHeadUnit}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(headUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Suction Pipe Length */}
-              <div className="space-y-2">
-                <Label htmlFor="suctionLength">Pipe Length</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="suctionLength"
-                    type="number"
-                    value={suctionPipeLength}
-                    onChange={(e) => setSuctionPipeLength(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={suctionLengthUnit} onValueChange={setSuctionLengthUnit}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(lengthUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Suction Pipe Diameter */}
-              <div className="space-y-2">
-                <Label>Nominal Diameter (NPS)</Label>
-                <Select value={suctionNominalDia} onValueChange={(val) => {
-                  setSuctionNominalDia(val);
-                  const schedules = getSchedulesForDiameter(val);
-                  if (!schedules.includes(suctionSchedule)) {
-                    setSuctionSchedule(schedules[0] || "40");
-                  }
-                }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nominalDiameters.map((nd) => (
-                      <SelectItem key={nd} value={nd}>{nd}"</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Suction Pipe Schedule */}
-              <div className="space-y-2">
-                <Label>Schedule</Label>
-                <Select value={suctionSchedule} onValueChange={setSuctionSchedule}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getSchedulesForDiameter(suctionNominalDia).map((sch) => (
-                      <SelectItem key={sch} value={sch}>{sch}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* ID Display */}
-              <div className="space-y-2">
-                <Label>Inside Diameter</Label>
-                <Input
-                  value={`${calculations.suctionDia_mm.toFixed(2)} mm`}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-
-              {/* Suction Status */}
-              <div className="md:col-span-2 lg:col-span-3 p-3 bg-muted/30 rounded-lg">
-                <p className="text-xs font-medium mb-2">Suction Line Status</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Velocity</span>
-                    <div className="flex items-center gap-1">
-                      <span className="font-mono">{calculations.suctionVelocity.toFixed(2)} m/s</span>
-                      {calculations.suctionVelocityOk ? (
-                        <CheckCircle2 className="w-3 h-3 text-green-500" />
-                      ) : (
-                        <AlertTriangle className="w-3 h-3 text-amber-500" />
-                      )}
+            {/* Flow & Fluid Properties Tab */}
+            < TabsContent value="flow" >
+              <Card>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Droplets className="w-5 h-5 text-primary" />
+                    Flow Rate & Fluid Properties
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Flow Rate */}
+                  <div className="space-y-2">
+                    <Label htmlFor="flowRate">Flow Rate</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="flowRate"
+                        type="number"
+                        value={flowRate}
+                        onChange={(e) => setFlowRate(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={flowRateUnit} onValueChange={setFlowRateUnit}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(flowRateUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Limit</span>
-                    <span className="font-mono">{calculations.suctionVelLimit?.toFixed(1) || '2.0'} m/s</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">ΔP</span>
-                    <div className="flex items-center gap-1">
-                      <span className="font-mono">{calculations.suctionDpBarKm.toFixed(2)} bar/km</span>
-                      {calculations.suctionDpOk ? (
-                        <CheckCircle2 className="w-3 h-3 text-green-500" />
-                      ) : (
-                        <AlertTriangle className="w-3 h-3 text-amber-500" />
-                      )}
+
+                  {/* Density */}
+                  <div className="space-y-2">
+                    <Label htmlFor="density">Density</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="density"
+                        type="number"
+                        value={density}
+                        onChange={(e) => setDensity(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={densityUnit} onValueChange={setDensityUnit}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(densityUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Reynolds</span>
-                    <span className="font-mono">{calculations.suctionRe.toExponential(2)}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        {/* Discharge Side Tab */}
-        <TabsContent value="discharge">
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ArrowUpCircle className="w-5 h-5 text-orange-500" />
-                  Discharge Side Geometry
-                </CardTitle>
-                {/* Eni Sizing Criteria */}
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs">Eni Sizing Criteria:</Label>
-                  <Select value={dischargeServiceType} onValueChange={setDischargeServiceType}>
-                    <SelectTrigger className="w-[220px] h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {liquidServiceCriteria.filter(c => c.service.toLowerCase().includes('discharge') || c.service.toLowerCase().includes('manifold') || c.service.toLowerCase().includes('condenser')).map((c) => (
-                        <SelectItem key={c.service} value={c.service} className="text-xs">{c.service}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Recommended Limits */}
-              {dischargeCriteria && (
-                <div className="mt-2 p-2 bg-muted/50 rounded-lg">
-                  <p className="text-xs font-medium mb-1">Recommended Limits</p>
-                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                    {dischargeCriteria.pressureDropBarKm && (
-                      <span>ΔP ≤ {dischargeCriteria.pressureDropBarKm} bar/km</span>
-                    )}
-                    {dischargeCriteria.velocity && (
-                      <span>
-                        v ≤ {getLiquidVelocityLimit(dischargeCriteria, calculations.dischargeNominalSizeInch)} m/s
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Discharge Static Head */}
-              <div className="space-y-2">
-                <Label htmlFor="dischargeHead" className="flex items-center gap-1">
-                  Static Discharge Head
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Info className="w-3 h-3 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Height of discharge point above pump centerline</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="dischargeHead"
-                    type="number"
-                    value={dischargeStaticHead}
-                    onChange={(e) => setDischargeStaticHead(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={dischargeHeadUnit} onValueChange={setDischargeHeadUnit}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(headUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Discharge Pipe Length */}
-              <div className="space-y-2">
-                <Label htmlFor="dischargeLength">Pipe Length</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="dischargeLength"
-                    type="number"
-                    value={dischargePipeLength}
-                    onChange={(e) => setDischargePipeLength(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={dischargeLengthUnit} onValueChange={setDischargeLengthUnit}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(lengthUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Discharge End Pressure */}
-              <div className="space-y-2">
-                <Label htmlFor="dischargePress" className="flex items-center gap-1">
-                  Discharge Pressure
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Info className="w-3 h-3 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Required pressure at discharge point<br/>Set to 0 for open tank discharge</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="dischargePress"
-                    type="number"
-                    step="0.1"
-                    value={dischargeEndPressure}
-                    onChange={(e) => setDischargeEndPressure(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select value={dischargeEndPressureUnit} onValueChange={setDischargeEndPressureUnit}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(pressureUnits).map((unit) => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Discharge Pipe Diameter */}
-              <div className="space-y-2">
-                <Label>Nominal Diameter (NPS)</Label>
-                <Select value={dischargeNominalDia} onValueChange={(val) => {
-                  setDischargeNominalDia(val);
-                  const schedules = getSchedulesForDiameter(val);
-                  if (!schedules.includes(dischargeSchedule)) {
-                    setDischargeSchedule(schedules[0] || "40");
-                  }
-                }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nominalDiameters.map((nd) => (
-                      <SelectItem key={nd} value={nd}>{nd}"</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Discharge Pipe Schedule */}
-              <div className="space-y-2">
-                <Label>Schedule</Label>
-                <Select value={dischargeSchedule} onValueChange={setDischargeSchedule}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getSchedulesForDiameter(dischargeNominalDia).map((sch) => (
-                      <SelectItem key={sch} value={sch}>{sch}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* ID Display */}
-              <div className="space-y-2">
-                <Label>Inside Diameter</Label>
-                <Input
-                  value={`${calculations.dischargeDia_mm.toFixed(2)} mm`}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-
-              {/* Discharge Status */}
-              <div className="md:col-span-2 lg:col-span-3 p-3 bg-muted/30 rounded-lg">
-                <p className="text-xs font-medium mb-2">Discharge Line Status</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Velocity</span>
-                    <div className="flex items-center gap-1">
-                      <span className="font-mono">{calculations.dischargeVelocity.toFixed(2)} m/s</span>
-                      {calculations.dischargeVelocityOk ? (
-                        <CheckCircle2 className="w-3 h-3 text-green-500" />
-                      ) : (
-                        <AlertTriangle className="w-3 h-3 text-amber-500" />
-                      )}
+                  {/* Viscosity */}
+                  <div className="space-y-2">
+                    <Label htmlFor="viscosity">Dynamic Viscosity</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="viscosity"
+                        type="number"
+                        value={viscosity}
+                        onChange={(e) => setViscosity(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={viscosityUnit} onValueChange={setViscosityUnit}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(viscosityToPas).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Limit</span>
-                    <span className="font-mono">{calculations.dischargeVelLimit?.toFixed(1) || '4.0'} m/s</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">ΔP</span>
-                    <div className="flex items-center gap-1">
-                      <span className="font-mono">{calculations.dischargeDpBarKm.toFixed(2)} bar/km</span>
-                      {calculations.dischargeDpOk ? (
-                        <CheckCircle2 className="w-3 h-3 text-green-500" />
-                      ) : (
-                        <AlertTriangle className="w-3 h-3 text-amber-500" />
-                      )}
+
+                  {/* Vapor Pressure */}
+                  <div className="space-y-2">
+                    <Label htmlFor="vaporPressure" className="flex items-center gap-1">
+                      Vapor Pressure
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="w-3 h-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Vapor pressure at operating temperature</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="vaporPressure"
+                        type="number"
+                        step="0.01"
+                        value={vaporPressure}
+                        onChange={(e) => setVaporPressure(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={vaporPressureUnit} onValueChange={setVaporPressureUnit}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(pressureUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Reynolds</span>
-                    <span className="font-mono">{calculations.dischargeRe.toExponential(2)}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        {/* Fittings Tab */}
-        <TabsContent value="fittings">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Suction Fittings */}
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <ArrowUpCircle className="w-4 h-4 text-blue-500 rotate-180" />
-                  Suction Fittings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 max-h-[400px] overflow-y-auto">
-                {Object.entries(fittingCategories).map(([category, fittings]) => (
-                  <div key={category} className="space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{category}</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {fittings.map(({ key, name, K }) => (
-                        <div key={key} className="flex items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-xs truncate">{name}</span>
-                            <span className="text-[10px] text-muted-foreground ml-1">(K={K})</span>
-                          </div>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={suctionFittings[key] || 0}
-                            onChange={(e) => updateSuctionFitting(key, parseInt(e.target.value) || 0)}
-                            className="w-16 h-7 text-xs text-center"
-                          />
+                  {/* Fluid Temperature */}
+                  <div className="space-y-2">
+                    <Label htmlFor="fluidTemp">Fluid Temperature ({unitSystem === 'metric' ? '°C' : '°F'})</Label>
+                    <Input
+                      id="fluidTemp"
+                      type="number"
+                      value={fluidTemp}
+                      onChange={(e) => setFluidTemp(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Pipe Material */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pipeMaterial">Pipe Material</Label>
+                    <Select value={pipeMaterial} onValueChange={setPipeMaterial}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(pipeRoughness).map((mat) => (
+                          <SelectItem key={mat} value={mat}>{mat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {pipeMaterial === "Custom" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="customRoughness">Custom Roughness (mm)</Label>
+                      <Input
+                        id="customRoughness"
+                        type="number"
+                        step="0.001"
+                        value={customRoughness}
+                        onChange={(e) => setCustomRoughness(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent >
+
+            {/* Suction Side Tab */}
+            < TabsContent value="suction" >
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <ArrowUpCircle className="w-5 h-5 text-blue-500 rotate-180" />
+                      Suction Side Geometry
+                    </CardTitle>
+                    {/* Eni Sizing Criteria */}
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs">Eni Sizing Criteria:</Label>
+                      <Select value={suctionServiceType} onValueChange={setSuctionServiceType}>
+                        <SelectTrigger className="w-[220px] h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {liquidServiceCriteria.filter(c => c.service.toLowerCase().includes('suction') || c.service.toLowerCase().includes('gravity')).map((c) => (
+                            <SelectItem key={c.service} value={c.service} className="text-xs">{c.service}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {/* Recommended Limits */}
+                  {suctionCriteria && (
+                    <div className="mt-2 p-2 bg-muted/50 rounded-lg">
+                      <p className="text-xs font-medium mb-1">Recommended Limits</p>
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        {suctionCriteria.pressureDropBarKm && (
+                          <span>ΔP ≤ {suctionCriteria.pressureDropBarKm} bar/km</span>
+                        )}
+                        {suctionCriteria.velocity && (
+                          <span>
+                            v ≤ {getLiquidVelocityLimit(suctionCriteria, calculations.suctionNominalSizeInch)} m/s
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Suction Pressure */}
+                  <div className="space-y-2">
+                    <Label htmlFor="suctionPressure" className="flex items-center gap-1">
+                      Suction Pressure (Absolute)
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="w-3 h-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Absolute pressure at suction source<br />Typically vessel pressure or atmospheric</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="suctionPressure"
+                        type="number"
+                        value={suctionPressure}
+                        onChange={(e) => setSuctionPressure(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={suctionPressureUnit} onValueChange={setSuctionPressureUnit}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(pressureUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Suction Static Head */}
+                  <div className="space-y-2">
+                    <Label htmlFor="suctionHead" className="flex items-center gap-1">
+                      Static Suction Head
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="w-3 h-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Positive: liquid level above pump centerline<br />Negative: liquid level below pump (suction lift)</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="suctionHead"
+                        type="number"
+                        value={suctionStaticHead}
+                        onChange={(e) => setSuctionStaticHead(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={suctionHeadUnit} onValueChange={setSuctionHeadUnit}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(headUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Suction Pipe Length */}
+                  <div className="space-y-2">
+                    <Label htmlFor="suctionLength">Pipe Length</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="suctionLength"
+                        type="number"
+                        value={suctionPipeLength}
+                        onChange={(e) => setSuctionPipeLength(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={suctionLengthUnit} onValueChange={setSuctionLengthUnit}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(lengthUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Suction Pipe Diameter */}
+                  <div className="space-y-2">
+                    <Label>Nominal Diameter (NPS)</Label>
+                    <Select value={suctionNominalDia} onValueChange={(val) => {
+                      setSuctionNominalDia(val);
+                      const schedules = getSchedulesForDiameter(val);
+                      if (!schedules.includes(suctionSchedule)) {
+                        setSuctionSchedule(schedules[0] || "40");
+                      }
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {nominalDiameters.map((nd) => (
+                          <SelectItem key={nd} value={nd}>{nd}"</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Suction Pipe Schedule */}
+                  <div className="space-y-2">
+                    <Label>Schedule</Label>
+                    <Select value={suctionSchedule} onValueChange={setSuctionSchedule}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getSchedulesForDiameter(suctionNominalDia).map((sch) => (
+                          <SelectItem key={sch} value={sch}>{sch}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* ID Display */}
+                  <div className="space-y-2">
+                    <Label>Inside Diameter</Label>
+                    <Input
+                      value={`${calculations.suctionDia_mm.toFixed(2)} mm`}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+
+                  {/* Suction Status */}
+                  <div className="md:col-span-2 lg:col-span-3 p-3 bg-muted/30 rounded-lg">
+                    <p className="text-xs font-medium mb-2">Suction Line Status</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Velocity</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono">{calculations.suctionVelocity.toFixed(2)} m/s</span>
+                          {calculations.suctionVelocityOk ? (
+                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <AlertTriangle className="w-3 h-3 text-amber-500" />
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Discharge Fittings */}
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <ArrowUpCircle className="w-4 h-4 text-orange-500" />
-                  Discharge Fittings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 max-h-[400px] overflow-y-auto">
-                {Object.entries(fittingCategories).map(([category, fittings]) => (
-                  <div key={category} className="space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{category}</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {fittings.map(({ key, name, K }) => (
-                        <div key={key} className="flex items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-xs truncate">{name}</span>
-                            <span className="text-[10px] text-muted-foreground ml-1">(K={K})</span>
-                          </div>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={dischargeFittings[key] || 0}
-                            onChange={(e) => updateDischargeFitting(key, parseInt(e.target.value) || 0)}
-                            className="w-16 h-7 text-xs text-center"
-                          />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Limit</span>
+                        <span className="font-mono">{calculations.suctionVelLimit?.toFixed(1) || '2.0'} m/s</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">ΔP</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono">{calculations.suctionDpBarKm.toFixed(2)} bar/km</span>
+                          {calculations.suctionDpOk ? (
+                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <AlertTriangle className="w-3 h-3 text-amber-500" />
+                          )}
                         </div>
-                      ))}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Reynolds</span>
+                        <span className="font-mono">{calculations.suctionRe.toExponential(2)}</span>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+                </CardContent>
+              </Card>
+            </TabsContent >
 
-        {/* Pump Selection Tab */}
-        <TabsContent value="pump">
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Gauge className="w-5 h-5 text-primary" />
-                Pump Selection & Efficiency
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Pump Type */}
-                <div className="space-y-2 lg:col-span-2">
-                  <Label>Pump Type (per API Standard)</Label>
-                  <Select value={pumpType} onValueChange={setPumpType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
-                      <SelectItem disabled value="header-api610" className="font-semibold text-primary">— API 610 Centrifugal —</SelectItem>
-                      {Object.entries(pumpTypes).filter(([_, t]) => t.standard === 'API 610').map(([key, type]) => (
-                        <SelectItem key={key} value={key} className="text-xs">{type.name}</SelectItem>
-                      ))}
-                      <SelectItem disabled value="header-api674" className="font-semibold text-primary">— API 674 Reciprocating —</SelectItem>
-                      {Object.entries(pumpTypes).filter(([_, t]) => t.standard === 'API 674').map(([key, type]) => (
-                        <SelectItem key={key} value={key} className="text-xs">{type.name}</SelectItem>
-                      ))}
-                      <SelectItem disabled value="header-api676" className="font-semibold text-primary">— API 676 Rotary —</SelectItem>
-                      {Object.entries(pumpTypes).filter(([_, t]) => t.standard === 'API 676').map(([key, type]) => (
-                        <SelectItem key={key} value={key} className="text-xs">{type.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Pump Efficiency */}
-                <div className="space-y-2">
-                  <Label htmlFor="pumpEff" className="flex items-center gap-1">
-                    Pump Efficiency (%)
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="w-3 h-3 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Typical: {selectedPumpInfo?.typicalEfficiency[0]}-{selectedPumpInfo?.typicalEfficiency[1]}%</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </Label>
-                  <Input
-                    id="pumpEff"
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={pumpEfficiency}
-                    onChange={(e) => setPumpEfficiency(e.target.value)}
-                  />
-                </div>
-
-                {/* Motor Efficiency */}
-                <div className="space-y-2">
-                  <Label htmlFor="motorEff">Motor Efficiency (%)</Label>
-                  <Input
-                    id="motorEff"
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={motorEfficiency}
-                    onChange={(e) => setMotorEfficiency(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* NPSH Margin */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="npshrMargin" className="flex items-center gap-1">
-                    NPSHa-NPSHr Margin ({headDisplayUnit})
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="w-3 h-3 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Per API 610: Min margin = 1.0m or 15% NPSHr</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </Label>
-                  <Input
-                    id="npshrMargin"
-                    type="number"
-                    step="0.1"
-                    value={npshrMargin}
-                    onChange={(e) => setNpshrMargin(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Pump Type Info */}
-              {selectedPumpInfo && (
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium">{selectedPumpInfo.name}</p>
-                    <Badge variant="outline">{selectedPumpInfo.standard}</Badge>
+            {/* Discharge Side Tab */}
+            < TabsContent value="discharge" >
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <ArrowUpCircle className="w-5 h-5 text-orange-500" />
+                      Discharge Side Geometry
+                    </CardTitle>
+                    {/* Eni Sizing Criteria */}
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs">Eni Sizing Criteria:</Label>
+                      <Select value={dischargeServiceType} onValueChange={setDischargeServiceType}>
+                        <SelectTrigger className="w-[220px] h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {liquidServiceCriteria.filter(c => c.service.toLowerCase().includes('discharge') || c.service.toLowerCase().includes('manifold') || c.service.toLowerCase().includes('condenser')).map((c) => (
+                            <SelectItem key={c.service} value={c.service} className="text-xs">{c.service}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {selectedPumpInfo.characteristics.map((char, idx) => (
-                      <Badge key={idx} variant="secondary" className="text-xs">{char}</Badge>
+                  {/* Recommended Limits */}
+                  {dischargeCriteria && (
+                    <div className="mt-2 p-2 bg-muted/50 rounded-lg">
+                      <p className="text-xs font-medium mb-1">Recommended Limits</p>
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        {dischargeCriteria.pressureDropBarKm && (
+                          <span>ΔP ≤ {dischargeCriteria.pressureDropBarKm} bar/km</span>
+                        )}
+                        {dischargeCriteria.velocity && (
+                          <span>
+                            v ≤ {getLiquidVelocityLimit(dischargeCriteria, calculations.dischargeNominalSizeInch)} m/s
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Discharge Static Head */}
+                  <div className="space-y-2">
+                    <Label htmlFor="dischargeHead" className="flex items-center gap-1">
+                      Static Discharge Head
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="w-3 h-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Height of discharge point above pump centerline</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="dischargeHead"
+                        type="number"
+                        value={dischargeStaticHead}
+                        onChange={(e) => setDischargeStaticHead(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={dischargeHeadUnit} onValueChange={setDischargeHeadUnit}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(headUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Discharge Pipe Length */}
+                  <div className="space-y-2">
+                    <Label htmlFor="dischargeLength">Pipe Length</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="dischargeLength"
+                        type="number"
+                        value={dischargePipeLength}
+                        onChange={(e) => setDischargePipeLength(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={dischargeLengthUnit} onValueChange={setDischargeLengthUnit}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(lengthUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Discharge End Pressure */}
+                  <div className="space-y-2">
+                    <Label htmlFor="dischargePress" className="flex items-center gap-1">
+                      Discharge Pressure
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="w-3 h-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Required pressure at discharge point<br />Set to 0 for open tank discharge</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="dischargePress"
+                        type="number"
+                        step="0.1"
+                        value={dischargeEndPressure}
+                        onChange={(e) => setDischargeEndPressure(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={dischargeEndPressureUnit} onValueChange={setDischargeEndPressureUnit}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.keys(pressureUnits).map((unit) => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Discharge Pipe Diameter */}
+                  <div className="space-y-2">
+                    <Label>Nominal Diameter (NPS)</Label>
+                    <Select value={dischargeNominalDia} onValueChange={(val) => {
+                      setDischargeNominalDia(val);
+                      const schedules = getSchedulesForDiameter(val);
+                      if (!schedules.includes(dischargeSchedule)) {
+                        setDischargeSchedule(schedules[0] || "40");
+                      }
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {nominalDiameters.map((nd) => (
+                          <SelectItem key={nd} value={nd}>{nd}"</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Discharge Pipe Schedule */}
+                  <div className="space-y-2">
+                    <Label>Schedule</Label>
+                    <Select value={dischargeSchedule} onValueChange={setDischargeSchedule}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getSchedulesForDiameter(dischargeNominalDia).map((sch) => (
+                          <SelectItem key={sch} value={sch}>{sch}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* ID Display */}
+                  <div className="space-y-2">
+                    <Label>Inside Diameter</Label>
+                    <Input
+                      value={`${calculations.dischargeDia_mm.toFixed(2)} mm`}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+
+                  {/* Discharge Status */}
+                  <div className="md:col-span-2 lg:col-span-3 p-3 bg-muted/30 rounded-lg">
+                    <p className="text-xs font-medium mb-2">Discharge Line Status</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Velocity</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono">{calculations.dischargeVelocity.toFixed(2)} m/s</span>
+                          {calculations.dischargeVelocityOk ? (
+                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <AlertTriangle className="w-3 h-3 text-amber-500" />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Limit</span>
+                        <span className="font-mono">{calculations.dischargeVelLimit?.toFixed(1) || '4.0'} m/s</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">ΔP</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono">{calculations.dischargeDpBarKm.toFixed(2)} bar/km</span>
+                          {calculations.dischargeDpOk ? (
+                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <AlertTriangle className="w-3 h-3 text-amber-500" />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Reynolds</span>
+                        <span className="font-mono">{calculations.dischargeRe.toExponential(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent >
+
+            {/* Fittings Tab */}
+            < TabsContent value="fittings" >
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Suction Fittings */}
+                <Card>
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <ArrowUpCircle className="w-4 h-4 text-blue-500 rotate-180" />
+                      Suction Fittings
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 max-h-[400px] overflow-y-auto">
+                    {Object.entries(fittingCategories).map(([category, fittings]) => (
+                      <div key={category} className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{category}</p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {fittings.map(({ key, name, K }) => (
+                            <div key={key} className="flex items-center justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs truncate">{name}</span>
+                                <span className="text-[10px] text-muted-foreground ml-1">(K={K})</span>
+                              </div>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={suctionFittings[key] || 0}
+                                onChange={(e) => updateSuctionFitting(key, parseInt(e.target.value) || 0)}
+                                className="w-16 h-7 text-xs text-center"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 text-xs text-muted-foreground border-t pt-3">
-                    <div>
-                      <span className="block text-[10px] uppercase tracking-wide">Head Range</span>
-                      <span className="font-mono">{selectedPumpInfo.typicalHead[0]}-{selectedPumpInfo.typicalHead[1]} m</span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] uppercase tracking-wide">Flow Range</span>
-                      <span className="font-mono">{selectedPumpInfo.typicalFlow[0]}-{selectedPumpInfo.typicalFlow[1]} m³/h</span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] uppercase tracking-wide">Efficiency</span>
-                      <span className="font-mono">{selectedPumpInfo.typicalEfficiency[0]}-{selectedPumpInfo.typicalEfficiency[1]}%</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                  </CardContent>
+                </Card>
 
-              {/* Pump Selection Guidance */}
-              <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
-                <p className="text-xs font-medium mb-2">Pump Selection Guidance (Based on Operating Point)</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <span className="block text-[10px] text-muted-foreground uppercase">Specific Speed (Ns)</span>
-                    <span className="font-mono text-sm">{calculations.specificSpeed.toFixed(0)}</span>
+                {/* Discharge Fittings */}
+                <Card>
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <ArrowUpCircle className="w-4 h-4 text-orange-500" />
+                      Discharge Fittings
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 max-h-[400px] overflow-y-auto">
+                    {Object.entries(fittingCategories).map(([category, fittings]) => (
+                      <div key={category} className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{category}</p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {fittings.map(({ key, name, K }) => (
+                            <div key={key} className="flex items-center justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs truncate">{name}</span>
+                                <span className="text-[10px] text-muted-foreground ml-1">(K={K})</span>
+                              </div>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={dischargeFittings[key] || 0}
+                                onChange={(e) => updateDischargeFitting(key, parseInt(e.target.value) || 0)}
+                                className="w-16 h-7 text-xs text-center"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent >
+
+            {/* Pump Selection Tab */}
+            < TabsContent value="pump" >
+              <Card>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Gauge className="w-5 h-5 text-primary" />
+                    Pump Selection & Efficiency
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Pump Type */}
+                    <div className="space-y-2 lg:col-span-2">
+                      <Label>Pump Type (per API Standard)</Label>
+                      <Select value={pumpType} onValueChange={setPumpType}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          <SelectItem disabled value="header-api610" className="font-semibold text-primary">— API 610 Centrifugal —</SelectItem>
+                          {Object.entries(pumpTypes).filter(([_, t]) => t.standard === 'API 610').map(([key, type]) => (
+                            <SelectItem key={key} value={key} className="text-xs">{type.name}</SelectItem>
+                          ))}
+                          <SelectItem disabled value="header-api674" className="font-semibold text-primary">— API 674 Reciprocating —</SelectItem>
+                          {Object.entries(pumpTypes).filter(([_, t]) => t.standard === 'API 674').map(([key, type]) => (
+                            <SelectItem key={key} value={key} className="text-xs">{type.name}</SelectItem>
+                          ))}
+                          <SelectItem disabled value="header-api676" className="font-semibold text-primary">— API 676 Rotary —</SelectItem>
+                          {Object.entries(pumpTypes).filter(([_, t]) => t.standard === 'API 676').map(([key, type]) => (
+                            <SelectItem key={key} value={key} className="text-xs">{type.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Pump Efficiency */}
+                    <div className="space-y-2">
+                      <Label htmlFor="pumpEff" className="flex items-center gap-1">
+                        Pump Efficiency (%)
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="w-3 h-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Typical: {selectedPumpInfo?.typicalEfficiency[0]}-{selectedPumpInfo?.typicalEfficiency[1]}%</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </Label>
+                      <Input
+                        id="pumpEff"
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={pumpEfficiency}
+                        onChange={(e) => setPumpEfficiency(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Motor Efficiency */}
+                    <div className="space-y-2">
+                      <Label htmlFor="motorEff">Motor Efficiency (%)</Label>
+                      <Input
+                        id="motorEff"
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={motorEfficiency}
+                        onChange={(e) => setMotorEfficiency(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <span className="block text-[10px] text-muted-foreground uppercase">Suction Ns (Nss)</span>
-                    <span className="font-mono text-sm">{calculations.suctionSpecificSpeed.toFixed(0)}</span>
+
+                  {/* NPSH Margin */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="npshrMargin" className="flex items-center gap-1">
+                        NPSHa-NPSHr Margin ({headDisplayUnit})
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="w-3 h-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Per API 610: Min margin = 1.0m or 15% NPSHr</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </Label>
+                      <Input
+                        id="npshrMargin"
+                        type="number"
+                        step="0.1"
+                        value={npshrMargin}
+                        onChange={(e) => setNpshrMargin(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <span className="block text-[10px] text-muted-foreground uppercase">Recommended Type</span>
-                    <span className="font-medium">
-                      {calculations.specificSpeed < 30 ? 'Positive Displacement' :
-                       calculations.specificSpeed < 80 ? 'Multistage Centrifugal' :
-                       calculations.specificSpeed < 200 ? 'Single Stage Centrifugal' :
-                       'Axial/Mixed Flow'}
-                    </span>
+
+                  {/* Pump Type Info */}
+                  {selectedPumpInfo && (
+                    <div className="p-4 bg-muted/50 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-sm font-medium">{selectedPumpInfo.name}</p>
+                        <Badge variant="outline">{selectedPumpInfo.standard}</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {selectedPumpInfo.characteristics.map((char, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">{char}</Badge>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-xs text-muted-foreground border-t pt-3">
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wide">Head Range</span>
+                          <span className="font-mono">{selectedPumpInfo.typicalHead[0]}-{selectedPumpInfo.typicalHead[1]} m</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wide">Flow Range</span>
+                          <span className="font-mono">{selectedPumpInfo.typicalFlow[0]}-{selectedPumpInfo.typicalFlow[1]} m³/h</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wide">Efficiency</span>
+                          <span className="font-mono">{selectedPumpInfo.typicalEfficiency[0]}-{selectedPumpInfo.typicalEfficiency[1]}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pump Selection Guidance */}
+                  <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+                    <p className="text-xs font-medium mb-2">Pump Selection Guidance (Based on Operating Point)</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <span className="block text-[10px] text-muted-foreground uppercase">Specific Speed (Ns)</span>
+                        <span className="font-mono text-sm">{calculations.specificSpeed.toFixed(0)}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-muted-foreground uppercase">Suction Ns (Nss)</span>
+                        <span className="font-mono text-sm">{calculations.suctionSpecificSpeed.toFixed(0)}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-muted-foreground uppercase">Recommended Type</span>
+                        <span className="font-medium">
+                          {calculations.specificSpeed < 30 ? 'Positive Displacement' :
+                            calculations.specificSpeed < 80 ? 'Multistage Centrifugal' :
+                              calculations.specificSpeed < 200 ? 'Single Stage Centrifugal' :
+                                'Axial/Mixed Flow'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-muted-foreground uppercase">NPSH Status</span>
+                        <span className={`font-medium ${calculations.npshaOk ? 'text-green-600' : 'text-red-600'}`}>
+                          {calculations.suctionSpecificSpeed > 11000 ? 'Critical - Review' : calculations.npshaOk ? 'Acceptable' : 'Insufficient'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="block text-[10px] text-muted-foreground uppercase">NPSH Status</span>
-                    <span className={`font-medium ${calculations.npshaOk ? 'text-green-600' : 'text-red-600'}`}>
-                      {calculations.suctionSpecificSpeed > 11000 ? 'Critical - Review' : calculations.npshaOk ? 'Acceptable' : 'Insufficient'}
-                    </span>
+                </CardContent>
+              </Card>
+            </TabsContent >
+          </Tabs> {/* Close Inner Input Tabs */}
+
+          {/* Results Section (Now inside Calculator Tab) */}
+          < div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6" >
+            {/* Main Results Card */}
+            < Card className="lg:col-span-2" >
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-primary" />
+                    Pump Requirements
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Select value={headDisplayUnit} onValueChange={setHeadDisplayUnit}>
+                      <SelectTrigger className="w-20 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys({ ...metricHeadToMeters, ...imperialHeadToMeters }).map(unit => (
+                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={powerDisplayUnit} onValueChange={setPowerDisplayUnit}>
+                      <SelectTrigger className="w-20 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys({ ...metricPowerToKW, ...imperialPowerToKW }).map(unit => (
+                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* Total Head */}
+                  <div className="p-4 bg-primary/10 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-primary">
+                      {convertHead(calculations.totalHead).toFixed(1)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Total Head ({headDisplayUnit})
+                    </div>
+                  </div>
+
+                  {/* Brake Power */}
+                  <div className="p-4 bg-orange-500/10 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {convertPower(calculations.brakePower_kW).toFixed(2)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Brake Power ({powerDisplayUnit})
+                    </div>
+                  </div>
+
+                  {/* Motor Power */}
+                  <div className="p-4 bg-purple-500/10 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {convertPower(calculations.motorPower_kW).toFixed(2)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Motor Power ({powerDisplayUnit})
+                    </div>
+                  </div>
+
+                  {/* NPSHa */}
+                  <div className={`p-4 rounded-lg text-center ${calculations.npshaOk ? 'bg-green-500/10' : 'bg-red-500/10'
+                    }`}>
+                    <div className={`text-2xl font-bold ${calculations.npshaOk ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                      {calculations.npshaValue.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      NPSHa (m)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Head Breakdown */}
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium mb-3">Head Components Breakdown (per API 610)</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Static Head (Zd - Zs)</span>
+                      <span className="font-mono">{convertHead(calculations.totalStaticHead).toFixed(2)} {headDisplayUnit}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Suction Friction Loss (hfs)</span>
+                      <span className="font-mono">{convertHead(calculations.suctionTotalLoss).toFixed(2)} {headDisplayUnit}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Discharge Friction Loss (hfd)</span>
+                      <span className="font-mono">{convertHead(calculations.dischargeTotalLoss).toFixed(2)} {headDisplayUnit}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Pressure Head (Pd-Ps)/(ρg)</span>
+                      <span className="font-mono">{convertHead(calculations.pressureHead).toFixed(2)} {headDisplayUnit}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Velocity Head Diff (Vd²-Vs²)/(2g)</span>
+                      <span className="font-mono">{convertHead(calculations.velocityHeadDiff).toFixed(3)} {headDisplayUnit}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm font-semibold border-t pt-2">
+                      <span>Total Dynamic Head (TDH)</span>
+                      <span className="font-mono text-primary">{convertHead(calculations.totalHead).toFixed(2)} {headDisplayUnit}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card >
+
+            {/* Status & Warnings Card */}
+            < Card >
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">System Status</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Flow Rate */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Flow Rate</span>
+                  <span className="text-sm font-mono">
+                    {unitSystem === 'metric' ? `${calculations.flowRate_m3h.toFixed(1)} m³/h` : `${calculations.flowRate_gpm.toFixed(0)} gpm`}
+                  </span>
+                </div>
+
+                {/* Suction Velocity */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Suction Velocity</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono">{calculations.suctionVelocity.toFixed(2)} m/s</span>
+                    {calculations.suctionVelocityOk ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Discharge Velocity */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Discharge Velocity</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono">{calculations.dischargeVelocity.toFixed(2)} m/s</span>
+                    {calculations.dischargeVelocityOk ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Flow Regime */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Flow Regime</span>
+                  <Badge variant="outline">{calculations.flowRegime}</Badge>
+                </div>
+
+                {/* Specific Speed */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Specific Speed (Ns)</span>
+                  <span className="text-sm font-mono">{calculations.specificSpeed.toFixed(0)}</span>
+                </div>
+
+                {/* Hydraulic Power */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Hydraulic Power</span>
+                  <span className="text-sm font-mono">{convertPower(calculations.hydraulicPower_kW).toFixed(2)} {powerDisplayUnit}</span>
+                </div>
+
+                {/* Warnings */}
+                <div className="pt-4 border-t space-y-2">
+                  {!calculations.suctionVelocityOk && (
+                    <div className="flex items-start gap-2 text-amber-600 text-xs">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>Suction velocity exceeds Eni limit ({calculations.suctionVelLimit?.toFixed(1) || '2.0'} m/s)</span>
+                    </div>
+                  )}
+                  {!calculations.dischargeVelocityOk && (
+                    <div className="flex items-start gap-2 text-amber-600 text-xs">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>Discharge velocity exceeds Eni limit ({calculations.dischargeVelLimit?.toFixed(1) || '4.0'} m/s)</span>
+                    </div>
+                  )}
+                  {!calculations.npshaOk && (
+                    <div className="flex items-start gap-2 text-red-600 text-xs">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>NPSHa is low! Risk of cavitation. Increase suction head or reduce losses.</span>
+                    </div>
+                  )}
+                  {calculations.suctionSpecificSpeed > 11000 && (
+                    <div className="flex items-start gap-2 text-amber-600 text-xs">
+                      <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>High Nss ({calculations.suctionSpecificSpeed.toFixed(0)}) - Review NPSH margin per API 610</span>
+                    </div>
+                  )}
+                  {calculations.isValid && calculations.npshaOk && calculations.suctionVelocityOk && calculations.dischargeVelocityOk && (
+                    <div className="flex items-start gap-2 text-green-600 text-xs">
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>All parameters within acceptable limits</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card >
+          </div >
+
+          {/* Metadata and Export Section */}
+          < div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-secondary/20 border border-border/50 mt-6" >
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Project</Label>
+              <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="h-8 bg-background/50" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Item No</Label>
+              <Input value={itemNumber} onChange={(e) => setItemNumber(e.target.value)} className="h-8 bg-background/50" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Service</Label>
+              <Input value={serviceName} onChange={(e) => setServiceName(e.target.value)} className="h-8 bg-background/50" />
+            </div>
+            <div className="flex items-end gap-2">
+              <Button onClick={handleExportPDF} className="flex-1 h-8 text-xs gap-2" variant="outline">
+                Export PDF
+              </Button>
+              <Button onClick={handleExportExcel} className="flex-1 h-8 text-xs gap-2" variant="outline">
+                Export Excel
+              </Button>
+            </div>
+          </div >
+        </TabsContent >
 
         {/* Pump Curves Tab */}
-        <TabsContent value="curves">
+        < TabsContent value="curves" >
           <PumpPerformanceCurves
             operatingFlow={calculations.flowRate_m3h}
             operatingHead={calculations.totalHead}
@@ -1778,223 +2139,93 @@ const PumpSizingCalculator = () => {
             npsha={calculations.npshaValue}
             pumpType={selectedPumpInfo?.name || 'centrifugal'}
           />
-        </TabsContent>
+        </TabsContent >
 
         {/* Guide Tab */}
-        <TabsContent value="guide">
-          <PumpGuide />
-        </TabsContent>
-      </Tabs>
+        < TabsContent value="guide" className="space-y-8" >
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <Card className="border-primary/20 bg-gradient-card">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                    API 610: Centrifugal Pumps
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-muted-foreground">
+                  <p>
+                    <strong>API Standard 610</strong> specifies requirements for centrifugal pumps for use in petroleum, petrochemical, and gas industry services.
+                  </p>
+                  <ul className="list-disc pl-5 space-y-2">
+                    <li><strong>OH (Overhung):</strong> Impeller is mounted on the end of a shaft which overhangs its bearings (OH1, OH2).</li>
+                    <li><strong>BB (Between Bearings):</strong> Impeller is mounted on a shaft between the bearings (BB1, BB2, BB3, BB5).</li>
+                    <li><strong>VS (Vertically Suspended):</strong> Shaft is vertical and suspended from the top (VS1, VS6).</li>
+                  </ul>
+                  <div className="mt-4 p-3 bg-secondary/30 rounded-lg border border-border/50">
+                    <span className="font-semibold text-foreground">Applicability:</span> Ideal for continuous duty, high efficiency, and wide flow ranges.
+                  </div>
+                </CardContent>
+              </Card>
 
-      {/* Results Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Main Results Card */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Zap className="w-5 h-5 text-primary" />
-                Pump Requirements
-              </CardTitle>
-              <div className="flex gap-2">
-                <Select value={headDisplayUnit} onValueChange={setHeadDisplayUnit}>
-                  <SelectTrigger className="w-20 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys({ ...metricHeadToMeters, ...imperialHeadToMeters }).map(unit => (
-                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={powerDisplayUnit} onValueChange={setPowerDisplayUnit}>
-                  <SelectTrigger className="w-20 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys({ ...metricPowerToKW, ...imperialPowerToKW }).map(unit => (
-                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Total Head */}
-              <div className="p-4 bg-primary/10 rounded-lg text-center">
-                <div className="text-2xl font-bold text-primary">
-                  {convertHead(calculations.totalHead).toFixed(1)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Total Head ({headDisplayUnit})
-                </div>
-              </div>
-
-              {/* Brake Power */}
-              <div className="p-4 bg-orange-500/10 rounded-lg text-center">
-                <div className="text-2xl font-bold text-orange-600">
-                  {convertPower(calculations.brakePower_kW).toFixed(2)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Brake Power ({powerDisplayUnit})
-                </div>
-              </div>
-
-              {/* Motor Power */}
-              <div className="p-4 bg-purple-500/10 rounded-lg text-center">
-                <div className="text-2xl font-bold text-purple-600">
-                  {convertPower(calculations.motorPower_kW).toFixed(2)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Motor Power ({powerDisplayUnit})
-                </div>
-              </div>
-
-              {/* NPSHa */}
-              <div className={`p-4 rounded-lg text-center ${
-                calculations.npshaOk ? 'bg-green-500/10' : 'bg-red-500/10'
-              }`}>
-                <div className={`text-2xl font-bold ${
-                  calculations.npshaOk ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {calculations.npshaValue.toFixed(2)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  NPSHa (m)
-                </div>
-              </div>
+              <Card className="border-primary/20 bg-gradient-card">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                    API 674: Reciprocating Pumps
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-muted-foreground">
+                  <p>
+                    <strong>API Standard 674</strong> covers reciprocating positive displacement pumps.
+                  </p>
+                  <ul className="list-disc pl-5 space-y-2">
+                    <li><strong>High Pressure:</strong> Capable of very high discharge pressures (up to 3000+ bar).</li>
+                    <li><strong>Efficiency:</strong> Typically higher efficiency (85-95%) than centrifugal pumps.</li>
+                    <li><strong>Constant Flow:</strong> Flow rate is largely independent of discharge pressure.</li>
+                  </ul>
+                  <div className="mt-4 p-3 bg-secondary/30 rounded-lg border border-border/50">
+                    <span className="font-semibold text-foreground">Applicability:</span> High pressure injection, metering, and high viscosity fluids.
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
-            {/* Head Breakdown */}
-            <div className="mt-6">
-              <h4 className="text-sm font-medium mb-3">Head Components Breakdown (per API 610)</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Static Head (Zd - Zs)</span>
-                  <span className="font-mono">{convertHead(calculations.totalStaticHead).toFixed(2)} {headDisplayUnit}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Suction Friction Loss (hfs)</span>
-                  <span className="font-mono">{convertHead(calculations.suctionTotalLoss).toFixed(2)} {headDisplayUnit}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Discharge Friction Loss (hfd)</span>
-                  <span className="font-mono">{convertHead(calculations.dischargeTotalLoss).toFixed(2)} {headDisplayUnit}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Pressure Head (Pd-Ps)/(ρg)</span>
-                  <span className="font-mono">{convertHead(calculations.pressureHead).toFixed(2)} {headDisplayUnit}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Velocity Head Diff (Vd²-Vs²)/(2g)</span>
-                  <span className="font-mono">{convertHead(calculations.velocityHeadDiff).toFixed(3)} {headDisplayUnit}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm font-semibold border-t pt-2">
-                  <span>Total Dynamic Head (TDH)</span>
-                  <span className="font-mono text-primary">{convertHead(calculations.totalHead).toFixed(2)} {headDisplayUnit}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <div className="space-y-6">
+              <Card className="border-primary/20 bg-gradient-card">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <Info className="w-5 h-5 text-primary" />
+                    Key Calculation Concepts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-muted-foreground">
+                  <div>
+                    <span className="font-semibold text-foreground block mb-1">NPSHa (Net Positive Suction Head Available)</span>
+                    Must be greater than NPSHr (Required) + Margin to prevent cavitation.
+                    <br />
+                    <code className="bg-secondary/50 px-1 py-0.5 rounded text-xs font-mono">NPSHa = (Ps - Pv)/(ρg) + Zs - hf</code>
+                  </div>
 
-        {/* Status & Warnings Card */}
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg">System Status</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Flow Rate */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Flow Rate</span>
-              <span className="text-sm font-mono">
-                {unitSystem === 'metric' ? `${calculations.flowRate_m3h.toFixed(1)} m³/h` : `${calculations.flowRate_gpm.toFixed(0)} gpm`}
-              </span>
-            </div>
+                  <div>
+                    <span className="font-semibold text-foreground block mb-1">TDH (Total Dynamic Head)</span>
+                    The total energy the pump must impart to the fluid.
+                    <br />
+                    <code className="bg-secondary/50 px-1 py-0.5 rounded text-xs font-mono">TDH = hd - hs</code>
+                  </div>
 
-            {/* Suction Velocity */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Suction Velocity</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-mono">{calculations.suctionVelocity.toFixed(2)} m/s</span>
-                {calculations.suctionVelocityOk ? (
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 text-amber-500" />
-                )}
-              </div>
+                  <div>
+                    <span className="font-semibold text-foreground block mb-1">Specific Speed (Ns)</span>
+                    Used to characterize impeller shape and select pump type.
+                    <br />
+                    <code className="bg-secondary/50 px-1 py-0.5 rounded text-xs font-mono">Ns = n√Q / H^0.75</code>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-
-            {/* Discharge Velocity */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Discharge Velocity</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-mono">{calculations.dischargeVelocity.toFixed(2)} m/s</span>
-                {calculations.dischargeVelocityOk ? (
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 text-amber-500" />
-                )}
-              </div>
-            </div>
-
-            {/* Flow Regime */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Flow Regime</span>
-              <Badge variant="outline">{calculations.flowRegime}</Badge>
-            </div>
-
-            {/* Specific Speed */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Specific Speed (Ns)</span>
-              <span className="text-sm font-mono">{calculations.specificSpeed.toFixed(0)}</span>
-            </div>
-
-            {/* Hydraulic Power */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Hydraulic Power</span>
-              <span className="text-sm font-mono">{convertPower(calculations.hydraulicPower_kW).toFixed(2)} {powerDisplayUnit}</span>
-            </div>
-
-            {/* Warnings */}
-            <div className="pt-4 border-t space-y-2">
-              {!calculations.suctionVelocityOk && (
-                <div className="flex items-start gap-2 text-amber-600 text-xs">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>Suction velocity exceeds Eni limit ({calculations.suctionVelLimit?.toFixed(1) || '2.0'} m/s)</span>
-                </div>
-              )}
-              {!calculations.dischargeVelocityOk && (
-                <div className="flex items-start gap-2 text-amber-600 text-xs">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>Discharge velocity exceeds Eni limit ({calculations.dischargeVelLimit?.toFixed(1) || '4.0'} m/s)</span>
-                </div>
-              )}
-              {!calculations.npshaOk && (
-                <div className="flex items-start gap-2 text-red-600 text-xs">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>NPSHa is low! Risk of cavitation. Increase suction head or reduce losses.</span>
-                </div>
-              )}
-              {calculations.suctionSpecificSpeed > 11000 && (
-                <div className="flex items-start gap-2 text-amber-600 text-xs">
-                  <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>High Nss ({calculations.suctionSpecificSpeed.toFixed(0)}) - Review NPSH margin per API 610</span>
-                </div>
-              )}
-              {calculations.isValid && calculations.npshaOk && calculations.suctionVelocityOk && calculations.dischargeVelocityOk && (
-                <div className="flex items-start gap-2 text-green-600 text-xs">
-                  <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>All parameters within acceptable limits</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          </div>
+        </TabsContent >
+      </Tabs >
+    </div >
   );
 };
 

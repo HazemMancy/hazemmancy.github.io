@@ -11,13 +11,17 @@ import { AlertTriangle, CheckCircle, Info, Gauge, Thermometer, Wind, Zap, Trendi
 import CompressorPerformanceCurves from './CompressorPerformanceCurves';
 import CompressorSelectionGuide from './CompressorSelectionGuide';
 import CompressorGuide from './guides/CompressorGuide';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
+import { generateCompressorPDF, CompressorDatasheetData } from '@/lib/compressorPdfDatasheet';
+import { generateCompressorExcelDatasheet, CompressorExcelData } from '@/lib/compressorExcelDatasheet';
 
 // Gas properties database with critical properties for real gas calculations
-const gasDatabase: Record<string, { 
-  name: string; 
-  mw: number; 
-  k: number; 
-  z: number; 
+const gasDatabase: Record<string, {
+  name: string;
+  mw: number;
+  k: number;
+  z: number;
   cp: number;
   Tc: number;  // Critical temperature (K)
   Pc: number;  // Critical pressure (bar)
@@ -37,11 +41,11 @@ const gasDatabase: Record<string, {
 };
 
 // Compressor types per API 617 (Centrifugal/Axial) and API 618 (Reciprocating)
-const compressorTypes: Record<string, { 
-  name: string; 
-  etaIsen: number; 
-  etaPoly: number; 
-  maxRatio: number; 
+const compressorTypes: Record<string, {
+  name: string;
+  etaIsen: number;
+  etaPoly: number;
+  maxRatio: number;
   maxFlow: number;
   standard: string;
   volumetricEff?: number; // For reciprocating (API 618)
@@ -136,6 +140,12 @@ const CompressorPowerCalculator: React.FC = () => {
   const [results, setResults] = useState<CalculationResults | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
 
+  // Metadata for Export
+  const [companyName, setCompanyName] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [itemNumber, setItemNumber] = useState("");
+  const [serviceName, setServiceName] = useState("");
+
   // Unit conversion functions
   const convertPressure = (value: number, from: string, to: string): number => {
     const barAbsFrom = () => {
@@ -184,11 +194,11 @@ const CompressorPowerCalculator: React.FC = () => {
   const convertTemp = (value: number, from: string, to: string): number => {
     let kelvin: number;
     if (from === 'C') kelvin = value + 273.15;
-    else if (from === 'F') kelvin = (value - 32) * 5/9 + 273.15;
+    else if (from === 'F') kelvin = (value - 32) * 5 / 9 + 273.15;
     else kelvin = value;
 
     if (to === 'C') return kelvin - 273.15;
-    if (to === 'F') return (kelvin - 273.15) * 9/5 + 32;
+    if (to === 'F') return (kelvin - 273.15) * 9 / 5 + 32;
     return kelvin;
   };
 
@@ -197,7 +207,7 @@ const CompressorPowerCalculator: React.FC = () => {
       case 'ISO':
         return { Tstd: 273.15, Pstd: 101325 };
       case 'SCFM':
-        return { Tstd: (60 - 32) * 5/9 + 273.15, Pstd: 101325 };
+        return { Tstd: (60 - 32) * 5 / 9 + 273.15, Pstd: 101325 };
       case 'NTP':
       default:
         return { Tstd: 273.15 + 15, Pstd: 101325 };
@@ -254,7 +264,7 @@ const CompressorPowerCalculator: React.FC = () => {
   // Main calculation
   useEffect(() => {
     const newWarnings: string[] = [];
-    
+
     // Convert units
     const P1 = convertPressure(inputs.inletPressure, inputs.pressureUnit, 'bara');
     const P2 = convertPressure(inputs.dischargePressure, inputs.pressureUnit, 'bara');
@@ -267,7 +277,7 @@ const CompressorPowerCalculator: React.FC = () => {
       P1,
       inputs.standardCondition
     );
-    
+
     const k = inputs.specificHeatRatio;
     const Z1 = inputs.compressibilityFactor;
     const MW = inputs.molecularWeight;
@@ -277,75 +287,75 @@ const CompressorPowerCalculator: React.FC = () => {
     const etaMech = inputs.mechanicalEfficiency / 100;
     const etaMotor = inputs.motorEfficiency / 100;
     const numStages = inputs.numberOfStages;
-    
+
     // Get gas critical properties (use actual values from database)
     const gasProps = gasDatabase[inputs.gasType] || gasDatabase.air;
     const Tc = gasProps.Tc;
     const Pc = gasProps.Pc;
-    
+
     // ============================================
     // API 617 / API 618 / ASME PTC 10 / ISO 5389 Calculations
     // Reference: Schultz, J.M. (1962) "The Polytropic Analysis of Centrifugal Compressors"
     // API 617 for Centrifugal/Axial, API 618 for Reciprocating
     // ============================================
-    
+
     // Compression ratio
     const compressionRatio = P2 / P1;
     const ratioPerStage = Math.pow(compressionRatio, 1 / numStages);
-    
+
     // Get compressor type properties
     const compressor = compressorTypes[inputs.compressorType];
     const isReciprocating = ['reciprocating', 'diaphragm'].includes(inputs.compressorType);
-    
+
     // Check compression ratio limits per applicable standard
     if (ratioPerStage > compressor.maxRatio) {
       newWarnings.push(`Compression ratio per stage (${ratioPerStage.toFixed(2)}) exceeds ${compressor.standard} limit for ${compressor.name} (${compressor.maxRatio})`);
     }
-    
+
     // ============================================
     // Real Gas Properties per ASME PTC 10
     // Using Lee-Kesler correlation for improved accuracy
     // ============================================
     const P1_Pa = P1 * 1e5; // Convert bar to Pa
-    
+
     // Reduced properties for compressibility calculations
     const Tr1 = T1 / Tc;
     const Pr1 = P1 / Pc;
-    
+
     // Lee-Kesler simple fluid compressibility (improved over simplified method)
     // Z = 1 + B × Pr / Tr where B = 0.083 - 0.422/Tr^1.6
     const B0_1 = 0.083 - 0.422 / Math.pow(Tr1, 1.6);
     const Z1_calc = 1 + B0_1 * Pr1 / Tr1;
     const Z1_used = Z1 < 0.99 ? Z1 : Math.max(0.5, Math.min(1.1, Z1_calc));
-    
+
     // Inlet density per API 617/618 (kg/m³)
     // ρ₁ = P₁ / (Z₁ × R × T₁)
     const rho1 = P1_Pa / (Z1_used * Rgas * T1);
-    
+
     // Inlet specific volume (m³/kg)
     const v1 = 1 / rho1;
-    
+
     // ============================================
     // Schultz Compressibility Functions (X and Y)
     // Per ASME PTC 10 - Exact definitions
     // X = (T/Z)(∂Z/∂T)_P = T × d(ln Z)/dT at constant P
     // Y = 1 - (P/Z)(∂Z/∂P)_T = 1 - P × d(ln Z)/dP at constant T
     // ============================================
-    
+
     // Derivative approximations from Lee-Kesler
     // dB/dT = 0.422 × 1.6 / (Tc × Tr^2.6)
     const dBdT = 0.422 * 1.6 / (Tc * Math.pow(Tr1, 2.6));
     const dZdT = Pr1 * (dBdT / Tr1 - B0_1 / (Tc * Tr1 * Tr1));
     const X = (T1 / Z1_used) * dZdT;
-    
+
     // dZ/dP at constant T
     const dZdP = B0_1 / (Pc * Tr1);
     const Y = 1 - (P1 / Z1_used) * dZdP;
-    
+
     // Bound X and Y to physical limits
     const X_bounded = Math.max(-0.5, Math.min(0.5, X));
     const Y_bounded = Math.max(0.8, Math.min(1.2, Y));
-    
+
     // ============================================
     // Polytropic Exponent per API 617 / ASME PTC 10
     // For dynamic compressors:
@@ -354,11 +364,11 @@ const CompressorPowerCalculator: React.FC = () => {
     // ============================================
     const nDenominator = 1 - ((k - 1) / k) * etaPoly * ((1 + X_bounded) / Y_bounded);
     const nPoly = Math.max(1.01, 1 / nDenominator);
-    
+
     // Isentropic exponent (accounting for real gas effects)
     // For real gas: ns = k × Y / (1 + X)
     const ns = k * Y_bounded / (1 + X_bounded);
-    
+
     // ============================================
     // Discharge Temperature Calculation
     // API 617: T₂/T₁ = (P₂/P₁)^((n-1)/n × (1+X)/Y)
@@ -367,12 +377,12 @@ const CompressorPowerCalculator: React.FC = () => {
     let dischargeTemp: number;
     let T2: number;
     const dischargeTempPerStage: number[] = [];
-    
+
     if (isReciprocating) {
       // API 618 Method for reciprocating compressors
       // T₂ = T₁ × (P₂/P₁)^((k-1)/(k×ηisen))
       const tempExponent = (k - 1) / (k * etaIsen);
-      
+
       let T_current = T1;
       for (let i = 0; i < numStages; i++) {
         const T_out = T_current * Math.pow(ratioPerStage, tempExponent);
@@ -388,7 +398,7 @@ const CompressorPowerCalculator: React.FC = () => {
     } else {
       // API 617 Method for dynamic compressors (centrifugal/axial)
       const m = ((nPoly - 1) / nPoly) * ((1 + X_bounded) / Y_bounded);
-      
+
       let T_current = T1;
       for (let i = 0; i < numStages; i++) {
         const T_out = T_current * Math.pow(ratioPerStage, m);
@@ -402,7 +412,7 @@ const CompressorPowerCalculator: React.FC = () => {
       dischargeTemp = (T2! || dischargeTempPerStage[dischargeTempPerStage.length - 1] + 273.15) - 273.15;
       T2 = dischargeTemp + 273.15;
     }
-    
+
     // ============================================
     // Discharge Compressibility (Lee-Kesler)
     // ============================================
@@ -411,12 +421,12 @@ const CompressorPowerCalculator: React.FC = () => {
     const B0_2 = 0.083 - 0.422 / Math.pow(Tr2, 1.6);
     const Z2_calc = 1 + B0_2 * Pr2 / Tr2;
     const Z2 = Math.max(0.5, Math.min(1.1, Z2_calc));
-    
+
     // Discharge density (kg/m³)
     const P2_Pa = P2 * 1e5;
     const rho2 = P2_Pa / (Z2 * Rgas * T2);
     const v2 = 1 / rho2;
-    
+
     // ============================================
     // Schultz Head Factor (f) per ASME PTC 10
     // f = ln(P₂/P₁) × (Z₂v₂ - Z₁v₁) / (Z₂v₂ × ln(Z₂v₂/Z₁v₁))
@@ -424,7 +434,7 @@ const CompressorPowerCalculator: React.FC = () => {
     const Z1v1 = Z1_used * v1;
     const Z2v2 = Z2 * v2;
     let schultzF: number;
-    
+
     if (Math.abs(Z2v2 - Z1v1) < 0.001 * Z1v1) {
       schultzF = 1.0;
     } else {
@@ -437,7 +447,7 @@ const CompressorPowerCalculator: React.FC = () => {
       }
     }
     schultzF = Math.max(0.85, Math.min(1.15, schultzF));
-    
+
     // ============================================
     // Head Calculations
     // Isentropic Head (API 617): Hs = (Z₁ × R × T₁ × k/(k-1)) × [(P₂/P₁)^((k-1)/k) - 1]
@@ -445,7 +455,7 @@ const CompressorPowerCalculator: React.FC = () => {
     // ============================================
     const isentropicHead = (Z1_used * Rgas * T1 * k / (k - 1)) * (Math.pow(compressionRatio, (k - 1) / k) - 1);
     const polytropicHead = schultzF * (Z1_used * Rgas * T1 * nPoly / (nPoly - 1)) * (Math.pow(compressionRatio, (nPoly - 1) / nPoly) - 1);
-    
+
     // ============================================
     // Power Calculations
     // API 617: Gas Power = ṁ × Hp (polytropic work)
@@ -457,25 +467,25 @@ const CompressorPowerCalculator: React.FC = () => {
     let volumetricEfficiency = 1.0;
     let pistonDisplacement = 0;
     let rodLoad = 0;
-    
+
     if (isReciprocating) {
       // API 618 Volumetric Efficiency
       // ηv = 1 - c × ((P₂/P₁)^(1/k) - 1) - losses
       const clearance = compressor.clearanceVol || 0.08;
-      const reExpansionLoss = clearance * (Math.pow(compressionRatio, 1/k) - 1);
+      const reExpansionLoss = clearance * (Math.pow(compressionRatio, 1 / k) - 1);
       const leakageLoss = 0.02;
       const heatingLoss = 0.02;
       volumetricEfficiency = Math.max(0.4, 1 - reExpansionLoss - leakageLoss - heatingLoss);
-      
+
       // Indicated power per API 618
       // Pind = (P₁ × V₁ × k/(k-1)) × [(P₂/P₁)^((k-1)/k) - 1] / ηv
       const actualVolumetricFlow = (massFlow / rho1); // m³/s at inlet
       pistonDisplacement = actualVolumetricFlow / volumetricEfficiency * 3600; // m³/h
-      
+
       isentropicPower = (massFlow * isentropicHead) / 1000;
       polytropicPower = isentropicPower / etaIsen; // Use isentropic for recip
       shaftPower = polytropicPower / etaMech;
-      
+
       // Rod load calculation (simplified)
       // F_rod = P₂ × A_piston - P₁ × A_rod_side
       const cylinderArea = 0.1; // Assumed 0.1 m² (typical)
@@ -486,9 +496,9 @@ const CompressorPowerCalculator: React.FC = () => {
       polytropicPower = (massFlow * polytropicHead) / 1000;
       shaftPower = polytropicPower / etaMech;
     }
-    
+
     const motorPower = shaftPower / etaMotor;
-    
+
     // Actual volumetric flow at inlet conditions (m³/h)
     const actualFlow = (massFlow / rho1) * 3600;
 
@@ -496,23 +506,23 @@ const CompressorPowerCalculator: React.FC = () => {
     const { Tstd, Pstd } = getStandardConditions(inputs.standardCondition);
     const nm3hFlow = (massFlow * 3600 * 8314.46 * Tstd) / (MW * Pstd);
     const specificPower = nm3hFlow > 0 ? (motorPower / nm3hFlow) * 100 : 0;
-    
+
     // ============================================
     // Performance Curve Parameters (for dynamic compressors)
     // Surge and stonewall limits per API 617
     // ============================================
     let surgeFlow = 0;
     let stonewallFlow = 0;
-    
+
     if (!isReciprocating) {
       // Surge flow typically 50-70% of design for centrifugal, 70-80% for axial
       const surgeRatio = inputs.compressorType === 'axial' ? 0.75 : 0.55;
       surgeFlow = actualFlow * surgeRatio;
-      
+
       // Stonewall at 110-120% of design
       stonewallFlow = actualFlow * 1.15;
     }
-    
+
     // ============================================
     // Warnings per API 617 and API 618
     // ============================================
@@ -538,9 +548,9 @@ const CompressorPowerCalculator: React.FC = () => {
       newWarnings.push(`Schultz factor (${schultzF.toFixed(3)}) indicates significant real gas effects`);
     }
     if (isReciprocating && volumetricEfficiency < 0.7) {
-      newWarnings.push(`Low volumetric efficiency (${(volumetricEfficiency*100).toFixed(0)}%) - verify clearance volume per API 618`);
+      newWarnings.push(`Low volumetric efficiency (${(volumetricEfficiency * 100).toFixed(0)}%) - verify clearance volume per API 618`);
     }
-    
+
     setResults({
       compressionRatio,
       ratioPerStage,
@@ -571,12 +581,98 @@ const CompressorPowerCalculator: React.FC = () => {
       designHead: polytropicHead / 1000,
       designPower: motorPower
     });
-    
+
     setWarnings(newWarnings);
   }, [inputs]);
 
   const handleInputChange = (field: keyof CompressorInputs, value: string | number) => {
     setInputs(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleExportPDF = () => {
+    if (!results) {
+      toast({
+        title: "Calculations missing",
+        description: "Please perform the calculations before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const datasheetData: CompressorDatasheetData = {
+      // Metadata
+      companyName,
+      projectName,
+      itemNumber,
+      serviceName,
+      date: new Date().toLocaleDateString(),
+
+      // Inputs
+      ...inputs,
+
+      // Results
+      ...results,
+
+      // Warnings
+      warnings
+    };
+
+    try {
+      generateCompressorPDF(datasheetData);
+      toast({
+        title: "PDF Exported",
+        description: "Compressor datasheet initialized successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Could not generate PDF.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!results) {
+      toast({
+        title: "Calculations missing",
+        description: "Please perform the calculations before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const excelData: CompressorExcelData = {
+      // Metadata
+      companyName,
+      projectName,
+      itemNumber,
+      serviceName,
+      date: new Date().toLocaleDateString(),
+
+      // Inputs
+      ...inputs,
+
+      // Results
+      ...results,
+
+      // Warnings
+      warnings
+    };
+
+    try {
+      generateCompressorExcelDatasheet(excelData);
+      toast({
+        title: "Excel Exported",
+        description: "Compressor datasheet initialized successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Could not generate Excel file.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -672,7 +768,7 @@ const CompressorPowerCalculator: React.FC = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Info className="h-4 w-4" />
@@ -896,7 +992,7 @@ const CompressorPowerCalculator: React.FC = () => {
 
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <p className="text-sm text-muted-foreground">
-                      <strong>Typical Efficiencies:</strong> Centrifugal (78-85%), Axial (88-92%), 
+                      <strong>Typical Efficiencies:</strong> Centrifugal (78-85%), Axial (88-92%),
                       Reciprocating (82-88%), Screw (75-82%), Diaphragm (70-78%)
                     </p>
                   </div>
@@ -916,8 +1012,8 @@ const CompressorPowerCalculator: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Number of Stages</Label>
-                      <Select 
-                        value={inputs.numberOfStages.toString()} 
+                      <Select
+                        value={inputs.numberOfStages.toString()}
                         onValueChange={(v) => handleInputChange('numberOfStages', parseInt(v))}
                       >
                         <SelectTrigger>
@@ -961,8 +1057,8 @@ const CompressorPowerCalculator: React.FC = () => {
 
                   <div className="p-3 bg-accent/10 border border-accent/20 rounded-lg">
                     <p className="text-sm">
-                      <strong>Staging Guideline:</strong> Use multiple stages when compression ratio exceeds 
-                      3-4 for centrifugal, or 6-8 for reciprocating compressors. Intercooling between stages 
+                      <strong>Staging Guideline:</strong> Use multiple stages when compression ratio exceeds
+                      3-4 for centrifugal, or 6-8 for reciprocating compressors. Intercooling between stages
                       reduces power consumption and discharge temperature.
                     </p>
                   </div>
@@ -1155,11 +1251,10 @@ const CompressorPowerCalculator: React.FC = () => {
               </Card>
 
               {/* Status indicator */}
-              <div className={`p-3 rounded-lg flex items-center gap-2 ${
-                warnings.length === 0 
-                  ? 'bg-green-500/10 border border-green-500/30' 
+              <div className={`p-3 rounded-lg flex items-center gap-2 ${warnings.length === 0
+                  ? 'bg-green-500/10 border border-green-500/30'
                   : 'bg-yellow-500/10 border border-yellow-500/30'
-              }`}>
+                }`}>
                 {warnings.length === 0 ? (
                   <>
                     <CheckCircle className="h-5 w-5 text-green-500" />
@@ -1171,6 +1266,39 @@ const CompressorPowerCalculator: React.FC = () => {
                     <span className="text-sm text-yellow-700 dark:text-yellow-400">Review warnings above</span>
                   </>
                 )}
+              </div>
+              {/* Metadata and Export Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-secondary/20 border border-border/50">
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Company</Label>
+                    <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="h-8 bg-background/50" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Project</Label>
+                    <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="h-8 bg-background/50" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Item No</Label>
+                      <Input value={itemNumber} onChange={(e) => setItemNumber(e.target.value)} className="h-8 bg-background/50" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Service</Label>
+                      <Input value={serviceName} onChange={(e) => setServiceName(e.target.value)} className="h-8 bg-background/50" />
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-2 pt-1">
+                    <Button onClick={handleExportPDF} className="flex-1 h-8 text-xs gap-2" variant="outline">
+                      Export PDF
+                    </Button>
+                    <Button onClick={handleExportExcel} className="flex-1 h-8 text-xs gap-2" variant="outline">
+                      Export Excel
+                    </Button>
+                  </div>
+                </div>
               </div>
             </>
           )}
