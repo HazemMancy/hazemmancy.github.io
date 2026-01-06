@@ -16,20 +16,19 @@ import { generateHydraulicExcelDatasheet, HydraulicExcelData } from "@/lib/hydra
 // ================== TYPE DEFINITIONS ==================
 type UnitSystem = 'metric' | 'imperial';
 
-// Darcy-Weisbach is the only method used - matching HYSYS calculations
+// Darcy-Weisbach is used for pressure drop calculations (Standard Industry Practice)
 
-// ENI Gas Line Sizing Criteria (Table 8.1.1.1)
+// API RP 14E / Best Practice Gas Line Sizing Criteria
 interface GasSizingCriteria {
   service: string;
   pressureRange: string;
-  pressureDropBarKm: number | null; // null = not specified, or "10% Pop" for vacuum
+  pressureDropBarKm: number | null; // null = not specified
   velocityMs: number | null; // null = not specified
-  rhoV2: number | null; // kg/m*s² - null = not specified
-  mach: number | null; // null = not specified
+  cValue: number | null; // API 14E C-value (Imperial: 100-200)
   note?: string;
 }
 
-// Eni Liquid Line Sizing Criteria (Table 8.2.1.1)
+// API RP 14E / Best Practice Liquid Line Sizing Criteria
 interface LiquidSizingCriteria {
   service: string;
   pressureDropBarKm: number | null;
@@ -42,130 +41,122 @@ interface LiquidSizingCriteria {
   } | null;
 }
 
-// Eni Mixed-Phase Line Sizing Criteria (Table 8.3.1.1)
+// Mixed-Phase: API RP 14E Checking
 interface MixedPhaseSizingCriteria {
   service: string;
-  rhoV2: number;
-  mach?: number | null;
+  cValue: number; // API 14E C-value (typically 100 for continuous)
 }
 
 const gasServiceCriteria: GasSizingCriteria[] = [
   // Continuous service
-  { service: "Continuous", pressureRange: "Vacuum", pressureDropBarKm: null, velocityMs: 60, rhoV2: null, mach: null, note: "ΔP = 10% Pop" },
-  { service: "Continuous", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.5, velocityMs: 50, rhoV2: null, mach: null, note: "Note 1" },
-  { service: "Continuous", pressureRange: "2 to 7 barg", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2: null, mach: null },
-  { service: "Continuous", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, rhoV2: 15000, mach: null },
-  { service: "Continuous", pressureRange: "35 to 140 barg", pressureDropBarKm: 3, velocityMs: null, rhoV2: 20000, mach: null },
-  { service: "Continuous", pressureRange: "Above 140 barg", pressureDropBarKm: 5, velocityMs: null, rhoV2: 25000, mach: null },
+  { service: "Continuous", pressureRange: "Vacuum", pressureDropBarKm: null, velocityMs: 60, cValue: 100, note: "Check vacuum stability" },
+  { service: "Continuous", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.5, velocityMs: 50, cValue: 100 },
+  { service: "Continuous", pressureRange: "2 to 7 barg", pressureDropBarKm: 1.0, velocityMs: 45, cValue: 100 },
+  { service: "Continuous", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, cValue: 100 },
+  { service: "Continuous", pressureRange: "35 to 140 barg", pressureDropBarKm: 3, velocityMs: null, cValue: 100 },
+  { service: "Continuous", pressureRange: "Above 140 barg", pressureDropBarKm: 5, velocityMs: null, cValue: 100 },
 
   // Compressor suction
-  { service: "Compressor Suction", pressureRange: "Vacuum", pressureDropBarKm: 0.05, velocityMs: 35, rhoV2: null, mach: null },
-  { service: "Compressor Suction", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.15, velocityMs: 30, rhoV2: null, mach: null },
-  { service: "Compressor Suction", pressureRange: "2 to 7 barg", pressureDropBarKm: 0.4, velocityMs: 25, rhoV2: null, mach: null },
-  { service: "Compressor Suction", pressureRange: "7 to 35 barg", pressureDropBarKm: 1, velocityMs: null, rhoV2: 6000, mach: null },
-  { service: "Compressor Suction", pressureRange: "Above 35 barg", pressureDropBarKm: 2, velocityMs: null, rhoV2: 15000, mach: null },
+  { service: "Compressor Suction", pressureRange: "Vacuum", pressureDropBarKm: 0.05, velocityMs: 35, cValue: 80 },
+  { service: "Compressor Suction", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.15, velocityMs: 30, cValue: 80 },
+  { service: "Compressor Suction", pressureRange: "2 to 7 barg", pressureDropBarKm: 0.4, velocityMs: 25, cValue: 80 },
+  { service: "Compressor Suction", pressureRange: "7 to 35 barg", pressureDropBarKm: 1, velocityMs: null, cValue: 80 },
+  { service: "Compressor Suction", pressureRange: "Above 35 barg", pressureDropBarKm: 2, velocityMs: null, cValue: 80 },
 
   // Discontinuous service
-  { service: "Discontinuous", pressureRange: "Below 35 barg", pressureDropBarKm: null, velocityMs: 60, rhoV2: 15000, mach: null },
-  { service: "Discontinuous", pressureRange: "35 barg and above", pressureDropBarKm: null, velocityMs: null, rhoV2: 25000, mach: null },
+  { service: "Discontinuous", pressureRange: "Below 35 barg", pressureDropBarKm: null, velocityMs: 60, cValue: 150 },
+  { service: "Discontinuous", pressureRange: "35 barg and above", pressureDropBarKm: null, velocityMs: null, cValue: 150 },
 
   // Flare
-  { service: "Flare - Upstream PSV", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2: null, mach: null, note: "ΔP < 3% PRV set" },
-  { service: "Flare - Upstream BDV", pressureRange: "All", pressureDropBarKm: null, velocityMs: 60, rhoV2: 30000, mach: null },
-  { service: "Flare - Tail Pipe", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2: null, mach: 0.7, note: "Note 2" },
-  { service: "Flare - Tail Pipe (downstream BDV)", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2: null, mach: 1.0 },
-  { service: "Flare Header", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2: null, mach: 0.5 },
+  { service: "Flare - Upstream PSV", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, cValue: null, note: "ΔP < 3% PRV set per API 520" },
+  { service: "Flare - Upstream BDV", pressureRange: "All", pressureDropBarKm: null, velocityMs: 60, cValue: 150 },
+  { service: "Flare - Tail Pipe", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, cValue: null, note: "Mach < 0.7 per API 521" },
+  { service: "Flare Header", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, cValue: null, note: "Mach < 0.5 (~0.2 continuous)" },
 
-  // Steam to users
-  { service: "Steam - Superheated #150", pressureRange: "All", pressureDropBarKm: 2.0, velocityMs: 45, rhoV2: null, mach: null, note: "Note 4" },
-  { service: "Steam - Superheated #300", pressureRange: "All", pressureDropBarKm: 3.0, velocityMs: 60, rhoV2: null, mach: null, note: "Note 4" },
-  { service: "Steam - Superheated #600", pressureRange: "All", pressureDropBarKm: 6.0, velocityMs: 60, rhoV2: null, mach: null, note: "Note 4" },
-  { service: "Steam - Superheated #900+", pressureRange: "All", pressureDropBarKm: 8.0, velocityMs: 70, rhoV2: null, mach: null, note: "Note 4" },
-  { service: "Steam - Saturated #150", pressureRange: "All", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2: null, mach: null, note: "Note 3" },
-  { service: "Steam - Saturated #300", pressureRange: "All", pressureDropBarKm: 3.0, velocityMs: 35, rhoV2: null, mach: null, note: "Note 3" },
-  { service: "Steam - Saturated #600", pressureRange: "All", pressureDropBarKm: 6.0, velocityMs: 30, rhoV2: null, mach: null, note: "Note 3" },
-
-  // Superheated Steam long headers
-  { service: "Steam Header - #150", pressureRange: "All", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2: null, mach: null, note: "Note 4" },
-  { service: "Steam Header - #300", pressureRange: "All", pressureDropBarKm: 1.5, velocityMs: 45, rhoV2: null, mach: null, note: "Note 4" },
-  { service: "Steam Header - #600", pressureRange: "All", pressureDropBarKm: 2.0, velocityMs: 45, rhoV2: null, mach: null, note: "Note 4" },
-
-  // Fuel Gas (same as continuous)
-  { service: "Fuel Gas", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.5, velocityMs: 50, rhoV2: null, mach: null },
-  { service: "Fuel Gas", pressureRange: "2 to 7 barg", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2: null, mach: null },
-  { service: "Fuel Gas", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, rhoV2: 15000, mach: null },
+  // Fuel Gas
+  { service: "Fuel Gas", pressureRange: "All", pressureDropBarKm: 1.0, velocityMs: 50, cValue: 100 },
 ];
 
-// Liquid service criteria per Eni Sizing Criteria Table 8.2.1.1
+// Liquid service criteria per Best Practices / API 14E
 const liquidServiceCriteria: LiquidSizingCriteria[] = [
-  { service: "Gravity Flow", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 } },
-  { service: "Pump Suction (Boiling Point)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 } },
-  { service: "Pump Suction (Sub-cooled)", pressureDropBarKm: 1.0, velocity: { size2: 0.7, size3to6: 1.2, size8to12: 1.6, size14to18: 2.1, size20plus: 2.6 } },
-  { service: "Pump Discharge (Pop < 35 barg)", pressureDropBarKm: 4.5, velocity: { size2: 1.4, size3to6: 1.9, size8to12: 3.1, size14to18: 4.1, size20plus: 5.0 } },
-  { service: "Pump Discharge (Pop > 35 barg)", pressureDropBarKm: 6.0, velocity: { size2: 1.5, size3to6: 2.0, size8to12: 3.5, size14to18: 4.6, size20plus: 5.0 } },
-  { service: "Condenser Outlet (Pop < 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 } },
-  { service: "Condenser Outlet (Pop > 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 } },
-  { service: "Cooling Water Manifold", pressureDropBarKm: null, velocity: { size2: 3.5, size3to6: 3.5, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 } },
-  { service: "Cooling Water Sub-manifold", pressureDropBarKm: 1.5, velocity: { size2: 2.0, size3to6: 3.1, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 } },
-  { service: "Diathermic Oil", pressureDropBarKm: null, velocity: null },
+  { service: "Gravity Flow", pressureDropBarKm: null, velocity: { size2: 1.0, size3to6: 1.0, size8to12: 1.0, size14to18: 1.0, size20plus: 1.0 } }, // API 14E recommends < 1 m/s for gravity
+  { service: "Pump Suction (Boiling Point)", pressureDropBarKm: 0.5, velocity: { size2: 1.0, size3to6: 1.2, size8to12: 1.5, size14to18: 1.8, size20plus: 2.1 } }, // Conservative for NPSH
+  { service: "Pump Suction (Sub-cooled)", pressureDropBarKm: 1.0, velocity: { size2: 1.2, size3to6: 1.5, size8to12: 2.0, size14to18: 2.4, size20plus: 2.7 } },
+  { service: "Pump Discharge (General)", pressureDropBarKm: 4.5, velocity: { size2: 2.5, size3to6: 3.5, size8to12: 4.5, size14to18: 5.0, size20plus: 6.0 } }, // Typical economic velocity
+  { service: "Cooling Water", pressureDropBarKm: 1.5, velocity: { size2: 2.5, size3to6: 3.0, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 } },
   { service: "Liquid Sulphur", pressureDropBarKm: null, velocity: { size2: 1.8, size3to6: 1.8, size8to12: 1.8, size14to18: 1.8, size20plus: 1.8 } },
-  { service: "Column Side-stream Draw-off", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 } },
 ];
 
-// Mixed-phase service criteria per Eni Sizing Criteria Table 8.3.1.1
+// Mixed-phase: API RP 14E C-values
 const mixedPhaseServiceCriteria: MixedPhaseSizingCriteria[] = [
-  { service: "Continuous P < 7 barg (Limited ΔP)", rhoV2: 6000 },
-  { service: "Continuous P > 7 barg", rhoV2: 15000 },
-  { service: "Discontinuous", rhoV2: 15000 },
-  { service: "Erosive Fluid (Continuous)", rhoV2: 3750 },
-  { service: "Erosive Fluid (Discontinuous)", rhoV2: 6000 },
-  { service: "Partial Condenser Outlet", rhoV2: 6000 },
-  { service: "Reboiler Return (Natural Circulation)", rhoV2: 1500 },
-  { service: "Flare Tail Pipe (Significant Liquids)", rhoV2: 50000, mach: 0.25 },
-  { service: "Flare Header (Significant Liquids)", rhoV2: 50000, mach: 0.25 },
+  { service: "Continuous (Solids-free)", cValue: 100 },
+  { service: "Intermittent (Solids-free)", cValue: 125 },
+  { service: "Erosive / Corrosive Service", cValue: 80 },
+  { service: "Flare Lines (Short duration)", cValue: 150 },
 ];
 
-// Get unique service types for each category
+// ... (rest of helper functions remain similar, but using new types)
+
+// Get unique service types
 const gasServiceTypes = [...new Set(gasServiceCriteria.map(c => c.service))];
 const liquidServiceTypes = liquidServiceCriteria.map(c => c.service);
 const mixedPhaseServiceTypes = mixedPhaseServiceCriteria.map(c => c.service);
 
-// Get pressure ranges for a service type
+// ... (getPressureRangesForService etc. - keep existing logic but map to new vars)
+
 const getPressureRangesForService = (service: string): string[] => {
   return gasServiceCriteria.filter(c => c.service === service).map(c => c.pressureRange);
 };
 
-// Get criteria for a specific service and pressure range
-const getCriteriaForServiceAndPressure = (service: string, pressureRange: string): GasSizingCriteria | undefined => {
-  return gasServiceCriteria.find(c => c.service === service && c.pressureRange === pressureRange);
+// ...
+
+// Calculate API 14E Erosional Velocity
+// Ve = C / sqrt(rho)
+// Note: API 14E uses Imperial Units: Ve in ft/s, rho in lb/ft³
+// We must convert for calculation if in Metric, or use Metric equivalent constant.
+// Metric equivalent: Ve(m/s) = (C_imperial * 0.3048 * sqrt(16.0185)) / sqrt(rho_kgm3) = C_imp * 1.22 / sqrt(rho_kgm3)
+const calculateErosionalVelocity = (rho_kgm3: number, cValue: number): number => {
+  if (rho_kgm3 <= 0 || !cValue) return 9999;
+  return (cValue * 1.22) / Math.sqrt(rho_kgm3);
 };
 
-// Get liquid criteria for a service
-const getLiquidCriteriaForService = (service: string): LiquidSizingCriteria | undefined => {
-  return liquidServiceCriteria.find(c => c.service === service);
+// Helper: Get criteria for gas service
+const getCriteriaForServiceAndPressure = (service: string, pressureRange: string): GasSizingCriteria | null => {
+  const criteria = gasServiceCriteria.find(c => c.service === service && c.pressureRange === pressureRange);
+  return criteria || null;
 };
 
-// Get mixed-phase criteria for a service
-const getMixedPhaseCriteriaForService = (service: string): MixedPhaseSizingCriteria | undefined => {
-  return mixedPhaseServiceCriteria.find(c => c.service === service);
+// Helper: Get criteria for liquid service
+const getLiquidCriteriaForService = (service: string): LiquidSizingCriteria | null => {
+  const criteria = liquidServiceCriteria.find(c => c.service === service);
+  return criteria || null;
 };
 
-// Get velocity limit based on pipe size for liquid lines
-const getLiquidVelocityLimit = (criteria: LiquidSizingCriteria, nominalSizeInch: number): number | null => {
+// Helper: Get criteria for mixed-phase service
+const getMixedPhaseCriteriaForService = (service: string): MixedPhaseSizingCriteria | null => {
+  const criteria = mixedPhaseServiceCriteria.find(c => c.service === service);
+  return criteria || null;
+};
+
+// Helper: Get liquid velocity limit based on diameter
+const getLiquidVelocityLimit = (criteria: LiquidSizingCriteria, diameter: number): number | null => {
   if (!criteria.velocity) return null;
-  if (nominalSizeInch <= 2) return criteria.velocity.size2;
-  if (nominalSizeInch <= 6) return criteria.velocity.size3to6;
-  if (nominalSizeInch <= 12) return criteria.velocity.size8to12;
-  if (nominalSizeInch <= 18) return criteria.velocity.size14to18;
+  if (diameter <= 2) return criteria.velocity.size2;
+  if (diameter <= 6) return criteria.velocity.size3to6;
+  if (diameter <= 12) return criteria.velocity.size8to12;
+  if (diameter <= 18) return criteria.velocity.size14to18;
   return criteria.velocity.size20plus;
 };
 
-// Unit conversion factors to SI
+// Length units to meters
 const lengthToMeters: Record<string, number> = {
   m: 1,
   km: 1000,
+  ft: 0.3048,
+  mi: 1609.34,
 };
 
+// Existing diameter constraints
 const diameterToMeters: Record<string, number> = {
   mm: 0.001,
   in: 0.0254,
@@ -421,31 +412,75 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Handle unit system change
   const handleUnitSystemChange = (isImperial: boolean) => {
     const newSystem = isImperial ? 'imperial' : 'metric';
-    setUnitSystem(newSystem);
 
-    if (newSystem === 'imperial') {
-      setLengthUnit("ft");
-      setDiameterUnit("in");
-      setDensityUnit("lb/ft³");
-      setPressureUnit("psi");
-      setRoughnessUnit("in");
-      if (lineType === "gas") {
-        setFlowRateUnit("MMSCFD");
+    // Convert values if system is changing
+    if (newSystem !== unitSystem) {
+      // Helper to safely parse and convert
+      const cvt = (val: string, factor: number) => {
+        const num = parseFloat(val);
+        return isNaN(num) ? val : (num * factor).toFixed(4);
+      };
+
+      const cvtTemp = (val: string, toF: boolean) => {
+        const num = parseFloat(val);
+        if (isNaN(num)) return val;
+        return toF ? ((num * 9 / 5) + 32).toFixed(2) : ((num - 32) * 5 / 9).toFixed(2);
+      };
+
+      if (isImperial) {
+        // Metric -> Imperial
+        setLengthUnit("ft");     // km -> ft
+        setPipeLength(prev => cvt(prev, 3280.84));
+
+        setDiameterUnit("in");   // mm -> in
+        setNominalDiameter(prev => cvt(prev, 1 / 25.4));
+
+        setDensityUnit("lb/ft³"); // kg/m³ -> lb/ft³
+        setDensity(prev => cvt(prev, 0.062428));
+
+        setPressureUnit("psi");   // bar -> psi
+        setInletPressure(prev => cvt(prev, 14.5038)); // Gauge pressure
+
+        setRoughnessUnit("in");   // mm -> in
+        setCustomRoughness(prev => cvt(prev, 1 / 25.4));
+
+        setFluidTemperature(prev => cvtTemp(prev, true)); // C -> F
+
+        if (lineType === "gas") {
+          setFlowRateUnit("MMSCFD"); // Standard is usually MMSCFD for both or similar
+        } else {
+          setFlowRateUnit("gpm"); // m³/h -> gpm
+          setFlowRate(prev => cvt(prev, 4.40287));
+        }
       } else {
-        setFlowRateUnit("gpm");
-      }
-    } else {
-      setLengthUnit("km");
-      setDiameterUnit("mm");
-      setDensityUnit("kg/m³");
-      setPressureUnit("bar");
-      setRoughnessUnit("mm");
-      if (lineType === "gas") {
-        setFlowRateUnit("MMSCFD");
-      } else {
-        setFlowRateUnit("m³/h");
+        // Imperial -> Metric
+        setLengthUnit("km");     // ft -> km
+        setPipeLength(prev => cvt(prev, 1 / 3280.84));
+
+        setDiameterUnit("mm");   // in -> mm
+        setNominalDiameter(prev => cvt(prev, 25.4));
+
+        setDensityUnit("kg/m³"); // lb/ft³ -> kg/m³
+        setDensity(prev => cvt(prev, 1 / 0.062428));
+
+        setPressureUnit("bar");  // psi -> bar
+        setInletPressure(prev => cvt(prev, 1 / 14.5038));
+
+        setRoughnessUnit("mm");  // in -> mm
+        setCustomRoughness(prev => cvt(prev, 25.4));
+
+        setFluidTemperature(prev => cvtTemp(prev, false)); // F -> C
+
+        if (lineType === "gas") {
+          setFlowRateUnit("MMSCFD");
+        } else {
+          setFlowRateUnit("m³/h"); // gpm -> m³/h
+          setFlowRate(prev => cvt(prev, 1 / 4.40287));
+        }
       }
     }
+
+    setUnitSystem(newSystem);
   };
 
   // Operating conditions for gas (editable)
@@ -464,10 +499,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [gasPressureRange, setGasPressureRange] = useState<string>("2 to 7 barg");
 
   // Liquid service type selection (API RP 14E criteria)
-  const [liquidServiceType, setLiquidServiceType] = useState<string>("Pump Discharge (Pop < 35 barg)");
+  const [liquidServiceType, setLiquidServiceType] = useState<string>("Pump Discharge (General)");
 
   // Mixed-phase service type selection (API RP 14E criteria)
-  const [mixedPhaseServiceType, setMixedPhaseServiceType] = useState<string>("Continuous P > 7 barg");
+  const [mixedPhaseServiceType, setMixedPhaseServiceType] = useState<string>("Continuous (Solids-free)");
 
   // Metadata for Export
   const [companyName, setCompanyName] = useState("");
@@ -544,7 +579,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     : liquidFlowRateToM3s;
 
   // Convert all inputs to SI units
-  const L_m = useMemo(() => parseFloat(pipeLength) * lengthToMeters[lengthUnit] || 0, [pipeLength, lengthUnit]);
+  const L_m = useMemo(() => {
+    const len = parseFloat(pipeLength) || 0;
+    const factor = lengthUnit === "km" ? 1000 : lengthUnit === "ft" ? 0.3048 : lengthUnit === "mi" ? 1609.34 : 1;
+    return len * factor;
+  }, [pipeLength, lengthUnit]);
   const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]);
   const Q_m3s = useMemo(() => {
     return parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0);
@@ -951,7 +990,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return getCriteriaForServiceAndPressure(gasServiceType, gasPressureRange);
   }, [gasServiceType, gasPressureRange]);
 
-  // Line Sizing Criteria based on ENI Table 8.1.1.1 for gas, API 14E for liquid/mixed
+  // Line Sizing Criteria based on API 14E for gas, liquid, and mixed
   const sizingCriteria = useMemo(() => {
     if (lineType === "gas" && currentGasCriteria) {
       // Convert pressure drop from bar/km to bar/100m
@@ -961,14 +1000,13 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
       return {
         minVelocity: 0, // No minimum for gas
-        maxVelocity: currentGasCriteria.velocityMs, // From ENI table, null if using ρv² instead
-        maxRhoVSquared: currentGasCriteria.rhoV2, // From ENI table
-        maxPressureDropPer100m: pressureDropBarPer100m, // bar/100m
+        maxVelocity: currentGasCriteria.velocityMs,
+        maxPressureDropPer100m: pressureDropBarPer100m,
         maxPressureDropBarKm: currentGasCriteria.pressureDropBarKm,
-        maxMach: currentGasCriteria.mach, // For flare applications
         note: currentGasCriteria.note,
         service: currentGasCriteria.service,
         pressureRange: currentGasCriteria.pressureRange,
+        // cValue handled in results calculation
       };
     } else if (lineType === "liquid" && currentLiquidCriteria) {
       // Liquid - API RP 14E criteria Table 8.2.1.1
@@ -978,28 +1016,25 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         : null;
 
       return {
-        minVelocity: liquidServiceType.includes("Sulphur") ? 0.9 : 0.3, // Minimum velocity
+        minVelocity: liquidServiceType.includes("Sulphur") ? 0.9 : 0.3,
         maxVelocity: velocityLimit,
-        maxRhoVSquared: null, // Not used for liquid
         maxPressureDropPer100m: pressureDropBarPer100m,
         maxPressureDropBarKm: currentLiquidCriteria.pressureDropBarKm,
-        maxMach: null,
         note: null,
         service: currentLiquidCriteria.service,
         pressureRange: null,
       };
     } else if (lineType === "mixed" && currentMixedPhaseCriteria) {
-      // Mixed-phase - Eni Sizing Criteria Table 8.3.1.1
+      // Mixed-phase
       return {
         minVelocity: 0,
-        maxVelocity: null, // Use ρv² instead
-        maxRhoVSquared: currentMixedPhaseCriteria.rhoV2,
+        maxVelocity: null,
         maxPressureDropPer100m: null,
         maxPressureDropBarKm: null,
-        maxMach: currentMixedPhaseCriteria.mach || null,
         note: null,
         service: currentMixedPhaseCriteria.service,
         pressureRange: null,
+        // cValue handled in results
       };
     } else {
       // Default fallback
@@ -1017,29 +1052,94 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     }
   }, [lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, nominalDiameterNumber, liquidServiceType]);
 
-  // Status check function based on ENI/API 14E criteria
-  const getStatusIndicator = () => {
-    const pressureDropPer100mBar = L_m > 0 ? (pressureDropPa * 100 / L_m) * 0.00001 : 0; // Convert to bar/100m
+  // ========== RESULTS CALCULATION (API 14E) ==========
+  const results = useMemo(() => {
+    if (velocity === 0 || rho <= 0 || D_m <= 0) return null;
 
-    // Pressure drop check - only if limit is specified
-    const pressureDropOk = sizingCriteria.maxPressureDropPer100m === null ||
-      (L_m > 0 && pressureDropPer100mBar <= sizingCriteria.maxPressureDropPer100m);
+    // Pressure drop per unit length (Pa/m)
+    const dP_per_m = (frictionFactor * rho * Math.pow(velocity, 2)) / (2 * D_m);
 
-    // Velocity check - only if limit is specified
-    const velocityOk = sizingCriteria.maxVelocity === null ||
-      (velocity >= sizingCriteria.minVelocity && velocity <= sizingCriteria.maxVelocity);
+    // Total Pressure Drop
+    const dP_total_bar = (dP_per_m * L_m) / 100000;
+    const dP_bar_km = dP_per_m * 0.01;
 
-    // ρv² check - only if limit is specified
-    const rhoVSquaredOk = sizingCriteria.maxRhoVSquared === null ||
-      rhoVSquared <= sizingCriteria.maxRhoVSquared;
+    // Check Limits
+    let velocityLimit = 999;
+    let dPWarning = false;
+    let velWarning = false;
+    let cValueLimit: number | null = null;
+    let erosionalVelocity = 0;
+
+    // Gas Limits
+    if (lineType === "gas" && currentGasCriteria) {
+      cValueLimit = currentGasCriteria.cValue;
+      if (cValueLimit) {
+        // Ve = C * 1.22 / sqrt(rho)
+        erosionalVelocity = calculateErosionalVelocity(rho, cValueLimit);
+      }
+
+      const vLimitAbs = currentGasCriteria.velocityMs || 999;
+      velocityLimit = cValueLimit ? Math.min(vLimitAbs, erosionalVelocity) : vLimitAbs;
+
+      if (velocity > velocityLimit) velWarning = true;
+
+      if (currentGasCriteria.pressureDropBarKm && dP_bar_km > currentGasCriteria.pressureDropBarKm) {
+        dPWarning = true;
+      }
+    }
+
+    // Liquid Limits
+    if (lineType === "liquid" && currentLiquidCriteria) {
+      const vLimit = getLiquidVelocityLimit(currentLiquidCriteria, nominalDiameterNumber);
+      velocityLimit = vLimit || 15;
+
+      if (velocity > velocityLimit) velWarning = true;
+
+      if (currentLiquidCriteria.pressureDropBarKm && dP_bar_km > currentLiquidCriteria.pressureDropBarKm) {
+        dPWarning = true;
+      }
+    }
+
+    // Mixed Limits
+    if (lineType === "mixed" && currentMixedPhaseCriteria) {
+      cValueLimit = currentMixedPhaseCriteria.cValue;
+      if (cValueLimit) {
+        erosionalVelocity = calculateErosionalVelocity(rho, cValueLimit);
+        velocityLimit = erosionalVelocity;
+        if (velocity > velocityLimit) velWarning = true;
+      }
+    }
+
+    const machNumber = lineType === "gas" ? velocity / 340 : 0;
 
     return {
-      pressureDrop: sizingCriteria.maxPressureDropPer100m === null ? "na" as const :
-        (pressureDropOk ? "ok" as const : "warning" as const),
-      velocity: sizingCriteria.maxVelocity === null ? "na" as const :
-        (velocityOk ? "ok" as const : "warning" as const),
-      rhoVSquared: sizingCriteria.maxRhoVSquared === null ? "na" as const :
-        (rhoVSquaredOk ? "ok" as const : "warning" as const),
+      velocity,
+      reynoldsNumber,
+      frictionFactor,
+      dP_total_bar,
+      dP_bar_km,
+      flowRegime,
+      velocityLimit,
+      erosionalVelocity,
+      cValueLimit,
+      dP_limit: (lineType === "gas" ? currentGasCriteria?.pressureDropBarKm : currentLiquidCriteria?.pressureDropBarKm) || null,
+      velWarning,
+      dPWarning,
+      machNumber,
+      // Pass safe values for PDF export if it still references old names (though we update it too)
+      rhoV2Limit: null,
+      rhoVSquared: rho * Math.pow(velocity, 2)
+    };
+  }, [velocity, rho, D_m, frictionFactor, L_m, lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, nominalDiameterNumber]);
+
+  // Status check function based on API 14E criteria
+  const getStatusIndicator = () => {
+    if (!results) return { pressureDrop: "na" as const, velocity: "na" as const, rhoVSquared: "na" as const };
+
+    return {
+      pressureDrop: results.dPWarning ? "warning" as const : "ok" as const,
+      velocity: results.velWarning ? "warning" as const : "ok" as const,
+      rhoVSquared: "na" as const // No longer primary check
     };
   };
 
@@ -1058,7 +1158,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Determine phase icon and title based on line type
   const PhaseIcon = lineType === "gas" ? Wind : lineType === "liquid" ? Droplets : Waves;
   const phaseTitle = lineType === "gas" ? "Gas Line Sizing" : lineType === "liquid" ? "Liquid Line Sizing" : "Mixed-Phase Line Sizing";
-  const phaseSubtitle = lineType === "gas" ? "Eni Sizing Criteria" : lineType === "liquid" ? "Eni Sizing Criteria" : "Eni Sizing Criteria";
+  const phaseSubtitle = "Best Practice Sizing Criteria as per API RP 14E";
 
   // Get current calculation method details
 
@@ -1297,11 +1397,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                             {currentGasCriteria.velocityMs !== null && (
                               <p>Velocity: ≤ {currentGasCriteria.velocityMs} m/s</p>
                             )}
-                            {currentGasCriteria.rhoV2 !== null && (
-                              <p>ρv²: ≤ {currentGasCriteria.rhoV2.toLocaleString()} kg/(m·s²)</p>
-                            )}
-                            {currentGasCriteria.mach !== null && (
-                              <p>Mach: ≤ {currentGasCriteria.mach}</p>
+                            {currentGasCriteria.cValue !== null && (
+                              <p>C-Value: {currentGasCriteria.cValue}</p>
                             )}
                           </div>
                         </div>
@@ -1369,10 +1466,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
                           <p className="text-xs font-medium text-primary">Recommended Limits</p>
                           <div className="text-xs text-muted-foreground space-y-0.5">
-                            <p>ρv²: ≤ {currentMixedPhaseCriteria.rhoV2.toLocaleString()} kg/(m·s²)</p>
-                            {currentMixedPhaseCriteria.mach !== null && currentMixedPhaseCriteria.mach !== undefined && (
-                              <p>Mach {"<"} {currentMixedPhaseCriteria.mach}</p>
-                            )}
+                            <p>C-Value: {currentMixedPhaseCriteria.cValue}</p>
                           </div>
                         </div>
                       )}
@@ -1883,19 +1977,15 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     </div>
 
 
-                    {/* ρv² */}
+                    {/* Erosional Velocity (API 14E) */}
                     <div className="p-3 rounded-lg bg-muted/50 border border-border">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">ρv² (Erosional)</span>
-                        <StatusIcon type={status.rhoVSquared} />
+                        <span className="text-xs text-muted-foreground">Erosional Vel (Ve)</span>
                       </div>
-                      <p className="text-lg font-mono font-semibold">{rhoVSquared.toFixed(2)} kg/(m·s²)</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {sizingCriteria.maxRhoVSquared !== null
-                          ? `Limit: ≤ ${sizingCriteria.maxRhoVSquared.toLocaleString()} kg/(m·s²)`
-                          : "N/A - Use velocity criterion"
-                        }
-                      </p>
+                      <p className="text-lg font-mono font-semibold">{results?.erosionalVelocity?.toFixed(2) || "0.00"} m/s</p>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        <p>API 14E C-Value: {results?.cValueLimit || "N/A"}</p>
+                      </div>
                     </div>
 
                     {/* Head Loss */}

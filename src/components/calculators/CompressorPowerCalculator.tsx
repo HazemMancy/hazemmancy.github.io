@@ -586,6 +586,37 @@ const CompressorPowerCalculator: React.FC = () => {
   }, [inputs]);
 
   const handleInputChange = (field: keyof CompressorInputs, value: string | number) => {
+    // Handle unit conversions
+    if (field === 'pressureUnit') {
+      const newUnit = value as string;
+      const oldUnit = inputs.pressureUnit;
+      if (newUnit !== oldUnit) {
+        const p1 = convertPressure(inputs.inletPressure, oldUnit, newUnit);
+        const p2 = convertPressure(inputs.dischargePressure, oldUnit, newUnit);
+        setInputs(prev => ({
+          ...prev,
+          pressureUnit: newUnit,
+          inletPressure: parseFloat(p1.toFixed(4)),
+          dischargePressure: parseFloat(p2.toFixed(4))
+        }));
+        return;
+      }
+    }
+
+    if (field === 'tempUnit') {
+      const newUnit = value as string;
+      const oldUnit = inputs.tempUnit;
+      if (newUnit !== oldUnit) {
+        const t1 = convertTemp(inputs.inletTemperature, oldUnit, newUnit);
+        setInputs(prev => ({
+          ...prev,
+          tempUnit: newUnit,
+          inletTemperature: parseFloat(t1.toFixed(2))
+        }));
+        return;
+      }
+    }
+
     setInputs(prev => ({ ...prev, [field]: value }));
   };
 
@@ -1252,8 +1283,8 @@ const CompressorPowerCalculator: React.FC = () => {
 
               {/* Status indicator */}
               <div className={`p-3 rounded-lg flex items-center gap-2 ${warnings.length === 0
-                  ? 'bg-green-500/10 border border-green-500/30'
-                  : 'bg-yellow-500/10 border border-yellow-500/30'
+                ? 'bg-green-500/10 border border-green-500/30'
+                : 'bg-yellow-500/10 border border-yellow-500/30'
                 }`}>
                 {warnings.length === 0 ? (
                   <>

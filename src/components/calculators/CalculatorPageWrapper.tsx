@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ThemeToggle';
+
 import Footer from '@/components/Footer';
 
 interface CalculatorPageWrapperProps {
@@ -11,10 +11,10 @@ interface CalculatorPageWrapperProps {
   children: React.ReactNode;
 }
 
-export default function CalculatorPageWrapper({ 
-  title, 
-  description, 
-  children 
+export default function CalculatorPageWrapper({
+  title,
+  description,
+  children
 }: CalculatorPageWrapperProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -33,7 +33,6 @@ export default function CalculatorPageWrapper({
               <h1 className="text-sm sm:text-base font-semibold truncate max-w-[200px] sm:max-w-none">
                 {title}
               </h1>
-              <ThemeToggle />
             </div>
           </div>
         </div>

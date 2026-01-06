@@ -17,11 +17,11 @@ const HydraulicGuide: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            This calculator performs hydraulic sizing for gas, liquid, and mixed-phase pipelines per 
-            <strong> Eni Sizing Criteria</strong> (Tables 8.1.1.1, 8.2.1.1, 8.3.1.1). Pressure drop calculations 
+            This calculator performs hydraulic sizing for gas, liquid, and mixed-phase pipelines per
+            <strong> API RP 14E / Best Practice Sizing Criteria</strong>. Pressure drop calculations
             use the <strong>Darcy-Weisbach</strong> equation with Colebrook-White friction factor for turbulent flow.
           </p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="p-3 bg-blue-500/5 rounded-lg border border-blue-500/20">
               <h4 className="font-medium text-sm flex items-center gap-2 mb-2">
@@ -126,17 +126,17 @@ const HydraulicGuide: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Eni Sizing Criteria Summary */}
+      {/* API RP 14E Sizing Criteria Summary */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <AlertCircle className="h-5 w-5" />
-            Eni Sizing Criteria Summary
+            API RP 14E / Best Practice Criteria Summary
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
-            <h4 className="font-medium text-sm">Gas Lines (Table 8.1.1.1)</h4>
+            <h4 className="font-medium text-sm">Gas Lines (Best Practice)</h4>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -177,10 +177,8 @@ const HydraulicGuide: React.FC = () => {
             </div>
           </div>
 
-          <Separator />
-
           <div className="space-y-3">
-            <h4 className="font-medium text-sm">Liquid Lines (Table 8.2.1.1)</h4>
+            <h4 className="font-medium text-sm">Liquid Lines (API RP 14E)</h4>
             <div className="text-xs text-muted-foreground">
               <p className="mb-2">Velocity limits vary by pipe size:</p>
               <div className="grid grid-cols-5 gap-2 text-center">
@@ -208,10 +206,8 @@ const HydraulicGuide: React.FC = () => {
             </div>
           </div>
 
-          <Separator />
-
           <div className="space-y-3">
-            <h4 className="font-medium text-sm">Mixed-Phase Lines (Table 8.3.1.1)</h4>
+            <h4 className="font-medium text-sm">Mixed-Phase Lines (API RP 14E)</h4>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -288,7 +284,7 @@ const HydraulicGuide: React.FC = () => {
         </CardHeader>
         <CardContent>
           <ul className="text-xs text-muted-foreground space-y-1">
-            <li>• Eni Design Standard - Line Sizing Criteria (Tables 8.1.1.1, 8.2.1.1, 8.3.1.1)</li>
+            <li>• API RP 14E - Design and Installation of Offshore Production Platform Piping Systems</li>
             <li>• Crane Technical Paper No. 410 - Flow of Fluids Through Valves, Fittings, and Pipe</li>
             <li>• ASME B36.10M - Welded and Seamless Wrought Steel Pipe</li>
             <li>• ASME B36.19M - Stainless Steel Pipe</li>

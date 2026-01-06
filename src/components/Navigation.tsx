@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X, Calculator } from "lucide-react";
-import { ThemeToggle } from "@/components/ThemeToggle";
+
 
 const navLinks = [
   { href: "#home", label: "Home" },
@@ -48,9 +48,8 @@ const Navigation = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? "bg-background/90 backdrop-blur-lg shadow-card" : "bg-transparent"
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? "bg-background/90 backdrop-blur-lg shadow-card" : "bg-transparent"
+        }`}
     >
       <nav className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
         <div className="flex items-center justify-between">
@@ -81,9 +80,6 @@ const Navigation = () => {
                 Calculators
               </Link>
             </li>
-            <li>
-              <ThemeToggle />
-            </li>
           </ul>
 
           {/* Mobile Menu Button */}
@@ -99,7 +95,7 @@ const Navigation = () => {
 
         {/* Mobile Navigation Overlay */}
         {isMobileMenuOpen && (
-          <div 
+          <div
             className="lg:hidden fixed inset-0 top-[56px] bg-card/98 backdrop-blur-lg z-40"
             onClick={(e) => e.target === e.currentTarget && setIsMobileMenuOpen(false)}
           >

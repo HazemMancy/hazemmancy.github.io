@@ -589,32 +589,111 @@ const PumpSizingCalculator = () => {
 
   // Update units when system changes
   const handleUnitSystemChange = (newSystem: UnitSystem) => {
-    setUnitSystem(newSystem);
-    if (newSystem === 'metric') {
-      setFlowRateUnit("m³/h");
-      setDensityUnit("kg/m³");
-      setVaporPressureUnit("kPa");
-      setSuctionPressureUnit("kPa(a)");
-      setSuctionHeadUnit("m");
-      setSuctionLengthUnit("m");
-      setDischargeHeadUnit("m");
-      setDischargeLengthUnit("m");
-      setDischargeEndPressureUnit("bar");
-      setHeadDisplayUnit("m");
-      setPowerDisplayUnit("kW");
-    } else {
-      setFlowRateUnit("gpm");
-      setDensityUnit("lb/ft³");
-      setVaporPressureUnit("psia");
-      setSuctionPressureUnit("psia");
-      setSuctionHeadUnit("ft");
-      setSuctionLengthUnit("ft");
-      setDischargeHeadUnit("ft");
-      setDischargeLengthUnit("ft");
-      setDischargeEndPressureUnit("psig");
-      setHeadDisplayUnit("ft");
-      setPowerDisplayUnit("hp");
+    if (newSystem !== unitSystem) {
+      // Helper conversion functions
+      const cvt = (val: string, factor: number) => {
+        const num = parseFloat(val);
+        return isNaN(num) ? val : (num * factor).toFixed(4);
+      };
+
+      const cvtTemp = (val: string, toF: boolean) => {
+        const num = parseFloat(val);
+        if (isNaN(num)) return val;
+        return toF ? ((num * 9 / 5) + 32).toFixed(2) : ((num - 32) * 5 / 9).toFixed(2);
+      };
+
+      if (newSystem === 'imperial') {
+        // Metric -> Imperial
+
+        // Flow: m³/h -> gpm
+        setFlowRate(prev => cvt(prev, 4.40287));
+        setFlowRateUnit("gpm");
+
+        // Density: kg/m³ -> lb/ft³
+        setDensity(prev => cvt(prev, 0.062428));
+        setDensityUnit("lb/ft³");
+
+        // Vapor Pressure: kPa -> psia
+        setVaporPressure(prev => cvt(prev, 0.145038));
+        setVaporPressureUnit("psia");
+
+        // Temperature: C -> F
+        setFluidTemp(prev => cvtTemp(prev, true));
+
+        // Suction Pressure: kPa(a) -> psia
+        setSuctionPressure(prev => cvt(prev, 0.145038));
+        setSuctionPressureUnit("psia");
+
+        // Heads & Lengths: m -> ft
+        setSuctionStaticHead(prev => cvt(prev, 3.28084));
+        setSuctionHeadUnit("ft");
+
+        setSuctionPipeLength(prev => cvt(prev, 3.28084));
+        setSuctionLengthUnit("ft");
+
+        setDischargeStaticHead(prev => cvt(prev, 3.28084));
+        setDischargeHeadUnit("ft");
+
+        setDischargePipeLength(prev => cvt(prev, 3.28084));
+        setDischargeLengthUnit("ft");
+
+        // Discharge Pressure: bar -> psig
+        setDischargeEndPressure(prev => cvt(prev, 14.5038));
+        setDischargeEndPressureUnit("psig");
+
+        setHeadDisplayUnit("ft");
+        setPowerDisplayUnit("hp");
+
+        // Margin: m -> ft based
+        setNpshrMargin(prev => cvt(prev, 3.28084));
+
+      } else {
+        // Imperial -> Metric
+
+        // Flow: gpm -> m³/h
+        setFlowRate(prev => cvt(prev, 1 / 4.40287));
+        setFlowRateUnit("m³/h");
+
+        // Density: lb/ft³ -> kg/m³
+        setDensity(prev => cvt(prev, 1 / 0.062428));
+        setDensityUnit("kg/m³");
+
+        // Vapor Pressure: psia -> kPa
+        setVaporPressure(prev => cvt(prev, 1 / 0.145038));
+        setVaporPressureUnit("kPa");
+
+        // Temperature: F -> C
+        setFluidTemp(prev => cvtTemp(prev, false));
+
+        // Suction Pressure: psia -> kPa(a)
+        setSuctionPressure(prev => cvt(prev, 1 / 0.145038));
+        setSuctionPressureUnit("kPa(a)");
+
+        // Heads & Lengths: ft -> m
+        setSuctionStaticHead(prev => cvt(prev, 1 / 3.28084));
+        setSuctionHeadUnit("m");
+
+        setSuctionPipeLength(prev => cvt(prev, 1 / 3.28084));
+        setSuctionLengthUnit("m");
+
+        setDischargeStaticHead(prev => cvt(prev, 1 / 3.28084));
+        setDischargeHeadUnit("m");
+
+        setDischargePipeLength(prev => cvt(prev, 1 / 3.28084));
+        setDischargeLengthUnit("m");
+
+        // Discharge Pressure: psig -> bar
+        setDischargeEndPressure(prev => cvt(prev, 1 / 14.5038));
+        setDischargeEndPressureUnit("bar");
+
+        setHeadDisplayUnit("m");
+        setPowerDisplayUnit("kW");
+
+        // Margin
+        setNpshrMargin(prev => cvt(prev, 1 / 3.28084));
+      }
     }
+    setUnitSystem(newSystem);
   };
 
   // Get Eni sizing criteria for suction

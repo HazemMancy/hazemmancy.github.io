@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Calculator, Fuel, Droplet, ArrowLeftRight, Gauge, Fan, FlaskConical, Warehouse, ShieldCheck, Waves, PipetteIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ThemeToggle } from "@/components/ThemeToggle";
+
 import Footer from "@/components/Footer";
 
 interface CalculatorCard {
@@ -115,8 +115,8 @@ const Calculators = () => {
       <header className="bg-card/50 backdrop-blur-lg border-b border-border sticky top-0 z-50 transition-colors duration-300">
         <div className="container mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
-            <Link 
-              to="/" 
+            <Link
+              to="/"
               className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -129,7 +129,6 @@ const Calculators = () => {
                   Process Engineering <span className="text-primary">Calculators</span>
                 </h1>
               </div>
-              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -168,30 +167,28 @@ const Calculators = () => {
 
 const CalculatorCardComponent = ({ calculator }: { calculator: CalculatorCard }) => {
   const isAvailable = calculator.status === "available";
-  
+
   const content = (
-    <Card className={`h-full transition-all duration-300 border-2 ${
-      isAvailable 
-        ? "hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1" 
-        : "opacity-60"
-    }`}>
+    <Card className={`h-full transition-all duration-300 border-2 ${isAvailable
+      ? "hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1"
+      : "opacity-60"
+      }`}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
-          <div className={`p-3 rounded-xl transition-colors ${
-            isAvailable 
-              ? "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground" 
-              : "bg-muted text-muted-foreground"
-          }`}>
+          <div className={`p-3 rounded-xl transition-colors ${isAvailable
+            ? "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
+            : "bg-muted text-muted-foreground"
+            }`}>
             {calculator.icon}
           </div>
-          <Badge 
+          <Badge
             variant={isAvailable ? "default" : "secondary"}
             className={isAvailable ? "bg-green-500/10 text-green-600 border-green-500/20" : ""}
           >
             {isAvailable ? "Available" : "Coming Soon"}
           </Badge>
         </div>
-        
+
         <div className="space-y-2">
           <Badge variant="outline" className="text-xs font-normal">
             {calculator.category}
