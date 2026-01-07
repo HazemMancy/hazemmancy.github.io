@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import FeedbackForm from './FeedbackForm';
 
 import Footer from '@/components/Footer';
 
@@ -48,6 +49,10 @@ export default function CalculatorPageWrapper({
           </div>
         )}
         {children}
+
+        <div className="mt-12">
+          <FeedbackForm />
+        </div>
       </main>
 
       <Footer />

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { generateHydraulicPDF, HydraulicDatasheetData } from "@/lib/hydraulicPdfDatasheet";
 import { generateHydraulicExcelDatasheet, HydraulicExcelData } from "@/lib/hydraulicExcelDatasheet";
+import { commonGases, commonLiquids, FluidProperty } from '@/lib/fluids';
 
 // ================== TYPE DEFINITIONS ==================
 type UnitSystem = 'metric' | 'imperial';
@@ -162,11 +163,13 @@ const getPressureRangesForService = (service: string): string[] => {
 // Note: API 14E uses Imperial Units: Ve in ft/s, rho in lb/ft³
 // We must convert for calculation if in Metric, or use Metric equivalent constant.
 // Metric equivalent: Ve(m/s) = (C_imperial * 0.3048 * sqrt(16.0185)) / sqrt(rho_kgm3) = C_imp * 1.22 / sqrt(rho_kgm3)
+// Metric equivalent: Ve(m/s) = (C_imperial * 0.3048 * sqrt(16.0185)) / sqrt(rho_kgm3) = C_imp * 1.22 / sqrt(rho_kgm3)
 const calculateErosionalVelocity = (rho_kgm3: number, cValue: number): number => {
   if (rho_kgm3 <= 0 || !cValue) return 9999;
   return (cValue * 1.22) / Math.sqrt(rho_kgm3);
 };
 
+// Helper: Get criteria for gas service
 // Helper: Get criteria for gas service
 const getCriteriaForServiceAndPressure = (service: string, pressureRange: string): GasSizingCriteria | null => {
   const criteria = gasServiceCriteria.find(c => c.service === service && c.pressureRange === pressureRange);
@@ -193,20 +196,6 @@ const getLiquidVelocityLimit = (criteria: LiquidSizingCriteria, diameter: number
   if (diameter <= 12) return criteria.velocity.size8to12;
   if (diameter <= 18) return criteria.velocity.size14to18;
   return criteria.velocity.size20plus;
-};
-
-// Length units to meters
-const lengthToMeters: Record<string, number> = {
-  m: 1,
-  km: 1000,
-  ft: 0.3048,
-  mi: 1609.34,
-};
-
-// Existing diameter constraints
-const diameterToMeters: Record<string, number> = {
-  mm: 0.001,
-  in: 0.0254,
 };
 
 // ASME B36.10M / B36.19M Pipe Schedule Data - Inside Diameter (mm)
@@ -450,6 +439,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [densityUnit, setDensityUnit] = useState<string>("kg/m³");
   const [viscosity, setViscosity] = useState<string>(lineType === "gas" ? "0.011" : "1");
   const [viscosityUnit, setViscosityUnit] = useState<string>("cP");
+  const [selectedFluid, setSelectedFluid] = useState<string>("Custom");
   const [pipeMaterial, setPipeMaterial] = useState<string>("Carbon Steel (New)");
   const [customRoughness, setCustomRoughness] = useState<string>("0.0457");
   const [roughnessUnit, setRoughnessUnit] = useState<string>("mm");
@@ -551,11 +541,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Mixed-phase service type selection (API RP 14E criteria)
   const [mixedPhaseServiceType, setMixedPhaseServiceType] = useState<string>("Continuous (P < 7 barg)");
 
-  // Metadata for Export
-  const [companyName, setCompanyName] = useState("");
-  const [projectName, setProjectName] = useState("");
-  const [itemNumber, setItemNumber] = useState("");
-  const [serviceName, setServiceName] = useState("");
+  // Mixed-phase flow inputs
 
   // Mixed-phase flow inputs
   const [mixedGasFlowRate, setMixedGasFlowRate] = useState<string>("5");
@@ -601,11 +587,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   }, [nominalDiameter]);
 
   // Reset schedule if not available for new diameter
-  useMemo(() => {
+  useEffect(() => {
     if (!availableSchedules.includes(schedule)) {
       setSchedule(availableSchedules[0] || "STD");
     }
-  }, [nominalDiameter, availableSchedules]);
+  }, [nominalDiameter, availableSchedules, schedule]);
 
   // Get inside diameter from nominal diameter and schedule
   const insideDiameterMM = useMemo(() => {
@@ -624,6 +610,41 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const flowRateConversion = lineType === "gas"
     ? gasVolumetricFlowRateToM3s
     : liquidFlowRateToM3s;
+
+  // Reset fluid selection when line type changes
+  useEffect(() => {
+    setSelectedFluid("Custom");
+  }, [lineType]);
+
+  // Reset fluid selection when line type changes
+
+
+  const handleFluidChange = (value: string) => {
+    setSelectedFluid(value);
+    if (value === "Custom") return;
+
+    if (lineType === "gas") {
+      const fluid = commonGases.find(f => f.name === value);
+      if (fluid) {
+        setGasMolecularWeight(fluid.mw?.toString() || "");
+        if (fluid.density) {
+          setGasDensity60F(fluid.density.toString());
+        } else if (fluid.mw) {
+          setGasDensity60F((fluid.mw / 23.69).toFixed(4));
+        }
+        setViscosity(fluid.viscosity.toString());
+        setViscosityUnit("cP");
+      }
+    } else if (lineType === "liquid") {
+      const fluid = commonLiquids.find(f => f.name === value);
+      if (fluid) {
+        setDensity(fluid.density?.toString() || "");
+        setDensityUnit("kg/m³");
+        setViscosity(fluid.viscosity.toString());
+        setViscosityUnit("cP");
+      }
+    }
+  };
 
   // Convert all inputs to SI units
   const L_m = useMemo(() => {
@@ -1225,18 +1246,25 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       rhoVSquared,
       rhoV2Limit: sizingCriteria.maxRhoVSquared,
       machNumber,
-      machLimit: sizingCriteria.maxMach
+      machLimit: sizingCriteria.maxMach,
+      erosionalRatio: erosionalVelocity > 0 ? velocity / erosionalVelocity : 0
     };
   }, [velocity, rho, D_m, frictionFactor, L_m, lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, sizingCriteria, nominalDiameterNumber, MW, T_operating_K, reynoldsNumber, flowRegime]);
 
   // Status check function based on API 14E criteria
   const getStatusIndicator = () => {
-    if (!results) return { pressureDrop: "na" as const, velocity: "na" as const, rhoVSquared: "na" as const };
+    if (!results) return { pressureDrop: "na" as const, velocity: "na" as const, rhoVSquared: "na" as const, mach: "na" as const };
+
+    const pressureDropLimit = sizingCriteria.maxPressureDropBarKm !== null;
+    const velocityLimit = sizingCriteria.maxVelocity !== null;
+    const rhoV2Limit = sizingCriteria.maxRhoVSquared !== null;
+    const machLimit = sizingCriteria.maxMach !== null;
 
     return {
-      pressureDrop: results.dPWarning ? "warning" as const : "ok" as const,
-      velocity: results.velWarning ? "warning" as const : "ok" as const,
-      rhoVSquared: "na" as const // No longer primary check
+      pressureDrop: pressureDropLimit ? (results.dPWarning ? "warning" as const : "ok" as const) : "na" as const,
+      velocity: velocityLimit ? (results.velWarning ? "warning" as const : "ok" as const) : "na" as const,
+      rhoVSquared: rhoV2Limit ? (results.momentumWarning ? "warning" as const : "ok" as const) : "na" as const,
+      mach: machLimit ? (results.machWarning ? "warning" as const : "ok" as const) : "na" as const,
     };
   };
 
@@ -1247,7 +1275,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       return <CheckCircle2 className="w-4 h-4 text-green-500" />;
     }
     if (type === "na") {
-      return <Info className="w-4 h-4 text-muted-foreground" />;
+      return null;
     }
     return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
   };
@@ -1262,10 +1290,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const handleExportPDF = () => {
     try {
       const datasheetData: HydraulicDatasheetData = {
-        companyName,
-        projectName,
-        itemNumber,
-        serviceName,
+        // companyName, projectName, etc. removed per request
         lineType: lineType as 'gas' | 'liquid' | 'mixed',
         date: new Date().toLocaleDateString(),
 
@@ -1326,10 +1351,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const handleExportExcel = () => {
     try {
       const excelData: HydraulicExcelData = {
-        companyName,
-        projectName,
-        itemNumber,
-        serviceName,
+        // companyName, projectName, etc. removed per request
         lineType: lineType as 'gas' | 'liquid' | 'mixed',
         date: new Date().toLocaleDateString(),
 
@@ -1723,6 +1745,34 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 </div>
 
                 <div className="space-y-5">
+                  {/* Fluid Type Selection - Top of Flow Properties */}
+                  {lineType !== "mixed" && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Fluid Type</Label>
+                      <Select value={selectedFluid} onValueChange={handleFluidChange}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {lineType === "gas" ? (
+                            <>
+                              <SelectItem value="Custom">Custom Gas</SelectItem>
+                              {commonGases.map(g => (
+                                <SelectItem key={g.name} value={g.name}>{g.name}</SelectItem>
+                              ))}
+                            </>
+                          ) : (
+                            <>
+                              <SelectItem value="Custom">Custom Liquid</SelectItem>
+                              {commonLiquids.map(l => (
+                                <SelectItem key={l.name} value={l.name}>{l.name}</SelectItem>
+                              ))}
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {/* Temperature */}
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Temperature (°C)</Label>
@@ -1867,13 +1917,30 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                   {/* Fluid Density - Only shown for liquid */}
                   {lineType === "liquid" && (
                     <div className="space-y-2">
+                      {/* Fluid Selection for Liquid */}
+                      <div className="hidden">
+                        <Label className="text-sm font-medium">Fluid Type</Label>
+                        <Select value={selectedFluid} onValueChange={handleFluidChange}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Custom">Custom Liquid</SelectItem>
+                            {commonLiquids.map(l => (
+                              <SelectItem key={l.name} value={l.name}>{l.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
                       <Label className="text-sm font-medium">Fluid Density (ρ)</Label>
                       <div className="flex gap-2">
                         <Input
                           type="number"
                           value={density}
                           onChange={(e) => setDensity(e.target.value)}
-                          className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          disabled={selectedFluid !== "Custom"}
+                          className={`flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${selectedFluid !== "Custom" ? "bg-muted/50" : ""}`}
                           placeholder="1000"
                         />
                         <Select value={densityUnit} onValueChange={setDensityUnit}>
@@ -1898,7 +1965,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         type="number"
                         value={viscosity}
                         onChange={(e) => setViscosity(e.target.value)}
-                        className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        disabled={selectedFluid !== "Custom" && (lineType === "gas" || lineType === "liquid")}
+                        className={`flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${selectedFluid !== "Custom" && (lineType === "gas" || lineType === "liquid") ? "bg-muted/50" : ""}`}
                         placeholder={lineType === "gas" ? "0.011" : "1"}
                       />
                       <Select value={viscosityUnit} onValueChange={setViscosityUnit}>
@@ -1919,6 +1987,22 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     <>
                       <div className="pt-3 border-t border-border">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Operating Conditions (for velocity at actual)</p>
+                      </div>
+
+                      {/* Fluid Selection for Gas */}
+                      <div className="hidden">
+                        <Label className="text-sm font-medium">Fluid Type</Label>
+                        <Select value={selectedFluid} onValueChange={handleFluidChange}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Custom">Custom Gas</SelectItem>
+                            {commonGases.map(g => (
+                              <SelectItem key={g.name} value={g.name}>{g.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       {/* Operating Pressure - in barg */}
@@ -1958,7 +2042,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                             const rho = parseFloat(e.target.value) || 0.856;
                             setGasMolecularWeight((rho * 23.69).toFixed(2));
                           }}
-                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          disabled={selectedFluid !== "Custom"}
+                          className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${selectedFluid !== "Custom" ? "bg-muted/50" : ""}`}
                           placeholder="0.856"
                         />
                       </div>
@@ -1969,8 +2054,16 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         <Input
                           type="number"
                           value={gasMolecularWeight}
-                          onChange={(e) => setGasMolecularWeight(e.target.value)}
-                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          onChange={(e) => {
+                            setGasMolecularWeight(e.target.value);
+                            // Auto-calculate Density @ 60F from MW
+                            const mw = parseFloat(e.target.value);
+                            if (mw > 0) {
+                              setGasDensity60F((mw / 23.69).toFixed(4));
+                            }
+                          }}
+                          disabled={selectedFluid !== "Custom"}
+                          className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${selectedFluid !== "Custom" ? "bg-muted/50" : ""}`}
                           placeholder="20.3"
                         />
                       </div>
@@ -2052,14 +2145,18 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       <p className="text-3xl font-mono font-bold text-primary">
                         {pressureDrop.toFixed(4)}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {(pressureDropPer100m * 10).toFixed(4)} {pressureUnit}/km
-                        {sizingCriteria.maxPressureDropPer100m !== null && lineType === "gas" && (
-                          <span className="ml-2">
-                            (Limit: ≤ {(sizingCriteria.maxPressureDropPer100m * 10).toFixed(1)} {pressureUnit}/km)
-                          </span>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        <p>{(pressureDropPer100m * 10).toFixed(4)} {pressureUnit}/km</p>
+                        {status.pressureDrop === "na" ? (
+                          <p className="mt-1 text-muted-foreground italic">No limit specified - follow recommended limits</p>
+                        ) : (
+                          sizingCriteria.maxPressureDropBarKm !== null && (
+                            <span className="ml-2">
+                              (Limit: ≤ {(sizingCriteria.maxPressureDropBarKm).toFixed(1)} bar/km)
+                            </span>
+                          )
                         )}
-                      </p>
+                      </div>
                     </div>
 
                     {/* Velocity */}
@@ -2068,17 +2165,22 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         <span className="text-xs text-muted-foreground">
                           {lineType === "gas" ? "Velocity" : "Fluid Velocity"}
                         </span>
-                        <StatusIcon type={results?.velocityWarning ? "warning" : "ok"} />
+                        <StatusIcon type={status.velocity} />
                       </div>
                       <p className="text-lg font-mono font-semibold">{velocity.toFixed(3)} m/s</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {sizingCriteria.maxVelocity !== null
-                          ? (lineType === "gas"
-                            ? `Limit: ≤ ${sizingCriteria.maxVelocity} m/s`
-                            : `Limit: ${sizingCriteria.minVelocity} - ${sizingCriteria.maxVelocity} m/s`)
-                          : "N/A - Use ρv² criterion"
-                        }
-                      </p>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {status.velocity === "na" ? (
+                          <p className="italic">No limit specified - follow recommended limits</p>
+                        ) : (
+                          <p>
+                            {sizingCriteria.maxVelocity !== null && (
+                              lineType === "gas"
+                                ? `Limit: ≤ ${sizingCriteria.maxVelocity} m/s`
+                                : `Limit: ${sizingCriteria.minVelocity} - ${sizingCriteria.maxVelocity} m/s`
+                            )}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
 
@@ -2086,36 +2188,55 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     <div className="p-3 rounded-lg bg-muted/50 border border-border">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Momentum (ρv²)</span>
-                        <StatusIcon type={results?.rhoV2Limit ? (results?.momentumWarning ? "warning" : "ok") : "na"} />
+                        <StatusIcon type={status.rhoVSquared} />
                       </div>
                       <p className="text-lg font-mono font-semibold">{results?.rhoVSquared.toFixed(0)} kg/(m·s²)</p>
 
                       <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                        {results?.rhoV2Limit && (
-                          <p>Limit: ≤ {results.rhoV2Limit.toLocaleString()}</p>
+                        {status.rhoVSquared === "na" ? (
+                          <p className="italic">No limit specified - follow recommended limits</p>
+                        ) : (
+                          results?.rhoV2Limit && (
+                            <p>Limit: ≤ {results.rhoV2Limit.toLocaleString()}</p>
+                          )
                         )}
+                        {/* We can still show erosional velocity as info if available */}
                         {results?.cValueLimit && !results?.rhoV2Limit && (
                           <p>Ve Limit: {results.erosionalVelocity.toFixed(1)} m/s (C={results.cValueLimit})</p>
                         )}
-                        {!results?.rhoV2Limit && !results?.cValueLimit && (
-                          <p>No erosion limit specified</p>
-                        )}
                       </div>
                     </div>
+
+                    {/* Erosional Ratio */}
+                    {results?.erosionalVelocity > 0 && (
+                      <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">Erosional Ratio (V/Ve)</span>
+                        </div>
+                        <p className={`text-lg font-mono font-semibold ${results.erosionalRatio > 1 ? "text-destructive" : ""}`}>
+                          {results.erosionalRatio.toFixed(2)}
+                        </p>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          <p>Ve = {results.erosionalVelocity.toFixed(1)} m/s</p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Mach Number (Gas/Mixed) */}
                     {(lineType === "gas" || lineType === "mixed") && (
                       <div className="p-3 rounded-lg bg-muted/50 border border-border">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">Mach Number</span>
-                          <StatusIcon type={results?.machLimit ? (results?.machWarning ? "warning" : "ok") : "na"} />
+                          <StatusIcon type={status.mach} />
                         </div>
                         <p className="text-lg font-mono font-semibold">{results?.machNumber.toFixed(3)}</p>
                         <div className="text-xs text-muted-foreground mt-1">
-                          {results?.machLimit ? (
-                            <p>Limit: ≤ {results.machLimit}</p>
+                          {status.mach === "na" ? (
+                            <p className="italic">No limit specified - follow recommended limits</p>
                           ) : (
-                            <p>No Mach Number limit specified</p>
+                            results?.machLimit && (
+                              <p>Limit: ≤ {results.machLimit}</p>
+                            )
                           )}
                         </div>
                       </div>
@@ -2196,57 +2317,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
             </Card>
           </div>
 
-          {/* Equation Reference */}
-          <Card className="border border-border">
-            <CardContent className="p-6">
-              <h4 className="font-heading font-semibold mb-4 flex items-center gap-2">
-                <Info className="w-4 h-4 text-muted-foreground" />
-                Equations Used
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                <div className="p-3 rounded-lg bg-muted/30">
-                  <p className="text-xs text-muted-foreground mb-1">Darcy-Weisbach</p>
-                  <p className="font-mono text-xs">ΔP = f × (L/D) × (ρV²/2)</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/30">
-                  <p className="text-xs text-muted-foreground mb-1">Reynolds Number</p>
-                  <p className="font-mono text-xs">Re = ρVD / μ</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/30">
-                  <p className="text-xs text-muted-foreground mb-1">Colebrook-White (Turbulent f)</p>
-                  <p className="font-mono text-xs">1/√f = -2 log(ε/3.7D + 2.51/(Re√f))</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/30">
-                  <p className="text-xs text-muted-foreground mb-1">Gas Density (Ideal Gas + Z)</p>
-                  <p className="font-mono text-xs">ρ = (P × MW) / (Z × R × T)</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Metadata and Export Section */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-secondary/20 border border-border/50 col-span-1 lg:col-span-3 mt-6">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Company</Label>
-              <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="h-8 bg-background/50" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Project</Label>
-              <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="h-8 bg-background/50" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Item No</Label>
-              <Input value={itemNumber} onChange={(e) => setItemNumber(e.target.value)} className="h-8 bg-background/50" />
-            </div>
-            <div className="flex items-end gap-2">
-              <Button onClick={handleExportPDF} className="flex-1 h-8 text-xs gap-2" variant="outline">
-                Export PDF
-              </Button>
-              <Button onClick={handleExportExcel} className="flex-1 h-8 text-xs gap-2" variant="outline">
-                Export Excel
-              </Button>
-            </div>
-          </div>
+
+          {/* Metadata and Export Section Removed */}
+
         </TabsContent>
 
         <TabsContent value="guide">

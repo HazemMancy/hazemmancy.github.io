@@ -132,5 +132,11 @@ export const generateHydraulicExcelDatasheet = (data: HydraulicExcelData) => {
     XLSX.utils.book_append_sheet(wb, ws, 'Datasheet');
 
     // Write file
-    XLSX.writeFile(wb, `hydraulic_sizing_${data.lineType}_${data.nominalDiameter}in_${new Date().toISOString().split('T')[0]}.xlsx`);
+    // Write to array buffer and save manually
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    saveBlob(blob, `hydraulic_sizing_${data.lineType}_${data.nominalDiameter}in_${new Date().toISOString().split('T')[0]}.xlsx`);
 };
+
+import { saveBlob } from './downloadUtils';

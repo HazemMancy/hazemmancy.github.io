@@ -143,5 +143,9 @@ export const generateHydraulicPDF = (data: HydraulicDatasheetData) => {
         doc.text('Calculated using Engineering Toolkit', pageWidth - 20, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
     }
 
-    doc.save(`hydraulic_sizing_${data.lineType}_${data.nominalDiameter}in.pdf`);
+    // Generate Blob and save manually
+    const blob = doc.output('blob');
+    saveBlob(blob, `hydraulic_sizing_${data.lineType}_${data.nominalDiameter}in.pdf`);
 };
+
+import { saveBlob } from './downloadUtils';
