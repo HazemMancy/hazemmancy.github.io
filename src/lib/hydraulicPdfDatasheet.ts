@@ -85,7 +85,7 @@ export const generateHydraulicPDF = (data: HydraulicDatasheetData) => {
         theme: 'grid',
         headStyles: { fillColor: [41, 128, 185] },
         styles: { fontSize: 9 },
-        columnStyles: { 0: { fontStyle: 'bold', width: 60 } },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
     });
 
     // Input Data
@@ -112,7 +112,7 @@ export const generateHydraulicPDF = (data: HydraulicDatasheetData) => {
         theme: 'grid',
         headStyles: { fillColor: [52, 73, 94] },
         styles: { fontSize: 9 },
-        columnStyles: { 0: { fontStyle: 'bold', width: 60 } },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
     });
 
     // Calculation Results

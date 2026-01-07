@@ -24,7 +24,9 @@ interface GasSizingCriteria {
   pressureRange: string;
   pressureDropBarKm: number | null; // null = not specified
   velocityMs: number | null; // null = not specified
-  cValue: number | null; // API 14E C-value (Imperial: 100-200)
+  rhoV2Limit: number | null; // kg/m·s²
+  machLimit: number | null;
+  cValue: number | null; // Keep for backward compatibility / calculation if needed
   note?: string;
 }
 
@@ -44,55 +46,100 @@ interface LiquidSizingCriteria {
 // Mixed-Phase: API RP 14E Checking
 interface MixedPhaseSizingCriteria {
   service: string;
-  cValue: number; // API 14E C-value (typically 100 for continuous)
+  rhoV2Limit: number | null; // kg/m·s²
+  machLimit: number | null;
+  cValue: number | null;
+  note?: string; // Add note field
 }
 
+// Data from user tables
 const gasServiceCriteria: GasSizingCriteria[] = [
   // Continuous service
-  { service: "Continuous", pressureRange: "Vacuum", pressureDropBarKm: null, velocityMs: 60, cValue: 100, note: "Check vacuum stability" },
-  { service: "Continuous", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.5, velocityMs: 50, cValue: 100 },
-  { service: "Continuous", pressureRange: "2 to 7 barg", pressureDropBarKm: 1.0, velocityMs: 45, cValue: 100 },
-  { service: "Continuous", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, cValue: 100 },
-  { service: "Continuous", pressureRange: "35 to 140 barg", pressureDropBarKm: 3, velocityMs: null, cValue: 100 },
-  { service: "Continuous", pressureRange: "Above 140 barg", pressureDropBarKm: 5, velocityMs: null, cValue: 100 },
+  { service: "Continuous", pressureRange: "Vacuum", pressureDropBarKm: null, velocityMs: 60, rhoV2Limit: null, machLimit: null, cValue: null, note: "ΔP = 10% Pop" },
+  { service: "Continuous", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.5, velocityMs: 50, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Continuous", pressureRange: "2 to 7 barg", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Continuous", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, rhoV2Limit: 15000, machLimit: null, cValue: null },
+  { service: "Continuous", pressureRange: "35 to 140 barg", pressureDropBarKm: 3.0, velocityMs: null, rhoV2Limit: 20000, machLimit: null, cValue: null },
+  { service: "Continuous", pressureRange: "Above 140 barg", pressureDropBarKm: 5.0, velocityMs: null, rhoV2Limit: 25000, machLimit: null, cValue: null },
 
   // Compressor suction
-  { service: "Compressor Suction", pressureRange: "Vacuum", pressureDropBarKm: 0.05, velocityMs: 35, cValue: 80 },
-  { service: "Compressor Suction", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.15, velocityMs: 30, cValue: 80 },
-  { service: "Compressor Suction", pressureRange: "2 to 7 barg", pressureDropBarKm: 0.4, velocityMs: 25, cValue: 80 },
-  { service: "Compressor Suction", pressureRange: "7 to 35 barg", pressureDropBarKm: 1, velocityMs: null, cValue: 80 },
-  { service: "Compressor Suction", pressureRange: "Above 35 barg", pressureDropBarKm: 2, velocityMs: null, cValue: 80 },
+  { service: "Compressor Suction", pressureRange: "Vacuum", pressureDropBarKm: 0.05, velocityMs: 35, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Compressor Suction", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.15, velocityMs: 30, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Compressor Suction", pressureRange: "2 to 7 barg", pressureDropBarKm: 0.4, velocityMs: 25, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Compressor Suction", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.0, velocityMs: null, rhoV2Limit: 6000, machLimit: null, cValue: null },
+  { service: "Compressor Suction", pressureRange: "Above 35 barg", pressureDropBarKm: 2.0, velocityMs: null, rhoV2Limit: 15000, machLimit: null, cValue: null },
+
+  // Column Overhead to condenser (Same as Compressor Suction)
+  { service: "Column Overhead to Condenser", pressureRange: "Vacuum", pressureDropBarKm: 0.05, velocityMs: 35, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Column Overhead to Condenser", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.15, velocityMs: 30, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Column Overhead to Condenser", pressureRange: "2 to 7 barg", pressureDropBarKm: 0.4, velocityMs: 25, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Column Overhead to Condenser", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.0, velocityMs: null, rhoV2Limit: 6000, machLimit: null, cValue: null },
+  { service: "Column Overhead to Condenser", pressureRange: "Above 35 barg", pressureDropBarKm: 2.0, velocityMs: null, rhoV2Limit: 15000, machLimit: null, cValue: null },
+
+  // Kettle Reboiler return (Same as Compressor Suction)
+  { service: "Kettle Reboiler Return", pressureRange: "Vacuum", pressureDropBarKm: 0.05, velocityMs: 35, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Kettle Reboiler Return", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.15, velocityMs: 30, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Kettle Reboiler Return", pressureRange: "2 to 7 barg", pressureDropBarKm: 0.4, velocityMs: 25, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Kettle Reboiler Return", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.0, velocityMs: null, rhoV2Limit: 6000, machLimit: null, cValue: null },
+  { service: "Kettle Reboiler Return", pressureRange: "Above 35 barg", pressureDropBarKm: 2.0, velocityMs: null, rhoV2Limit: 15000, machLimit: null, cValue: null },
 
   // Discontinuous service
-  { service: "Discontinuous", pressureRange: "Below 35 barg", pressureDropBarKm: null, velocityMs: 60, cValue: 150 },
-  { service: "Discontinuous", pressureRange: "35 barg and above", pressureDropBarKm: null, velocityMs: null, cValue: 150 },
+  { service: "Discontinuous", pressureRange: "Below 35 barg", pressureDropBarKm: null, velocityMs: 60, rhoV2Limit: 15000, machLimit: null, cValue: null },
+  { service: "Discontinuous", pressureRange: "35 barg and above", pressureDropBarKm: null, velocityMs: null, rhoV2Limit: 25000, machLimit: null, cValue: null },
 
   // Flare
-  { service: "Flare - Upstream PSV", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, cValue: null, note: "ΔP < 3% PRV set per API 520" },
-  { service: "Flare - Upstream BDV", pressureRange: "All", pressureDropBarKm: null, velocityMs: 60, cValue: 150 },
-  { service: "Flare - Tail Pipe", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, cValue: null, note: "Mach < 0.7 per API 521" },
-  { service: "Flare Header", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, cValue: null, note: "Mach < 0.5 (~0.2 continuous)" },
+  { service: "Flare - Upstream PSV", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2Limit: null, machLimit: null, cValue: null, note: "ΔP < 3% PRV set" },
+  { service: "Flare - Upstream BDV", pressureRange: "All", pressureDropBarKm: null, velocityMs: 60, rhoV2Limit: 30000, machLimit: null, cValue: null },
+  { service: "Flare Tail Pipe", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2Limit: null, machLimit: 0.7, cValue: null },
+  { service: "Flare Tail Pipe (Legacy)", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2Limit: null, machLimit: 1.0, cValue: null, note: "Downstream BDV" }, // Renamed for clarity vs Mixed
+  { service: "Flare Header", pressureRange: "All", pressureDropBarKm: null, velocityMs: null, rhoV2Limit: null, machLimit: 0.5, cValue: null },
 
-  // Fuel Gas
-  { service: "Fuel Gas", pressureRange: "All", pressureDropBarKm: 1.0, velocityMs: 50, cValue: 100 },
+  // Steam
+  { service: "Steam (Superheated 150#)", pressureRange: "All", pressureDropBarKm: 2.0, velocityMs: 45, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Superheated 300#)", pressureRange: "All", pressureDropBarKm: 3.0, velocityMs: 60, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Superheated 600#)", pressureRange: "All", pressureDropBarKm: 6.0, velocityMs: 60, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Superheated >=900#)", pressureRange: "All", pressureDropBarKm: 8.0, velocityMs: 70, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Saturated 150#)", pressureRange: "All", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Saturated 300#)", pressureRange: "All", pressureDropBarKm: 3.0, velocityMs: 35, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Saturated 600#)", pressureRange: "All", pressureDropBarKm: 6.0, velocityMs: 30, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Long Headers 150#)", pressureRange: "All", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Long Headers 300#)", pressureRange: "All", pressureDropBarKm: 1.5, velocityMs: 45, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Steam (Long Headers 600#)", pressureRange: "All", pressureDropBarKm: 2.0, velocityMs: 45, rhoV2Limit: null, machLimit: null, cValue: null },
+
+  // Fuel Gas (Mirrors Continuous Service)
+  { service: "Fuel Gas", pressureRange: "Vacuum", pressureDropBarKm: null, velocityMs: 60, rhoV2Limit: null, machLimit: null, cValue: null, note: "ΔP = 10% Pop" },
+  { service: "Fuel Gas", pressureRange: "Atm to 2 barg", pressureDropBarKm: 0.5, velocityMs: 50, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Fuel Gas", pressureRange: "2 to 7 barg", pressureDropBarKm: 1.0, velocityMs: 45, rhoV2Limit: null, machLimit: null, cValue: null },
+  { service: "Fuel Gas", pressureRange: "7 to 35 barg", pressureDropBarKm: 1.5, velocityMs: null, rhoV2Limit: 15000, machLimit: null, cValue: null },
+  { service: "Fuel Gas", pressureRange: "35 to 140 barg", pressureDropBarKm: 3.0, velocityMs: null, rhoV2Limit: 20000, machLimit: null, cValue: null },
+  { service: "Fuel Gas", pressureRange: "Above 140 barg", pressureDropBarKm: 5.0, velocityMs: null, rhoV2Limit: 25000, machLimit: null, cValue: null },
 ];
 
-// Liquid service criteria per Best Practices / API 14E
+// Liquid service criteria per User Tables
 const liquidServiceCriteria: LiquidSizingCriteria[] = [
-  { service: "Gravity Flow", pressureDropBarKm: null, velocity: { size2: 1.0, size3to6: 1.0, size8to12: 1.0, size14to18: 1.0, size20plus: 1.0 } }, // API 14E recommends < 1 m/s for gravity
-  { service: "Pump Suction (Boiling Point)", pressureDropBarKm: 0.5, velocity: { size2: 1.0, size3to6: 1.2, size8to12: 1.5, size14to18: 1.8, size20plus: 2.1 } }, // Conservative for NPSH
-  { service: "Pump Suction (Sub-cooled)", pressureDropBarKm: 1.0, velocity: { size2: 1.2, size3to6: 1.5, size8to12: 2.0, size14to18: 2.4, size20plus: 2.7 } },
-  { service: "Pump Discharge (General)", pressureDropBarKm: 4.5, velocity: { size2: 2.5, size3to6: 3.5, size8to12: 4.5, size14to18: 5.0, size20plus: 6.0 } }, // Typical economic velocity
-  { service: "Cooling Water", pressureDropBarKm: 1.5, velocity: { size2: 2.5, size3to6: 3.0, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 } },
-  { service: "Liquid Sulphur", pressureDropBarKm: null, velocity: { size2: 1.8, size3to6: 1.8, size8to12: 1.8, size14to18: 1.8, size20plus: 1.8 } },
+  { service: "Gravity Flow", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 } },
+  { service: "Pump Suction (Boiling Point)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 } },
+  { service: "Pump Suction (Sub-cooled)", pressureDropBarKm: 1.0, velocity: { size2: 0.7, size3to6: 1.2, size8to12: 1.6, size14to18: 2.1, size20plus: 2.6 } },
+  { service: "Pump Discharge (Pop < 35 barg)", pressureDropBarKm: 4.5, velocity: { size2: 1.4, size3to6: 1.9, size8to12: 3.1, size14to18: 4.1, size20plus: 5.0 } },
+  { service: "Pump Discharge (Pop > 35 barg)", pressureDropBarKm: 6.0, velocity: { size2: 1.5, size3to6: 2.0, size8to12: 3.5, size14to18: 4.6, size20plus: 5.0 } },
+  { service: "Condenser Out (Pop < 10 barg)", pressureDropBarKm: null, velocity: { size2: 0.3, size3to6: 0.4, size8to12: 0.6, size14to18: 0.8, size20plus: 0.9 } },
+  { service: "Condenser Out (Pop > 10 barg)", pressureDropBarKm: 0.5, velocity: { size2: 0.6, size3to6: 0.9, size8to12: 1.3, size14to18: 1.8, size20plus: 2.2 } },
+  { service: "Cooling Water", pressureDropBarKm: null, velocity: { size2: 3.5, size3to6: 3.5, size8to12: 3.5, size14to18: 3.5, size20plus: 3.5 } }, // Simplified
+  { service: "Liquid Sulphur", pressureDropBarKm: null, velocity: { size2: 1.8, size3to6: 1.8, size8to12: 1.8, size14to18: 1.8, size20plus: 1.8 } }, // Note: Min 0.9
 ];
 
 // Mixed-phase: API RP 14E C-values
+// Mixed-phase: API RP 14E (Table 8.3.1.1)
 const mixedPhaseServiceCriteria: MixedPhaseSizingCriteria[] = [
-  { service: "Continuous (Solids-free)", cValue: 100 },
-  { service: "Intermittent (Solids-free)", cValue: 125 },
-  { service: "Erosive / Corrosive Service", cValue: 80 },
-  { service: "Flare Lines (Short duration)", cValue: 150 },
+  { service: "Continuous (P < 7 barg)", rhoV2Limit: 6000, machLimit: null, cValue: null },
+  { service: "Continuous (P > 7 barg)", rhoV2Limit: 15000, machLimit: null, cValue: null },
+  { service: "Discontinuous", rhoV2Limit: 15000, machLimit: null, cValue: null },
+  { service: "Erosive Fluid (Continuous)", rhoV2Limit: 3750, machLimit: null, cValue: null },
+  { service: "Erosive Fluid (Discontinuous)", rhoV2Limit: 6000, machLimit: null, cValue: null },
+  { service: "Partial Condenser Outlet", rhoV2Limit: 6000, machLimit: null, cValue: null },
+  { service: "Reboiler Return (Natural Circulation)", rhoV2Limit: 1500, machLimit: null, cValue: null },
+  { service: "Flare Tail Pipe (Liquids)", rhoV2Limit: 50000, machLimit: 0.25, cValue: null, note: "Mach < 0.25" },
+  { service: "Flare Header (Liquids)", rhoV2Limit: 50000, machLimit: 0.25, cValue: null, note: "Mach < 0.25" },
 ];
 
 // ... (rest of helper functions remain similar, but using new types)
@@ -499,10 +546,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [gasPressureRange, setGasPressureRange] = useState<string>("2 to 7 barg");
 
   // Liquid service type selection (API RP 14E criteria)
-  const [liquidServiceType, setLiquidServiceType] = useState<string>("Pump Discharge (General)");
+  const [liquidServiceType, setLiquidServiceType] = useState<string>("Pump Discharge (Pop < 35 barg)");
 
   // Mixed-phase service type selection (API RP 14E criteria)
-  const [mixedPhaseServiceType, setMixedPhaseServiceType] = useState<string>("Continuous (Solids-free)");
+  const [mixedPhaseServiceType, setMixedPhaseServiceType] = useState<string>("Continuous (P < 7 barg)");
 
   // Metadata for Export
   const [companyName, setCompanyName] = useState("");
@@ -993,7 +1040,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Line Sizing Criteria based on API 14E for gas, liquid, and mixed
   const sizingCriteria = useMemo(() => {
     if (lineType === "gas" && currentGasCriteria) {
-      // Convert pressure drop from bar/km to bar/100m
+      // Gas - API RP 14E / Custom Table
       const pressureDropBarPer100m = currentGasCriteria.pressureDropBarKm
         ? currentGasCriteria.pressureDropBarKm / 10
         : null;
@@ -1001,15 +1048,17 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       return {
         minVelocity: 0, // No minimum for gas
         maxVelocity: currentGasCriteria.velocityMs,
+        maxRhoVSquared: currentGasCriteria.rhoV2Limit, // Re-enabled
         maxPressureDropPer100m: pressureDropBarPer100m,
         maxPressureDropBarKm: currentGasCriteria.pressureDropBarKm,
+        maxMach: currentGasCriteria.machLimit,
         note: currentGasCriteria.note,
         service: currentGasCriteria.service,
         pressureRange: currentGasCriteria.pressureRange,
-        // cValue handled in results calculation
+        cValue: currentGasCriteria.cValue, // Pass C-value if needed
       };
     } else if (lineType === "liquid" && currentLiquidCriteria) {
-      // Liquid - API RP 14E criteria Table 8.2.1.1
+      // Liquid - Table 8.2.1.1
       const velocityLimit = getLiquidVelocityLimit(currentLiquidCriteria, nominalDiameterNumber);
       const pressureDropBarPer100m = currentLiquidCriteria.pressureDropBarKm
         ? currentLiquidCriteria.pressureDropBarKm / 10
@@ -1018,8 +1067,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       return {
         minVelocity: liquidServiceType.includes("Sulphur") ? 0.9 : 0.3,
         maxVelocity: velocityLimit,
+        maxRhoVSquared: null,
         maxPressureDropPer100m: pressureDropBarPer100m,
         maxPressureDropBarKm: currentLiquidCriteria.pressureDropBarKm,
+        maxMach: null,
         note: null,
         service: currentLiquidCriteria.service,
         pressureRange: null,
@@ -1029,12 +1080,14 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       return {
         minVelocity: 0,
         maxVelocity: null,
+        maxRhoVSquared: currentMixedPhaseCriteria.rhoV2Limit,
         maxPressureDropPer100m: null,
         maxPressureDropBarKm: null,
-        note: null,
+        maxMach: currentMixedPhaseCriteria.machLimit,
+        note: currentMixedPhaseCriteria.note,
         service: currentMixedPhaseCriteria.service,
         pressureRange: null,
-        // cValue handled in results
+        cValue: currentMixedPhaseCriteria.cValue,
       };
     } else {
       // Default fallback
@@ -1061,30 +1114,61 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
     // Total Pressure Drop
     const dP_total_bar = (dP_per_m * L_m) / 100000;
+    // dP per km (bar/km) = dP_per_m * 1000 m / 100000 Pa/bar = dP_per_m / 100
     const dP_bar_km = dP_per_m * 0.01;
+    const pressureDropBarPer100m = dP_per_m * 100 / 100000;
 
     // Check Limits
     let velocityLimit = 999;
     let dPWarning = false;
-    let velWarning = false;
+    let velocityWarning = false;
+    let momentumWarning = false;
+    let machWarning = false;
+
     let cValueLimit: number | null = null;
     let erosionalVelocity = 0;
 
+    // Mach Number (for gas or mixed)
+    let machNumber = 0;
+    if (lineType === "gas" || lineType === "mixed") {
+      // Simplistic Mach calc: Ma = v / c
+      const k = 1.3; // Specific heat ratio approx
+      const R_gas = 8314; // J/kmol K
+      if (MW > 0 && T_operating_K > 0) {
+        const c_sound = Math.sqrt((k * R_gas * T_operating_K) / MW);
+        machNumber = velocity / c_sound;
+      }
+    }
+
     // Gas Limits
     if (lineType === "gas" && currentGasCriteria) {
-      cValueLimit = currentGasCriteria.cValue;
-      if (cValueLimit) {
-        // Ve = C * 1.22 / sqrt(rho)
-        erosionalVelocity = calculateErosionalVelocity(rho, cValueLimit);
+      // 1. Absolute Velocity Limit
+      const vLimitAbs = currentGasCriteria.velocityMs;
+      if (vLimitAbs !== null) {
+        if (velocity > vLimitAbs) velocityWarning = true;
+        // For gauge display, we can use this as the primary velocity limit
+        velocityLimit = vLimitAbs;
       }
 
-      const vLimitAbs = currentGasCriteria.velocityMs || 999;
-      velocityLimit = cValueLimit ? Math.min(vLimitAbs, erosionalVelocity) : vLimitAbs;
+      // 2. Momentum (Rho v^2) Limit
+      if (currentGasCriteria.rhoV2Limit !== null) {
+        if (rhoVSquared > currentGasCriteria.rhoV2Limit) momentumWarning = true;
 
-      if (velocity > velocityLimit) velWarning = true;
+        // If no explicit velocity limit, calculate equiv for display reference only
+        if (vLimitAbs === null) {
+          const equivVel = Math.sqrt(currentGasCriteria.rhoV2Limit / rho);
+          velocityLimit = equivVel;
+        }
+      }
 
-      if (currentGasCriteria.pressureDropBarKm && dP_bar_km > currentGasCriteria.pressureDropBarKm) {
-        dPWarning = true;
+      // 3. Mach Number Limit
+      if (currentGasCriteria.machLimit !== null) {
+        if (machNumber > currentGasCriteria.machLimit) machWarning = true;
+      }
+
+      // 4. Pressure Drop Limit
+      if (currentGasCriteria.pressureDropBarKm !== null) {
+        if (dP_bar_km > currentGasCriteria.pressureDropBarKm) dPWarning = true;
       }
     }
 
@@ -1093,44 +1177,57 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       const vLimit = getLiquidVelocityLimit(currentLiquidCriteria, nominalDiameterNumber);
       velocityLimit = vLimit || 15;
 
-      if (velocity > velocityLimit) velWarning = true;
+      if (velocity > velocityLimit) velocityWarning = true;
 
       if (currentLiquidCriteria.pressureDropBarKm && dP_bar_km > currentLiquidCriteria.pressureDropBarKm) {
         dPWarning = true;
       }
     }
 
-    // Mixed Limits
+    // Mixed Phase Limits
     if (lineType === "mixed" && currentMixedPhaseCriteria) {
       cValueLimit = currentMixedPhaseCriteria.cValue;
       if (cValueLimit) {
         erosionalVelocity = calculateErosionalVelocity(rho, cValueLimit);
-        velocityLimit = erosionalVelocity;
-        if (velocity > velocityLimit) velWarning = true;
+        // velocityLimit = erosionalVelocity; // C-Value is not a recommended limit, just for info
+        // if (velocity > velocityLimit) velocityWarning = true; // Disabled per user request
+      }
+
+      if (currentMixedPhaseCriteria.rhoV2Limit) {
+        const currentRhoV2 = rho * velocity * velocity;
+        if (currentRhoV2 > currentMixedPhaseCriteria.rhoV2Limit) momentumWarning = true;
+      }
+      if (currentMixedPhaseCriteria.machLimit && machNumber > currentMixedPhaseCriteria.machLimit) {
+        machWarning = true;
       }
     }
 
-    const machNumber = lineType === "gas" ? velocity / 340 : 0;
+    // Calculate final rhoV2
+    // const rhoVSquared = rho * Math.pow(velocity, 2); // Already calculated above in memo
 
     return {
       velocity,
       reynoldsNumber,
       frictionFactor,
+      dP_per_m,
       dP_total_bar,
       dP_bar_km,
       flowRegime,
       velocityLimit,
-      erosionalVelocity,
+      erosionalVelocity, // informative
       cValueLimit,
       dP_limit: (lineType === "gas" ? currentGasCriteria?.pressureDropBarKm : currentLiquidCriteria?.pressureDropBarKm) || null,
-      velWarning,
+      velWarning: velocityWarning || momentumWarning || machWarning, // General flag
+      velocityWarning, // Specific
+      momentumWarning, // Specific
+      machWarning,     // Specific
       dPWarning,
+      rhoVSquared,
+      rhoV2Limit: sizingCriteria.maxRhoVSquared,
       machNumber,
-      // Pass safe values for PDF export if it still references old names (though we update it too)
-      rhoV2Limit: null,
-      rhoVSquared: rho * Math.pow(velocity, 2)
+      machLimit: sizingCriteria.maxMach
     };
-  }, [velocity, rho, D_m, frictionFactor, L_m, lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, nominalDiameterNumber]);
+  }, [velocity, rho, D_m, frictionFactor, L_m, lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, sizingCriteria, nominalDiameterNumber, MW, T_operating_K, reynoldsNumber, flowRegime]);
 
   // Status check function based on API 14E criteria
   const getStatusIndicator = () => {
@@ -1397,8 +1494,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                             {currentGasCriteria.velocityMs !== null && (
                               <p>Velocity: ≤ {currentGasCriteria.velocityMs} m/s</p>
                             )}
-                            {currentGasCriteria.cValue !== null && (
-                              <p>C-Value: {currentGasCriteria.cValue}</p>
+                            {currentGasCriteria.rhoV2Limit !== null && (
+                              <p>Momentum (ρv²): ≤ {currentGasCriteria.rhoV2Limit.toLocaleString()} kg/m·s²</p>
+                            )}
+                            {currentGasCriteria.machLimit !== null && (
+                              <p>Mach: ≤ {currentGasCriteria.machLimit}</p>
                             )}
                           </div>
                         </div>
@@ -1434,7 +1534,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                               <p>ΔP: ≤ {currentLiquidCriteria.pressureDropBarKm} bar/km</p>
                             )}
                             {sizingCriteria.maxVelocity !== null && (
-                              <p>Velocity ({nominalDiameterNumber <= 2 ? "≤2\"" : nominalDiameterNumber <= 6 ? "3-6\"" : nominalDiameterNumber <= 12 ? "8-12\"" : nominalDiameterNumber <= 18 ? "14-18\"" : "≥20\""}): ≤ {sizingCriteria.maxVelocity} m/s</p>
+                              <p>Velocity: ≤ {sizingCriteria.maxVelocity} m/s</p>
                             )}
                           </div>
                         </div>
@@ -1466,7 +1566,12 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
                           <p className="text-xs font-medium text-primary">Recommended Limits</p>
                           <div className="text-xs text-muted-foreground space-y-0.5">
-                            <p>C-Value: {currentMixedPhaseCriteria.cValue}</p>
+                            {currentMixedPhaseCriteria.rhoV2Limit !== null && (
+                              <p>Momentum (ρv²): ≤ {currentMixedPhaseCriteria.rhoV2Limit.toLocaleString()} kg/m·s²</p>
+                            )}
+                            {currentMixedPhaseCriteria.machLimit !== null && (
+                              <p>Mach: ≤ {currentMixedPhaseCriteria.machLimit}</p>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1963,7 +2068,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         <span className="text-xs text-muted-foreground">
                           {lineType === "gas" ? "Velocity" : "Fluid Velocity"}
                         </span>
-                        <StatusIcon type={status.velocity} />
+                        <StatusIcon type={results?.velocityWarning ? "warning" : "ok"} />
                       </div>
                       <p className="text-lg font-mono font-semibold">{velocity.toFixed(3)} m/s</p>
                       <p className="text-xs text-muted-foreground mt-1">
@@ -1977,16 +2082,44 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     </div>
 
 
-                    {/* Erosional Velocity (API 14E) */}
+                    {/* Momentum / Erosion Limits */}
                     <div className="p-3 rounded-lg bg-muted/50 border border-border">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Erosional Vel (Ve)</span>
+                        <span className="text-xs text-muted-foreground">Momentum (ρv²)</span>
+                        <StatusIcon type={results?.rhoV2Limit ? (results?.momentumWarning ? "warning" : "ok") : "na"} />
                       </div>
-                      <p className="text-lg font-mono font-semibold">{results?.erosionalVelocity?.toFixed(2) || "0.00"} m/s</p>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        <p>API 14E C-Value: {results?.cValueLimit || "N/A"}</p>
+                      <p className="text-lg font-mono font-semibold">{results?.rhoVSquared.toFixed(0)} kg/(m·s²)</p>
+
+                      <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                        {results?.rhoV2Limit && (
+                          <p>Limit: ≤ {results.rhoV2Limit.toLocaleString()}</p>
+                        )}
+                        {results?.cValueLimit && !results?.rhoV2Limit && (
+                          <p>Ve Limit: {results.erosionalVelocity.toFixed(1)} m/s (C={results.cValueLimit})</p>
+                        )}
+                        {!results?.rhoV2Limit && !results?.cValueLimit && (
+                          <p>No erosion limit specified</p>
+                        )}
                       </div>
                     </div>
+
+                    {/* Mach Number (Gas/Mixed) */}
+                    {(lineType === "gas" || lineType === "mixed") && (
+                      <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">Mach Number</span>
+                          <StatusIcon type={results?.machLimit ? (results?.machWarning ? "warning" : "ok") : "na"} />
+                        </div>
+                        <p className="text-lg font-mono font-semibold">{results?.machNumber.toFixed(3)}</p>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {results?.machLimit ? (
+                            <p>Limit: ≤ {results.machLimit}</p>
+                          ) : (
+                            <p>No Mach Number limit specified</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Head Loss */}
                     <div className="p-3 rounded-lg bg-muted/50 border border-border">

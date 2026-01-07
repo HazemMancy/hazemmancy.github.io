@@ -6,7 +6,7 @@ const HydraulicSizingPage = () => {
   return (
     <CalculatorPageWrapper
       title="Hydraulic Sizing"
-      description="Calculate line sizing for gas, liquid, and mixed-phase systems per Best Practice Sizing Criteria as per API RP 14E and Darcy-Weisbach equation."
+      description="Size process piping and check velocity, pressure drop, and momentum limits for gas, liquid, and mixed-phase flow per API RP 14E."
     >
       <Tabs defaultValue="gas" className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-8">

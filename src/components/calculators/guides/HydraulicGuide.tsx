@@ -1,240 +1,145 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { BookOpen, Calculator, AlertCircle, CheckCircle, Wind, Droplets, Waves, Info } from 'lucide-react';
+import { Calculator, AlertCircle, CheckCircle, Info, ArrowRight, ArrowDown } from 'lucide-react';
 
 const HydraulicGuide: React.FC = () => {
   return (
     <div className="space-y-6">
-      {/* Overview */}
-      <Card>
+
+      {/* Gas Calculator - Inputs, Equations, Outputs */}
+      <Card className="border-l-4 border-l-blue-500">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary" />
-            Hydraulic Line Sizing Guide
+            <Calculator className="h-5 w-5 text-blue-500" />
+            Gas Line Calculator
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            This calculator performs hydraulic sizing for gas, liquid, and mixed-phase pipelines per
-            <strong> API RP 14E / Best Practice Sizing Criteria</strong>. Pressure drop calculations
-            use the <strong>Darcy-Weisbach</strong> equation with Colebrook-White friction factor for turbulent flow.
-          </p>
+        <CardContent className="space-y-5">
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="p-3 bg-blue-500/5 rounded-lg border border-blue-500/20">
-              <h4 className="font-medium text-sm flex items-center gap-2 mb-2">
-                <Wind className="h-4 w-4 text-blue-500" />
-                Gas Lines
-              </h4>
-              <ul className="text-xs text-muted-foreground space-y-1">
-                <li>• Velocity limits</li>
-                <li>• ρV² erosional velocity</li>
-                <li>• Mach number (flare)</li>
-                <li>• ΔP/km criteria</li>
-              </ul>
-            </div>
-            <div className="p-3 bg-cyan-500/5 rounded-lg border border-cyan-500/20">
-              <h4 className="font-medium text-sm flex items-center gap-2 mb-2">
-                <Droplets className="h-4 w-4 text-cyan-500" />
-                Liquid Lines
-              </h4>
-              <ul className="text-xs text-muted-foreground space-y-1">
-                <li>• Size-dependent velocity</li>
-                <li>• Pump suction/discharge</li>
-                <li>• Gravity flow</li>
-                <li>• ΔP/km criteria</li>
-              </ul>
-            </div>
-            <div className="p-3 bg-purple-500/5 rounded-lg border border-purple-500/20">
-              <h4 className="font-medium text-sm flex items-center gap-2 mb-2">
-                <Waves className="h-4 w-4 text-purple-500" />
-                Mixed-Phase
-              </h4>
-              <ul className="text-xs text-muted-foreground space-y-1">
-                <li>• ρV² erosional velocity</li>
-                <li>• Mixture density</li>
-                <li>• Mach (flare headers)</li>
-                <li>• Erosive fluid limits</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Key Equations */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Key Equations
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Darcy-Weisbach Pressure Drop</h4>
-              <p className="text-xs font-mono bg-background/60 p-2 rounded">
-                ΔP = f × (L/D) × (ρV²/2)
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Where: f = Darcy friction factor, L = pipe length, D = inside diameter, ρ = fluid density, V = velocity
-              </p>
-            </div>
-
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Colebrook-White Friction Factor</h4>
-              <p className="text-xs font-mono bg-background/60 p-2 rounded">
-                1/√f = -2 × log₁₀(ε/(3.7D) + 2.51/(Re×√f))
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Where: ε = absolute roughness, Re = Reynolds number
-              </p>
-            </div>
-
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Reynolds Number</h4>
-              <p className="text-xs font-mono bg-background/60 p-2 rounded">
-                Re = ρVD/μ
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Where: μ = dynamic viscosity
-              </p>
-            </div>
-
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Erosional Velocity (ρV²)</h4>
-              <p className="text-xs font-mono bg-background/60 p-2 rounded">
-                ρV² = ρ × V² [kg/(m·s²)]
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Industry limit: typically 6,000-25,000 kg/(m·s²) depending on service
-              </p>
-            </div>
-
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Mach Number (Gas Flow)</h4>
-              <p className="text-xs font-mono bg-background/60 p-2 rounded">
-                Ma = V / √(k × R × T / MW)
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Where: k = specific heat ratio, R = universal gas constant, T = temperature, MW = molecular weight
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* API RP 14E Sizing Criteria Summary */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <AlertCircle className="h-5 w-5" />
-            API RP 14E / Best Practice Criteria Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <h4 className="font-medium text-sm">Gas Lines (Best Practice)</h4>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 pr-4">Service</th>
-                    <th className="text-center py-2 px-2">ΔP (bar/km)</th>
-                    <th className="text-center py-2 px-2">Velocity (m/s)</th>
-                    <th className="text-center py-2 px-2">ρV²</th>
-                  </tr>
-                </thead>
-                <tbody className="text-muted-foreground">
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">Continuous (&lt;2 barg)</td>
-                    <td className="text-center">0.5</td>
-                    <td className="text-center">50</td>
-                    <td className="text-center">-</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">Continuous (7-35 barg)</td>
-                    <td className="text-center">1.5</td>
-                    <td className="text-center">-</td>
-                    <td className="text-center">15,000</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">Compressor Suction</td>
-                    <td className="text-center">0.15-2</td>
-                    <td className="text-center">25-35</td>
-                    <td className="text-center">6,000-15,000</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">Flare Header</td>
-                    <td className="text-center">-</td>
-                    <td className="text-center">-</td>
-                    <td className="text-center">Mach 0.5</td>
-                  </tr>
-                </tbody>
-              </table>
+          {/* Input Fields */}
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm text-blue-600 dark:text-blue-400">Required Inputs</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {[
+                { name: "Flow Rate", unit: "m³/h or MMSCFD" },
+                { name: "Gas Density", unit: "kg/m³" },
+                { name: "Viscosity", unit: "cP" },
+                { name: "Molecular Weight", unit: "kg/kmol" },
+                { name: "Pipe Length", unit: "m" },
+                { name: "Nominal Diameter", unit: "in" },
+                { name: "Pipe Schedule", unit: "Sch 40, 80, etc." },
+                { name: "Operating Temp", unit: "°C" },
+              ].map((input, i) => (
+                <div key={i} className="p-2 bg-blue-500/5 rounded-md border border-blue-500/20">
+                  <p className="text-xs font-medium">{input.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{input.unit}</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="space-y-3">
-            <h4 className="font-medium text-sm">Liquid Lines (API RP 14E)</h4>
-            <div className="text-xs text-muted-foreground">
-              <p className="mb-2">Velocity limits vary by pipe size:</p>
-              <div className="grid grid-cols-5 gap-2 text-center">
-                <div className="p-2 bg-muted/30 rounded">
-                  <p className="font-medium text-foreground">≤2"</p>
-                  <p>Lower</p>
-                </div>
-                <div className="p-2 bg-muted/30 rounded">
-                  <p className="font-medium text-foreground">3-6"</p>
-                  <p>Medium</p>
-                </div>
-                <div className="p-2 bg-muted/30 rounded">
-                  <p className="font-medium text-foreground">8-12"</p>
-                  <p>Medium</p>
-                </div>
-                <div className="p-2 bg-muted/30 rounded">
-                  <p className="font-medium text-foreground">14-18"</p>
-                  <p>Higher</p>
-                </div>
-                <div className="p-2 bg-muted/30 rounded">
-                  <p className="font-medium text-foreground">≥20"</p>
-                  <p>Highest</p>
-                </div>
+          <div className="flex justify-center">
+            <ArrowDown className="h-5 w-5 text-muted-foreground" />
+          </div>
+
+          {/* Key Equations */}
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm text-blue-600 dark:text-blue-400">Calculation Equations</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="p-3 bg-muted/40 rounded-lg border">
+                <p className="text-xs font-medium mb-1">Velocity</p>
+                <p className="font-mono text-xs bg-background/60 p-1.5 rounded">V = Q / A = 4Q / (π × D²)</p>
+              </div>
+              <div className="p-3 bg-muted/40 rounded-lg border">
+                <p className="text-xs font-medium mb-1">Reynolds Number</p>
+                <p className="font-mono text-xs bg-background/60 p-1.5 rounded">Re = ρVD / μ</p>
+              </div>
+              <div className="p-3 bg-muted/40 rounded-lg border">
+                <p className="text-xs font-medium mb-1">Friction Factor (Colebrook)</p>
+                <p className="font-mono text-xs bg-background/60 p-1.5 rounded">1/√f = -2·log(ε/3.7D + 2.51/Re√f)</p>
+              </div>
+              <div className="p-3 bg-muted/40 rounded-lg border">
+                <p className="text-xs font-medium mb-1">Pressure Drop (Darcy)</p>
+                <p className="font-mono text-xs bg-background/60 p-1.5 rounded">ΔP = f × (L/D) × (ρV²/2)</p>
+              </div>
+              <div className="p-3 bg-muted/40 rounded-lg border">
+                <p className="text-xs font-medium mb-1">Momentum</p>
+                <p className="font-mono text-xs bg-background/60 p-1.5 rounded">ρV² [kg/m·s²]</p>
+              </div>
+              <div className="p-3 bg-muted/40 rounded-lg border">
+                <p className="text-xs font-medium mb-1">Mach Number</p>
+                <p className="font-mono text-xs bg-background/60 p-1.5 rounded">Ma = V / √(k·R·T/MW)</p>
               </div>
             </div>
           </div>
 
+          <div className="flex justify-center">
+            <ArrowDown className="h-5 w-5 text-muted-foreground" />
+          </div>
+
+          {/* Output Fields */}
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm text-blue-600 dark:text-blue-400">Calculated Outputs</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {[
+                { name: "Velocity", unit: "m/s" },
+                { name: "Pressure Drop", unit: "bar/km & total bar" },
+                { name: "Reynolds Number", unit: "dimensionless" },
+                { name: "Flow Regime", unit: "Laminar/Turbulent" },
+                { name: "Momentum ρV²", unit: "kg/m·s²" },
+                { name: "Mach Number", unit: "dimensionless" },
+                { name: "Friction Factor", unit: "dimensionless" },
+                { name: "Status", unit: "Pass / Warning" },
+              ].map((output, i) => (
+                <div key={i} className="p-2 bg-green-500/5 rounded-md border border-green-500/20">
+                  <p className="text-xs font-medium">{output.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{output.unit}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </CardContent>
+      </Card>
+
+      {/* Engineering Design Considerations */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            Engineering Design Considerations
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="space-y-3">
-            <h4 className="font-medium text-sm">Mixed-Phase Lines (API RP 14E)</h4>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 pr-4">Service</th>
-                    <th className="text-center py-2 px-2">ρV² Limit</th>
-                  </tr>
-                </thead>
-                <tbody className="text-muted-foreground">
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">Continuous (&lt;7 barg)</td>
-                    <td className="text-center">6,000</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">Continuous (&gt;7 barg)</td>
-                    <td className="text-center">15,000</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">Erosive Fluid</td>
-                    <td className="text-center">3,750</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">Flare (Significant Liquids)</td>
-                    <td className="text-center">50,000 + Mach 0.25</td>
-                  </tr>
-                </tbody>
-              </table>
+            <h4 className="font-medium text-sm">Gas Systems</h4>
+            <div className="text-xs text-muted-foreground space-y-2 pl-2 border-l-2 border-blue-500/30">
+              <p><strong>Acoustic Induced Vibration (AIV):</strong> High velocity gas flows can generate acoustic energy causing pipe fatigue. Mach limits ({"<"} 0.5 continuous, {"<"} 0.7 intermittent) help mitigate this risk per API 521.</p>
+              <p><strong>Joule-Thomson Effect:</strong> Significant pressure drops in gas lines cause temperature drops. Material selection must account for minimum design metal temperature (MDMT).</p>
+              <p><strong>Compressibility:</strong> Gas density varies significantly with pressure and temperature. Always use actual flowing conditions for calculations.</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <h4 className="font-medium text-sm">Liquid Systems</h4>
+            <div className="text-xs text-muted-foreground space-y-2 pl-2 border-l-2 border-cyan-500/30">
+              <p><strong>Water Hammer (Surge):</strong> Velocities {">"} 3-4 m/s significantly increase surge overpressure risk during rapid valve closures (Joukowsky equation).</p>
+              <p><strong>Pump Suction (NPSH):</strong> Suction lines require stricter velocity limits (typically {"<"} 1-2 m/s) to minimize friction loss and ensure NPSHa exceeds NPSHr.</p>
+              <p><strong>Cavitation:</strong> Boiling-point liquids require even lower velocities ({"<"} 0.6-0.9 m/s) to prevent vaporization at low-pressure points.</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <h4 className="font-medium text-sm">Mixed-Phase Systems</h4>
+            <div className="text-xs text-muted-foreground space-y-2 pl-2 border-l-2 border-purple-500/30">
+              <p><strong>Flow Regimes:</strong> Slug flow causes high dynamic loads and vibration. Annular flow has liquid film on walls with high-velocity gas core.</p>
+              <p><strong>Erosion:</strong> Particulates in mixed-phase flow cause rapid wall thinning at bends. The momentum (ρv²) limit directly correlates to erosion potential.</p>
+              <p><strong>Density Modeling:</strong> Calculator uses homogeneous flow model where mixture density is weighted by the volume fraction of liquid and gas phases.</p>
             </div>
           </div>
         </CardContent>
@@ -264,11 +169,15 @@ const HydraulicGuide: React.FC = () => {
             </div>
             <div className="flex items-start gap-2">
               <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-              <span>Use actual flowing conditions for gas density calculations</span>
+              <span>Use actual flowing conditions (P, T) for gas density calculations</span>
             </div>
             <div className="flex items-start gap-2">
               <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
               <span>Check erosional velocity limits for corrosive or erosive services</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+              <span>For flare systems, always verify Mach number against API 521 limits</span>
             </div>
           </div>
         </CardContent>
@@ -285,10 +194,10 @@ const HydraulicGuide: React.FC = () => {
         <CardContent>
           <ul className="text-xs text-muted-foreground space-y-1">
             <li>• API RP 14E - Design and Installation of Offshore Production Platform Piping Systems</li>
+            <li>• API 520/521 - Sizing, Selection, and Installation of Pressure-Relieving Devices</li>
+            <li>• ASME B31.3 - Process Piping Code</li>
             <li>• Crane Technical Paper No. 410 - Flow of Fluids Through Valves, Fittings, and Pipe</li>
-            <li>• ASME B36.10M - Welded and Seamless Wrought Steel Pipe</li>
-            <li>• ASME B36.19M - Stainless Steel Pipe</li>
-            <li>• API RP 14E - Design and Installation of Offshore Production Platform Piping Systems</li>
+            <li>• ASME B36.10M/B36.19M - Welded and Seamless Steel Pipe</li>
           </ul>
         </CardContent>
       </Card>
