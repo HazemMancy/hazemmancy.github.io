@@ -6,13 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Gauge, ArrowRight, AlertTriangle, Info, CheckCircle2, Wind, Droplets, Waves, Ruler, HelpCircle } from "lucide-react";
+import { Gauge, ArrowRight, AlertTriangle, Info, CheckCircle2, Wind, Droplets, Waves, Ruler, HelpCircle, Bot } from "lucide-react";
 import HydraulicGuide from "./guides/HydraulicGuide";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { generateHydraulicPDF, HydraulicDatasheetData } from "@/lib/hydraulicPdfDatasheet";
 import { generateHydraulicExcelDatasheet, HydraulicExcelData } from "@/lib/hydraulicExcelDatasheet";
 import { commonGases, commonLiquids, FluidProperty } from '@/lib/fluids';
+
 
 // ================== TYPE DEFINITIONS ==================
 type UnitSystem = 'metric' | 'imperial';
@@ -444,7 +445,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [customRoughness, setCustomRoughness] = useState<string>("0.0457");
   const [roughnessUnit, setRoughnessUnit] = useState<string>("mm");
   const [pressureUnit, setPressureUnit] = useState<string>("bar");
+
   const [fluidTemperature, setFluidTemperature] = useState<string>("15");
+
+
 
   // Handle unit system change
   const handleUnitSystemChange = (isImperial: boolean) => {
@@ -1407,6 +1411,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     }
   };
 
+
+
   return (
     <div className="space-y-8">
       {/* Title Card */}
@@ -1441,6 +1447,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                 Imperial
               </span>
             </div>
+
+
           </div>
         </CardContent>
       </Card>
@@ -2332,3 +2340,4 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 };
 
 export default HydraulicSizingCalculator;
+
