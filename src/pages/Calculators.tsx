@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Calculator, Fuel, Droplet, ArrowLeftRight, Gauge, Fan, FlaskConical, Warehouse, ShieldCheck, Waves, PipetteIcon } from "lucide-react";
+import { ArrowLeft, Calculator, Wind, Droplet, Thermometer, Gauge, Fan, FlaskConical, Warehouse, ShieldCheck, Waves, Ruler } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -20,7 +20,7 @@ const calculators: CalculatorCard[] = [
     id: "gas-flow-converter",
     title: "Gas Volume Converter",
     description: "Convert gas flow rates between standard and actual conditions with real-time calculations",
-    icon: <Fuel className="w-8 h-8" />,
+    icon: <Wind className="w-8 h-8" />,
     route: "/calculators/gas-flow-converter",
     status: "available",
     category: "Flow"
@@ -38,7 +38,7 @@ const calculators: CalculatorCard[] = [
     id: "heat-exchanger",
     title: "Heat Exchanger Sizing",
     description: "Design and rate shell & tube heat exchangers with LMTD and effectiveness-NTU methods",
-    icon: <ArrowLeftRight className="w-8 h-8" />,
+    icon: <Thermometer className="w-8 h-8" />,
     route: "/calculators/heat-exchanger",
     status: "available",
     category: "Heat Transfer"
@@ -101,7 +101,7 @@ const calculators: CalculatorCard[] = [
     id: "piping-components",
     title: "Piping Components Data",
     description: "ASME B36.10M dimensional data for flanges, fittings, gaskets, valves, olets, blanks, flexibility & safe spans",
-    icon: <PipetteIcon className="w-8 h-8" />,
+    icon: <Ruler className="w-8 h-8" />,
     route: "/calculators/piping-components",
     status: "available",
     category: "Piping"

@@ -98,6 +98,153 @@ const tubeMaterials: Record<string, { E: number; density: number; k: number }> =
   "monel-400": { E: 179e9, density: 8800, k: 22 },
 };
 
+interface FluidInputCardProps {
+  title: string;
+  fluid: FluidInputs;
+  setFluid: (f: FluidInputs) => void;
+  colorClass: string;
+  isCustom: boolean;
+  unitSystem: UnitSystem;
+  tempUnit: TemperatureUnit;
+  calculationMode: CalculationMode;
+}
+
+const FluidInputCard = ({
+  title,
+  fluid,
+  setFluid,
+  colorClass,
+  isCustom,
+  unitSystem,
+  tempUnit,
+  calculationMode
+}: FluidInputCardProps) => {
+  const getTempUnitLabel = () => {
+    switch (tempUnit) {
+      case "C": return "°C";
+      case "F": return "°F";
+      case "K": return "K";
+    }
+  };
+
+  const getFlowRateUnit = () => unitSystem === 'metric' ? 'kg/hr' : 'lb/hr';
+  const getDensityUnit = () => unitSystem === 'metric' ? 'kg/m³' : 'lb/ft³';
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${colorClass}`} />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Inlet Temp ({getTempUnitLabel()})</Label>
+            <Input
+              type="number"
+              value={fluid.inletTemp}
+              onChange={(e) => setFluid({ ...fluid, inletTemp: e.target.value })}
+              className="h-9 no-spinner"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">
+              Outlet Temp ({getTempUnitLabel()})
+              {calculationMode === "rating" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="w-3 h-3 inline ml-1 text-muted-foreground/60" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Used as initial guess; actual value calculated</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </Label>
+            <Input
+              type="number"
+              value={fluid.outletTemp}
+              onChange={(e) => setFluid({ ...fluid, outletTemp: e.target.value })}
+              className="h-9 no-spinner"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Flow Rate ({getFlowRateUnit()})</Label>
+            <Input
+              type="number"
+              value={fluid.flowRate}
+              onChange={(e) => setFluid({ ...fluid, flowRate: e.target.value })}
+              className="h-9 no-spinner"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Specific Heat ({unitSystem === 'metric' ? 'kJ/kg·K' : 'BTU/lb·°F'})</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={fluid.specificHeat}
+              onChange={(e) => setFluid({ ...fluid, specificHeat: e.target.value })}
+              className="h-9 no-spinner"
+              disabled={!isCustom}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Density ({getDensityUnit()})</Label>
+            <Input
+              type="number"
+              value={fluid.density}
+              onChange={(e) => setFluid({ ...fluid, density: e.target.value })}
+              className="h-9 no-spinner"
+              disabled={!isCustom}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Viscosity (cP)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={fluid.viscosity}
+              onChange={(e) => setFluid({ ...fluid, viscosity: e.target.value })}
+              className="h-9 no-spinner"
+              disabled={!isCustom}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Therm Cond ({unitSystem === 'metric' ? 'W/m·K' : 'BTU/hr·ft·°F'})</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={fluid.thermalConductivity}
+              onChange={(e) => setFluid({ ...fluid, thermalConductivity: e.target.value })}
+              className="h-9 no-spinner"
+              disabled={!isCustom}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Prandtl (Pr)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={fluid.prandtl}
+              onChange={(e) => setFluid({ ...fluid, prandtl: e.target.value })}
+              className="h-9 no-spinner"
+              disabled={!isCustom}
+            />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const HeatExchangerSizing = () => {
   const [calculationMode, setCalculationMode] = useState<CalculationMode>("design");
   const [flowArrangement, setFlowArrangement] = useState<FlowArrangement>("shell-tube-1-2");
@@ -130,7 +277,7 @@ const HeatExchangerSizing = () => {
   const [shellType, setShellType] = useState<ShellType>("fixed-tubesheet");
 
   // HTRI Rating Summary state
-  const [htriEnabled, setHtriEnabled] = useState(false);
+  const [htriEnabled, setHtriEnabled] = useState(true);
   const [allowedDPTube, setAllowedDPTube] = useState("50");
   const [allowedDPShell, setAllowedDPShell] = useState("50");
 
@@ -888,6 +1035,51 @@ const HeatExchangerSizing = () => {
     toast({ title: "Design Saved", description: `Saved as ${design.name}` });
   }, [results, asmeResults, tubeGeometry, overallU, shellMaterial, savedDesigns.length]);
 
+  // Dynamic Fluid Property Updates
+  useEffect(() => {
+    const updateProperties = (
+      type: string,
+      tempIn: string,
+      tempOut: string,
+      setter: React.Dispatch<React.SetStateAction<FluidInputs>>
+    ) => {
+      if (type === "custom") return;
+
+      const Ti = parseFloat(tempIn);
+      const To = parseFloat(tempOut);
+      if (isNaN(Ti) || isNaN(To)) return;
+
+      const avgTemp = (Ti + To) / 2;
+      // Convert to Celsius for database lookup
+      const avgTempC = tempUnit === "F" ? (avgTemp - 32) * 5 / 9 :
+        tempUnit === "K" ? avgTemp - 273.15 : avgTemp;
+
+      const props = getFluidProperties(type, avgTempC);
+      if (!props) return;
+
+      // Helper to convert DB metric values to current unit system
+      // DB Units: Density (kg/m³), Cp (kJ/kg·K), Visc (cP), k (W/m·K)
+      // Imperial: Density (lb/ft³), Cp (BTU/lb·°F), Visc (cP), k (BTU/hr·ft·°F)
+      const isImperial = unitSystem === "imperial";
+
+      setter(prev => ({
+        ...prev,
+        density: (isImperial ? props.density * 0.062428 : props.density).toFixed(3),
+        specificHeat: (isImperial ? props.specificHeat * 0.23885 : props.specificHeat).toFixed(3),
+        viscosity: props.viscosity.toFixed(3),
+        thermalConductivity: (isImperial ? props.thermalConductivity * 0.57779 : props.thermalConductivity).toFixed(4),
+        prandtl: props.prandtl.toFixed(2)
+      }));
+    };
+
+    // Update Hot Fluid
+    updateProperties(hotFluidType, hotFluid.inletTemp, hotFluid.outletTemp, setHotFluid);
+
+    // Update Cold Fluid
+    updateProperties(coldFluidType, coldFluid.inletTemp, coldFluid.outletTemp, setColdFluid);
+
+  }, [hotFluidType, coldFluidType, hotFluid.inletTemp, hotFluid.outletTemp, coldFluid.inletTemp, coldFluid.outletTemp, tempUnit, unitSystem]);
+
   // TEMA auto-calculate geometry - calculates shell diameter from tube count OR tube count from shell diameter
   const handleAutoCalculateGeometry = useCallback(() => {
     const tubeOD = parseFloat(tubeGeometry.outerDiameter);
@@ -946,125 +1138,6 @@ const HeatExchangerSizing = () => {
   const getAreaUnit = () => unitSystem === 'metric' ? 'm²' : 'ft²';
   const getDutyUnit = () => unitSystem === 'metric' ? 'kW' : 'BTU/hr';
   const getHTCUnit = () => unitSystem === 'metric' ? 'W/m²K' : 'BTU/hr·ft²·°F';
-
-  const FluidInputCard = ({
-    title,
-    fluid,
-    setFluid,
-    colorClass
-  }: {
-    title: string;
-    fluid: FluidInputs;
-    setFluid: (f: FluidInputs) => void;
-    colorClass: string;
-  }) => (
-    <Card className="border-border/50">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <div className={`w-3 h-3 rounded-full ${colorClass}`} />
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Inlet Temp ({getTempUnitLabel()})</Label>
-            <Input
-              type="number"
-              value={fluid.inletTemp}
-              onChange={(e) => setFluid({ ...fluid, inletTemp: e.target.value })}
-              className="h-9 no-spinner"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">
-              Outlet Temp ({getTempUnitLabel()})
-              {calculationMode === "rating" && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="w-3 h-3 inline ml-1 text-muted-foreground/60" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">Used as initial guess; actual value calculated</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </Label>
-            <Input
-              type="number"
-              value={fluid.outletTemp}
-              onChange={(e) => setFluid({ ...fluid, outletTemp: e.target.value })}
-              className="h-9 no-spinner"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Flow Rate (kg/hr)</Label>
-            <Input
-              type="number"
-              value={fluid.flowRate}
-              onChange={(e) => setFluid({ ...fluid, flowRate: e.target.value })}
-              className="h-9 no-spinner"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Cp (kJ/kg·K)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={fluid.specificHeat}
-              onChange={(e) => setFluid({ ...fluid, specificHeat: e.target.value })}
-              className="h-9 no-spinner"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Density (kg/m³)</Label>
-            <Input
-              type="number"
-              value={fluid.density}
-              onChange={(e) => setFluid({ ...fluid, density: e.target.value })}
-              className="h-9 no-spinner"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Viscosity (cP)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={fluid.viscosity}
-              onChange={(e) => setFluid({ ...fluid, viscosity: e.target.value })}
-              className="h-9 no-spinner"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">k (W/m·K)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={fluid.thermalConductivity}
-              onChange={(e) => setFluid({ ...fluid, thermalConductivity: e.target.value })}
-              className="h-9 no-spinner"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Prandtl (Pr)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={fluid.prandtl}
-              onChange={(e) => setFluid({ ...fluid, prandtl: e.target.value })}
-              className="h-9 no-spinner"
-            />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="space-y-6">
@@ -1232,12 +1305,20 @@ const HeatExchangerSizing = () => {
               fluid={hotFluid}
               setFluid={setHotFluid}
               colorClass="bg-red-500"
+              isCustom={hotFluidType === "custom"}
+              unitSystem={unitSystem}
+              tempUnit={tempUnit}
+              calculationMode={calculationMode}
             />
             <FluidInputCard
               title="Cold Fluid (Tube Side)"
               fluid={coldFluid}
               setFluid={setColdFluid}
               colorClass="bg-blue-500"
+              isCustom={coldFluidType === "custom"}
+              unitSystem={unitSystem}
+              tempUnit={tempUnit}
+              calculationMode={calculationMode}
             />
           </div>
 

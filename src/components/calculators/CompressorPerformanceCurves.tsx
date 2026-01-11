@@ -62,46 +62,46 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
     const designFlow = operatingFlow;
     const designHead = operatingHead > 0 ? operatingHead : 50;
     const designPower = shaftPower > 0 ? shaftPower : 100;
-    
+
     // Flow range based on compressor type per API 617/618
     const minFlowRatio = isDynamic ? 0.4 : 0.3;
     const maxFlowRatio = isDynamic ? 1.3 : 1.2;
     const numPoints = 35;
-    
+
     // Calculate actual surge flow
-    const actualSurgeFlow = surgeFlow > 0 ? surgeFlow : 
+    const actualSurgeFlow = surgeFlow > 0 ? surgeFlow :
       (isDynamic ? designFlow * (compressorType === 'axial' ? 0.75 : 0.55) : 0);
-    
+
     for (let i = 0; i <= numPoints; i++) {
       const flowRatio = minFlowRatio + (i * (maxFlowRatio - minFlowRatio) / numPoints);
       const flow = designFlow * flowRatio;
       const flowPercent = flowRatio * 100;
-      
+
       let head: number;
       let efficiency: number;
       let power: number;
       let surge: number | undefined;
-      
+
       if (isDynamic) {
         // API 617 Dynamic compressor characteristic curves
         // Head-flow: parabolic with different slopes per type
         const headCoeff = compressorType === 'axial' ? 0.12 : 0.25;
         const slopeCoeff = compressorType === 'axial' ? 0.08 : 0.15;
-        
+
         // H/H_design = 1 + a*(1-Q/Q_d)^2 - b*(Q/Q_d - 1)^2
         head = designHead * (1 + headCoeff * Math.pow(1 - flowRatio, 2) - slopeCoeff * Math.pow(Math.max(0, flowRatio - 1), 2));
         head = Math.max(0, head);
-        
+
         // Efficiency: bell curve peaking at design point
         // η/η_d = 1 - c*(Q/Q_d - 1)^2
         const effDropCoeff = compressorType === 'axial' ? 0.8 : 1.2;
         efficiency = operatingEfficiency * (1 - effDropCoeff * Math.pow(flowRatio - 1, 2));
         efficiency = Math.max(20, Math.min(operatingEfficiency + 2, efficiency));
-        
+
         // Power curve: P = ṁ × H / η (follows head×flow/efficiency)
         const powerRatio = flowRatio * (head / designHead) / (efficiency / operatingEfficiency);
         power = designPower * Math.max(0.3, powerRatio);
-        
+
         // Surge line: quadratic through surge point
         if (flow >= actualSurgeFlow * 0.8) {
           surge = designHead * 1.15 * Math.pow(flow / actualSurgeFlow, 2);
@@ -112,16 +112,16 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
         // Head is essentially constant (positive displacement)
         head = designHead * (1 - 0.05 * Math.pow(flowRatio - 1, 2));
         head = Math.max(designHead * 0.85, head);
-        
+
         // Efficiency drops at off-design conditions
         efficiency = operatingEfficiency * (1 - 0.3 * Math.pow(flowRatio - 1, 2));
         efficiency = Math.max(50, efficiency);
-        
+
         // Power roughly proportional to flow for PD compressors
         power = designPower * flowRatio * (1 + 0.05 * Math.pow(flowRatio - 1, 2));
         power = Math.max(0, power);
       }
-      
+
       points.push({
         flow: Math.round(flow),
         flowPercent: Math.round(flowPercent),
@@ -132,14 +132,14 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
         pressureRatio: compressionRatio * (head / designHead)
       });
     }
-    
+
     return points;
   }, [operatingFlow, operatingHead, operatingEfficiency, compressionRatio, compressorType, shaftPower, surgeFlow, isDynamic]);
 
   // Calculate surge margin for dynamic compressors
   const surgeMargin = useMemo(() => {
     if (!isDynamic) return 100;
-    const actualSurge = surgeFlow > 0 ? surgeFlow : 
+    const actualSurge = surgeFlow > 0 ? surgeFlow :
       operatingFlow * (compressorType === 'axial' ? 0.75 : 0.55);
     return ((operatingFlow - actualSurge) / operatingFlow) * 100;
   }, [operatingFlow, surgeFlow, compressorType, isDynamic]);
@@ -177,9 +177,9 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                 {isDynamic ? 'API 617' : 'API 618'}
               </Badge>
             </CardTitle>
-            <Badge 
-              variant={operatingStatus.status === 'danger' ? 'destructive' : 
-                      operatingStatus.status === 'warning' ? 'secondary' : 'default'}
+            <Badge
+              variant={operatingStatus.status === 'danger' ? 'destructive' :
+                operatingStatus.status === 'warning' ? 'secondary' : 'default'}
               className="text-[10px]"
             >
               {operatingStatus.message}
@@ -189,55 +189,55 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
         <CardContent className="p-2 sm:p-4">
           <div className="h-[280px] sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={curveData} margin={{ top: 10, right: 45, left: 5, bottom: 40 }}>
+              <ComposedChart data={curveData} margin={{ top: 20, right: 30, left: 10, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted/50" />
-                <XAxis 
-                  dataKey="flowPercent" 
-                  tick={{ fontSize: 9 }}
+                <XAxis
+                  dataKey="flowPercent"
+                  tick={{ fontSize: 10 }}
                   tickFormatter={(v) => `${v}%`}
                   className="text-muted-foreground"
                 >
-                  <Label 
-                    value="Flow (% of Design)" 
-                    position="bottom" 
-                    offset={20} 
-                    style={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} 
+                  <Label
+                    value="Flow (% of Design)"
+                    position="bottom"
+                    offset={20}
+                    style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                   />
                 </XAxis>
-                <YAxis 
+                <YAxis
                   yAxisId="head"
-                  tick={{ fontSize: 9 }}
+                  tick={{ fontSize: 10 }}
                   domain={['auto', 'auto']}
-                  width={45}
+                  width={50}
                   tickFormatter={(v) => v.toFixed(0)}
                 >
-                  <Label 
-                    value="Head (kJ/kg)" 
-                    angle={-90} 
-                    position="insideLeft" 
-                    offset={10} 
-                    style={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }} 
+                  <Label
+                    value="Head (kJ/kg)"
+                    angle={-90}
+                    position="insideLeft"
+                    offset={0}
+                    style={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }}
                   />
                 </YAxis>
-                <YAxis 
+                <YAxis
                   yAxisId="efficiency"
                   orientation="right"
-                  tick={{ fontSize: 9 }}
+                  tick={{ fontSize: 10 }}
                   domain={[0, 100]}
-                  width={35}
+                  width={40}
                   tickFormatter={(v) => `${v}`}
                 >
-                  <Label 
-                    value="η (%)" 
-                    angle={90} 
-                    position="insideRight" 
-                    offset={5} 
-                    style={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }} 
+                  <Label
+                    value="η (%)"
+                    angle={90}
+                    position="insideRight"
+                    offset={5}
+                    style={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }}
                   />
                 </YAxis>
                 <Tooltip
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '6px',
                     fontSize: '10px',
@@ -251,12 +251,12 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   }}
                   labelFormatter={(label) => `Flow: ${label}% of design`}
                 />
-                <Legend 
-                  wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} 
+                <Legend
+                  wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
                   verticalAlign="top"
                   iconSize={8}
                 />
-                
+
                 {/* Surge region (dynamic compressors only) */}
                 {isDynamic && (
                   <Area
@@ -268,7 +268,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                     name="Surge Zone"
                   />
                 )}
-                
+
                 {/* Head curve */}
                 <Line
                   yAxisId="head"
@@ -279,7 +279,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   dot={false}
                   name="Head"
                 />
-                
+
                 {/* Surge line (dynamic only) */}
                 {isDynamic && (
                   <Line
@@ -293,7 +293,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                     name="Surge"
                   />
                 )}
-                
+
                 {/* Efficiency curve */}
                 <Line
                   yAxisId="efficiency"
@@ -304,7 +304,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   dot={false}
                   name="Efficiency"
                 />
-                
+
                 {/* Operating point */}
                 <ReferenceDot
                   x={100}
@@ -315,7 +315,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   stroke="hsl(var(--background))"
                   strokeWidth={2}
                 />
-                
+
                 {/* Design flow line */}
                 <ReferenceLine
                   x={100}
@@ -327,7 +327,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          
+
           {/* Operating point summary */}
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div className="p-2 bg-primary/10 rounded-lg text-center">
@@ -346,11 +346,10 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
               <p className="text-xs sm:text-sm font-semibold">{operatingEfficiency.toFixed(1)}%</p>
             </div>
             {isDynamic && (
-              <div className={`p-2 rounded-lg text-center ${
-                surgeMargin < 10 ? 'bg-red-500/10 border border-red-500/30' : 
-                surgeMargin < 20 ? 'bg-yellow-500/10 border border-yellow-500/30' : 
-                'bg-green-500/10 border border-green-500/30'
-              }`}>
+              <div className={`p-2 rounded-lg text-center ${surgeMargin < 10 ? 'bg-red-500/10 border border-red-500/30' :
+                surgeMargin < 20 ? 'bg-yellow-500/10 border border-yellow-500/30' :
+                  'bg-green-500/10 border border-green-500/30'
+                }`}>
                 <span className="text-[9px] sm:text-[10px] text-muted-foreground">Surge Margin</span>
                 <p className={`text-xs sm:text-sm font-semibold ${operatingStatus.color}`}>
                   {surgeMargin.toFixed(0)}%
@@ -378,35 +377,35 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
         <CardContent className="p-2 sm:p-4">
           <div className="h-[180px] sm:h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={curveData} margin={{ top: 10, right: 15, left: 5, bottom: 40 }}>
+              <LineChart data={curveData} margin={{ top: 20, right: 20, left: 10, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted/50" />
-                <XAxis 
-                  dataKey="flowPercent" 
-                  tick={{ fontSize: 9 }}
+                <XAxis
+                  dataKey="flowPercent"
+                  tick={{ fontSize: 10 }}
                   tickFormatter={(v) => `${v}%`}
                 >
-                  <Label 
-                    value="Flow (% of Design)" 
-                    position="bottom" 
-                    offset={20} 
-                    style={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} 
+                  <Label
+                    value="Flow (% of Design)"
+                    position="bottom"
+                    offset={20}
+                    style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                   />
                 </XAxis>
-                <YAxis 
-                  tick={{ fontSize: 9 }}
-                  width={50}
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  width={55}
                   tickFormatter={(v) => v.toFixed(0)}
                 >
-                  <Label 
-                    value="Power (kW)" 
-                    angle={-90} 
-                    position="insideLeft" 
-                    offset={10} 
-                    style={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }} 
+                  <Label
+                    value="Power (kW)"
+                    angle={-90}
+                    position="insideLeft"
+                    offset={10}
+                    style={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' }}
                   />
                 </YAxis>
-                <Tooltip 
-                  contentStyle={{ 
+                <Tooltip
+                  contentStyle={{
                     backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '6px',
@@ -462,8 +461,8 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
                   {surgeMargin < 10 ? 'Critical: Near Surge Limit' : 'Low Surge Margin Warning'}
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Operating at {surgeMargin.toFixed(0)}% above surge line. 
-                  Per API 617, minimum 10% surge margin recommended. 
+                  Operating at {surgeMargin.toFixed(0)}% above surge line.
+                  Per API 617, minimum 10% surge margin recommended.
                   Consider increasing flow or reducing discharge pressure.
                 </p>
               </div>
@@ -475,7 +474,7 @@ const CompressorPerformanceCurves: React.FC<PerformanceCurvesProps> = ({
       {/* Curve notes */}
       <div className="p-2 bg-muted/20 rounded-lg">
         <p className="text-[10px] text-muted-foreground">
-          <strong>Note:</strong> Curves generated per {isDynamic ? 'API 617' : 'API 618'} typical {compressorType} characteristics. 
+          <strong>Note:</strong> Curves generated per {isDynamic ? 'API 617' : 'API 618'} typical {compressorType} characteristics.
           {isDynamic && ' Surge line shows minimum stable flow limit per ASME PTC 10.'}
           {isReciprocating && ' Positive displacement machines have relatively flat head-flow curves.'}
           {' '}Actual manufacturer curves may vary.

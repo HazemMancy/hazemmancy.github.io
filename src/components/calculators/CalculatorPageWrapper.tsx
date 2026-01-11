@@ -9,12 +9,14 @@ import Footer from '@/components/Footer';
 interface CalculatorPageWrapperProps {
   title: string;
   description?: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }
 
 export default function CalculatorPageWrapper({
   title,
   description,
+  icon,
   children
 }: CalculatorPageWrapperProps) {
   return (
@@ -31,6 +33,7 @@ export default function CalculatorPageWrapper({
               </Button>
             </Link>
             <div className="flex items-center gap-2">
+              {icon && <div className="text-primary">{icon}</div>}
               <h1 className="text-sm sm:text-base font-semibold truncate max-w-[200px] sm:max-w-none">
                 {title}
               </h1>

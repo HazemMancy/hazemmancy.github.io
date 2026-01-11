@@ -49,16 +49,16 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
     const points: CurvePoint[] = [];
     const designFlow = operatingFlow;
     const designHead = operatingHead;
-    
+
     // Flow range: 0% to 140% of design flow
     const minFlow = 0;
     const maxFlow = designFlow * 1.4;
     const flowStep = maxFlow / 30;
-    
+
     // Determine head-flow characteristic based on pump type
     let shutoffHeadRatio: number;
     let steepness: number;
-    
+
     if (pumpType.includes('axial') || pumpType.includes('mixed')) {
       shutoffHeadRatio = 1.15; // Flatter curve
       steepness = 1.5;
@@ -69,17 +69,17 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
       shutoffHeadRatio = 1.20; // Typical centrifugal
       steepness = 2.0;
     }
-    
+
     const shutoffHead = designHead * shutoffHeadRatio;
-    
+
     for (let i = 0; i <= 30; i++) {
       const flow = minFlow + (i * flowStep);
       const flowRatio = flow / designFlow;
-      
+
       // Head-flow curve: H = Hso - k * Q^n
       // Normalized: H/Hdesign = (Hso/Hdesign) - ((Hso/Hdesign - 1) * (Q/Qdesign)^n)
       const head = Math.max(0, shutoffHead - (shutoffHead - designHead) * Math.pow(flowRatio, steepness));
-      
+
       // Efficiency curve (bell-shaped, peaks near BEP)
       const effPeak = operatingEfficiency;
       let efficiency: number;
@@ -89,15 +89,15 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
         const effWidth = 0.5; // Width of efficiency curve
         efficiency = Math.max(0, effPeak * Math.exp(-Math.pow((flowRatio - 1) / effWidth, 2)));
       }
-      
+
       // Power curve: P = ρgQH/η (approximately proportional to Q for centrifugal)
-      const power = flow > 0 && efficiency > 0 
-        ? (flow / 3600) * head * 9.81 * 1000 / (efficiency / 100) / 1000 
+      const power = flow > 0 && efficiency > 0
+        ? (flow / 3600) * head * 9.81 * 1000 / (efficiency / 100) / 1000
         : operatingPower * 0.3; // Shutoff power (about 30% for centrifugal)
-      
+
       // NPSHr curve (increases with flow squared)
       const npshrValue = npshr * Math.pow(flowRatio, 2) * 0.8 + npshr * 0.2;
-      
+
       points.push({
         flow: Math.round(flow * 10) / 10,
         head: Math.max(0, head),
@@ -106,13 +106,13 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
         npshr: Math.max(0.5, npshrValue)
       });
     }
-    
+
     return points;
   }, [operatingFlow, operatingHead, operatingEfficiency, operatingPower, npshr, pumpType]);
 
   // Calculate NPSH margin
   const npshMargin = ((npsha - npshr) / npshr) * 100;
-  
+
   // Determine operating status
   const getOperatingStatus = () => {
     if (npsha < npshr) {
@@ -144,32 +144,33 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
         <CardContent className="p-2 sm:p-6">
           <div className="h-[280px] sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={curveData} margin={{ top: 10, right: 10, left: -10, bottom: 30 }}>
+              {/* Increased margin-left to prevent Y-label overlap */}
+              <ComposedChart data={curveData} margin={{ top: 20, right: 30, left: 10, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="flow" 
+                <XAxis
+                  dataKey="flow"
                   label={{ value: 'Flow (m³/h)', position: 'bottom', offset: 10, fontSize: 10 }}
                   tick={{ fontSize: 9 }}
                   className="text-muted-foreground"
                 />
-                <YAxis 
+                <YAxis
                   yAxisId="head"
-                  label={{ value: 'Head (m)', angle: -90, position: 'insideLeft', fontSize: 10, offset: 15 }}
+                  label={{ value: 'Head (m)', angle: -90, position: 'insideLeft', fontSize: 10, offset: 10 }}
                   tick={{ fontSize: 9 }}
                   domain={['auto', 'auto']}
-                  width={45}
+                  width={50} // Increased width for axis
                 />
-                <YAxis 
+                <YAxis
                   yAxisId="efficiency"
                   orientation="right"
                   label={{ value: 'Eff (%)', angle: 90, position: 'insideRight', fontSize: 10, offset: 10 }}
                   tick={{ fontSize: 9 }}
                   domain={[0, 100]}
-                  width={35}
+                  width={40} // Increased width for axis
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px',
                     fontSize: '11px'
@@ -181,7 +182,7 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
-                
+
                 {/* Head curve */}
                 <Line
                   yAxisId="head"
@@ -192,7 +193,7 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
                   dot={false}
                   name="Head"
                 />
-                
+
                 {/* Efficiency curve */}
                 <Line
                   yAxisId="efficiency"
@@ -203,7 +204,7 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
                   dot={false}
                   name="Efficiency"
                 />
-                
+
                 {/* Operating point marker */}
                 <ReferenceDot
                   x={Math.round(operatingFlow * 10) / 10}
@@ -214,7 +215,7 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
                   stroke="hsl(var(--background))"
                   strokeWidth={3}
                 />
-                
+
                 {/* Operating flow reference line */}
                 <ReferenceLine
                   x={Math.round(operatingFlow * 10) / 10}
@@ -226,7 +227,7 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          
+
           {/* Operating point info */}
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div className="p-2 bg-primary/10 rounded-lg text-center">
@@ -244,10 +245,9 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
               <span className="text-[10px] sm:text-xs text-muted-foreground">Efficiency</span>
               <p className="text-xs sm:text-sm font-medium">{operatingEfficiency.toFixed(1)}%</p>
             </div>
-            <div className={`p-2 rounded-lg text-center ${
-              npshMargin < 0 ? 'bg-red-500/10' : 
+            <div className={`p-2 rounded-lg text-center ${npshMargin < 0 ? 'bg-red-500/10' :
               npshMargin < 15 ? 'bg-yellow-500/10' : 'bg-green-500/10'
-            }`}>
+              }`}>
               <span className="text-[10px] sm:text-xs text-muted-foreground">NPSH Margin</span>
               <p className={`text-xs sm:text-sm font-medium ${operatingStatus.color}`}>
                 {npshMargin.toFixed(0)}%
@@ -265,29 +265,30 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
         <CardContent className="p-2 sm:p-6">
           <div className="h-[200px] sm:h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={curveData} margin={{ top: 10, right: 10, left: -10, bottom: 30 }}>
+              {/* Increased margins */}
+              <ComposedChart data={curveData} margin={{ top: 20, right: 30, left: 10, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="flow" 
+                <XAxis
+                  dataKey="flow"
                   label={{ value: 'Flow (m³/h)', position: 'bottom', offset: 10, fontSize: 10 }}
                   tick={{ fontSize: 9 }}
                 />
-                <YAxis 
+                <YAxis
                   yAxisId="power"
-                  label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft', fontSize: 10, offset: 15 }}
+                  label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft', fontSize: 10, offset: 10 }}
                   tick={{ fontSize: 9 }}
-                  width={45}
+                  width={50}
                 />
-                <YAxis 
+                <YAxis
                   yAxisId="npshr"
                   orientation="right"
                   label={{ value: 'NPSHr (m)', angle: 90, position: 'insideRight', fontSize: 10, offset: 10 }}
                   tick={{ fontSize: 9 }}
-                  width={35}
+                  width={40}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px',
                     fontSize: '11px'
@@ -299,7 +300,7 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
-                
+
                 <Line
                   yAxisId="power"
                   type="monotone"
@@ -318,16 +319,17 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
                   dot={false}
                   name="NPSHr"
                 />
-                
+
                 {/* NPSHa reference line */}
                 <ReferenceLine
                   y={npsha}
                   yAxisId="npshr"
                   stroke="hsl(var(--chart-4))"
                   strokeDasharray="5 5"
-                  label={{ value: `NPSHa: ${npsha.toFixed(1)}m`, position: 'right', fontSize: 9 }}
+                  // Moved label slightly to ensure it doesn't overlap excessively 
+                  label={{ value: `NPSHa: ${npsha.toFixed(1)}m`, position: 'insideTopRight', fontSize: 9, fill: 'hsl(var(--chart-4))', offset: 10 }}
                 />
-                
+
                 <ReferenceLine
                   x={Math.round(operatingFlow * 10) / 10}
                   yAxisId="power"
@@ -352,7 +354,7 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
                   {npsha < npshr ? 'Insufficient NPSHa' : 'Low NPSH Margin Warning'}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {npsha < npshr 
+                  {npsha < npshr
                     ? `NPSHa (${npsha.toFixed(2)} m) is less than NPSHr (${npshr.toFixed(2)} m). Cavitation will occur.`
                     : `NPSH margin is ${npshMargin.toFixed(0)}%. API 610 recommends minimum 10% margin or 0.9m (whichever is greater).`
                   }
@@ -366,7 +368,7 @@ const PumpPerformanceCurves: React.FC<PumpPerformanceCurvesProps> = ({
       {/* Curve Legend Info */}
       <div className="p-3 bg-muted/30 rounded-lg">
         <p className="text-xs text-muted-foreground">
-          <strong>Note:</strong> Performance curves are generated based on typical {pumpType} pump 
+          <strong>Note:</strong> Performance curves are generated based on typical {pumpType} pump
           characteristics. Actual manufacturer curves may vary. Operating point shown at Best Efficiency Point (BEP).
         </p>
       </div>

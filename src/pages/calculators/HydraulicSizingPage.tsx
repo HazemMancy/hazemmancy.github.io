@@ -1,11 +1,13 @@
 import CalculatorPageWrapper from '@/components/calculators/CalculatorPageWrapper';
 import HydraulicSizingCalculator from "@/components/calculators/HydraulicSizingCalculator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Gauge } from "lucide-react";
 
 const HydraulicSizingPage = () => {
   return (
     <CalculatorPageWrapper
       title="Hydraulic Sizing"
+      icon={<Gauge className="h-5 w-5" />}
       description="Size process piping and check velocity, pressure drop, and momentum limits for gas, liquid, and mixed-phase flow per API RP 14E."
     >
       <Tabs defaultValue="gas" className="w-full">

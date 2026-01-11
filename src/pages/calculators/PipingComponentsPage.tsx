@@ -1,7 +1,7 @@
 import { useState } from "react";
 import CalculatorPageWrapper from '@/components/calculators/CalculatorPageWrapper';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { HelpCircle, Calculator } from "lucide-react";
+import { HelpCircle, Calculator, Ruler } from "lucide-react";
 import PipingComponentsCalculator from "@/components/calculators/PipingComponentsCalculator";
 import PipingComponentsGuide from "@/components/calculators/guides/PipingComponentsGuide";
 
@@ -9,8 +9,9 @@ export default function PipingComponentsPage() {
   const [activeTab, setActiveTab] = useState("calculator");
 
   return (
-    <CalculatorPageWrapper 
+    <CalculatorPageWrapper
       title="Piping Components"
+      icon={<Ruler className="h-5 w-5" />}
       description="ASME B36.10M dimensional data for flanges, fittings, gaskets, valves, olets, blanks, flexibility & safe spans per industry standards."
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
