@@ -552,8 +552,20 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [mixedGasFlowRateUnit, setMixedGasFlowRateUnit] = useState<string>("MMSCFD");
   const [mixedLiquidFlowRate, setMixedLiquidFlowRate] = useState<string>("50");
   const [mixedLiquidFlowRateUnit, setMixedLiquidFlowRateUnit] = useState<string>("m³/h");
-  const [mixedGasDensity, setMixedGasDensity] = useState<string>("30"); // kg/m³ at operating conditions
+
+  // Mixed-phase Operating Conditions (New)
+  const [mixedOpPressure, setMixedOpPressure] = useState<string>("12"); // barg
+  const [mixedOpTemp, setMixedOpTemp] = useState<string>("45"); // °C
+  const [mixedGasZ, setMixedGasZ] = useState<string>("0.9"); // Z-factor at op conditions
+
+  // Mixed-phase Fluid Properties (New)
+  const [mixedGasDensity, setMixedGasDensity] = useState<string>("30"); // kg/m³ at OP conditions (keep for now as fallback or user override)
   const [mixedLiquidDensity, setMixedLiquidDensity] = useState<string>("800"); // kg/m³
+  const [mixedGasViscosity, setMixedGasViscosity] = useState<string>("0.013"); // cP
+  const [mixedLiquidViscosity, setMixedLiquidViscosity] = useState<string>("1.0"); // cP
+
+  // API 14E C-Factor
+  const [cFactor, setCFactor] = useState<string>("100"); // Default 100 for continuous
 
   // Get available pressure ranges for selected gas service
   const availableGasPressureRanges = useMemo(() => {
@@ -650,6 +662,89 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     }
   };
 
+  // Mixed-phase calculations (HYSYS Homogeneous Model Refactoring)
+  // MOVED UP to be available for viscosity calculation
+  const mixedPhaseCalc = useMemo(() => {
+    if (lineType !== "mixed") return null;
+
+    const rhoG = parseFloat(mixedGasDensity) || 30; // kg/m³
+    const rhoL = parseFloat(mixedLiquidDensity) || 800; // kg/m³
+    const muG = parseFloat(mixedGasViscosity) || 0.013; // cP
+    const muL = parseFloat(mixedLiquidViscosity) || 1.0; // cP
+
+    // Operating Conditions
+    const P_op_barg = parseFloat(mixedOpPressure) || 0;
+    const P_op_bara = P_op_barg + 1.01325;
+    const T_op_C = parseFloat(mixedOpTemp) || 15;
+    const T_op_K = T_op_C + 273.15;
+    const Z_op = parseFloat(mixedGasZ) || 1.0;
+
+    // Standard Conditions
+    const P_std_bara = parseFloat(basePressure) || 1.01325;
+    const T_std_C = parseFloat(baseTemperature) || 15.56;
+    const T_std_K = T_std_C + 273.15;
+    const Z_std = parseFloat(baseCompressibilityZ) || 1.0;
+
+    // 1. Gas Flow Correction (Standard -> Actual)
+    // Qg_act = Qg_std * (P_std/P_op) * (T_op/T_std) * (Z_op/Z_std)
+    const Qg_std_input = parseFloat(mixedGasFlowRate) || 0;
+    const factorStd = gasVolumetricFlowRateToM3s[mixedGasFlowRateUnit] || 0;
+    const Qg_std_m3s = Qg_std_input * factorStd;
+
+    // Calculate Correction Factor
+    let correctionFactor = 1.0;
+    if (P_op_bara > 0 && P_std_bara > 0) {
+      correctionFactor = (P_std_bara / P_op_bara) * (T_op_K / T_std_K) * (Z_op / Z_std);
+    }
+
+    const Qg_act_m3s = Qg_std_m3s * correctionFactor;
+
+    // 2. Liquid Flow (Actual)
+    const Ql_input = parseFloat(mixedLiquidFlowRate) || 0;
+    const Ql_m3s = Ql_input * (liquidFlowRateToM3s[mixedLiquidFlowRateUnit] || 0);
+
+    // 3. Homogeneous Mixture Properties
+    const totalVolumetricFlow = Qg_act_m3s + Ql_m3s; // v_m * A
+
+    // No-Slip Liquid Holdup (Lambda_L)
+    const lambdaL = totalVolumetricFlow > 0 ? Ql_m3s / totalVolumetricFlow : 0;
+    const lambdaG = 1 - lambdaL;
+
+    // Mixture Density (Homogeneous)
+    const rhoMixture = (lambdaL * rhoL) + (lambdaG * rhoG);
+
+    // Mixture Viscosity (Homogeneous)
+    const viscosityMixture_cP = (lambdaL * muL) + (lambdaG * muG);
+    const viscosityMixture_Pas = viscosityMixture_cP * 0.001;
+
+    // Mass Flows
+    const massFlowGas = Qg_act_m3s * rhoG;
+    const massFlowLiquid = Ql_m3s * rhoL;
+    const totalMassFlow = massFlowGas + massFlowLiquid;
+    const xG = totalMassFlow > 0 ? massFlowGas / totalMassFlow : 0;
+
+    return {
+      rhoG,
+      rhoL,
+      muG,
+      muL,
+      rhoMixture,
+      viscosityMixture_cP,
+      viscosityMixture_Pas,
+      Qg_std_m3s,
+      Qg_act_m3s,
+      Ql_m3s,
+      totalVolumetricFlow,
+      totalMassFlow,
+      lambdaL,
+      lambdaG,
+      xG,
+      correctionFactor
+    };
+  }, [lineType, mixedGasDensity, mixedLiquidDensity, mixedGasViscosity, mixedLiquidViscosity,
+    mixedGasFlowRate, mixedGasFlowRateUnit, mixedLiquidFlowRate, mixedLiquidFlowRateUnit,
+    mixedOpPressure, mixedOpTemp, mixedGasZ, basePressure, baseTemperature, baseCompressibilityZ]);
+
   // Convert all inputs to SI units
   const L_m = useMemo(() => {
     const len = parseFloat(pipeLength) || 0;
@@ -660,7 +755,13 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const Q_m3s = useMemo(() => {
     return parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0);
   }, [flowRate, flowRateUnit, flowRateConversion]);
-  const mu = useMemo(() => parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0, [viscosity, viscosityUnit]);
+
+  const mu = useMemo(() => {
+    if (lineType === "mixed" && mixedPhaseCalc) {
+      return mixedPhaseCalc.viscosityMixture_Pas;
+    }
+    return parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0;
+  }, [viscosity, viscosityUnit, lineType, mixedPhaseCalc]);
   const epsilon_m = useMemo(() => {
     const roughnessValue = pipeMaterial === "Custom"
       ? parseFloat(customRoughness)
@@ -703,62 +804,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return (P_Pa * MW) / (Z_std_factor * R_kmol * T_std_K);
   }, [lineType, P_std_bara, MW, T_std_K, Z_std_factor]);
 
-  // Mixed-phase calculations
-  const mixedPhaseCalc = useMemo(() => {
-    if (lineType !== "mixed") return null;
 
-    const rhoG = parseFloat(mixedGasDensity) || 30; // kg/m³ at operating conditions
-    const rhoL = parseFloat(mixedLiquidDensity) || 800; // kg/m³
-
-    // Convert gas flow to actual m³/s at operating conditions
-    const Qg_std_m3s = parseFloat(mixedGasFlowRate) * (gasVolumetricFlowRateToM3s[mixedGasFlowRateUnit] || 0);
-    // For mixed-phase, we need actual gas flow. Assuming user provides operating density directly.
-    // We'll estimate actual from standard assuming ideal gas behavior: Q_act = Q_std * (P_std/P_op) * (T_op/T_std)
-    // But since user provides operating density directly, we use mass conservation:
-    // Mass flow gas = Q_std * rho_std → but we'll simplify by assuming the flow is already at operating conditions
-    // For more accuracy, user should input gas density at operating conditions
-    const Qg_act_m3s = Qg_std_m3s; // Simplified - actual volumetric at operating
-
-    // Convert liquid flow to m³/s
-    const Ql_m3s = parseFloat(mixedLiquidFlowRate) * (liquidFlowRateToM3s[mixedLiquidFlowRateUnit] || 0);
-
-    // Mass flows
-    const massFlowGas = Qg_act_m3s * rhoG; // kg/s
-    const massFlowLiquid = Ql_m3s * rhoL; // kg/s
-    const totalMassFlow = massFlowGas + massFlowLiquid;
-
-    // Total volumetric flow at operating conditions (gas + liquid)
-    const totalVolumetricFlow = Qg_act_m3s + Ql_m3s; // m³/s
-
-    // Mixture density (homogeneous model)
-    // ρm = (ρG * QG + ρL * QL) / (QG + QL) - volumetric weighted
-    // OR for ρv² calculation, we use: ρm = total mass flow / total volumetric flow
-    const rhoMixture = totalVolumetricFlow > 0 ? totalMassFlow / totalVolumetricFlow : 0;
-
-    // Gas volume fraction (no-slip)
-    const lambdaG = totalVolumetricFlow > 0 ? Qg_act_m3s / totalVolumetricFlow : 0;
-
-    // Liquid volume fraction
-    const lambdaL = 1 - lambdaG;
-
-    // Gas mass fraction
-    const xG = totalMassFlow > 0 ? massFlowGas / totalMassFlow : 0;
-
-    return {
-      rhoG,
-      rhoL,
-      rhoMixture,
-      Qg_m3s: Qg_act_m3s,
-      Ql_m3s,
-      totalVolumetricFlow,
-      massFlowGas,
-      massFlowLiquid,
-      totalMassFlow,
-      lambdaG,
-      lambdaL,
-      xG,
-    };
-  }, [lineType, mixedGasDensity, mixedLiquidDensity, mixedGasFlowRate, mixedGasFlowRateUnit, mixedLiquidFlowRate, mixedLiquidFlowRateUnit]);
 
   // Use calculated density for gas, user input for liquid, mixture for mixed
   const rho = useMemo(() => {
@@ -810,10 +856,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     return (P_ref_Pa * Q_vol) / (Z_ref * R_kmol * T_ref_K);
   }, [lineType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW, massFlowKgS]);
 
-  // Calculate velocity
-  // Gas: velocity is computed from the inlet actual volumetric flow derived from molar flow (HYSYS-style)
+  // Calculate velocity (HYSYS-Consistent)
+  // Gas: velocity is computed from the inlet actual volumetric flow derived from molar flow
   // Liquid: v = Q / A (incompressible)
-  // Mixed: v = (Qg + Ql) / A (total volumetric flow)
+  // Mixed: v_m = (Qg_act + Ql) / A (No-Slip Mixture Velocity)
   const velocity = useMemo(() => {
     if (D_m <= 0) return 0;
     const area = Math.PI * Math.pow(D_m / 2, 2);
@@ -828,6 +874,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     }
 
     if (lineType === "mixed" && mixedPhaseCalc) {
+      // vm = (Qg_act + Ql) / A
       return mixedPhaseCalc.totalVolumetricFlow / area;
     }
 
@@ -1040,22 +1087,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
   const isValidInput = L_m > 0 && D_m > 0 && Q_m3s > 0 && rho > 0 && mu > 0;
 
-  // API 14E Erosional Velocity Calculation
-  // Ve = C / sqrt(ρm) where C = 100-150 and ρm is in lb/ft³
-  const erosionalVelocity = useMemo(() => {
-    // Convert density from kg/m³ to lb/ft³
-    const rhoLbFt3 = rho / 16.0185;
-    if (rhoLbFt3 <= 0) return 0;
 
-    // C = 100 for continuous service (conservative, solid-free fluids)
-    const C = 100;
-
-    // Ve in ft/s
-    const VeFtS = C / Math.sqrt(rhoLbFt3);
-
-    // Convert to m/s
-    return VeFtS * 0.3048;
-  }, [rho]);
 
   // Get current ENI gas sizing criteria based on service type and pressure range
   const currentGasCriteria = useMemo(() => {
@@ -1129,6 +1161,31 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       };
     }
   }, [lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, nominalDiameterNumber, liquidServiceType]);
+
+  // API 14E Erosional Velocity Calculation
+  // Ve = C / sqrt(ρm) where C is configurable (default 100) and ρm is in lb/ft³
+  // Moved here to be after sizingCriteria
+  const erosionalVelocity = useMemo(() => {
+    // Convert density from kg/m³ to lb/ft³
+    const rhoLbFt3 = rho / 16.0185;
+    if (rhoLbFt3 <= 0) return 0;
+
+    // User input C-factor (default 100)
+    let C_val = parseFloat(cFactor) || 100;
+
+    // Optional: if sizingCriteria enforces a C-value, use it?
+    // For now we stick to user override if they want custom. 
+    // But logically if sizingCriteria has it, it might stem from service selection.
+    if (sizingCriteria && sizingCriteria.cValue) {
+      C_val = sizingCriteria.cValue;
+    }
+
+    // Ve in ft/s
+    const VeFtS = C_val / Math.sqrt(rhoLbFt3);
+
+    // Convert to m/s
+    return VeFtS * 0.3048;
+  }, [rho, cFactor, sizingCriteria]);
 
   // ========== RESULTS CALCULATION (API 14E) ==========
   const results = useMemo(() => {
@@ -1222,9 +1279,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         const currentRhoV2 = rho * velocity * velocity;
         if (currentRhoV2 > currentMixedPhaseCriteria.rhoV2Limit) momentumWarning = true;
       }
-      if (currentMixedPhaseCriteria.machLimit && machNumber > currentMixedPhaseCriteria.machLimit) {
-        machWarning = true;
-      }
+      // Mach check disabled per user requirements for mixed phase
+      // if (currentMixedPhaseCriteria.machLimit && machNumber > currentMixedPhaseCriteria.machLimit) {
+      //   machWarning = true;
+      // }
     }
 
     // Calculate final rhoV2
@@ -1873,15 +1931,57 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         </div>
                       </div>
 
+                      {/* Operating Conditions for Mixed Phase (P-T-Z) */}
+                      <div className="pt-3 border-t border-border mt-4">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4 font-semibold text-primary">Operating Conditions (Required for Gas actual flow)</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Op. Pressure (barg)</Label>
+                          <Input
+                            type="number"
+                            value={mixedOpPressure}
+                            onChange={(e) => setMixedOpPressure(e.target.value)}
+                            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Op. Temp (°C)</Label>
+                          <Input
+                            type="number"
+                            value={mixedOpTemp}
+                            onChange={(e) => setMixedOpTemp(e.target.value)}
+                            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Gas Z-Factor</Label>
+                          <Input
+                            type="number"
+                            value={mixedGasZ}
+                            onChange={(e) => setMixedGasZ(e.target.value)}
+                            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
+                            placeholder="0.9"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Fluid Properties Split for Mixed Phase */}
+                      <div className="pt-3 border-t border-border mt-4">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4 font-semibold text-primary">Component Properties</p>
+                      </div>
+
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium">Gas Density @ Operating (kg/m³)</Label>
+                        <Label className="text-sm font-medium">Gas Density @ Op. Cond. (kg/m³)</Label>
                         <Input
                           type="number"
                           value={mixedGasDensity}
                           onChange={(e) => setMixedGasDensity(e.target.value)}
-                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
                           placeholder="30"
                         />
+                        <p className="text-[10px] text-muted-foreground">Used for mass flow calculation</p>
                       </div>
 
                       <div className="space-y-2">
@@ -1890,31 +1990,71 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                           type="number"
                           value={mixedLiquidDensity}
                           onChange={(e) => setMixedLiquidDensity(e.target.value)}
-                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
                           placeholder="800"
                         />
                       </div>
 
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Gas Viscosity (cP)</Label>
+                          <Input
+                            type="number"
+                            value={mixedGasViscosity}
+                            onChange={(e) => setMixedGasViscosity(e.target.value)}
+                            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Liq. Viscosity (cP)</Label>
+                          <Input
+                            type="number"
+                            value={mixedLiquidViscosity}
+                            onChange={(e) => setMixedLiquidViscosity(e.target.value)}
+                            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* API 14E C-Factor */}
+                      <div className="space-y-2 mt-2">
+                        <Label className="text-sm font-medium">API 14E C-Factor</Label>
+                        <Input
+                          type="number"
+                          value={cFactor}
+                          onChange={(e) => setCFactor(e.target.value)}
+                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
+                          placeholder="100"
+                        />
+                        <p className="text-[10px] text-muted-foreground">Standard: 100 for Continuous, 125 for Intermittent</p>
+                      </div>
+
                       {/* Mixed-phase calculated properties */}
                       {mixedPhaseCalc && (
-                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
-                          <p className="text-xs font-medium text-primary">Calculated Mixture Properties</p>
+                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2 mt-4">
+                          <p className="text-xs font-medium text-primary flex items-center gap-1">
+                            <Info className="w-3 h-3" /> Homogeneous Mixture Results
+                          </p>
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-muted-foreground">ρ<sub>mix</sub>:</span>
-                              <span className="font-mono ml-1">{mixedPhaseCalc.rhoMixture.toFixed(2)} kg/m³</span>
+                              <span className="font-mono ml-1 text-primary font-bold">{mixedPhaseCalc.rhoMixture.toFixed(2)} kg/m³</span>
                             </div>
                             <div>
-                              <span className="text-muted-foreground">λ<sub>G</sub>:</span>
-                              <span className="font-mono ml-1">{(mixedPhaseCalc.lambdaG * 100).toFixed(1)}%</span>
+                              <span className="text-muted-foreground">μ<sub>mix</sub>:</span>
+                              <span className="font-mono ml-1">{mixedPhaseCalc.viscosityMixture_cP.toFixed(3)} cP</span>
                             </div>
                             <div>
-                              <span className="text-muted-foreground">ṁ<sub>total</sub>:</span>
-                              <span className="font-mono ml-1">{(mixedPhaseCalc.totalMassFlow * 3600).toFixed(1)} kg/h</span>
+                              <span className="text-muted-foreground">λ<sub>L</sub> (No-Slip):</span>
+                              <span className="font-mono ml-1">{(mixedPhaseCalc.lambdaL * 100).toFixed(1)}%</span>
                             </div>
                             <div>
-                              <span className="text-muted-foreground">x<sub>G</sub>:</span>
-                              <span className="font-mono ml-1">{(mixedPhaseCalc.xG * 100).toFixed(1)}%</span>
+                              <span className="text-muted-foreground">Correction:</span>
+                              <span className="font-mono ml-1">{mixedPhaseCalc.correctionFactor.toFixed(3)}x</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Q<sub>g,act</sub>:</span>
+                              <span className="font-mono ml-1">{(mixedPhaseCalc.Qg_act_m3s * 3600).toFixed(1)} m³/h</span>
                             </div>
                           </div>
                         </div>

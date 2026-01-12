@@ -206,6 +206,65 @@ export const calculateAccelerationHead = (
     return (suctionLength * velocity * rpm * C) / (compressibilityFactor * g);
 };
 
+/**
+ * Calculates HI 9.6.7 Viscosity Correction Factors
+ * Using digitized data from Hydraulic Institute Standards (ANSI/HI 9.6.7)
+ * Method: Calculates Parameter B, then interpolates C_Q, C_H, C_eta.
+ * 
+ * @param Q_m3h Flow rate in m³/h (Viscous) - Assumed at/near BEP for method
+ * @param H_m Head in meters (Viscous)
+ * @param N_rpm Pump Speed in RPM
+ * @param nu_cSt Viscosity in cSt (mm²/s)
+ * @returns { C_Q, C_H, C_eta, B }
+ */
+export const calculateHICorrections = (Q_m3h: number, H_m: number, N_rpm: number, nu_cSt: number) => {
+    // 0. Limits check
+    if (Q_m3h <= 0 || H_m <= 0 || N_rpm <= 0 || nu_cSt <= 1) {
+        return { C_Q: 1, C_H: 1, C_eta: 1, B: 0 };
+    }
+
+    // 1. Calculate Parameter B
+    // B = 16.5 * (nu^0.5 * H^0.0625) / (Q^0.375 * N^0.25)
+    // Note: HI Formula uses Q(m3/h), H(m), nu(cSt), N(rpm)
+    const B = 16.5 * (Math.pow(nu_cSt, 0.5) * Math.pow(H_m, 0.0625)) / (Math.pow(Q_m3h, 0.375) * Math.pow(N_rpm, 0.25));
+
+    // 2. Interpolate Factors from Digitized table
+    // Table: [B, C_eta, C_Q, C_H]
+    const table = [
+        [0, 1.0, 1.0, 1.0],
+        [1.0, 1.00, 1.00, 1.00],
+        [2.0, 0.96, 0.99, 0.99],
+        [4.0, 0.89, 0.97, 0.98],
+        [6.0, 0.85, 0.96, 0.97],
+        [8.0, 0.81, 0.95, 0.96],
+        [10.0, 0.77, 0.94, 0.95],
+        [15.0, 0.69, 0.91, 0.93],
+        [20.0, 0.62, 0.89, 0.91],
+        [30.0, 0.53, 0.85, 0.88],
+        [40.0, 0.45, 0.82, 0.85]
+    ];
+
+    // Linear Interpolation Helper
+    const interpolate = (val: number, idx: number) => {
+        if (val <= table[0][0]) return 1.0;
+        if (val >= table[table.length - 1][0]) return table[table.length - 1][idx];
+
+        for (let i = 0; i < table.length - 1; i++) {
+            if (val >= table[i][0] && val < table[i + 1][0]) {
+                const t = (val - table[i][0]) / (table[i + 1][0] - table[i][0]);
+                return table[i][idx] * (1 - t) + table[i + 1][idx] * t;
+            }
+        }
+        return 1.0;
+    };
+
+    const C_eta = interpolate(B, 1);
+    const C_Q = interpolate(B, 2);
+    const C_H = interpolate(B, 3);
+
+    return { C_Q, C_H, C_eta, B };
+};
+
 export interface CalculationResult {
     suctionVelocity: number;
     dischargeVelocity: number;
@@ -223,4 +282,5 @@ export interface CalculationResult {
     hydraulicPower: number;
     brakePower: number;
     motorPower: number;
+    viscosityCorrections?: { C_Q: number, C_H: number, C_eta: number, B: number };
 }

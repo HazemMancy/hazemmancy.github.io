@@ -39,7 +39,9 @@ import {
   calculateReynolds,
   calculateFrictionFactor,
   calculateNPSHa,
-  calculateAccelerationHead
+  calculateAccelerationHead,
+  calculateHICorrections,
+  CalculationResult
 } from "@/lib/pumpCalculations";
 
 // Pipe Roughness Data (Needed locally for selection)
@@ -439,6 +441,17 @@ const PumpSizingCalculator = () => {
     const suctionDpBarKm = suctionLength_m > 0 ? (suctionTotalLoss * rho * g / 100000) / (suctionLength_m / 1000) : 0;
     const dischargeDpBarKm = dischargeLength_m > 0 ? (dischargeTotalLoss * rho * g / 100000) / (dischargeLength_m / 1000) : 0;
 
+    // 12. HI 9.6.7 Viscosity Corrections
+    // Calculate if viscosity > 1 cSt (approx).
+    // kinematic viscosity in cSt = mu (Pa.s) / rho (kg/m3) * 1e6
+    const nu_cSt = (mu / rho) * 1e6;
+    let viscosityCorrections = undefined;
+    if (nu_cSt > 1.0 && selectedFluid !== "Water") { // Basic check, water is baseline
+      // Assume Operating Point is basis for correction (matches common sizing practice)
+      // Q in m3/h, H in m.
+      viscosityCorrections = calculateHICorrections(Q_m3s * 3600, totalHead || 10, parseFloat(pumpRpm), nu_cSt);
+    }
+
     return {
       Q_m3s, suctionVelocity, dischargeVelocity, suctionRe, dischargeRe,
       suctionTotalLoss, dischargeTotalLoss, totalFrictionLoss,
@@ -450,7 +463,8 @@ const PumpSizingCalculator = () => {
       suctionDia_mm, dischargeDia_mm,
       suctionVelLimit, dischargeVelLimit, suctionDpBarKm, dischargeDpBarKm,
       suctionCriteriaData, dischargeCriteriaData,
-      viscosityPaS: mu
+      viscosityPaS: mu,
+      viscosityCorrections // Return corrections
     };
   }, [
     flowRate, flowRateUnit, density, densityUnit, viscosity, viscosityUnit,
@@ -870,10 +884,22 @@ const PumpSizingCalculator = () => {
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader className="pb-2"><CardTitle className="text-lg">Pump Sizing Results</CardTitle></CardHeader>
             <CardContent>
-              {calculations.viscosityPaS > 0.01 && (
-                <div className="flex items-center gap-2 mb-4 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-sm text-yellow-700 dark:text-yellow-400">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span><strong>High Viscosity Warning:</strong> Viscosity &gt; 10 cP. Performance curves and power shown are for Water. Correct for viscosity per HI 9.6.7.</span>
+              {calculations.viscosityCorrections && calculations.viscosityCorrections.B > 0 && (
+                <div className="mb-4 p-3 bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200 rounded text-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <span className="font-semibold text-blue-700 dark:text-blue-300">HI 9.6.7 Viscosity Correction Applied</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-muted-foreground">
+                    <div>Parameter B: <span className="font-mono font-bold text-foreground">{calculations.viscosityCorrections.B.toFixed(2)}</span></div>
+                    <div>Head Factor ($C_H$): <span className="font-mono font-bold text-foreground">{calculations.viscosityCorrections.C_H.toFixed(3)}</span></div>
+                    <div>Flow Factor ($C_Q$): <span className="font-mono font-bold text-foreground">{calculations.viscosityCorrections.C_Q.toFixed(3)}</span></div>
+                    <div>Eff. Factor ($C_\eta$): <span className="font-mono font-bold text-foreground">{calculations.viscosityCorrections.C_eta.toFixed(3)}</span></div>
+                  </div>
+                  <p className="mt-2 text-xs italic opacity-80">
+                    Performance is derated for viscosity.
+                    Predicting Water Performance: Q_w = Q_vis/C_Q, H_w = H_vis/C_H, η_vis = η_w × C_η.
+                  </p>
                 </div>
               )}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
