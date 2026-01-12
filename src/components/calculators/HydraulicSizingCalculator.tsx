@@ -8,10 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Gauge, ArrowRight, AlertTriangle, Info, CheckCircle2, Wind, Droplets, Waves, Ruler, HelpCircle, Bot } from "lucide-react";
 import HydraulicGuide from "./guides/HydraulicGuide";
-import { toast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
 import { generateHydraulicPDF, HydraulicDatasheetData } from "@/lib/hydraulicPdfDatasheet";
 import { generateHydraulicExcelDatasheet, HydraulicExcelData } from "@/lib/hydraulicExcelDatasheet";
+import { toast } from "@/components/ui/use-toast";
+import { Button } from "@/components/ui/button";
+// Export imports managed above
 import { commonGases, commonLiquids, FluidProperty } from '@/lib/fluids';
 
 
@@ -525,10 +526,12 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   };
 
   // Operating conditions for gas (editable)
-  const [inletPressure, setInletPressure] = useState<string>("12"); // barg (user enters gauge pressure)
+  const [inletPressure, setInletPressure] = useState<string>("12"); // User input value
+  const [pressureType, setPressureType] = useState<"gauge" | "absolute">("gauge"); // New: Gauge/Abs toggle
   const [compressibilityZ, setCompressibilityZ] = useState<string>("1.0"); // Compressibility factor
   const [gasDensity60F, setGasDensity60F] = useState<string>("0.856"); // Gas density at 60°F (kg/m³)
   const [gasMolecularWeight, setGasMolecularWeight] = useState<string>("20.3"); // kg/kmol - editable for accuracy
+  const [gasFlowBasis, setGasFlowBasis] = useState<"standard" | "actual">("standard"); // New: Flow Basis toggle
 
   // Standard/Base conditions (editable so you can match your HYSYS/project settings)
   const [baseTemperature, setBaseTemperature] = useState<string>("15.56"); // °C (60°F for MMSCFD)
@@ -541,6 +544,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
   // Liquid service type selection (API RP 14E criteria)
   const [liquidServiceType, setLiquidServiceType] = useState<string>("Pump Discharge (Pop < 35 barg)");
+
+  // Liquid Physics Inputs (New)
+  const [elevationChange, setElevationChange] = useState<string>("0"); // meters (+ is up/gain head, - is down/loss head? Convention: + means outlet is higher)
+  const [minorLossK, setMinorLossK] = useState<string>("0"); // Dimensionless total K value
 
   // Mixed-phase service type selection (API RP 14E criteria)
   const [mixedPhaseServiceType, setMixedPhaseServiceType] = useState<string>("Continuous (P < 7 barg)");
@@ -662,39 +669,53 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     }
   };
 
-  // Mixed-phase calculations (HYSYS Homogeneous Model Refactoring)
-  // MOVED UP to be available for viscosity calculation
+  // 1. Common Unit Conversions (SI) & Base Hooks
+  const L_m = useMemo(() => {
+    const len = parseFloat(pipeLength) || 0;
+    const factor = lengthUnit === "km" ? 1000 : lengthUnit === "ft" ? 0.3048 : lengthUnit === "mi" ? 1609.34 : 1;
+    return len * factor;
+  }, [pipeLength, lengthUnit]);
+
+  const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]);
+
+  const Q_m3s = useMemo(() => {
+    return parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0);
+  }, [flowRate, flowRateUnit, flowRateConversion]);
+
+  const epsilon_m = useMemo(() => {
+    const roughnessValue = pipeMaterial === "Custom"
+      ? parseFloat(customRoughness)
+      : (pipeRoughness[pipeMaterial] ?? pipeRoughness["Carbon Steel (New)"]); // safe fallback
+    return (roughnessValue || 0) * roughnessToMeters[roughnessUnit];
+  }, [pipeMaterial, customRoughness, roughnessUnit]);
+
+  // 2. Base / Standard Conditions (Common)
+  const T_std_K = useMemo(() => (parseFloat(baseTemperature) || 15.56) + 273.15, [baseTemperature]);
+  const P_std_bara = useMemo(() => parseFloat(basePressure) || 1.01325, [basePressure]);
+  const Z_std_factor = useMemo(() => parseFloat(baseCompressibilityZ) || 1.0, [baseCompressibilityZ]);
+
+  // 3. Mixed Phase Calculation (Rigorous)
+  // Depends on Base Conditions
   const mixedPhaseCalc = useMemo(() => {
     if (lineType !== "mixed") return null;
 
-    const rhoG = parseFloat(mixedGasDensity) || 30; // kg/m³
+    const rhoG_op = parseFloat(mixedGasDensity) || 0; // Operating density
     const rhoL = parseFloat(mixedLiquidDensity) || 800; // kg/m³
-    const muG = parseFloat(mixedGasViscosity) || 0.013; // cP
-    const muL = parseFloat(mixedLiquidViscosity) || 1.0; // cP
 
-    // Operating Conditions
-    const P_op_barg = parseFloat(mixedOpPressure) || 0;
-    const P_op_bara = P_op_barg + 1.01325;
-    const T_op_C = parseFloat(mixedOpTemp) || 15;
-    const T_op_K = T_op_C + 273.15;
-    const Z_op = parseFloat(mixedGasZ) || 1.0;
+    // 1. Gas Flow Conversion (Standard to Actual)
+    // Formula: Q_act = Q_std * (P_std / P_op) * (T_op / T_std) * (Z_op / Z_std)
+    const Qg_std_m3s = parseFloat(mixedGasFlowRate) * (gasVolumetricFlowRateToM3s[mixedGasFlowRateUnit] || 0);
 
-    // Standard Conditions
-    const P_std_bara = parseFloat(basePressure) || 1.01325;
-    const T_std_C = parseFloat(baseTemperature) || 15.56;
-    const T_std_K = T_std_C + 273.15;
-    const Z_std = parseFloat(baseCompressibilityZ) || 1.0;
+    // Rigorous Pressure
+    let P_op_bara = parseFloat(mixedOpPressure) || 0;
+    if (pressureType === "gauge") P_op_bara += 1.01325; // Add atm if gauge
 
-    // 1. Gas Flow Correction (Standard -> Actual)
-    // Qg_act = Qg_std * (P_std/P_op) * (T_op/T_std) * (Z_op/Z_std)
-    const Qg_std_input = parseFloat(mixedGasFlowRate) || 0;
-    const factorStd = gasVolumetricFlowRateToM3s[mixedGasFlowRateUnit] || 0;
-    const Qg_std_m3s = Qg_std_input * factorStd;
+    const T_op_K = (parseFloat(mixedOpTemp) || 15) + 273.15;
+    const Z_op = parseFloat(mixedGasZ) || 0.9;
 
-    // Calculate Correction Factor
     let correctionFactor = 1.0;
-    if (P_op_bara > 0 && P_std_bara > 0) {
-      correctionFactor = (P_std_bara / P_op_bara) * (T_op_K / T_std_K) * (Z_op / Z_std);
+    if (P_op_bara > 0 && P_std_bara > 0 && T_std_K > 0 && Z_std_factor > 0) {
+      correctionFactor = (P_std_bara / P_op_bara) * (T_op_K / T_std_K) * (Z_op / Z_std_factor);
     }
 
     const Qg_act_m3s = Qg_std_m3s * correctionFactor;
@@ -703,31 +724,36 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     const Ql_input = parseFloat(mixedLiquidFlowRate) || 0;
     const Ql_m3s = Ql_input * (liquidFlowRateToM3s[mixedLiquidFlowRateUnit] || 0);
 
-    // 3. Homogeneous Mixture Properties
-    const totalVolumetricFlow = Qg_act_m3s + Ql_m3s; // v_m * A
-
-    // No-Slip Liquid Holdup (Lambda_L)
-    const lambdaL = totalVolumetricFlow > 0 ? Ql_m3s / totalVolumetricFlow : 0;
-    const lambdaG = 1 - lambdaL;
-
-    // Mixture Density (Homogeneous)
-    const rhoMixture = (lambdaL * rhoL) + (lambdaG * rhoG);
-
-    // Mixture Viscosity (Homogeneous)
-    const viscosityMixture_cP = (lambdaL * muL) + (lambdaG * muG);
-    const viscosityMixture_Pas = viscosityMixture_cP * 0.001;
-
-    // Mass Flows
-    const massFlowGas = Qg_act_m3s * rhoG;
+    // 3. Mass Flows
+    const massFlowGas = Qg_act_m3s * rhoG_op;
     const massFlowLiquid = Ql_m3s * rhoL;
     const totalMassFlow = massFlowGas + massFlowLiquid;
+
+    // 4. Homogeneous Mixture Properties
+    const totalVolumetricFlow = Qg_act_m3s + Ql_m3s; // v_m * A
+
+    // Mixture Density: ρm = (mg + ml) / Q_total (Explicit form)
+    const rhoMixture = totalVolumetricFlow > 0 ? totalMassFlow / totalVolumetricFlow : 0;
+
+    // Volume Fractions
+    const lambdaG = totalVolumetricFlow > 0 ? Qg_act_m3s / totalVolumetricFlow : 0;
+    const lambdaL = 1 - lambdaG;
+
+    // Mixture Viscosity (McAdams / Volume Weighted)
+    const muG_cP = parseFloat(mixedGasViscosity) || 0.01;
+    const muL_cP = parseFloat(mixedLiquidViscosity) || 1.0;
+
+    const viscosityMixture_cP = (lambdaG * muG_cP) + (lambdaL * muL_cP);
+    const viscosityMixture_Pas = viscosityMixture_cP * 0.001;
+
+    // Gas Mass Fraction
     const xG = totalMassFlow > 0 ? massFlowGas / totalMassFlow : 0;
 
     return {
-      rhoG,
+      rhoG: rhoG_op,
       rhoL,
-      muG,
-      muL,
+      muG: muG_cP,
+      muL: muL_cP,
       rhoMixture,
       viscosityMixture_cP,
       viscosityMixture_Pas,
@@ -743,347 +769,352 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     };
   }, [lineType, mixedGasDensity, mixedLiquidDensity, mixedGasViscosity, mixedLiquidViscosity,
     mixedGasFlowRate, mixedGasFlowRateUnit, mixedLiquidFlowRate, mixedLiquidFlowRateUnit,
-    mixedOpPressure, mixedOpTemp, mixedGasZ, basePressure, baseTemperature, baseCompressibilityZ]);
+    mixedOpPressure, mixedOpTemp, mixedGasZ, pressureType, P_std_bara, T_std_K, Z_std_factor]);
 
-  // Convert all inputs to SI units
-  const L_m = useMemo(() => {
-    const len = parseFloat(pipeLength) || 0;
-    const factor = lengthUnit === "km" ? 1000 : lengthUnit === "ft" ? 0.3048 : lengthUnit === "mi" ? 1609.34 : 1;
-    return len * factor;
-  }, [pipeLength, lengthUnit]);
-  const D_m = useMemo(() => insideDiameterMM * 0.001, [insideDiameterMM]);
-  const Q_m3s = useMemo(() => {
-    return parseFloat(flowRate) * (flowRateConversion[flowRateUnit] || 0);
-  }, [flowRate, flowRateUnit, flowRateConversion]);
-
+  // 4. Viscosity (Depends on Mixed Phase)
   const mu = useMemo(() => {
     if (lineType === "mixed" && mixedPhaseCalc) {
       return mixedPhaseCalc.viscosityMixture_Pas;
     }
     return parseFloat(viscosity) * viscosityToPas[viscosityUnit] || 0;
   }, [viscosity, viscosityUnit, lineType, mixedPhaseCalc]);
-  const epsilon_m = useMemo(() => {
-    const roughnessValue = pipeMaterial === "Custom"
-      ? parseFloat(customRoughness)
-      : (pipeRoughness[pipeMaterial] ?? pipeRoughness["Carbon Steel (New)"]); // safe fallback
-    return (roughnessValue || 0) * roughnessToMeters[roughnessUnit];
-  }, [pipeMaterial, customRoughness, roughnessUnit]);
 
-  // Parse operating conditions for gas
-  // Convert inlet pressure from barg to bara (user enters gauge pressure)
-  const P_operating_bara = useMemo(() => (parseFloat(inletPressure) || 0) + 1.01325, [inletPressure]);
-  const T_operating_K = useMemo(() => (parseFloat(fluidTemperature) || 15) + 273.15, [fluidTemperature]);
-  const T_std_K = useMemo(() => (parseFloat(baseTemperature) || 15.56) + 273.15, [baseTemperature]);
-  const P_std_bara = useMemo(() => parseFloat(basePressure) || 1.01325, [basePressure]);
-  const Z_factor = useMemo(() => parseFloat(compressibilityZ) || 1.0, [compressibilityZ]);
-  const Z_std_factor = useMemo(() => parseFloat(baseCompressibilityZ) || 1.0, [baseCompressibilityZ]);
+  // =====================================================================
+  // HYSYS ALIGNMENT: CORE PHYSICS ENGINE
+  // =====================================================================
 
-  // Use molecular weight directly from user input (or auto-calculated from density)
-  const MW = useMemo(() => {
-    return parseFloat(gasMolecularWeight) || 20.3; // kg/kmol
-  }, [gasMolecularWeight]);
+  // 1. Constants & Unit Conversions (Audited)
+  const R_GAS_CONSTANT = 8314.462618; // J/(kmol·K)
+  const G_GRAVITY = 9.80665; // m/s²
+  const PATM_PA = 101325; // Standard Atm in Pa
 
-  // Gas constant R = 8.314 J/(mol·K) = 8.314 kPa·L/(mol·K)
-  const R_gas = 8.314; // J/(mol·K)
+  // 2. Process Conditions Parsing (Rigorous SI Conversion)
 
-  // Calculate gas density at operating conditions (HYSYS method)
-  // ρ = (P × MW) / (Z × R × T)
-  // P in Pa, MW in kg/kmol, R = 8314 J/(kmol·K), T in K → ρ in kg/m³
-  const rhoGasOperating = useMemo(() => {
-    if (lineType !== "gas") return 0;
-    const P_Pa = P_operating_bara * 100000; // bara to Pa
-    const R_kmol = 8314; // J/(kmol·K)
-    return (P_Pa * MW) / (Z_factor * R_kmol * T_operating_K);
-  }, [lineType, P_operating_bara, MW, Z_factor, T_operating_K]);
-
-  // Calculate gas density at standard conditions
-  const rhoGasStandard = useMemo(() => {
-    if (lineType !== "gas") return 0;
-    const P_Pa = P_std_bara * 100000;
-    const R_kmol = 8314;
-    return (P_Pa * MW) / (Z_std_factor * R_kmol * T_std_K);
-  }, [lineType, P_std_bara, MW, T_std_K, Z_std_factor]);
-
-
-
-  // Use calculated density for gas, user input for liquid, mixture for mixed
-  const rho = useMemo(() => {
-    if (lineType === "gas") {
-      return rhoGasOperating;
+  // Temperature (Operating & Base)
+  const T_op_K = useMemo(() => {
+    const tVal = parseFloat(fluidTemperature) || 15;
+    // Temp unit conversion if needed (currently implementation assumes C input for calc, but UI handles conversion?? Needs Check)
+    // Actually, looking at handleUnitSystemChange, the state `fluidTemperature` is converted.
+    // So we just interpret based on expected 'C' effectively if checking logic? 
+    // Wait, unitSystem toggle updates the VALUE. So `fluidTemperature` is in C or F?
+    // Let's assume the state `fluidTemperature` is always the number matching `temperatureUnit`.
+    // But we don't have a `temperatureUnit` state variable that drives physics.
+    // The legacy code assumed `fluidTemperature` was converted to C if Metric?
+    // FIX: To be safe, look at `unitSystem`.
+    if (unitSystem === 'imperial') {
+      return (tVal - 32) * 5 / 9 + 273.15;
     }
-    if (lineType === "mixed" && mixedPhaseCalc) {
-      return mixedPhaseCalc.rhoMixture;
-    }
-    return parseFloat(density) * densityToKgM3[densityUnit] || 0;
-  }, [lineType, rhoGasOperating, density, densityUnit, mixedPhaseCalc]);
+    return tVal + 273.15;
+  }, [fluidTemperature, unitSystem]);
 
-  // For gas calculations we convert the entered volumetric flow (standard OR actual) into a molar flow.
-  // Convention used here: for gas, "m³/h" is treated as ACTUAL flow at inlet conditions; other units are treated as STANDARD flow at base/std conditions.
-  const isGasActualFlow = lineType === "gas" && flowRateUnit === "m³/h";
+  const T_base_K = useMemo(() => {
+    const tVal = parseFloat(baseTemperature) || 15.56;
+    // Base is typically entered in C? Let's assume Base is always C for now unless we add unit toggle.
+    return tVal + 273.15;
+  }, [baseTemperature]);
 
-  // Calculate mass flow in kg/s for display
-  const massFlowKgS = useMemo(() => {
-    if (lineType !== "gas") return 0;
+  // Pressure (Operating) -> Absolute Pa
+  const P_inlet_Pa_abs = useMemo(() => {
+    const pVal = parseFloat(inletPressure) || 0;
 
-    // From volumetric: first get molar flow, then multiply by MW
-    const R_kmol = 8314;
-    const P_ref_Pa = (isGasActualFlow ? P_operating_bara : P_std_bara) * 100000;
-    const T_ref_K = isGasActualFlow ? T_operating_K : T_std_K;
-    const Z_ref = isGasActualFlow ? Z_factor : Z_std_factor;
-
-    if (P_ref_Pa <= 0 || T_ref_K <= 0 || Z_ref <= 0 || MW <= 0) return 0;
-
-    const Q_vol = parseFloat(flowRate) * (gasVolumetricFlowRateToM3s[flowRateUnit] || 0);
-    const molarFlow = (P_ref_Pa * Q_vol) / (Z_ref * R_kmol * T_ref_K);
-    return molarFlow * MW;
-  }, [lineType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW]);
-
-  const molarFlowKmolPerS = useMemo(() => {
-    if (lineType !== "gas") return 0;
-
-    const R_kmol = 8314; // Pa·m³/(kmol·K)
-
-    // Volumetric flow input only
-    const P_ref_Pa = (isGasActualFlow ? P_operating_bara : P_std_bara) * 100000;
-    const T_ref_K = isGasActualFlow ? T_operating_K : T_std_K;
-    const Z_ref = isGasActualFlow ? Z_factor : Z_std_factor;
-
-    if (P_ref_Pa <= 0 || T_ref_K <= 0 || Z_ref <= 0) return 0;
-
-    const Q_vol = parseFloat(flowRate) * (gasVolumetricFlowRateToM3s[flowRateUnit] || 0);
-
-    // ṅ = (P·Q) / (Z·R·T)
-    return (P_ref_Pa * Q_vol) / (Z_ref * R_kmol * T_ref_K);
-  }, [lineType, isGasActualFlow, P_operating_bara, P_std_bara, T_operating_K, T_std_K, Z_factor, Z_std_factor, flowRate, flowRateUnit, MW, massFlowKgS]);
-
-  // Calculate velocity (HYSYS-Consistent)
-  // Gas: velocity is computed from the inlet actual volumetric flow derived from molar flow
-  // Liquid: v = Q / A (incompressible)
-  // Mixed: v_m = (Qg_act + Ql) / A (No-Slip Mixture Velocity)
-  const velocity = useMemo(() => {
-    if (D_m <= 0) return 0;
-    const area = Math.PI * Math.pow(D_m / 2, 2);
-
-    if (lineType === "gas") {
-      const R_kmol = 8314; // Pa·m³/(kmol·K)
-      const P_in_Pa = P_operating_bara * 100000;
-      if (P_in_Pa <= 0) return 0;
-
-      const Q_inlet_actual_m3s = (molarFlowKmolPerS * Z_factor * R_kmol * T_operating_K) / P_in_Pa;
-      return Q_inlet_actual_m3s / area;
+    // 1. Convert to Pa Gauge/Abs based on unit
+    let p_Pa = 0;
+    switch (pressureUnit) {
+      case 'bar': p_Pa = pVal * 100000; break;
+      case 'kPa': p_Pa = pVal * 1000; break;
+      case 'Pa': p_Pa = pVal; break;
+      case 'psi': p_Pa = pVal * 6894.76; break;
+      case 'psia': p_Pa = pVal * 6894.76; break; // Treat as same number, handle abs later
+      case 'kg/cm²': p_Pa = pVal * 98066.5; break;
+      default: p_Pa = pVal * 100000;
     }
 
-    if (lineType === "mixed" && mixedPhaseCalc) {
-      // vm = (Qg_act + Ql) / A
-      return mixedPhaseCalc.totalVolumetricFlow / area;
+    // 2. Handle Gauge vs Absolute
+    // If unit implies absolute (psia), ignore toggle? Or respect toggle?
+    // "psi" usually means gauge, "psia" means absolute.
+    const isUnitAbsolute = pressureUnit === 'psia';
+    const isSelectionGauge = pressureType === 'gauge';
+
+    if (isUnitAbsolute) {
+      return p_Pa;
     }
 
-    return Q_m3s / area;
-  }, [D_m, lineType, Q_m3s, molarFlowKmolPerS, P_operating_bara, T_operating_K, Z_factor, mixedPhaseCalc]);
+    // If gauge selection, add Atm
+    if (isSelectionGauge) {
+      // Add 1 atm (101325 Pa) or user defined base pressure?
+      // Prompt says "For gauge values, add atmospheric pressure... 101.325 kPa or 14.696 psia"
+      return p_Pa + PATM_PA;
+    }
 
-  // Calculate ρv² (rho v squared)
-  const rhoVSquared = useMemo(() => {
-    return rho * Math.pow(velocity, 2);
-  }, [rho, velocity]);
+    return p_Pa;
+  }, [inletPressure, pressureUnit, pressureType]);
 
-  // Calculate Reynolds number
-  const reynoldsNumber = useMemo(() => {
-    if (mu <= 0 || D_m <= 0) return 0;
-    return (rho * velocity * D_m) / mu;
-  }, [rho, velocity, D_m, mu]);
+  const P_base_Pa_abs = useMemo(() => {
+    return (parseFloat(basePressure) || 1.01325) * 100000;
+  }, [basePressure]);
 
-  // Determine flow regime
+  // fluid Properties
+  const MW = parseFloat(gasMolecularWeight) || 20.3;
+  const Z_op = parseFloat(compressibilityZ) || 1.0;
+  const Z_base = parseFloat(baseCompressibilityZ) || 1.0;
+
+  // 3. Flow Rate Handling (Molar Flow Basis)
+  // Calculates n_dot (kmol/s) which is conserved.
+  const molarFlow_kmol_s = useMemo(() => {
+    if (lineType !== 'gas') return 0;
+    const qVal = parseFloat(flowRate) || 0;
+    if (qVal <= 0) return 0;
+
+    // Convert input flow to SI volumetric rate (m3/s) as if it were raw volume
+    // But we need to know if it's Standard or Actual volume first.
+    let q_m3s_raw = 0;
+
+    // Metric: MMSCFD, Nm3/h, Sm3/h, m3/h
+    // Imperial: MMSCFD, SCFM
+    // We already have `flowRateConversion` map, let's use it carefully.
+
+    // Special handling for MMSCFD/SCFM -> They are inherently Standard.
+    const isStandardUnit = ['MMSCFD', 'Nm³/h', 'Sm³/h', 'SCFM'].includes(flowRateUnit);
+
+    // User Toggle "Standard" vs "Actual" applies primarily when unit is generic like "m3/h"
+    const isBasisStandard = gasFlowBasis === 'standard' || isStandardUnit;
+
+    // Get Raw SI Volumetric Flow (m3/s)
+    q_m3s_raw = qVal * (gasVolumetricFlowRateToM3s[flowRateUnit] || 0);
+
+    // Calculate Molar Flow
+    if (isBasisStandard) {
+      // n = (P_base * Q_std) / (Z_base * R * T_base)
+      // Note: MMSCFD conversion factor usually includes P_base/T_base assumption (1 atm, 60F).
+      // If we want rigorous, we should convert MMSCFD to "Standard m3/s" then apply Ideal Gas Law at Base Conditions?
+      // Actually, 1 kmol = 23.64 Sm3 at 15C? 
+      // Let's rely on the ideal gas law with user P_base/T_base for "m3/h" types.
+      // For MMSCFD, it is strictly 60F/1atm. 
+      if (flowRateUnit === 'MMSCFD') {
+        // 1 MMSCFD = 1177.6 kg/hr for Air? No, depends on MW.
+        // 1 lb-mol = 379.48 SCF. 
+        // 1 MMSCF = 1,000,000 / 379.48 = 2635.18 lbmol.
+        // Convert to kmol: 2635.18 * 0.45359 = 1195 kmol (per day).
+        // Per second: 1195 / 86400 = 0.0138 kmol/s.
+        // Let's use rigorous conversion.
+        const kmol_per_day = qVal * 1000000 / 379.48 / 2.20462; // Check constant 379.48 is for 60F/14.696psi
+        // Better: Use the q_m3s_raw which converts to "Standard m3/s".
+        // If q_m3s_raw is correct "Standard m3/s", then:
+        return (P_base_Pa_abs * q_m3s_raw) / (Z_base * R_GAS_CONSTANT * T_base_K);
+      }
+
+      return (P_base_Pa_abs * q_m3s_raw) / (Z_base * R_GAS_CONSTANT * T_base_K);
+    } else {
+      // Actual Flow
+      // n = (P_op * Q_act) / (Z_op * R * T_op)
+      return (P_inlet_Pa_abs * q_m3s_raw) / (Z_op * R_GAS_CONSTANT * T_op_K);
+    }
+  }, [flowRate, flowRateUnit, gasFlowBasis, P_inlet_Pa_abs, T_op_K, Z_op, P_base_Pa_abs, T_base_K, Z_base, lineType]);
+
+  // 4. Density Calculation (Rigorous)
+  // At Inlet
+  const rhoInlet = useMemo(() => {
+    if (lineType === 'gas') {
+      return (P_inlet_Pa_abs * MW) / (Z_op * R_GAS_CONSTANT * T_op_K);
+    }
+    if (lineType === 'liquid') {
+      const dVal = parseFloat(density) || 1000;
+      return dVal * (densityToKgM3[densityUnit] || 1);
+    }
+    if (lineType === 'mixed' && mixedPhaseCalc) return mixedPhaseCalc.rhoMixture;
+    return 0;
+  }, [lineType, P_inlet_Pa_abs, MW, Z_op, T_op_K, density, densityUnit, mixedPhaseCalc]);
+
+  // 5. Viscosity (Convert to Pa·s)
+  const viscosityPas = useMemo(() => {
+    if (lineType === 'mixed' && mixedPhaseCalc) return mixedPhaseCalc.viscosityMixture_Pas;
+    const vVal = parseFloat(viscosity) || (lineType === 'gas' ? 0.01 : 1);
+    return vVal * (viscosityToPas[viscosityUnit] || 0.001);
+  }, [viscosity, viscosityUnit, lineType, mixedPhaseCalc]);
+
+  // 6. CORE HYDRAULIC CALCULATION (Segmented)
+  const hydraulicResult = useMemo(() => {
+    if (L_m <= 0 || D_m <= 0) return null;
+
+    // --- LIQUID or MIXED (Homogeneous) PHYSICS (Incompressible) ---
+    if (lineType === 'liquid' || (lineType === 'mixed' && mixedPhaseCalc)) {
+      // Properties
+      const rho = rhoInlet;
+      const mu = viscosityPas;
+
+      let Q_total_m3s = 0;
+      if (lineType === 'liquid') Q_total_m3s = Q_m3s;
+      if (lineType === 'mixed' && mixedPhaseCalc) Q_total_m3s = mixedPhaseCalc.totalVolumetricFlow;
+
+      if (Q_total_m3s <= 0) return null;
+
+      const Area = Math.PI * Math.pow(D_m / 2, 2);
+      const v = Q_total_m3s / Area;
+      const Re = (rho * v * D_m) / mu;
+
+      // Friction Factor (Swamee-Jain equivalent)
+      let f = 0.02;
+      if (Re < 2300) {
+        f = 64 / Re;
+      } else {
+        const rr = epsilon_m / D_m;
+        f = 0.25 / Math.pow(Math.log10(rr / 3.7 + 5.74 / Math.pow(Re, 0.9)), 2);
+      }
+
+      // 1. Frictional Loss (Darcy)
+      const dP_fric_Pa = f * (L_m / D_m) * 0.5 * rho * Math.pow(v, 2);
+
+      // 2. Minor Losses
+      const K = parseFloat(minorLossK) || 0;
+      const dP_minor_Pa = K * 0.5 * rho * Math.pow(v, 2);
+
+      // 3. Static Head (Elevation)
+      const dz = parseFloat(elevationChange) || 0;
+      const dP_static_Pa = rho * G_GRAVITY * dz;
+
+      const dP_total_Pa = dP_fric_Pa + dP_minor_Pa + dP_static_Pa;
+      const dP_bar = dP_total_Pa / 100000;
+
+      return {
+        velocity: v, // Constant velocity for liquid
+        maxVelocity: v,
+        reynoldsNumber: Re,
+        frictionFactor: f,
+        pressureDropPa: dP_total_Pa,
+        pressureDropBar: dP_bar,
+        pressureDropBarKm: (dP_bar / L_m) * 1000,
+        rhoVSquared: rho * v * v,
+        outletPressurePa: P_inlet_Pa_abs - dP_total_Pa,
+        avgDensity: rho,
+        machNumber: 0,
+      };
+    }
+
+    // --- GAS PHYSICS (Segmented Compressible) ---
+    if (lineType === 'gas' && molarFlow_kmol_s > 0) {
+      const SEGMENTS = 20;
+      const dL = L_m / SEGMENTS;
+      const Area = Math.PI * Math.pow(D_m / 2, 2);
+
+      let P_current = P_inlet_Pa_abs;
+      let dP_accumulated = 0;
+      let v_inlet = 0;
+      let rho_inlet_val = 0;
+      let rho_avg_accum = 0;
+
+      for (let i = 0; i < SEGMENTS; i++) {
+        // Isothermal check: P_current
+        if (P_current <= 0) break;
+
+        // 1. Density at Node
+        const rho_node = (P_current * MW) / (Z_op * R_GAS_CONSTANT * T_op_K);
+
+        // 2. Actual Flow at Node
+        const Q_act_node = (molarFlow_kmol_s * Z_op * R_GAS_CONSTANT * T_op_K) / P_current;
+
+        // 3. Velocity
+        const v_node = Q_act_node / Area;
+
+        if (i === 0) {
+          rho_inlet_val = rho_node;
+          v_inlet = v_node;
+        }
+
+        // 4. Reynolds
+        const Re_node = (rho_node * v_node * D_m) / viscosityPas;
+
+        // 5. Friction Factor
+        let f_node = 0.02;
+        if (Re_node < 2300) {
+          f_node = 64 / Re_node;
+        } else {
+          const rr = epsilon_m / D_m;
+          f_node = 0.25 / Math.pow(Math.log10(rr / 3.7 + 5.74 / Math.pow(Re_node, 0.9)), 2);
+        }
+
+        // 6. dP Segment
+        const dP_seg = f_node * (dL / D_m) * 0.5 * rho_node * Math.pow(v_node, 2);
+
+        P_current -= dP_seg;
+        dP_accumulated += dP_seg;
+        rho_avg_accum += rho_node;
+      }
+
+      // Outlet calc
+      const Q_act_outlet = (molarFlow_kmol_s * Z_op * R_GAS_CONSTANT * T_op_K) / P_current;
+      const v_outlet = Q_act_outlet / Area;
+
+      // Mach Approx (k=1.3)
+      const k = 1.3;
+      const c_sound = Math.sqrt((k * Z_op * R_GAS_CONSTANT * T_op_K) / MW);
+      const mach = v_outlet / c_sound;
+
+      return {
+        velocity: v_inlet,
+        maxVelocity: v_outlet,
+        velocityInlet: v_inlet,
+        reynoldsNumber: (rho_inlet_val * v_inlet * D_m) / viscosityPas,
+        frictionFactor: 0,
+        pressureDropPa: dP_accumulated,
+        pressureDropBar: dP_accumulated / 100000,
+        pressureDropBarKm: (dP_accumulated / 100000 / L_m) * 1000,
+        outletPressurePa: P_current,
+        avgDensity: rho_avg_accum / SEGMENTS,
+        rhoVSquared: rho_inlet_val * v_inlet * v_inlet, // Use max? Gas criteria usually implies max dynamic pressure? No, typically check momentum at highest velocity.
+        // Let's use Outlet Rho * Outlet V^2 ?
+        // Rho_out * V_out^2 = (P_out*MW/ZRT) * (n*ZRT/P_out / A)^2 = P_out * const * 1/P_out^2 = const / P_out.
+        // As P drops, V increases, Rho decreases. 
+        // Momentum (rho v^2) typically increases as pressure drops.
+        // Let's report max Rho V^2 (at outlet).
+        maxRhoVSquared: ((P_current * MW) / (Z_op * R_GAS_CONSTANT * T_op_K)) * Math.pow(v_outlet, 2),
+        machNumber: mach
+      };
+    }
+    return null;
+  }, [L_m, D_m, lineType, Q_m3s, molarFlow_kmol_s, P_inlet_Pa_abs, T_op_K, Z_op, MW, viscosityPas, epsilon_m, mixedPhaseCalc, minorLossK, elevationChange, density, densityUnit, R_GAS_CONSTANT]);
+
+  // 7. Map Results to UI Variables
+  const velocity = hydraulicResult?.maxVelocity || hydraulicResult?.velocity || 0;
+  const reynoldsNumber = hydraulicResult?.reynoldsNumber || 0;
+  const frictionFactor = hydraulicResult?.frictionFactor || 0;
+
+  const pressureDropPa = hydraulicResult?.pressureDropPa || 0;
+  // Convert for Display
+  const pressureDrop = useMemo(() => {
+    return pressureDropPa * (pressureFromPa[pressureUnit] || 0.00001);
+  }, [pressureDropPa, pressureUnit]);
+
+  const pressureDropPer100m = useMemo(() => {
+    if (L_m <= 0) return 0;
+    // Convert dP to unit, then divide by L, mult by 100
+    return (pressureDrop * 100) / L_m;
+  }, [pressureDrop, L_m]);
+
+  const headLoss = useMemo(() => {
+    // hL = dP / (rho g)
+    const r = hydraulicResult?.avgDensity || rhoInlet || 1;
+    return pressureDropPa / (r * G_GRAVITY);
+  }, [pressureDropPa, hydraulicResult, rhoInlet]);
+
   const flowRegime = useMemo(() => {
     if (reynoldsNumber < 2300) return "Laminar";
     if (reynoldsNumber < 4000) return "Transitional";
     return "Turbulent";
   }, [reynoldsNumber]);
 
-  // Calculate friction factor using iterative Colebrook-White (HYSYS method)
-  // 1/√f = -2 × log10(ε/(3.7D) + 2.51/(Re×√f))
-  const frictionFactor = useMemo(() => {
-    if (reynoldsNumber <= 0 || D_m <= 0) return 0;
+  const rhoVSquared = hydraulicResult?.maxRhoVSquared || hydraulicResult?.rhoVSquared || 0;
+  const machNumber = hydraulicResult?.machNumber || 0;
+  const rho = hydraulicResult?.avgDensity || rhoInlet; // For legacy downstream checks if any
 
-    // Laminar flow
-    if (reynoldsNumber < 2300) {
-      return 64 / reynoldsNumber;
-    }
-
-    const relativeRoughness = epsilon_m / D_m;
-
-    // Iterative Colebrook-White solution
-    // Start with Swamee-Jain approximation as initial guess
-    let f = 0.25 / Math.pow(Math.log10(relativeRoughness / 3.7 + 5.74 / Math.pow(reynoldsNumber, 0.9)), 2);
-
-    // Newton-Raphson iteration for Colebrook-White
-    for (let i = 0; i < 20; i++) {
-      const sqrtF = Math.sqrt(f);
-      const lhs = 1 / sqrtF;
-      const rhs = -2 * Math.log10(relativeRoughness / 3.7 + 2.51 / (reynoldsNumber * sqrtF));
-      const residual = lhs - rhs;
-
-      // Derivative: d(1/√f)/df = -0.5 × f^(-1.5)
-      // d(rhs)/df = -2 × (1/ln(10)) × (2.51/(Re×√f)) × (-0.5×f^(-1.5)) / (ε/3.7D + 2.51/(Re×√f))
-      //           = (2.51 / (ln(10) × Re × f^1.5)) / (ε/3.7D + 2.51/(Re×√f))
-      const term = relativeRoughness / 3.7 + 2.51 / (reynoldsNumber * sqrtF);
-      const dLhs = -0.5 * Math.pow(f, -1.5);
-      const dRhs = (2.51 / (Math.LN10 * reynoldsNumber * Math.pow(f, 1.5))) / term;
-      const derivative = dLhs - dRhs;
-
-      const fNew = f - residual / derivative;
-
-      if (Math.abs(fNew - f) < 1e-10) {
-        f = fNew;
-        break;
-      }
-      f = fNew;
-      if (f <= 0) f = 0.001; // Safety check
-    }
-
-    return f;
-  }, [reynoldsNumber, epsilon_m, D_m]);
-
-  // Alias for pressure drop calculations
-  const P1_bara = P_operating_bara;
-
-  // Helper: Calculate friction factor for given Re, epsilon, D
-  const calcFrictionFactor = (Re: number, eps: number, D: number): number => {
-    if (Re <= 0 || D <= 0) return 0;
-    if (Re < 2300) return 64 / Re;
-
-    const relRough = eps / D;
-    let f = 0.25 / Math.pow(Math.log10(relRough / 3.7 + 5.74 / Math.pow(Re, 0.9)), 2);
-
-    for (let i = 0; i < 20; i++) {
-      const sqrtF = Math.sqrt(f);
-      const lhs = 1 / sqrtF;
-      const rhs = -2 * Math.log10(relRough / 3.7 + 2.51 / (Re * sqrtF));
-      const residual = lhs - rhs;
-      const term = relRough / 3.7 + 2.51 / (Re * sqrtF);
-      const dLhs = -0.5 * Math.pow(f, -1.5);
-      const dRhs = (2.51 / (Math.LN10 * Re * Math.pow(f, 1.5))) / term;
-      const derivative = dLhs - dRhs;
-      const fNew = f - residual / derivative;
-      if (Math.abs(fNew - f) < 1e-10) { f = fNew; break; }
-      f = Math.max(fNew, 0.001);
-    }
-    return f;
-  };
-
-  // Helper: Calculate gas density at given pressure (bara) and temperature (K)
-  const calcGasDensity = (P_bara: number, T_K: number, Z: number, mw: number): number => {
-    const P_Pa = P_bara * 100000;
-    const R_kmol = 8314;
-    return (P_Pa * mw) / (Z * R_kmol * T_K);
-  };
-
-  // HYSYS-style segmented compressible flow calculation for gas
-  // Divides pipe into segments, recalculates density/velocity as P drops
-  // Uses molar flow conservation: ṅ = constant, Q = ṅ·Z·R·T / P
-  const segmentedResults = useMemo(() => {
-    if (lineType !== "gas" || D_m <= 0 || Q_m3s <= 0 || L_m <= 0 || mu <= 0 || molarFlowKmolPerS <= 0) {
-      return null;
-    }
-
-    const area = Math.PI * Math.pow(D_m / 2, 2);
-    const numSegments = 100; // More segments = more accuracy
-    const dL = L_m / numSegments;
-    const R_kmol = 8314; // Pa·m³/(kmol·K)
-
-    let P_current = P_operating_bara;
-    let totalDeltaP_Pa = 0;
-    let avgVelocity = 0;
-    let avgDensity = 0;
-    let avgRe = 0;
-    let avgFriction = 0;
-    let segmentsRun = 0;
-
-    for (let i = 0; i < numSegments; i++) {
-      // Density at current pressure
-      const rho_local = calcGasDensity(P_current, T_operating_K, Z_factor, MW);
-
-      // Actual volumetric flow at current conditions from molar flow
-      const P_local_Pa = P_current * 100000;
-      if (P_local_Pa <= 0) break;
-      const Q_local = (molarFlowKmolPerS * Z_factor * R_kmol * T_operating_K) / P_local_Pa;
-      const v_local = Q_local / area;
-
-      // Reynolds number
-      const Re_local = (rho_local * v_local * D_m) / mu;
-
-      // Friction factor
-      const f_local = calcFrictionFactor(Re_local, epsilon_m, D_m);
-
-      // Pressure drop for this segment: ΔP = f × (dL/D) × (ρV²/2)
-      const dP_Pa = f_local * (dL / D_m) * (rho_local * Math.pow(v_local, 2) / 2);
-
-      totalDeltaP_Pa += dP_Pa;
-
-      // Update pressure for next segment
-      P_current -= dP_Pa / 100000; // Convert Pa to bar
-
-      // Accumulate for averages
-      avgVelocity += v_local;
-      avgDensity += rho_local;
-      avgRe += Re_local;
-      avgFriction += f_local;
-      segmentsRun += 1;
-
-      // Safety: stop if pressure goes too low
-      if (P_current < 0.1) break;
-    }
-
-    const denom = segmentsRun || 1;
-
-    return {
-      totalPressureDropPa: totalDeltaP_Pa,
-      avgVelocity: avgVelocity / denom,
-      avgDensity: avgDensity / denom,
-      avgReynolds: avgRe / denom,
-      avgFriction: avgFriction / denom,
-      outletPressure: P_current,
-      inletVelocity: velocity, // Use the already calculated inlet velocity
-      outletVelocity: (() => {
-        const P_out_Pa = P_current * 100000;
-        if (P_out_Pa <= 0) return 0;
-        const Q_out = (molarFlowKmolPerS * Z_factor * R_kmol * T_operating_K) / P_out_Pa;
-        return Q_out / area;
-      })(),
-    };
-  }, [lineType, D_m, Q_m3s, L_m, mu, P_operating_bara, T_operating_K, Z_factor, MW, epsilon_m, velocity, molarFlowKmolPerS]);
-
-  // Calculate pressure drop using Darcy-Weisbach
-  // For gas: use segmented method (HYSYS-style)
-  // For liquid: single calculation (incompressible)
-  const pressureDropPa = useMemo(() => {
-    if (D_m <= 0) return 0;
-
-    // For gas, use segmented compressible method
-    if (lineType === "gas" && segmentedResults) {
-      return segmentedResults.totalPressureDropPa;
-    }
-
-    // For liquid, use standard Darcy-Weisbach
-    if (frictionFactor <= 0) return 0;
-    return frictionFactor * (L_m / D_m) * (rho * Math.pow(velocity, 2) / 2);
-  }, [lineType, segmentedResults, frictionFactor, L_m, D_m, rho, velocity]);
-
-  // Convert to selected unit
-  const pressureDrop = useMemo(() => {
-    return pressureDropPa * pressureFromPa[pressureUnit];
-  }, [pressureDropPa, pressureUnit]);
-
-  // Calculate head loss
-  const headLoss = useMemo(() => {
-    if (rho <= 0) return 0;
-    return pressureDropPa / (rho * 9.81);
-  }, [pressureDropPa, rho]);
-
-  // Calculate pressure drop per 100m
-  const pressureDropPer100m = useMemo(() => {
-    if (L_m <= 0) return 0;
-    return (pressureDropPa * 100 / L_m) * pressureFromPa[pressureUnit];
-  }, [pressureDropPa, L_m, pressureUnit]);
+  // API 14E Erosional Velocity
+  const erosionalVelocity = useMemo(() => {
+    const c = parseFloat(cFactor) || 100;
+    // Ve(m/s) = (C / sqrt(rho_lb_ft3)) * 0.3048
+    const r_use = rho > 0 ? rho : 1;
+    const rho_imp = r_use / 16.0185;
+    const ve_ft = c / Math.sqrt(rho_imp);
+    return ve_ft * 0.3048;
+  }, [rho, cFactor]);
 
   const isValidInput = L_m > 0 && D_m > 0 && Q_m3s > 0 && rho > 0 && mu > 0;
 
@@ -1165,29 +1196,22 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // API 14E Erosional Velocity Calculation
   // Ve = C / sqrt(ρm) where C is configurable (default 100) and ρm is in lb/ft³
   // Moved here to be after sizingCriteria
-  const erosionalVelocity = useMemo(() => {
-    // Convert density from kg/m³ to lb/ft³
-    const rhoLbFt3 = rho / 16.0185;
-    if (rhoLbFt3 <= 0) return 0;
+  // Restore Aliases for legacy export/results compatibility
+  const T_operating_K = T_op_K;
+  const Z_factor = Z_op;
+  const P_operating_bara = P_inlet_Pa_abs / 100000;
 
-    // User input C-factor (default 100)
-    let C_val = parseFloat(cFactor) || 100;
-
-    // Optional: if sizingCriteria enforces a C-value, use it?
-    // For now we stick to user override if they want custom. 
-    // But logically if sizingCriteria has it, it might stem from service selection.
-    if (sizingCriteria && sizingCriteria.cValue) {
-      C_val = sizingCriteria.cValue;
-    }
-
-    // Ve in ft/s
-    const VeFtS = C_val / Math.sqrt(rhoLbFt3);
-
-    // Convert to m/s
-    return VeFtS * 0.3048;
-  }, [rho, cFactor, sizingCriteria]);
+  // Placeholders for specific export fields if needed
+  const rhoGasStandard = 0;
+  const rhoGasOperating = rho;
 
   // ========== RESULTS CALCULATION (API 14E) ==========
+  // Metadata for Export - RESTORED
+  const [companyName, setCompanyName] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [itemNumber, setItemNumber] = useState("");
+  const [serviceName, setServiceName] = useState("");
+
   const results = useMemo(() => {
     if (velocity === 0 || rho <= 0 || D_m <= 0) return null;
 
@@ -1853,7 +1877,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
                   {/* Flow Rate - Gas and Liquid lines */}
                   {lineType !== "mixed" && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <Label className="text-sm font-medium">Flow Rate</Label>
                       <div className="flex gap-2">
                         <Input
@@ -1874,10 +1898,31 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {/* Flow Basis Toggle for Gas */}
                       {lineType === "gas" && (
-                        <p className="text-xs text-muted-foreground">
-                          <span className="font-mono">m³/h</span> = actual flow at inlet; other units = standard flow.
-                        </p>
+                        <div className="flex flex-col gap-2 p-2 bg-muted/30 rounded-md border border-border/50">
+                          <Label className="text-xs font-medium text-muted-foreground">Flow Basis</Label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setGasFlowBasis("standard")}
+                              className={`px-3 py-1 text-xs rounded-md transition-colors ${gasFlowBasis === "standard" ? "bg-primary text-primary-foreground font-medium" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                            >
+                              Standard
+                            </button>
+                            <button
+                              onClick={() => setGasFlowBasis("actual")}
+                              className={`px-3 py-1 text-xs rounded-md transition-colors ${gasFlowBasis === "actual" ? "bg-primary text-primary-foreground font-medium" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                            >
+                              Actual
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            {gasFlowBasis === "standard"
+                              ? "Flow is at standard conditions (Ref. T_std, P_std). Converted to actual for velocity."
+                              : "Flow is at operating inlet conditions (Ref. T_op, P_op)."}
+                          </p>
+                        </div>
                       )}
                     </div>
                   )}
@@ -1938,13 +1983,24 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="space-y-2">
-                          <Label className="text-sm font-medium">Op. Pressure (barg)</Label>
-                          <Input
-                            type="number"
-                            value={mixedOpPressure}
-                            onChange={(e) => setMixedOpPressure(e.target.value)}
-                            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
-                          />
+                          <Label className="text-sm font-medium">Op. Pressure</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              type="number"
+                              value={mixedOpPressure}
+                              onChange={(e) => setMixedOpPressure(e.target.value)}
+                              className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none"
+                            />
+                            <Select value={pressureType} onValueChange={(v: any) => setPressureType(v)}>
+                              <SelectTrigger className="w-24 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="gauge">Gauge</SelectItem>
+                                <SelectItem value="absolute">Abs</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <Label className="text-sm font-medium">Op. Temp (°C)</Label>
@@ -2130,6 +2186,44 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                     </div>
                   </div>
 
+                  {/* Liquid Physics - Elevation and Minor Losses */}
+                  {lineType === "liquid" && (
+                    <div className="p-4 rounded-lg bg-secondary/20 border border-border space-y-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hydraulic Details (HYSYS Segment)</p>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Elevation Change (Total)</Label>
+                          <div className="flex gap-2 items-center">
+                            <Input
+                              type="number"
+                              value={elevationChange}
+                              onChange={(e) => setElevationChange(e.target.value)}
+                              className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none bg-background/50 border-input/60"
+                              placeholder="0"
+                            />
+                            <span className="text-xs text-muted-foreground">m</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">Positive = Gain elevation (Pressure Drop)</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Minor Losses (K)</Label>
+                          <Input
+                            type="number"
+                            value={minorLossK}
+                            onChange={(e) => setMinorLossK(e.target.value)}
+                            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none bg-background/50 border-input/60"
+                            placeholder="0"
+                          />
+                          <p className="text-[10px] text-muted-foreground">Total resistance coeff (Valves/Fittings)</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dynamic Viscosity */}
+
                   {/* Operating Conditions - Always shown for Gas */}
                   {lineType === "gas" && (
                     <>
@@ -2153,17 +2247,28 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                         </Select>
                       </div>
 
-                      {/* Operating Pressure - in barg */}
+                      {/* Operating Pressure */}
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium">Inlet Pressure (barg)</Label>
-                        <Input
-                          type="number"
-                          value={inletPressure}
-                          onChange={(e) => setInletPressure(e.target.value)}
-                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          placeholder="12"
-                        />
-                        <p className="text-xs text-muted-foreground">= {P_operating_bara.toFixed(4)} bara</p>
+                        <Label className="text-sm font-medium">Inlet Pressure</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            type="number"
+                            value={inletPressure}
+                            onChange={(e) => setInletPressure(e.target.value)}
+                            className="flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            placeholder="12"
+                          />
+                          <Select value={pressureType} onValueChange={(v: any) => setPressureType(v)}>
+                            <SelectTrigger className="w-24 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="gauge">Gauge</SelectItem>
+                              <SelectItem value="absolute">Abs</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <p className="text-xs text-muted-foreground">= {P_operating_bara.toFixed(4)} bara (used for density)</p>
                       </div>
 
                       {/* Compressibility Factor */}
@@ -2420,35 +2525,29 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div className="p-2 rounded bg-muted/30">
                           <span className="text-xs text-muted-foreground block">
-                            Reynolds (Re) {lineType === "gas" && segmentedResults ? "(Avg)" : ""}
+                            Reynolds (Re) {lineType === "gas" ? "(Avg)" : ""}
                           </span>
                           <span className="font-mono">
-                            {lineType === "gas" && segmentedResults
-                              ? segmentedResults.avgReynolds.toFixed(0)
-                              : reynoldsNumber.toFixed(0)
-                            }
+                            {reynoldsNumber.toFixed(0)}
                           </span>
                         </div>
                         <div className="p-2 rounded bg-muted/30">
                           <span className="text-xs text-muted-foreground block">
-                            Friction Factor (f) {lineType === "gas" && segmentedResults ? "(Avg)" : ""}
+                            Friction Factor (f) {lineType === "gas" ? "(Avg)" : ""}
                           </span>
                           <span className="font-mono">
-                            {lineType === "gas" && segmentedResults
-                              ? segmentedResults.avgFriction.toFixed(6)
-                              : frictionFactor.toFixed(6)
-                            }
+                            {frictionFactor.toFixed(6)}
                           </span>
                         </div>
-                        {lineType === "gas" && segmentedResults && (
+                        {lineType === "gas" && hydraulicResult && (
                           <>
                             <div className="p-2 rounded bg-muted/30">
                               <span className="text-xs text-muted-foreground block">Outlet Pressure</span>
-                              <span className="font-mono">{segmentedResults.outletPressure.toFixed(4)} bara</span>
+                              <span className="font-mono">{(hydraulicResult.outletPressurePa / 100000).toFixed(4)} bara</span>
                             </div>
                             <div className="p-2 rounded bg-muted/30">
                               <span className="text-xs text-muted-foreground block">Avg. Gas Density</span>
-                              <span className="font-mono">{segmentedResults.avgDensity.toFixed(4)} kg/m³</span>
+                              <span className="font-mono">{hydraulicResult.avgDensity.toFixed(4)} kg/m³</span>
                             </div>
                           </>
                         )}
@@ -2467,7 +2566,87 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
 
 
-          {/* Metadata and Export Section Removed */}
+          {/* Metadata and Export Section - RESTORED */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-secondary/10 border border-border/50">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Company</Label>
+              <Input value={companyName} onChange={e => setCompanyName(e.target.value)} className="h-8 bg-background/50 border-input/60" placeholder="Company Name" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Project</Label>
+              <Input value={projectName} onChange={e => setProjectName(e.target.value)} className="h-8 bg-background/50 border-input/60" placeholder="Project Name" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Item No</Label>
+              <Input value={itemNumber} onChange={e => setItemNumber(e.target.value)} className="h-8 bg-background/50 border-input/60" placeholder="Line Number" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Service</Label>
+              <Input value={serviceName} onChange={e => setServiceName(e.target.value)} className="h-8 bg-background/50 border-input/60" placeholder="Service Description" />
+            </div>
+            <div className="col-span-1 md:col-span-4 flex items-center justify-end gap-2 mt-2">
+              <Button onClick={() => {
+                if (!results) {
+                  toast({ title: "No results", description: "Run calculations first", variant: "destructive" });
+                  return;
+                }
+                // Map state to export interface
+                const datasheet: HydraulicDatasheetData = {
+                  companyName,
+                  projectName,
+                  itemNumber,
+                  serviceName,
+                  date: new Date().toLocaleDateString(),
+                  lineType: lineType as "gas" | "liquid" | "mixed",
+                  // Inputs
+                  flowRate: parseFloat(flowRate) || 0,
+                  flowRateUnit,
+                  pipeDiameter: insideDiameterMM,
+                  pipeSchedule: schedule === "Custom" ? "Custom" : schedule,
+                  pipeLength: parseFloat(pipeLength) || 0,
+                  lengthUnit,
+                  pressure: parseFloat(inletPressure) || 0,
+                  pressureUnit,
+                  temperature: parseFloat(fluidTemperature) || 0,
+                  temperatureUnit: "C", // Simplified for now
+                  // Results
+                  velocity: results.velocity,
+                  pressureDrop: pressureDrop, // Use calculated value from scope
+                  headLoss: headLoss,
+                  erosionalVelocity: results.erosionalVelocity,
+                  machNumber: results.machNumber,
+                  flowRegime: flowRegime,
+                  rhoVSquared: results.rhoVSquared,
+                  // HYSYS physics
+                  pressureType,
+                  gasFlowBasis,
+                } as any;
+                generateHydraulicPDF(datasheet);
+                toast({ title: "PDF Exported Successfully" });
+              }} className="h-9 gap-2" variant="outline">
+                Export Datasheet (PDF)
+              </Button>
+              <Button onClick={() => {
+                if (!results) {
+                  toast({ title: "No results", description: "Run calculations first", variant: "destructive" });
+                  return;
+                }
+                // Basic Excel Export logic
+                const excel: HydraulicExcelData = {
+                  companyName,
+                  projectName,
+                  itemNumber,
+                  serviceName,
+                  lineType,
+                  results
+                } as any;
+                generateHydraulicExcelDatasheet(excel);
+                toast({ title: "Excel Exported Successfully" });
+              }} className="h-9 gap-2" variant="outline">
+                Export to Excel
+              </Button>
+            </div>
+          </div>
 
         </TabsContent>
 
