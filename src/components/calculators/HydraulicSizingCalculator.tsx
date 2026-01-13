@@ -454,6 +454,46 @@ const pipeRoughness: Record<string, number> = {
   "Custom": 0,
 };
 
+type BeggsBrillRegime = "segregated" | "transition" | "intermittent" | "distributed";
+
+const getBeggsBrillRegime = (lambdaL: number, nFr: number): BeggsBrillRegime => {
+  const lambdaSafe = Math.max(lambdaL, 1e-6);
+  const L1 = 316 * Math.pow(lambdaSafe, 0.302);
+  const L2 = 0.0009252 * Math.pow(lambdaSafe, -2.468);
+  const L3 = 0.1 * Math.pow(lambdaSafe, -1.4516);
+  const L4 = 0.5 * Math.pow(lambdaSafe, -6.738);
+
+  if ((lambdaSafe < 0.01 && nFr < L1) || (lambdaSafe >= 0.01 && nFr < L2)) return "segregated";
+  if (nFr >= L2 && nFr < L3) return "transition";
+  if (nFr >= L3 && nFr < L4) return "intermittent";
+  return "distributed";
+};
+
+const getBeggsBrillHoldup = (lambdaL: number, nFr: number, regime: BeggsBrillRegime): number => {
+  const lambdaSafe = Math.max(lambdaL, 1e-6);
+  const nFrSafe = Math.max(nFr, 1e-6);
+
+  const coeffs = {
+    segregated: { a: 0.98, b: 0.4846, c: 0.0868 },
+    intermittent: { a: 0.845, b: 0.5351, c: 0.0173 },
+    distributed: { a: 1.065, b: 0.5824, c: 0.0609 },
+  };
+
+  const holdup = (a: number, b: number, c: number) => a * Math.pow(lambdaSafe, b) / Math.pow(nFrSafe, c);
+
+  if (regime === "transition") {
+    const L2 = 0.0009252 * Math.pow(lambdaSafe, -2.468);
+    const L3 = 0.1 * Math.pow(lambdaSafe, -1.4516);
+    const hSeg = holdup(coeffs.segregated.a, coeffs.segregated.b, coeffs.segregated.c);
+    const hInt = holdup(coeffs.intermittent.a, coeffs.intermittent.b, coeffs.intermittent.c);
+    const t = (Math.min(Math.max(nFrSafe, L2), L3) - L2) / (L3 - L2);
+    return Math.min(1, Math.max(lambdaSafe, hSeg + t * (hInt - hSeg)));
+  }
+
+  const selected = coeffs[regime === "segregated" ? "segregated" : regime === "intermittent" ? "intermittent" : "distributed"];
+  return Math.min(1, Math.max(lambdaSafe, holdup(selected.a, selected.b, selected.c)));
+};
+
 interface HydraulicSizingCalculatorProps {
   lineType: "gas" | "liquid" | "mixed";
 }
@@ -951,15 +991,14 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const hydraulicResult = useMemo(() => {
     if (L_m <= 0 || D_m <= 0) return null;
 
-    // --- LIQUID or MIXED (Homogeneous) PHYSICS (Incompressible) ---
-    if (lineType === 'liquid' || (lineType === 'mixed' && mixedPhaseCalc)) {
+    // --- LIQUID PHYSICS (Incompressible) ---
+    if (lineType === 'liquid') {
       // Properties
       const rho = rhoInlet;
       const mu = viscosityPas;
 
       let Q_total_m3s = 0;
-      if (lineType === 'liquid') Q_total_m3s = Q_m3s;
-      if (lineType === 'mixed' && mixedPhaseCalc) Q_total_m3s = mixedPhaseCalc.totalVolumetricFlow;
+      Q_total_m3s = Q_m3s;
 
       if (Q_total_m3s <= 0) return null;
 
@@ -1005,6 +1044,64 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       };
     }
 
+    // --- MIXED-PHASE PHYSICS (Beggs & Brill) ---
+    if (lineType === 'mixed' && mixedPhaseCalc) {
+      const rhoL = mixedPhaseCalc.rhoL;
+      const rhoG = mixedPhaseCalc.rhoG;
+      const muL = mixedPhaseCalc.muL * 0.001;
+      const muG = mixedPhaseCalc.muG * 0.001;
+
+      const Ql = mixedPhaseCalc.Ql_m3s;
+      const Qg = mixedPhaseCalc.Qg_act_m3s;
+      const Q_total = Ql + Qg;
+      if (Q_total <= 0) return null;
+
+      const Area = Math.PI * Math.pow(D_m / 2, 2);
+      const vsl = Ql / Area;
+      const vsg = Qg / Area;
+      const vm = vsl + vsg;
+      const lambdaL = vm > 0 ? vsl / vm : 0;
+
+      const nFr = (vm * vm) / (G_GRAVITY * D_m);
+      const regime = getBeggsBrillRegime(lambdaL, nFr);
+      const holdup = getBeggsBrillHoldup(lambdaL, nFr, regime);
+
+      const rhoMix = rhoL * holdup + rhoG * (1 - holdup);
+      const muMix = muL * holdup + muG * (1 - holdup);
+
+      const Re = (rhoMix * vm * D_m) / Math.max(muMix, 1e-12);
+      let f = 0.02;
+      if (Re < 2300) {
+        f = 64 / Re;
+      } else {
+        const rr = epsilon_m / D_m;
+        f = 0.25 / Math.pow(Math.log10(rr / 3.7 + 5.74 / Math.pow(Re, 0.9)), 2);
+      }
+
+      const dP_fric_Pa = f * (L_m / D_m) * 0.5 * rhoMix * Math.pow(vm, 2);
+      const K = parseFloat(minorLossK) || 0;
+      const dP_minor_Pa = K * 0.5 * rhoMix * Math.pow(vm, 2);
+      const dz = parseFloat(elevationChange) || 0;
+      const dP_static_Pa = rhoMix * G_GRAVITY * dz;
+
+      const dP_total_Pa = dP_fric_Pa + dP_minor_Pa + dP_static_Pa;
+
+      return {
+        velocity: vm,
+        maxVelocity: vm,
+        reynoldsNumber: Re,
+        frictionFactor: f,
+        pressureDropPa: dP_total_Pa,
+        pressureDropBar: dP_total_Pa / 100000,
+        pressureDropBarKm: (dP_total_Pa / 100000 / L_m) * 1000,
+        rhoVSquared: rhoMix * vm * vm,
+        outletPressurePa: Math.max(P_inlet_Pa_abs - dP_total_Pa, 0),
+        avgDensity: rhoMix,
+        machNumber: 0,
+        flowRegime: `Mixed (${regime})`,
+      };
+    }
+
     // --- GAS PHYSICS (Segmented Compressible) ---
     if (lineType === 'gas' && molarFlow_kmol_s > 0) {
       const SEGMENTS = 20;
@@ -1013,9 +1110,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
       let P_current = P_inlet_Pa_abs;
       let dP_accumulated = 0;
+      let f_accumulated = 0;
       let v_inlet = 0;
       let rho_inlet_val = 0;
       let rho_avg_accum = 0;
+      let segmentsUsed = 0;
 
       for (let i = 0; i < SEGMENTS; i++) {
         // Isothermal check: P_current
@@ -1053,11 +1152,27 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         P_current -= dP_seg;
         dP_accumulated += dP_seg;
         rho_avg_accum += rho_node;
+        f_accumulated += f_node;
+        segmentsUsed += 1;
       }
+
+      if (segmentsUsed === 0 || P_current <= 0) return null;
 
       // Outlet calc
       const Q_act_outlet = (molarFlow_kmol_s * Z_op * R_GAS_CONSTANT * T_op_K) / P_current;
       const v_outlet = Q_act_outlet / Area;
+
+      const rho_avg = rho_avg_accum / segmentsUsed;
+      const f_avg = f_accumulated / segmentsUsed;
+
+      // 7. Minor Losses (K-factor) and Static Head
+      const K = parseFloat(minorLossK) || 0;
+      const dP_minor_Pa = K * 0.5 * rho_avg * Math.pow(v_outlet, 2);
+      const dz = parseFloat(elevationChange) || 0;
+      const dP_static_Pa = rho_avg * G_GRAVITY * dz;
+
+      const dP_total_Pa = dP_accumulated + dP_minor_Pa + dP_static_Pa;
+      const outletPressurePa = Math.max(P_current - dP_minor_Pa - dP_static_Pa, 0);
 
       // Mach Approx (k=1.3)
       const k = 1.3;
@@ -1069,19 +1184,19 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         maxVelocity: v_outlet,
         velocityInlet: v_inlet,
         reynoldsNumber: (rho_inlet_val * v_inlet * D_m) / viscosityPas,
-        frictionFactor: 0,
-        pressureDropPa: dP_accumulated,
-        pressureDropBar: dP_accumulated / 100000,
-        pressureDropBarKm: (dP_accumulated / 100000 / L_m) * 1000,
-        outletPressurePa: P_current,
-        avgDensity: rho_avg_accum / SEGMENTS,
+        frictionFactor: f_avg,
+        pressureDropPa: dP_total_Pa,
+        pressureDropBar: dP_total_Pa / 100000,
+        pressureDropBarKm: (dP_total_Pa / 100000 / L_m) * 1000,
+        outletPressurePa,
+        avgDensity: rho_avg,
         rhoVSquared: rho_inlet_val * v_inlet * v_inlet, // Use max? Gas criteria usually implies max dynamic pressure? No, typically check momentum at highest velocity.
         // Let's use Outlet Rho * Outlet V^2 ?
         // Rho_out * V_out^2 = (P_out*MW/ZRT) * (n*ZRT/P_out / A)^2 = P_out * const * 1/P_out^2 = const / P_out.
         // As P drops, V increases, Rho decreases. 
         // Momentum (rho v^2) typically increases as pressure drops.
         // Let's report max Rho V^2 (at outlet).
-        maxRhoVSquared: ((P_current * MW) / (Z_op * R_GAS_CONSTANT * T_op_K)) * Math.pow(v_outlet, 2),
+        maxRhoVSquared: ((outletPressurePa * MW) / (Z_op * R_GAS_CONSTANT * T_op_K)) * Math.pow(v_outlet, 2),
         machNumber: mach
       };
     }
@@ -1094,6 +1209,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const frictionFactor = hydraulicResult?.frictionFactor || 0;
 
   const pressureDropPa = hydraulicResult?.pressureDropPa || 0;
+  const pressureDropBar = useMemo(() => {
+    return pressureDropPa / 100000;
+  }, [pressureDropPa]);
+
   // Convert for Display
   const pressureDrop = useMemo(() => {
     return pressureDropPa * (pressureFromPa[pressureUnit] || 0.00001);
@@ -1101,9 +1220,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
   const pressureDropPer100m = useMemo(() => {
     if (L_m <= 0) return 0;
-    // Convert dP to unit, then divide by L, mult by 100
-    return (pressureDrop * 100) / L_m;
-  }, [pressureDrop, L_m]);
+    // API 14E criteria are defined in bar/100m
+    return (pressureDropBar * 100) / L_m;
+  }, [pressureDropBar, L_m]);
 
   const headLoss = useMemo(() => {
     // hL = dP / (rho g)
@@ -1112,10 +1231,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   }, [pressureDropPa, hydraulicResult, rhoInlet]);
 
   const flowRegime = useMemo(() => {
+    if (hydraulicResult?.flowRegime) return hydraulicResult.flowRegime;
     if (reynoldsNumber < 2300) return "Laminar";
     if (reynoldsNumber < 4000) return "Transitional";
     return "Turbulent";
-  }, [reynoldsNumber]);
+  }, [hydraulicResult, reynoldsNumber]);
 
   const rhoVSquared = hydraulicResult?.maxRhoVSquared || hydraulicResult?.rhoVSquared || 0;
   const machNumber = hydraulicResult?.machNumber || 0;
@@ -1315,7 +1435,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       dP_per_m: pressureDropPa / L_m,
       dP_total_bar: pressureDropBar,
       dP_bar_km: pressureDropBarKm,
-      flowRegime: reynoldsNumber < 2300 ? "Laminar" : reynoldsNumber < 4000 ? "Transitional" : "Turbulent",
+      flowRegime,
       velocityLimit,
       erosionalVelocity,
       cValueLimit,
@@ -2655,4 +2775,3 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 };
 
 export default HydraulicSizingCalculator;
-
