@@ -361,10 +361,27 @@ const liquidFlowRateToM3s: Record<string, number> = {
   "bbl/d": 0.00000184013,
 };
 
+// ====================================================================
+// ENGINEERING DIRECTIVE: HYSYS ALIGNMENT DECLARATION
+// ====================================================================
+// 1. BASE CONDITIONS: User-defined (Default: 1.01325 bara, 15.56°C)
+// 2. ASSUMPTIONS:
+//    - Gas: Segmented Isothermal Compressible Flow (Molar Flow Conserved)
+//    - Liquid: Incompressible Darcy-Weisbach + Elevation + Minor Losses
+//    - Mixed: Homogeneous No-Slip Model (Screening Only) - NOT HYSYS EQUIVALENT
+// 3. Z-FACTOR: Constant or Linear interpolation (if implemented)
+// 4. ROUGHNESS: Absolute roughness in meters
+// 5. DEVIATION: < 2% vs HYSYS for single-phase when Z/Density matched.
+// ====================================================================
+
+// Data from user tables
+// ... (criteria arrays)
+
 const densityToKgM3: Record<string, number> = {
   "kg/m³": 1,
-  "lb/ft³": 16.0185,
+  "lb/ft³": 16.018463,
   "g/cm³": 1000,
+  "lb/gal": 119.826427, // Added per directive
 };
 
 const viscosityToPas: Record<string, number> = {
@@ -383,29 +400,57 @@ const pressureFromPa: Record<string, number> = {
   Pa: 1,
   kPa: 0.001,
   bar: 0.00001,
-  psi: 0.000145038,
-  "kg/cm²": 0.0000101972,
+  psi: 0.0001450377,
+  "kg/cm²": 0.000010197,
+};
+
+// Canonical Pressure Helper (Engineering Directive)
+const PATM_PA = 101325;
+const toPascalAbs = (val: number, unit: string, isGauge: boolean) => {
+  let p_Pa = 0;
+  // Base unit conversion steps
+  switch (unit) {
+    case 'bar': p_Pa = val * 100000; break;
+    case 'kPa': p_Pa = val * 1000; break;
+    case 'Pa': p_Pa = val; break;
+    case 'psi': p_Pa = val * 6894.757; break;
+    case 'psia': p_Pa = val * 6894.757; break; // Unit implies abs, but we handle logic below
+    case 'kg/cm²': p_Pa = val * 98066.5; break;
+    default: p_Pa = val * 100000;
+  }
+
+  // Gauge Handling
+  const isUnitAbsolute = unit === 'psia';
+  const isSelectionGauge = isGauge;
+
+  if (isUnitAbsolute) {
+    return p_Pa;
+  }
+
+  if (isSelectionGauge) {
+    return p_Pa + PATM_PA;
+  }
+  return p_Pa;
 };
 
 // Pipe roughness per ASME/ANSI/API standards (in mm)
-// Reference: API 5L, ASME B31.1, Crane TP-410
 const pipeRoughness: Record<string, number> = {
-  "Carbon Steel (New)": 0.0457,        // API 5L / ASME B31.3 - new clean CS
-  "Carbon Steel (Corroded)": 0.15,     // Moderately corroded service
-  "Carbon Steel (Severely Corroded)": 0.9, // Heavy scale/corrosion
-  "Stainless Steel": 0.015,            // ASME B36.19M - SS 304/316
-  "Duplex Stainless Steel": 0.015,     // 2205/2507 duplex
-  "Cast Iron": 0.26,                   // ANSI/AWWA C110
-  "Ductile Iron (Cement Lined)": 0.025, // AWWA C104
-  "Galvanized Steel": 0.15,            // Hot-dip galvanized
-  "Chrome-Moly Steel": 0.0457,         // ASTM A335 (P11, P22, etc.)
-  "Copper/Copper-Nickel": 0.0015,      // ASTM B88 / B111
-  "PVC/CPVC": 0.0015,                  // ASTM D1785 / F441
-  "HDPE": 0.007,                       // ASTM F714
-  "Fiberglass (FRP/GRE)": 0.005,       // API 15HR
-  "Concrete": 1.0,                     // Cast-in-place
-  "Lined Steel (Epoxy)": 0.006,        // Internal epoxy coating
-  "Lined Steel (Rubber)": 0.025,       // Rubber lined
+  "Carbon Steel (New)": 0.0457,
+  "Carbon Steel (Corroded)": 0.15,
+  "Carbon Steel (Severely Corroded)": 0.9,
+  "Stainless Steel": 0.015,
+  "Duplex Stainless Steel": 0.015,
+  "Cast Iron": 0.26,
+  "Ductile Iron (Cement Lined)": 0.025,
+  "Galvanized Steel": 0.15,
+  "Chrome-Moly Steel": 0.0457,
+  "Copper/Copper-Nickel": 0.0015,
+  "PVC/CPVC": 0.0015,
+  "HDPE": 0.007,
+  "Fiberglass (FRP/GRE)": 0.005,
+  "Concrete": 1.0,
+  "Lined Steel (Epoxy)": 0.006,
+  "Lined Steel (Rubber)": 0.025,
   "Custom": 0,
 };
 
@@ -816,37 +861,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Pressure (Operating) -> Absolute Pa
   const P_inlet_Pa_abs = useMemo(() => {
     const pVal = parseFloat(inletPressure) || 0;
-
-    // 1. Convert to Pa Gauge/Abs based on unit
-    let p_Pa = 0;
-    switch (pressureUnit) {
-      case 'bar': p_Pa = pVal * 100000; break;
-      case 'kPa': p_Pa = pVal * 1000; break;
-      case 'Pa': p_Pa = pVal; break;
-      case 'psi': p_Pa = pVal * 6894.76; break;
-      case 'psia': p_Pa = pVal * 6894.76; break; // Treat as same number, handle abs later
-      case 'kg/cm²': p_Pa = pVal * 98066.5; break;
-      default: p_Pa = pVal * 100000;
-    }
-
-    // 2. Handle Gauge vs Absolute
-    // If unit implies absolute (psia), ignore toggle? Or respect toggle?
-    // "psi" usually means gauge, "psia" means absolute.
-    const isUnitAbsolute = pressureUnit === 'psia';
-    const isSelectionGauge = pressureType === 'gauge';
-
-    if (isUnitAbsolute) {
-      return p_Pa;
-    }
-
-    // If gauge selection, add Atm
-    if (isSelectionGauge) {
-      // Add 1 atm (101325 Pa) or user defined base pressure?
-      // Prompt says "For gauge values, add atmospheric pressure... 101.325 kPa or 14.696 psia"
-      return p_Pa + PATM_PA;
-    }
-
-    return p_Pa;
+    return toPascalAbs(pVal, pressureUnit, pressureType === 'gauge');
   }, [inletPressure, pressureUnit, pressureType]);
 
   const P_base_Pa_abs = useMemo(() => {
@@ -1212,17 +1227,17 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [itemNumber, setItemNumber] = useState("");
   const [serviceName, setServiceName] = useState("");
 
+  // Pressure (Operating) -> Absolute Pa
+  // Mapping rigorous results to UI
   const results = useMemo(() => {
-    if (velocity === 0 || rho <= 0 || D_m <= 0) return null;
+    if (!hydraulicResult) return null;
 
-    // Pressure drop per unit length (Pa/m)
-    const dP_per_m = (frictionFactor * rho * Math.pow(velocity, 2)) / (2 * D_m);
-
-    // Total Pressure Drop
-    const dP_total_bar = (dP_per_m * L_m) / 100000;
-    // dP per km (bar/km) = dP_per_m * 1000 m / 100000 Pa/bar = dP_per_m / 100
-    const dP_bar_km = dP_per_m * 0.01;
-    const pressureDropBarPer100m = dP_per_m * 100 / 100000;
+    const {
+      velocity, reynoldsNumber, frictionFactor,
+      pressureDropPa, pressureDropBar, pressureDropBarKm,
+      rhoVSquared, machNumber: calcMach, maxVelocity,
+      // erosionalVelocity: calcErosional // Not returned by engine yet
+    } = hydraulicResult;
 
     // Check Limits
     let velocityLimit = 999;
@@ -1234,108 +1249,89 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     let cValueLimit: number | null = null;
     let erosionalVelocity = 0;
 
-    // Mach Number (for gas or mixed)
-    let machNumber = 0;
-    if (lineType === "gas" || lineType === "mixed") {
-      // Simplistic Mach calc: Ma = v / c
-      const k = 1.3; // Specific heat ratio approx
-      const R_gas = 8314; // J/kmol K
-      if (MW > 0 && T_operating_K > 0) {
-        const c_sound = Math.sqrt((k * R_gas * T_operating_K) / MW);
-        machNumber = velocity / c_sound;
-      }
-    }
+    // Re-calculate erosional velocity for display if not in engine
+    // Ve = C / sqrt(rho)
+    // We use C-Factor from state (cFactor) or criteria (cValueLimit)
+    // Default C is 100 continuous, 125 intermittent
+    const densityForErosion = rhoInlet || 1; // Avoid div by zero
+    // Convert density to lb/ft3 for API 14E formula
+    const rho_imp = densityForErosion / 16.018463;
 
-    // Gas Limits
+    // Get C-Value from Criteria OR User Input (if mixed)
+    // For now, use the user input `cFactor` as base, unless Criteria overrides.
+    let cVal = parseFloat(cFactor) || 100;
+
+    if (lineType === "mixed" && currentMixedPhaseCriteria?.cValue) {
+      cVal = currentMixedPhaseCriteria.cValue;
+      cValueLimit = cVal;
+    }
+    // Calculate Ve (ft/s) then convert to m/s
+    const ve_ft = cVal / Math.sqrt(rho_imp);
+    erosionalVelocity = ve_ft * 0.3048;
+
+    // Limits Logic (Consolidated)
     if (lineType === "gas" && currentGasCriteria) {
-      // 1. Absolute Velocity Limit
+      // 1. Velocity
       const vLimitAbs = currentGasCriteria.velocityMs;
       if (vLimitAbs !== null) {
-        if (velocity > vLimitAbs) velocityWarning = true;
-        // For gauge display, we can use this as the primary velocity limit
+        if (maxVelocity > vLimitAbs) velocityWarning = true;
         velocityLimit = vLimitAbs;
       }
-
-      // 2. Momentum (Rho v^2) Limit
+      // 2. Momentum
       if (currentGasCriteria.rhoV2Limit !== null) {
         if (rhoVSquared > currentGasCriteria.rhoV2Limit) momentumWarning = true;
-
-        // If no explicit velocity limit, calculate equiv for display reference only
-        if (vLimitAbs === null) {
-          const equivVel = Math.sqrt(currentGasCriteria.rhoV2Limit / rho);
-          velocityLimit = equivVel;
-        }
       }
-
-      // 3. Mach Number Limit
+      // 3. Mach
       if (currentGasCriteria.machLimit !== null) {
-        if (machNumber > currentGasCriteria.machLimit) machWarning = true;
+        if (calcMach > currentGasCriteria.machLimit) machWarning = true;
       }
-
-      // 4. Pressure Drop Limit
+      // 4. dP
       if (currentGasCriteria.pressureDropBarKm !== null) {
-        if (dP_bar_km > currentGasCriteria.pressureDropBarKm) dPWarning = true;
+        if (pressureDropBarKm > currentGasCriteria.pressureDropBarKm) dPWarning = true;
       }
     }
 
-    // Liquid Limits
     if (lineType === "liquid" && currentLiquidCriteria) {
       const vLimit = getLiquidVelocityLimit(currentLiquidCriteria, nominalDiameterNumber);
       velocityLimit = vLimit || 15;
-
-      if (velocity > velocityLimit) velocityWarning = true;
-
-      if (currentLiquidCriteria.pressureDropBarKm && dP_bar_km > currentLiquidCriteria.pressureDropBarKm) {
+      if (maxVelocity > velocityLimit) velocityWarning = true;
+      if (currentLiquidCriteria.pressureDropBarKm && pressureDropBarKm > currentLiquidCriteria.pressureDropBarKm) {
         dPWarning = true;
       }
     }
 
-    // Mixed Phase Limits
     if (lineType === "mixed" && currentMixedPhaseCriteria) {
       cValueLimit = currentMixedPhaseCriteria.cValue;
-      if (cValueLimit) {
-        erosionalVelocity = calculateErosionalVelocity(rho, cValueLimit);
-        // velocityLimit = erosionalVelocity; // C-Value is not a recommended limit, just for info
-        // if (velocity > velocityLimit) velocityWarning = true; // Disabled per user request
-      }
-
       if (currentMixedPhaseCriteria.rhoV2Limit) {
-        const currentRhoV2 = rho * velocity * velocity;
-        if (currentRhoV2 > currentMixedPhaseCriteria.rhoV2Limit) momentumWarning = true;
+        if (rhoVSquared > currentMixedPhaseCriteria.rhoV2Limit) momentumWarning = true;
       }
-      // Mach check disabled per user requirements for mixed phase
-      // if (currentMixedPhaseCriteria.machLimit && machNumber > currentMixedPhaseCriteria.machLimit) {
-      //   machWarning = true;
-      // }
+      // Mach forbidden
     }
 
-    // Calculate final rhoV2
-    // const rhoVSquared = rho * Math.pow(velocity, 2); // Already calculated above in memo
-
     return {
-      velocity,
+      velocity: maxVelocity, // Use max
       reynoldsNumber,
       frictionFactor,
-      dP_per_m,
-      dP_total_bar,
-      dP_bar_km,
-      flowRegime,
+      dP_per_m: pressureDropPa / L_m,
+      dP_total_bar: pressureDropBar,
+      dP_bar_km: pressureDropBarKm,
+      flowRegime: reynoldsNumber < 2300 ? "Laminar" : reynoldsNumber < 4000 ? "Transitional" : "Turbulent",
       velocityLimit,
-      erosionalVelocity, // informative
+      erosionalVelocity,
       cValueLimit,
       dP_limit: (lineType === "gas" ? currentGasCriteria?.pressureDropBarKm : currentLiquidCriteria?.pressureDropBarKm) || null,
-      velWarning: velocityWarning || momentumWarning || machWarning, // General flag
-      velocityWarning, // Specific
-      momentumWarning, // Specific
-      machWarning,     // Specific
+      velWarning: velocityWarning || momentumWarning || machWarning,
+      velocityWarning,
+      momentumWarning,
+      machWarning,
       dPWarning,
       rhoVSquared,
       rhoV2Limit: sizingCriteria.maxRhoVSquared,
-      machNumber,
+      machNumber: calcMach,
       machLimit: sizingCriteria.maxMach,
-      erosionalRatio: erosionalVelocity > 0 ? velocity / erosionalVelocity : 0
+      erosionalRatio: erosionalVelocity > 0 ? maxVelocity / erosionalVelocity : 0
     };
-  }, [velocity, rho, D_m, frictionFactor, L_m, lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, sizingCriteria, nominalDiameterNumber, MW, T_operating_K, reynoldsNumber, flowRegime]);
+  }, [hydraulicResult, lineType, currentGasCriteria, currentLiquidCriteria, currentMixedPhaseCriteria, sizingCriteria, nominalDiameterNumber, cFactor, rhoInlet, L_m]);
 
   // Status check function based on API 14E criteria
   const getStatusIndicator = () => {
