@@ -1013,9 +1013,11 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
       let P_current = P_inlet_Pa_abs;
       let dP_accumulated = 0;
+      let f_accumulated = 0;
       let v_inlet = 0;
       let rho_inlet_val = 0;
       let rho_avg_accum = 0;
+      let segmentsUsed = 0;
 
       for (let i = 0; i < SEGMENTS; i++) {
         // Isothermal check: P_current
@@ -1053,11 +1055,27 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         P_current -= dP_seg;
         dP_accumulated += dP_seg;
         rho_avg_accum += rho_node;
+        f_accumulated += f_node;
+        segmentsUsed += 1;
       }
+
+      if (segmentsUsed === 0 || P_current <= 0) return null;
 
       // Outlet calc
       const Q_act_outlet = (molarFlow_kmol_s * Z_op * R_GAS_CONSTANT * T_op_K) / P_current;
       const v_outlet = Q_act_outlet / Area;
+
+      const rho_avg = rho_avg_accum / segmentsUsed;
+      const f_avg = f_accumulated / segmentsUsed;
+
+      // 7. Minor Losses (K-factor) and Static Head
+      const K = parseFloat(minorLossK) || 0;
+      const dP_minor_Pa = K * 0.5 * rho_avg * Math.pow(v_outlet, 2);
+      const dz = parseFloat(elevationChange) || 0;
+      const dP_static_Pa = rho_avg * G_GRAVITY * dz;
+
+      const dP_total_Pa = dP_accumulated + dP_minor_Pa + dP_static_Pa;
+      const outletPressurePa = Math.max(P_current - dP_minor_Pa - dP_static_Pa, 0);
 
       // Mach Approx (k=1.3)
       const k = 1.3;
@@ -1069,19 +1087,19 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
         maxVelocity: v_outlet,
         velocityInlet: v_inlet,
         reynoldsNumber: (rho_inlet_val * v_inlet * D_m) / viscosityPas,
-        frictionFactor: 0,
-        pressureDropPa: dP_accumulated,
-        pressureDropBar: dP_accumulated / 100000,
-        pressureDropBarKm: (dP_accumulated / 100000 / L_m) * 1000,
-        outletPressurePa: P_current,
-        avgDensity: rho_avg_accum / SEGMENTS,
+        frictionFactor: f_avg,
+        pressureDropPa: dP_total_Pa,
+        pressureDropBar: dP_total_Pa / 100000,
+        pressureDropBarKm: (dP_total_Pa / 100000 / L_m) * 1000,
+        outletPressurePa,
+        avgDensity: rho_avg,
         rhoVSquared: rho_inlet_val * v_inlet * v_inlet, // Use max? Gas criteria usually implies max dynamic pressure? No, typically check momentum at highest velocity.
         // Let's use Outlet Rho * Outlet V^2 ?
         // Rho_out * V_out^2 = (P_out*MW/ZRT) * (n*ZRT/P_out / A)^2 = P_out * const * 1/P_out^2 = const / P_out.
         // As P drops, V increases, Rho decreases. 
         // Momentum (rho v^2) typically increases as pressure drops.
         // Let's report max Rho V^2 (at outlet).
-        maxRhoVSquared: ((P_current * MW) / (Z_op * R_GAS_CONSTANT * T_op_K)) * Math.pow(v_outlet, 2),
+        maxRhoVSquared: ((outletPressurePa * MW) / (Z_op * R_GAS_CONSTANT * T_op_K)) * Math.pow(v_outlet, 2),
         machNumber: mach
       };
     }
@@ -1094,6 +1112,10 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const frictionFactor = hydraulicResult?.frictionFactor || 0;
 
   const pressureDropPa = hydraulicResult?.pressureDropPa || 0;
+  const pressureDropBar = useMemo(() => {
+    return pressureDropPa / 100000;
+  }, [pressureDropPa]);
+
   // Convert for Display
   const pressureDrop = useMemo(() => {
     return pressureDropPa * (pressureFromPa[pressureUnit] || 0.00001);
@@ -1101,9 +1123,9 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 
   const pressureDropPer100m = useMemo(() => {
     if (L_m <= 0) return 0;
-    // Convert dP to unit, then divide by L, mult by 100
-    return (pressureDrop * 100) / L_m;
-  }, [pressureDrop, L_m]);
+    // API 14E criteria are defined in bar/100m
+    return (pressureDropBar * 100) / L_m;
+  }, [pressureDropBar, L_m]);
 
   const headLoss = useMemo(() => {
     // hL = dP / (rho g)
@@ -2655,4 +2677,3 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
 };
 
 export default HydraulicSizingCalculator;
-
