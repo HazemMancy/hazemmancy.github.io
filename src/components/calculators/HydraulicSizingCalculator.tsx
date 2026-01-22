@@ -39,6 +39,7 @@ import {
   PIPE_SCHEDULE_DATA,
   PIPE_ROUGHNESS
 } from "./data/constants";
+import { commonGases, commonLiquids } from "@/lib/fluids";
 
 interface HydraulicSizingCalculatorProps {
   lineType: "gas" | "liquid" | "mixed";
@@ -95,6 +96,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [mixedGasZ, setMixedGasZ] = useState<string>("0.9");
   const [mixedGasViscosity, setMixedGasViscosity] = useState<string>("0.015");
   const [mixedLiquidViscosity, setMixedLiquidViscosity] = useState<string>("1.0");
+  const [mixedGasMW, setMixedGasMW] = useState<string>("20.3");
   const [pressureType, setPressureType] = useState<string>("gauge");
 
   // Get current criteria based on line type
@@ -162,6 +164,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
       mixedOpPressure: parseFloat(mixedOpPressure) || 0,
       mixedOpTemp: parseFloat(mixedOpTemp) || 0,
       mixedGasZ: parseFloat(mixedGasZ) || 0,
+      mixedGasMW: parseFloat(mixedGasMW) || 20.3,
       mixedGasViscosity: parseFloat(mixedGasViscosity) || 0,
       mixedLiquidViscosity: parseFloat(mixedLiquidViscosity) || 0,
       pressureType,
@@ -180,7 +183,7 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
     baseCompressibilityZ, liquidServiceType, mixedPhaseServiceType,
     mixedGasFlowRate, mixedGasFlowRateUnit, mixedLiquidFlowRate,
     mixedLiquidFlowRateUnit, mixedGasDensity, mixedLiquidDensity,
-    mixedOpPressure, mixedOpTemp, mixedGasZ, mixedGasViscosity,
+    mixedOpPressure, mixedOpTemp, mixedGasZ, mixedGasMW, mixedGasViscosity,
     mixedLiquidViscosity, pressureType, currentGasCriteria,
     currentLiquidCriteria, currentMixedPhaseCriteria
   ]);
@@ -208,6 +211,37 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   // Handle fluid change
   const handleFluidChange = (value: string) => {
     setSelectedFluid(value);
+
+    if (value === "Custom") return;
+
+    if (lineType === "gas") {
+      const fluid = commonGases.find(f => f.name === value);
+      if (fluid) {
+        setGasDensity60F(fluid.density?.toString() || "0.856");
+        setViscosity(fluid.viscosity.toString());
+        if (fluid.mw) setGasMolecularWeight(fluid.mw.toString());
+      }
+    } else if (lineType === "liquid") {
+      const fluid = commonLiquids.find(f => f.name === value);
+      if (fluid) {
+        setDensity(fluid.density?.toString() || "1000");
+        setViscosity(fluid.viscosity.toString());
+      }
+    } else if (lineType === "mixed") {
+      // Mixed Phase: search both lists
+      const gasFluid = commonGases.find(f => f.name === value);
+      if (gasFluid) {
+        setMixedGasDensity(gasFluid.density?.toString() || "0");
+        setMixedGasViscosity(gasFluid.viscosity.toString());
+        if (gasFluid.mw) setMixedGasMW(gasFluid.mw.toString());
+      }
+
+      const liqFluid = commonLiquids.find(f => f.name === value);
+      if (liqFluid) {
+        setMixedLiquidDensity(liqFluid.density?.toString() || "0");
+        setMixedLiquidViscosity(liqFluid.viscosity.toString());
+      }
+    }
   };
 
   // Export functions
@@ -459,6 +493,8 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
               onMixedGasZChange={setMixedGasZ}
               mixedGasViscosity={mixedGasViscosity}
               onMixedGasViscosityChange={setMixedGasViscosity}
+              mixedGasMW={mixedGasMW}
+              onMixedGasMWChange={setMixedGasMW}
               mixedLiquidViscosity={mixedLiquidViscosity}
               onMixedLiquidViscosityChange={setMixedLiquidViscosity}
               pressureType={pressureType}

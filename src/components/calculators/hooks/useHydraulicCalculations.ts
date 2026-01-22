@@ -98,7 +98,7 @@ const validateInputs = (inputs: HydraulicInputs): ValidationResult => {
 
     // Basic validation
     if (inputs.pipeLength <= 0) errors.push("Pipe length must be positive");
-    if (inputs.flowRate <= 0) errors.push("Flow rate must be positive");
+    if (inputs.lineType !== "mixed" && inputs.flowRate <= 0) errors.push("Flow rate must be positive");
     if (inputs.fluidTemperature < -273.15) errors.push("Temperature below absolute zero");
 
     // Type-specific validation

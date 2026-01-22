@@ -2,6 +2,22 @@
 // Heat Exchanger Calculation Library
 // Contains physics models for Shell & Tube Heat Exchangers
 // Methods: Bell-Delaware, Kern, Dittus-Boelter, Sieder-Tate, TEMA/HTRI Vibration
+// 
+// SCREENING-LEVEL CALCULATION LIBRARY
+// -----------------------------------
+// This library provides screening-level engineering calculations only.
+// It is NOT intended for final design, fabrication, or safety-critical applications.
+// Results should be verified against specialized software (HTRI, ASPEN, etc.)
+// 
+// UNIT REQUIREMENTS (STRICT SI):
+// - Lengths: meters (m)
+// - Pressure: Pascals (Pa)
+// - Temperature: Kelvin (K)
+// - Viscosity: Pascal-seconds (Pa·s) [NOT cP]
+// - Flow Rate: kg/s or m³/s as specified
+// - Density: kg/m³
+// - Specific Heat: J/kg·K [NOT kJ]
+// - Thermal Conductivity: W/m·K
 
 export type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "crossflow-unmixed" | "crossflow-mixed";
 export type TemperatureUnit = "C" | "F" | "K";
@@ -58,6 +74,20 @@ export const fromKelvin = (tempK: number, unit: TemperatureUnit): number => {
  * @param viscosityRatio - Optional: μ_bulk/μ_wall for Sieder-Tate correction (use when ΔT > 10°C)
  * @returns Object containing heat transfer coefficient (W/m²K) and Nusselt number
  */
+export interface CalculationResult {
+    warnings: string[];
+    errors: string[];
+}
+
+export interface HtcResult extends CalculationResult {
+    h: number;
+    Nu: number;
+}
+
+/**
+ * Calculate Tube-Side Heat Transfer Coefficient (hi)
+ * ...
+ */
 export const calculateTubeSideHTC = (
     Re: number,
     Pr: number,
@@ -65,78 +95,38 @@ export const calculateTubeSideHTC = (
     Di: number,
     isHeating: boolean = true,
     viscosityRatio?: number
-): { h: number; Nu: number } => {
+): HtcResult => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
     if (Re <= 0 || Pr <= 0 || k <= 0 || Di <= 0) {
-        return { h: 0, Nu: 0 };
+        return { h: 0, Nu: 0, warnings, errors: ["Invalid input parameters for tube-side HTC"] };
     }
 
     let Nu: number;
 
     if (Re < 2300) {
-        // Laminar flow: Nu = 3.66 (constant wall temp) or 4.36 (constant heat flux)
-        // Per Shah & London (1978) - Advances in Heat Transfer
         Nu = 3.66;
     } else if (Re < 10000) {
-        // Transition: Gnielinski correlation (1976)
-        // Valid for 2300 < Re < 10^6, 0.5 < Pr < 2000
         const f = Math.pow(1.82 * Math.log10(Re) - 1.64, -2);
         Nu = (f / 8) * (Re - 1000) * Pr / (1 + 12.7 * Math.sqrt(f / 8) * (Math.pow(Pr, 2 / 3) - 1));
-        Nu = Math.max(Nu, 3.66); // Ensure positive
+        Nu = Math.max(Nu, 3.66);
     } else {
-        // Turbulent: Dittus-Boelter correlation (1930)
-        // Valid for Re > 10000, 0.6 < Pr < 160, L/D > 10
-        // n = 0.4 for heating (Tw > Tb), n = 0.3 for cooling (Tw < Tb)
         const n = isHeating ? 0.4 : 0.3;
         Nu = 0.023 * Math.pow(Re, 0.8) * Math.pow(Pr, n);
     }
 
-    // Apply Sieder-Tate viscosity correction if provided
-    // Recommended when (Tw - Tb) > 10°C or viscosity varies significantly
-    // Per Sieder & Tate (1936): Nu_corrected = Nu * (μ_bulk/μ_wall)^0.14
     if (viscosityRatio && viscosityRatio > 0 && Re >= 10000) {
         Nu = Nu * Math.pow(viscosityRatio, 0.14);
     }
 
     const h = Nu * k / Di;
-    return { h, Nu };
+    return { h, Nu, warnings, errors };
 };
 
 /**
  * Calculate Shell-Side Heat Transfer Coefficient (ho)
- * 
- * References:
- * - Bell, K.J. (1963): "Final Report of the Cooperative Research Program on Shell and Tube Heat Exchangers"
- * - TEMA Standards Section RGP-4.5: Shell-Side Heat Transfer
- * - Taborek, J. (1983): "Shell-and-Tube Heat Exchangers" in Heat Exchanger Design Handbook
- * - HTRI Design Manual: Delaware Method
- * 
- * Method: Bell-Delaware with j-factor correlations
- * 
- * Validity Ranges:
- * - Reynolds number: 10 < Re < 10^6
- * - Prandtl number: 0.7 < Pr < 500
- * - Tube pitch/diameter ratio: 1.25 < P/D < 2.0
- * 
- * Correction Factors (Bell-Delaware):
- * - Jc: Baffle configuration correction
- * - Jl: Baffle leakage correction (shell-to-baffle and tube-to-baffle)
- * - Jb: Bundle bypass correction
- * - Jr: Laminar flow correction
- * - Js: Unequal baffle spacing correction
- * 
- * @param Re - Shell-side Reynolds number based on tube OD
- * @param Pr - Prandtl number
- * @param k - Thermal conductivity (W/m·K)
- * @param De - Equivalent diameter (m)
- * @param Gs - Mass velocity (kg/m²s)
- * @param Cp - Specific heat (kJ/kg·K)
- * @param tubePattern - "triangular" or "square"
- * @param Jc - Baffle configuration correction factor
- * @param Jl - Leakage correction factor
- * @param Jb - Bundle bypass correction factor
- * @param Jr - Laminar flow correction factor
- * @param Js - Unequal spacing correction factor
- * @returns Object containing heat transfer coefficient (W/m²K) and Nusselt number
+ * ...
  */
 export const calculateShellSideHTC = (
     Re: number,
@@ -151,52 +141,46 @@ export const calculateShellSideHTC = (
     Jb: number,
     Jr: number,
     Js: number
-): { h: number; Nu: number } => {
+): HtcResult => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
     if (Re <= 0 || Pr <= 0 || k <= 0 || De <= 0 || Gs <= 0) {
-        return { h: 0, Nu: 0 };
+        return { h: 0, Nu: 0, warnings, errors: ["Invalid input parameters for shell-side HTC"] };
     }
 
     let jFactor: number;
 
-    // j-factor correlations per Bell-Delaware method
-    // Coefficients from HTRI and Taborek (1983)
     if (tubePattern === "triangular") {
-        // Triangular (30° or 60°) pitch - more efficient heat transfer
         if (Re > 10000) {
-            jFactor = 0.321 * Math.pow(Re, -0.388);  // Turbulent
+            jFactor = 0.321 * Math.pow(Re, -0.388);
         } else if (Re > 1000) {
-            jFactor = 0.593 * Math.pow(Re, -0.477);  // Transition
+            jFactor = 0.593 * Math.pow(Re, -0.477);
         } else if (Re > 100) {
-            jFactor = 1.52 * Math.pow(Re, -0.574);   // Low Re transition
+            jFactor = 1.52 * Math.pow(Re, -0.574);
         } else {
-            jFactor = 1.04 * Math.pow(Re, -0.451);   // Laminar
+            jFactor = 1.04 * Math.pow(Re, -0.451);
         }
     } else {
-        // Square (90°) or rotated square (45°) pitch - easier to clean
         if (Re > 10000) {
-            jFactor = 0.249 * Math.pow(Re, -0.382);  // Turbulent
+            jFactor = 0.249 * Math.pow(Re, -0.382);
         } else if (Re > 1000) {
-            jFactor = 0.391 * Math.pow(Re, -0.438);  // Transition
+            jFactor = 0.391 * Math.pow(Re, -0.438);
         } else if (Re > 100) {
-            jFactor = 1.187 * Math.pow(Re, -0.547);  // Low Re transition
+            jFactor = 1.187 * Math.pow(Re, -0.547);
         } else {
-            jFactor = 0.994 * Math.pow(Re, -0.426);  // Laminar
+            jFactor = 0.994 * Math.pow(Re, -0.426);
         }
     }
 
-    // Ideal heat transfer coefficient (no corrections)
-    // h_ideal = j × Cp × Gs × Pr^(-2/3)
-    const h_ideal = jFactor * Cp * 1000 * Gs * Math.pow(Pr, -2 / 3);
-
-    // Apply Bell-Delaware correction factors
-    // h_actual = h_ideal × Jc × Jl × Jb × Jr × Js
+    const h_ideal = jFactor * Cp * Gs * Math.pow(Pr, -2 / 3);
     const h = h_ideal * Jc * Jl * Jb * Jr * Js;
-
-    // Calculate Nusselt number
     const Nu = h * De / k;
 
-    return { h, Nu };
+    return { h, Nu, warnings, errors };
 };
+
+export interface VibrationsExtendedResult extends VibrationResults, CalculationResult { }
 
 /**
  * Flow-Induced Vibration Analysis per TEMA and HTRI Standards
@@ -211,8 +195,13 @@ export const calculateVibrationAnalysis = (
     tubeDensity: number,
     tubeWallThickness: number,
     unsupportedLength: number,
-    shellDiameter: number
-): VibrationResults => {
+    shellDiameter: number,
+    tubeFluidDensity: number,
+    speedOfSound: number
+): VibrationsExtendedResult => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
     if (shellVelocity <= 0 || tubeOD <= 0) {
         return {
             naturalFrequency: 0,
@@ -224,25 +213,28 @@ export const calculateVibrationAnalysis = (
             isVibrationRisk: false,
             isAcousticRisk: false,
             vibrationMessage: "Insufficient data",
-            damageNumber: 0
+            damageNumber: 0,
+            warnings,
+            errors: ["Invalid velocity or tube geometry for vibration analysis"]
         };
     }
 
-    // Tube inner diameter
+    // [VALIDATION] Speed of Sound Clamping
+    // Prevent non-physical zero speed of sound (division by zero risk)
+    let safeSpeedOfSound = speedOfSound;
+    if (speedOfSound < 50) {
+        safeSpeedOfSound = 150; // Minimum credible speed (gas/mixed)
+        warnings.push(`Input Speed of Sound (${speedOfSound.toFixed(1)} m/s) is suspiciously low. Clamped to 150 m/s for safety.`);
+    }
+
     const Di = tubeOD - 2 * tubeWallThickness;
-
-    // Second moment of area (I) for tube
     const I = (Math.PI / 64) * (Math.pow(tubeOD, 4) - Math.pow(Di, 4));
-
-    // Cross-sectional area
     const A = (Math.PI / 4) * (Math.pow(tubeOD, 2) - Math.pow(Di, 2));
 
-    // Mass per unit length (tube + fluid inside)
     const tubeLinearMass = tubeDensity * A;
-    const fluidLinearMass = shellDensity * (Math.PI / 4) * Math.pow(Di, 2);
+    const fluidLinearMass = tubeFluidDensity * (Math.PI / 4) * Math.pow(Di, 2);
     const totalLinearMass = tubeLinearMass + fluidLinearMass;
 
-    // Added mass coefficient (hydrodynamic mass)
     const pitchRatio = tubePitch / tubeOD;
     let Cm: number;
     if (tubePattern === "triangular") {
@@ -250,66 +242,42 @@ export const calculateVibrationAnalysis = (
     } else {
         Cm = 1.0 + 0.5 / Math.pow(pitchRatio - 1, 1.5);
     }
-    Cm = Math.min(Cm, 3.0); // Cap at reasonable value
+    Cm = Math.min(Cm, 3.0);
 
-    // Effective mass per unit length
     const addedMass = Cm * shellDensity * (Math.PI / 4) * Math.pow(tubeOD, 2);
     const effectiveMass = totalLinearMass + addedMass;
 
-    /**
-     * Natural Frequency (TEMA)
-     * fn = (Cn/2π) × √(E×I / (m×L⁴))
-     */
-    const Cn = 22.4; // Fixed-fixed boundary conditions
+    const Cn = 22.4;
     const fn = (Cn / (2 * Math.PI)) * Math.sqrt(
         (tubeElasticModulus * I) / (effectiveMass * Math.pow(unsupportedLength, 4))
     );
 
-    /**
-     * Strouhal Number and Vortex Shedding Frequency
-     */
     const St = tubePattern === "triangular" ? 0.2 : 0.25;
     const fvs = St * shellVelocity / tubeOD;
 
-    /**
-     * Acoustic Resonance Frequency
-     */
-    const speedOfSound = 1500; // m/s (approximate for liquids)
     const effectiveWidth = shellDiameter;
-    const fa = speedOfSound / (2 * effectiveWidth);
+    const fa = safeSpeedOfSound / (2 * effectiveWidth);
 
-    /**
-     * Critical Velocity - Connors' Equation
-     */
     const K = tubePattern === "triangular" ? 2.4 : 3.4;
     const logDecrement = 0.03;
     const massRatio = effectiveMass / (shellDensity * Math.pow(tubeOD, 2));
     const Vcrit = K * fn * tubeOD * Math.sqrt(massRatio * logDecrement);
 
-    // Reduced velocity
     const Vr = shellVelocity / (fn * tubeOD);
-
-    // Frequency ratio
     const freqRatio = fvs / fn;
 
-    /**
-     * Damage Number (Pettigrew & Taylor)
-     */
     const damageNumber = (shellDensity * Math.pow(shellVelocity, 2) * tubeOD) /
         (effectiveMass * fn * logDecrement);
 
-    // Vibration risk assessment
     const isVibrationRisk =
-        (freqRatio > 0.7 && freqRatio < 1.3) || // Resonance band
-        shellVelocity > 0.8 * Vcrit ||           // Near critical velocity
-        damageNumber > 0.5;                       // Damage potential
+        (freqRatio > 0.7 && freqRatio < 1.3) ||
+        shellVelocity > 0.8 * Vcrit ||
+        damageNumber > 0.5;
 
-    // Acoustic resonance risk
     const isAcousticRisk =
         Math.abs(fvs - fa) / fa < 0.15 ||
         Math.abs(2 * fvs - fa) / fa < 0.15;
 
-    // Generate message
     let vibrationMessage = "✓ Design is within safe limits";
     if (isVibrationRisk) {
         if (freqRatio > 0.7 && freqRatio < 1.3) {
@@ -331,51 +299,35 @@ export const calculateVibrationAnalysis = (
         isVibrationRisk,
         isAcousticRisk,
         vibrationMessage,
-        damageNumber
+        damageNumber,
+        warnings,
+        errors
     };
 };
 
 /**
  * LMTD Correction Factor (F)
- * 
- * References:
- * - TEMA Standards Section RGP-4.5: LMTD Correction Factors
- * - Bowman, Mueller, Nagle (1940): "Mean Temperature Difference in Design"
- * - Kern, D.Q.: Process Heat Transfer, Chapter 8
- * 
- * TEMA Design Guideline:
- * - F should be > 0.75 for economical design
- * - F < 0.75 indicates potential temperature cross or poor configuration
- * - Consider increasing shell passes or changing flow arrangement if F < 0.75
- * 
- * @param R - Temperature effectiveness ratio: (T1-T2)/(t2-t1)
- * @param P - Thermal effectiveness: (t2-t1)/(T1-t1)
- * @param arrangement - Flow arrangement type
- * @returns Object with F-factor value and warning flag
+ * ...
  */
 export const calculateCorrectionFactor = (
     R: number,
     P: number,
     arrangement: FlowArrangement
 ): { F: number; warning: boolean; message?: string } => {
-    // Counter-flow and parallel-flow have F = 1.0 (no correction needed)
     if (arrangement === "counter" || arrangement === "parallel") {
         return { F: 1.0, warning: false };
     }
 
-    // Validate inputs
     if (P <= 0 || P >= 1 || R <= 0) {
         return { F: 0.9, warning: true, message: "Invalid P or R values" };
     }
 
     let F: number;
 
-    // Special case: R ≈ 1 (equal heat capacity rates)
     if (Math.abs(R - 1) < 0.001) {
         const F_calc = (P * Math.sqrt(2)) / ((1 - P) * Math.log((2 - P * (2 - Math.sqrt(2))) / (2 - P * (2 + Math.sqrt(2)))));
         F = Math.min(1, Math.max(0.5, isNaN(F_calc) || !isFinite(F_calc) ? 0.9 : F_calc));
     } else {
-        // General formula for 1-2, 1-4 shell-tube exchangers
         const sqrtTerm = Math.sqrt(R * R + 1);
         const numerator = sqrtTerm * Math.log((1 - P) / (1 - P * R));
         const term1 = (2 - P * (R + 1 - sqrtTerm)) / (2 - P * (R + 1 + sqrtTerm));
@@ -385,7 +337,6 @@ export const calculateCorrectionFactor = (
         F = Math.min(1, Math.max(0.5, isNaN(F) || !isFinite(F) ? 0.9 : F));
     }
 
-    // TEMA recommendation: F should be > 0.75
     const warning = F < 0.75;
     const message = warning
         ? `F-factor (${F.toFixed(3)}) is below TEMA recommended minimum of 0.75. Consider increasing shell passes or changing flow arrangement.`
@@ -405,6 +356,11 @@ export const calculateEffectivenessParallel = (ntu: number, Cr: number): number 
     return (1 - Math.exp(-ntu * (1 + Cr))) / (1 + Cr);
 };
 
+export interface PressureDropResult extends CalculationResult {
+    pressureDrop: number;
+    reynolds: number;
+}
+
 /**
  * Tube-side pressure drop per Kern's Method
  */
@@ -415,10 +371,13 @@ export const calculateTubeSidePressureDrop = (
     innerDiameter: number,
     tubeLength: number,
     tubePasses: number
-): { pressureDrop: number; reynolds: number } => {
-    if (velocity <= 0 || innerDiameter <= 0) return { pressureDrop: 0, reynolds: 0 };
+): PressureDropResult => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
 
-    const reynolds = (density * velocity * innerDiameter) / (viscosity / 1000);
+    if (velocity <= 0 || innerDiameter <= 0) return { pressureDrop: 0, reynolds: 0, warnings, errors: ["Invalid velocity or diameter"] };
+
+    const reynolds = (density * velocity * innerDiameter) / viscosity;
 
     let frictionFactor: number;
     if (reynolds < 2300) {
@@ -431,10 +390,25 @@ export const calculateTubeSidePressureDrop = (
 
     const straightDrop = (4 * frictionFactor * tubeLength * tubePasses * density * velocity * velocity) / (2 * innerDiameter);
     const returnLoss = (4 * tubePasses * density * velocity * velocity) / 2;
-    const totalPressureDrop = (straightDrop + returnLoss) / 1000;
+    const totalPressureDrop = straightDrop + returnLoss;
 
-    return { pressureDrop: totalPressureDrop, reynolds };
+    return { pressureDrop: totalPressureDrop, reynolds, warnings, errors };
 };
+
+export interface BellDelawareResult extends CalculationResult {
+    pressureDrop: number;
+    velocity: number;
+    reynolds: number;
+    crossFlowArea: number;
+    Jc: number;
+    Jl: number;
+    Jb: number;
+    Jr: number;
+    Js: number;
+    numberOfBaffles: number;
+    equivalentDiameter: number;
+    Gs: number;
+}
 
 /**
  * Bell-Delaware Method for Shell-Side
@@ -454,29 +428,40 @@ export const calculateBellDelaware = (
     shellBaffleLeakage: number,
     tubeBaffleLeakage: number,
     bundleBypass: number
-): {
-    pressureDrop: number;
-    velocity: number;
-    reynolds: number;
-    crossFlowArea: number;
-    Jc: number;
-    Jl: number;
-    Jb: number;
-    Jr: number;
-    Js: number;
-    numberOfBaffles: number;
-    equivalentDiameter: number;
-    Gs: number;
-} => {
+): BellDelawareResult => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
+    // Default safe return object
+    const errorResult = {
+        pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0,
+        Jc: 1, Jl: 1, Jb: 1, Jr: 1, Js: 1,
+        numberOfBaffles: 0, equivalentDiameter: 0, Gs: 0,
+        warnings, errors
+    };
+
     if (massFlowRate <= 0 || shellDiameter <= 0) {
-        return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0, Jc: 1, Jl: 1, Jb: 1, Jr: 1, Js: 1, numberOfBaffles: 0, equivalentDiameter: 0, Gs: 0 };
+        errors.push("Invalid mass flow or shell diameter");
+        return { ...errorResult, errors };
+    }
+
+    // [VALIDATION] Geometry Guardrails
+    if (baffleCut <= 0 || baffleCut >= 0.5) {
+        errors.push(`Invalid Baffle Cut (${(baffleCut * 100).toFixed(1)}%). Must be between 0 and 50%.`);
+        return { ...errorResult, errors };
+    }
+
+    if (tubePitch <= tubeOuterDiameter) {
+        errors.push(`Invalid Geometry: Pitch (${tubePitch * 1000}mm) must be greater than Tube OD (${tubeOuterDiameter * 1000}mm).`);
+        return { ...errorResult, errors };
     }
 
     const clearance = tubePitch - tubeOuterDiameter;
     const Sm = shellDiameter * baffleSpacing * clearance / tubePitch;
 
     if (Sm <= 0) {
-        return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0, Jc: 1, Jl: 1, Jb: 1, Jr: 1, Js: 1, numberOfBaffles: 0, equivalentDiameter: 0, Gs: 0 };
+        errors.push("Calculated cross-flow area is zero or negative. Check geometry inputs.");
+        return { ...errorResult, errors };
     }
 
     const Gs = massFlowRate / Sm;
@@ -490,7 +475,7 @@ export const calculateBellDelaware = (
     }
     De = Math.max(De, 0.001);
 
-    const reynolds = (tubeOuterDiameter * Gs) / (viscosity / 1000);
+    const reynolds = (tubeOuterDiameter * Gs) / viscosity;
     const Nb = Math.max(1, Math.floor(tubeLength / baffleSpacing) - 1);
 
     const Fc = 1 - 2 * baffleCut;
@@ -530,10 +515,20 @@ export const calculateBellDelaware = (
         frictionFactor = 48 / reynolds;
     }
 
-    const Nc = Math.floor(shellDiameter * (1 - 2 * baffleCut) / tubePitch);
+    // [FIX] Enforce Nc >= 1 per engineering rules
+    // Calculate theoretical crossflow rows
+    const theoreticalNc = shellDiameter * (1 - 2 * baffleCut) / tubePitch;
+    const Nc = Math.max(1, Math.floor(theoreticalNc));
+
+    if (theoreticalNc < 1) {
+        warnings.push(`Geometry warning: Calculated crossflow rows (${theoreticalNc.toFixed(2)}) < 1.0. Claming to 1.0 for pressure drop safety.`);
+    }
+
     const deltaP_cross = (Nb * 4 * frictionFactor * Gs * Gs * Nc) / (2 * density);
 
-    const Nw = Math.floor(2 * baffleCut * shellDiameter / tubePitch);
+    // [FIX] Enforce Nw >= 0
+    const theoreticalNw = 2 * baffleCut * shellDiameter / tubePitch;
+    const Nw = Math.max(0, Math.floor(theoreticalNw));
     const deltaP_window = (Nb + 1) * (2 + 0.6 * Nw) * Gs * Gs / (2 * density);
 
     const deltaP_ends = 2 * Gs * Gs / (2 * density);
@@ -541,7 +536,7 @@ export const calculateBellDelaware = (
     const Rb = Jb;
     const Rl = Math.pow(Jl, 2);
 
-    const totalPressureDrop = ((deltaP_cross * Rb * Rl) + deltaP_window + deltaP_ends) / 1000;
+    const totalPressureDrop = (deltaP_cross * Rb * Rl) + deltaP_window + deltaP_ends;
 
     return {
         pressureDrop: Math.max(0, totalPressureDrop),
@@ -555,9 +550,21 @@ export const calculateBellDelaware = (
         Js,
         numberOfBaffles: Nb,
         equivalentDiameter: De,
-        Gs
+        Gs,
+        warnings,
+        errors
     };
 };
+
+export interface KernResult extends CalculationResult {
+    pressureDrop: number;
+    velocity: number;
+    reynolds: number;
+    crossFlowArea: number;
+    numberOfBaffles: number;
+    equivalentDiameter: number;
+    Gs: number;
+}
 
 export const calculateKernShellSide = (
     massFlowRate: number,
@@ -569,16 +576,32 @@ export const calculateKernShellSide = (
     tubePitch: number,
     tubeLength: number,
     tubePattern: string
-): { pressureDrop: number; velocity: number; reynolds: number; crossFlowArea: number; numberOfBaffles: number; equivalentDiameter: number; Gs: number } => {
+): KernResult => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
+    const errorResult = {
+        pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0,
+        numberOfBaffles: 0, equivalentDiameter: 0, Gs: 0,
+        warnings, errors
+    };
+
     if (massFlowRate <= 0 || shellDiameter <= 0) {
-        return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0, numberOfBaffles: 0, equivalentDiameter: 0, Gs: 0 };
+        errors.push("Invalid mass flow or shell diameter");
+        return { ...errorResult, errors };
+    }
+
+    if (tubePitch <= tubeOuterDiameter) {
+        errors.push(`Invalid Geometry: Pitch (${tubePitch * 1000}mm) must be greater than Tube OD (${tubeOuterDiameter * 1000}mm).`);
+        return { ...errorResult, errors };
     }
 
     const clearance = tubePitch - tubeOuterDiameter;
     const crossFlowArea = (shellDiameter * baffleSpacing * clearance) / tubePitch;
 
     if (crossFlowArea <= 0) {
-        return { pressureDrop: 0, velocity: 0, reynolds: 0, crossFlowArea: 0, numberOfBaffles: 0, equivalentDiameter: 0, Gs: 0 };
+        errors.push("Calculated cross-flow area is zero or negative. Check geometry inputs.");
+        return { ...errorResult, errors };
     }
 
     const Gs = massFlowRate / crossFlowArea;
@@ -593,7 +616,7 @@ export const calculateKernShellSide = (
             (Math.PI * tubeOuterDiameter);
     }
 
-    const reynolds = (De * Gs) / (viscosity / 1000);
+    const reynolds = (De * Gs) / viscosity;
 
     let frictionFactor: number;
     if (reynolds > 500) {
@@ -605,7 +628,11 @@ export const calculateKernShellSide = (
     const numberOfBaffles = Math.floor(tubeLength / baffleSpacing) - 1;
 
     const pressureDrop = (frictionFactor * Gs * Gs * shellDiameter * (numberOfBaffles + 1)) /
-        (2 * density * De * 1000);
+        (2 * density * De);
 
-    return { pressureDrop: Math.max(0, pressureDrop), velocity, reynolds, crossFlowArea, numberOfBaffles, equivalentDiameter: De, Gs };
+    return {
+        pressureDrop: Math.max(0, pressureDrop),
+        velocity, reynolds, crossFlowArea, numberOfBaffles, equivalentDiameter: De, Gs,
+        warnings, errors
+    };
 };

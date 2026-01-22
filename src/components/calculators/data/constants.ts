@@ -215,5 +215,7 @@ export const ACTUAL_GAS_UNITS = ["m³/h", "m³/s", "Am³/h"];
 export const STANDARD_CONDITIONS = {
     Nm3: { pressure: 101.325, temperature: 273.15 }, // 0°C, 101.325 kPa
     Sm3: { pressure: 101.325, temperature: 288.15 }, // 15°C, 101.325 kPa
-    SCF: { pressure: 14.696, temperature: 519.67 },  // 60°F, 14.696 psia
+    SF6: { pressure: 101.325, temperature: 293.15 }, // Example, rarely used in this context
 };
+
+

@@ -31,7 +31,7 @@ const calculators: CalculatorCard[] = [
     description: "Size gas, liquid, and mixed-phase lines with pressure drop, velocity, and ρv² calculations",
     icon: <Gauge className="w-8 h-8" />,
     route: "/calculators/hydraulic-sizing",
-    status: "available",
+    status: "coming-soon",
     category: "Fluid Mechanics"
   },
   {

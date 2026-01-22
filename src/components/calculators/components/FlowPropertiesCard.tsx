@@ -70,6 +70,8 @@ interface FlowPropertiesCardProps {
     onMixedGasZChange?: (val: string) => void;
     mixedGasViscosity?: string;
     onMixedGasViscosityChange?: (val: string) => void;
+    mixedGasMW?: string;
+    onMixedGasMWChange?: (val: string) => void;
     mixedLiquidViscosity?: string;
     onMixedLiquidViscosityChange?: (val: string) => void;
 
@@ -132,6 +134,8 @@ const FlowPropertiesCard = ({
     onMixedGasZChange,
     mixedGasViscosity,
     onMixedGasViscosityChange,
+    mixedGasMW,
+    onMixedGasMWChange,
     mixedLiquidViscosity,
     onMixedLiquidViscosityChange,
     pressureType,
@@ -146,6 +150,8 @@ const FlowPropertiesCard = ({
     const densityUnits = unitSystem === 'metric' ? ["kg/m³", "g/cm³"] : ["lb/ft³", "lb/gal"];
     const viscosityUnits = unitSystem === 'metric' ? ["cP", "Pa·s", "mPa·s"] : ["cP"];
 
+    const isReadOnly = selectedFluid !== "Custom";
+
     return (
         <Card className="border-2 border-border hover:border-primary/30 transition-colors">
             <CardContent className="p-6">
@@ -158,21 +164,25 @@ const FlowPropertiesCard = ({
 
                 <div className="space-y-5">
                     {/* Fluid Selection */}
-                    {lineType !== "mixed" && (
-                        <div className="space-y-2">
-                            <Label className="text-sm font-medium">Fluid</Label>
-                            <Select value={selectedFluid} onValueChange={onFluidChange}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Custom">Custom</SelectItem>
-                                    {lineType === "gas"
-                                        ? commonGases.map(f => <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>)
-                                        : commonLiquids.map(f => <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>)
-                                    }
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
+                    <div className="space-y-2">
+                        <Label className="text-sm font-medium">Fluid</Label>
+                        <Select value={selectedFluid} onValueChange={onFluidChange}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Custom">Custom</SelectItem>
+                                {lineType === "gas"
+                                    ? commonGases.map(f => <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>)
+                                    : (lineType === "liquid"
+                                        ? commonLiquids.map(f => <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>)
+                                        : [
+                                            ...commonGases.map(f => <SelectItem key={`gas-${f.name}`} value={f.name}>{f.name} (Gas)</SelectItem>),
+                                            ...commonLiquids.map(f => <SelectItem key={`liq-${f.name}`} value={f.name}>{f.name} (Liq)</SelectItem>)
+                                        ]
+                                    )
+                                }
+                            </SelectContent>
+                        </Select>
+                    </div>
 
                     {/* Temperature */}
                     <div className="space-y-2">
@@ -208,7 +218,7 @@ const FlowPropertiesCard = ({
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="text-sm font-medium">Mol Weight (kg/kmol)</Label>
-                                            <Input type="number" value={gasMolecularWeight} onChange={(e) => onGasMolecularWeightChange?.(e.target.value)} />
+                                            <Input type="number" value={gasMolecularWeight} onChange={(e) => onGasMolecularWeightChange?.(e.target.value)} disabled={isReadOnly} />
                                         </div>
                                     </div>
                                 </>
@@ -219,7 +229,7 @@ const FlowPropertiesCard = ({
                                 <div className="space-y-2">
                                     <Label className="text-sm font-medium">Density</Label>
                                     <div className="flex gap-2">
-                                        <Input type="number" value={density} onChange={(e) => onDensityChange(e.target.value)} className="flex-1" />
+                                        <Input type="number" value={density} onChange={(e) => onDensityChange(e.target.value)} className="flex-1" disabled={isReadOnly} />
                                         <Select value={densityUnit} onValueChange={onDensityUnitChange}>
                                             <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
                                             <SelectContent>{densityUnits.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
@@ -229,7 +239,7 @@ const FlowPropertiesCard = ({
                                 <div className="space-y-2">
                                     <Label className="text-sm font-medium">Viscosity</Label>
                                     <div className="flex gap-2">
-                                        <Input type="number" value={viscosity} onChange={(e) => onViscosityChange(e.target.value)} className="flex-1" />
+                                        <Input type="number" value={viscosity} onChange={(e) => onViscosityChange(e.target.value)} className="flex-1" disabled={isReadOnly} />
                                         <Select value={viscosityUnit} onValueChange={onViscosityUnitChange}>
                                             <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
                                             <SelectContent>{viscosityUnits.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
@@ -299,7 +309,11 @@ const FlowPropertiesCard = ({
                                     </div>
                                     <div className="space-y-1">
                                         <Label className="text-xs">Gas Visc (cP)</Label>
-                                        <Input type="number" value={mixedGasViscosity} onChange={(e) => onMixedGasViscosityChange?.(e.target.value)} className="h-8" />
+                                        <Input type="number" value={mixedGasViscosity} onChange={(e) => onMixedGasViscosityChange?.(e.target.value)} className="h-8" disabled={isReadOnly} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Gas MW</Label>
+                                        <Input type="number" value={mixedGasMW} onChange={(e) => onMixedGasMWChange?.(e.target.value)} className="h-8" disabled={isReadOnly} />
                                     </div>
                                     <div className="space-y-1">
                                         <Label className="text-xs">Liq Visc (cP)</Label>

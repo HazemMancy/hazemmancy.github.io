@@ -149,7 +149,7 @@ export const calculatePressureDrop = (
             temperature_K: inputs.lineType === 'mixed'
                 ? inputs.mixedOpTemp + 273.15
                 : inputs.fluidTemperature + 273.15,
-            gasMw_kgkmol: inputs.lineType === "gas" ? inputs.gasMolecularWeight : undefined,
+            gasMw_kgkmol: inputs.lineType === "gas" ? inputs.gasMolecularWeight : (inputs.lineType === "mixed" ? inputs.mixedGasMW : undefined),
             gasZ: inputs.lineType === "gas" ? inputs.compressibilityZ : undefined,
             gasViscosity_Pas: inputs.lineType === "gas" ? flowProperties.viscosity : undefined,
             gasK: 1.3, // Default Cp/Cv ratio
@@ -308,6 +308,12 @@ export const calculateAPICriteriaChecks = (
 
         if (criteria.rhoV2Limit !== null && rhoVSquared > criteria.rhoV2Limit) {
             warnings.push(`Momentum (${rhoVSquared.toFixed(0)} kg/m·s²) exceeds limit (${criteria.rhoV2Limit})`);
+        }
+
+        // Mixed Phase Mach Check
+        const machNumber = pressureDrop.machNumber;
+        if (criteria.machLimit !== null && machNumber > criteria.machLimit) {
+            warnings.push(`Mach number (${machNumber.toFixed(3)}) exceeds limit (${criteria.machLimit})`);
         }
     }
 

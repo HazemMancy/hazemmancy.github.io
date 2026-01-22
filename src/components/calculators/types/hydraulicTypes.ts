@@ -80,6 +80,7 @@ export interface HydraulicInputs {
     mixedOpTemp: number;
     mixedGasZ: number;
     mixedGasViscosity: number;
+    mixedGasMW: number;
     mixedLiquidViscosity: number;
     pressureType: string;
 
