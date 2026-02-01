@@ -1896,6 +1896,24 @@ const HeatExchangerSizing = () => {
                   description: "Design comparison has been reset",
                 });
               }}
+              onLoadDesign={(design) => {
+                setTubeGeometry(prev => ({
+                  ...prev,
+                  shellDiameter: design.shellDiameter.toString(),
+                  outerDiameter: design.tubeOD.toString(),
+                  tubeLength: design.tubeLength.toString(),
+                  numberOfTubes: design.numberOfTubes.toString(),
+                  tubePasses: design.tubePasses.toString(),
+                  tubePitch: design.tubePitch.toString(),
+                  tubePattern: design.tubePattern as "triangular" | "square" | "rotatedSquare",
+                  baffleSpacing: design.baffleSpacing.toString(),
+                  baffleCut: design.baffleCut.toString(),
+                }));
+                toast({
+                  title: "Design Loaded",
+                  description: `${design.name} geometry restored to input fields`,
+                });
+              }}
             />
           )}
 

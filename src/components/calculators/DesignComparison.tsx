@@ -1,10 +1,9 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Plus, Trophy, AlertTriangle, CheckCircle } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { Trash2, Plus, Trophy, AlertTriangle, CheckCircle, Upload } from "lucide-react";
 
 export interface SavedDesign {
   id: string;
@@ -43,9 +42,10 @@ interface DesignComparisonProps {
   savedDesigns: SavedDesign[];
   onDeleteDesign: (id: string) => void;
   onClearAll: () => void;
+  onLoadDesign: (design: SavedDesign) => void;
 }
 
-const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll }: DesignComparisonProps) => {
+const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll, onLoadDesign }: DesignComparisonProps) => {
   const formatNumber = (num: number, decimals: number = 2): string => {
     if (isNaN(num) || !isFinite(num)) return "—";
     return num.toLocaleString(undefined, { 
@@ -115,17 +115,28 @@ const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll }: DesignCo
               <TableRow>
                 <TableHead className="w-[150px]">Parameter</TableHead>
                 {savedDesigns.map((design) => (
-                  <TableHead key={design.id} className="min-w-[120px]">
-                    <div className="flex items-center justify-between">
-                      <span className="truncate">{design.name}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 ml-1"
-                        onClick={() => onDeleteDesign(design.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                  <TableHead key={design.id} className="min-w-[140px]">
+                    <div className="flex flex-col gap-1">
+                      <span className="truncate font-medium">{design.name}</span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-5 px-1.5 text-[10px]"
+                          onClick={() => onLoadDesign(design)}
+                        >
+                          <Upload className="h-2.5 w-2.5 mr-0.5" />
+                          Load
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-destructive hover:text-destructive"
+                          onClick={() => onDeleteDesign(design.id)}
+                        >
+                          <Trash2 className="h-2.5 w-2.5" />
+                        </Button>
+                      </div>
                     </div>
                   </TableHead>
                 ))}
