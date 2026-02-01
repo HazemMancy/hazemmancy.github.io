@@ -5,8 +5,10 @@
 
 import { FluidType, FluidProperties, UnitSystem } from './heatExchangerTypes';
 
+
 // Fluid database with properties at reference conditions (25°C, 1 atm)
-const fluidDatabase: Record<FluidType, Partial<FluidProperties>> = {
+// Note: This is a legacy database. Use fluidLibraryExpanded.ts for the full library.
+const fluidDatabase: Partial<Record<FluidType, Partial<FluidProperties>>> = {
   [FluidType.CRUDE_OIL]: {
     density: 850,
     viscosity: 10,
@@ -227,7 +229,7 @@ export function getAvailableFluidTypes(): FluidType[] {
  * Get fluid type display name
  */
 export function getFluidTypeDisplayName(type: FluidType): string {
-  const names: Record<FluidType, string> = {
+  const names: Partial<Record<FluidType, string>> = {
     [FluidType.CRUDE_OIL]: 'Crude Oil',
     [FluidType.NATURAL_GAS]: 'Natural Gas',
     [FluidType.WATER]: 'Water',
@@ -240,7 +242,7 @@ export function getFluidTypeDisplayName(type: FluidType): string {
     [FluidType.DIESEL]: 'Diesel',
     [FluidType.CUSTOM]: 'Custom Fluid'
   };
-  return names[type];
+  return names[type] || type;
 }
 
 export { fluidDatabase };
