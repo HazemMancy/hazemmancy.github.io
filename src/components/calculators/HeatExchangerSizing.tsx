@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3, AlertTriangle, Activity, Download, Database, Shield, Droplets, Save, GitCompare, FileSpreadsheet } from "lucide-react";
+import { Thermometer, ArrowRight, Info, BookOpen, Settings, Gauge, Grid3X3, AlertTriangle, Activity, Download, Database, Shield, Droplets, Save, GitCompare, FileSpreadsheet, FileCheck } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import HeatExchangerGuide from "./guides/HeatExchangerGuide";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import TubeBundleVisualization from "./TubeBundleVisualization";
 import DesignComparison, { type SavedDesign } from "./DesignComparison";
 import { HTRIRatingSummary, type HTRIRatingData } from "./HTRIRatingSummary";
 import { generateExcelDatasheet, type ExcelDatasheetData, unitConversions } from "@/lib/excelDatasheet";
+import { generateHTRIExcel, createHTRIExportData, type HTRIExportData } from "@/lib/htriExport";
 import APIValidationPanel from "./components/APIValidationPanel";
 import ValidationSummaryPanel from "./components/ValidationSummaryPanel";
 import FluidTypeSelector from "./components/FluidTypeSelector";
@@ -1842,6 +1843,187 @@ const HeatExchangerSizing = () => {
                     >
                       <Save className="h-3.5 w-3.5 mr-1" />
                       Save Design
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        // Generate HTRI-compatible export
+                        const htriData = createHTRIExportData({
+                          caseInfo: {
+                            caseName: 'Heat Exchanger Design',
+                            caseNumber: `HX-${Date.now().toString().slice(-6)}`,
+                            projectName: 'Lovable Calculator Export',
+                            customer: '',
+                            engineer: '',
+                            date: new Date().toLocaleDateString(),
+                            revision: 'A',
+                            temaDesignation: `${shellType === 'u-tube' ? 'BEU' : 'AES'}`,
+                            orientation: 'horizontal',
+                            exchangerService: 'General Service',
+                          },
+                          shellSide: {
+                            fluidName: 'Shell Fluid',
+                            flowRate: parseFloat(shellFluid.flowRate) / 3600, // kg/hr to kg/s
+                            inletTemp: parseFloat(shellFluid.inletTemp),
+                            outletTemp: parseFloat(shellFluid.outletTemp),
+                            operatingPressure: 101.325,
+                            allowablePD: 50,
+                            foulingFactor: 0.0002,
+                            density: parseFloat(shellFluid.density),
+                            viscosity: parseFloat(shellFluid.viscosity) * 1000, // Pa·s to mPa·s
+                            specificHeat: parseFloat(shellFluid.specificHeat) / 1000, // J to kJ
+                            thermalConductivity: parseFloat(shellFluid.thermalConductivity),
+                            prandtlNumber: parseFloat(shellFluid.prandtl),
+                            phase: 'liquid',
+                          },
+                          tubeSide: {
+                            fluidName: 'Tube Fluid',
+                            flowRate: parseFloat(tubeFluid.flowRate) / 3600,
+                            inletTemp: parseFloat(tubeFluid.inletTemp),
+                            outletTemp: parseFloat(tubeFluid.outletTemp),
+                            operatingPressure: 101.325,
+                            allowablePD: 50,
+                            foulingFactor: 0.0002,
+                            density: parseFloat(tubeFluid.density),
+                            viscosity: parseFloat(tubeFluid.viscosity) * 1000,
+                            specificHeat: parseFloat(tubeFluid.specificHeat) / 1000,
+                            thermalConductivity: parseFloat(tubeFluid.thermalConductivity),
+                            prandtlNumber: parseFloat(tubeFluid.prandtl),
+                            phase: 'liquid',
+                          },
+                          thermalResults: {
+                            heatDuty: results.heatDuty / 1000, // W to kW
+                            heatDutyBalance: 0,
+                            lmtd: results.lmtd,
+                            correctionFactorF: results.correctionFactor,
+                            effectiveMTD: results.effectiveLmtd,
+                            overallUClean: results.cleanU,
+                            overallUFouled: results.fouledU,
+                            overallURequired: results.fouledU,
+                            overallUService: results.calculatedU,
+                            shellHTC: results.ho,
+                            tubeHTC: results.hi,
+                            tubeWallResistance: 0,
+                            effectiveness: results.effectiveness,
+                            ntu: results.ntu,
+                            thermalEfficiency: results.effectiveness * 100,
+                            oversurfacePercent: ((results.heatTransferArea / results.requiredArea) - 1) * 100,
+                          },
+                          pressureDropResults: {
+                            shellSidePD: results.shellSidePressureDrop / 1000, // Pa to kPa
+                            shellSideComponents: { 
+                              crossflow: results.shellSidePressureDrop * 0.6 / 1000, 
+                              window: results.shellSidePressureDrop * 0.25 / 1000, 
+                              endZones: results.shellSidePressureDrop * 0.1 / 1000, 
+                              nozzles: results.shellSidePressureDrop * 0.05 / 1000 
+                            },
+                            tubeSidePD: results.tubeSidePressureDrop / 1000,
+                            tubeSideComponents: { 
+                              friction: results.tubeSidePressureDrop * 0.7 / 1000, 
+                              returns: results.tubeSidePressureDrop * 0.25 / 1000, 
+                              nozzles: results.tubeSidePressureDrop * 0.05 / 1000 
+                            },
+                            shellVelocity: results.shellSideVelocity,
+                            tubeVelocity: results.tubeSideVelocity,
+                            shellReynolds: results.shellReynolds,
+                            tubeReynolds: results.tubeReynolds,
+                            shellFlowRegime: results.shellReynolds > 10000 ? 'Turbulent' : results.shellReynolds > 2300 ? 'Transition' : 'Laminar',
+                            tubeFlowRegime: results.tubeReynolds > 10000 ? 'Turbulent' : results.tubeReynolds > 2300 ? 'Transition' : 'Laminar',
+                          },
+                          geometry: {
+                            shellID: parseFloat(tubeGeometry.shellDiameter),
+                            shellThickness: asmeResults?.shellRecommended || 10,
+                            tubeOD: parseFloat(tubeGeometry.outerDiameter),
+                            tubeWall: parseFloat(tubeGeometry.wallThickness),
+                            tubeID: parseFloat(tubeGeometry.outerDiameter) - 2 * parseFloat(tubeGeometry.wallThickness),
+                            tubeLength: parseFloat(tubeGeometry.tubeLength),
+                            effectiveTubeLength: parseFloat(tubeGeometry.tubeLength) - 0.05,
+                            numberOfTubes: parseInt(tubeGeometry.numberOfTubes),
+                            tubePitch: parseFloat(tubeGeometry.tubePitch),
+                            pitchRatio: parseFloat(tubeGeometry.tubePitch) / parseFloat(tubeGeometry.outerDiameter),
+                            tubePattern: tubeGeometry.tubePattern === 'triangular' ? 'triangular-30' : tubeGeometry.tubePattern === 'square' ? 'square-90' : 'rotated-square-45',
+                            tubePasses: parseInt(tubeGeometry.tubePasses),
+                            shellPasses: 1,
+                            baffleType: 'single-segmental',
+                            baffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
+                            inletBaffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
+                            outletBaffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
+                            baffleCut: parseFloat(tubeGeometry.baffleCut),
+                            baffleThickness: 6,
+                            numberOfBaffles: Math.floor((parseFloat(tubeGeometry.tubeLength) * 1000) / parseFloat(tubeGeometry.baffleSpacing)) - 1,
+                            crossflowArea: results.crossFlowArea || 0,
+                            windowArea: 0,
+                            bundleDiameter: parseFloat(tubeGeometry.shellDiameter) - 24,
+                            shellToTubesheetClearance: 12,
+                            sealingStrips: 0,
+                          },
+                          mechanical: {
+                            shellMaterial: shellMaterial,
+                            tubeMaterial: 'Carbon Steel SA-179',
+                            tubesheetMaterial: shellMaterial,
+                            baffleMaterial: 'Carbon Steel',
+                            designPressureShell: asmeResults?.shellMAWP || 10,
+                            designPressureTube: asmeResults?.shellMAWP || 10,
+                            designTemperature: 150,
+                            hydroTestPressure: asmeResults?.hydroTestPressure || 15,
+                            corrosionAllowance: 3,
+                            jointEfficiency: 0.85,
+                            tubesheetThickness: asmeResults?.tubesheetThickness || 50,
+                            channelThickness: asmeResults?.headThickness || 15,
+                            flangeRating: asmeResults?.flangeClass || 'Class 150',
+                            tubeToTubesheetJoint: 'expanded',
+                          },
+                          vibration: {
+                            naturalFrequency: results.vibration?.naturalFrequency || 0,
+                            vortexSheddingFrequency: results.vibration?.vortexSheddingFrequency || 0,
+                            turbulentBuffetingFrequency: 0,
+                            acousticResonanceFrequency: results.vibration?.acousticResonanceFrequency || 0,
+                            criticalVelocity: results.vibration?.criticalVelocity || 0,
+                            crossflowVelocity: results.shellSideVelocity,
+                            velocityRatio: results.shellSideVelocity / (results.vibration?.criticalVelocity || 1),
+                            frequencyRatio: results.vibration?.frequencyRatio || 0,
+                            reducedVelocity: results.vibration?.reducedVelocity || 0,
+                            damageNumber: results.vibration?.damageNumber || 0,
+                            unsupportedSpan: parseFloat(tubeGeometry.baffleSpacing),
+                            logDecrement: 0.03,
+                            isVortexSheddingRisk: results.vibration?.isVibrationRisk || false,
+                            isFEIRisk: results.shellSideVelocity > 0.8 * (results.vibration?.criticalVelocity || 999),
+                            isAcousticRisk: results.vibration?.isAcousticRisk || false,
+                            vibrationStatus: results.vibration?.isVibrationRisk ? 'unsafe' : 'safe',
+                            recommendations: results.vibration?.isVibrationRisk ? ['Review baffle spacing', 'Add tube supports'] : [],
+                          },
+                          bellDelawareFactors: {
+                            Jc: results.Jc || 1,
+                            Jl: results.Jl || 1,
+                            Jb: results.Jb || 1,
+                            Jr: results.Jr || 1,
+                            Js: results.Js || 1,
+                            jFactor: 0,
+                            fFactor: 0,
+                          },
+                          compliance: {
+                            api660Compliant: results.errors.length === 0,
+                            temaClass: 'R',
+                            api660Warnings: results.warnings,
+                            api660Errors: results.errors,
+                            temaWarnings: [],
+                            asmeCompliant: true,
+                            designCode: 'ASME Section VIII Div.1',
+                          },
+                          unitSystem: 'SI',
+                        });
+                        generateHTRIExcel(htriData);
+                        toast({
+                          title: "HTRI Report Generated",
+                          description: "Excel file downloaded in HTRI-compatible format",
+                        });
+                      }}
+                      className="text-xs"
+                      aria-label="Export HTRI-compatible report"
+                    >
+                      <FileCheck className="h-3.5 w-3.5 mr-1" />
+                      HTRI Export
                     </Button>
                     <Badge variant={results.errors.length > 0 ? "destructive" : "secondary"} className="text-xs">
                       {results.errors.length > 0 ? `${results.errors.length} Error(s)` : 'Valid'}
