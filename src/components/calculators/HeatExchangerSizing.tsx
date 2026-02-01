@@ -20,6 +20,10 @@ import TubeBundleVisualization from "./TubeBundleVisualization";
 import DesignComparison, { type SavedDesign } from "./DesignComparison";
 import { HTRIRatingSummary, type HTRIRatingData } from "./HTRIRatingSummary";
 import { generateExcelDatasheet, type ExcelDatasheetData, unitConversions } from "@/lib/excelDatasheet";
+import APIValidationPanel from "./components/APIValidationPanel";
+import FluidTypeSelector from "./components/FluidTypeSelector";
+import { FluidType, UnitSystem as HXUnitSystem, TubeLayout, MechanicalDesign, APIValidationResult, VibrationCheckResult } from "@/lib/heatExchangerTypes";
+import { validateAPI660 } from "@/lib/heatExchangerAPIValidation";
 import {
   toKelvin,
   fromKelvin,
@@ -260,9 +264,12 @@ const HeatExchangerSizing = () => {
   const [tempUnit, setTempUnit] = useState<TemperatureUnit>("C");
   const [shellSideMethod, setShellSideMethod] = useState<ShellSideMethod>("bell-delaware");
 
-  // Fluid selection
-  const [hotFluidType, setHotFluidType] = useState<string>("custom");
-  const [coldFluidType, setColdFluidType] = useState<string>("water");
+  // Fluid selection - use new FluidType enum
+  const [hotFluidType, setHotFluidType] = useState<FluidType>(FluidType.CUSTOM);
+  const [coldFluidType, setColdFluidType] = useState<FluidType>(FluidType.WATER);
+  
+  // API Validation state
+  const [apiValidation, setApiValidation] = useState<APIValidationResult | null>(null);
 
   // ASME inputs
   const [designPressure, setDesignPressure] = useState("10"); // barg
@@ -707,15 +714,52 @@ const HeatExchangerSizing = () => {
     }
   }, []);
 
-  useEffect(() => {
-    const avgTemp = (parseFloat(hotFluid.inletTemp) + parseFloat(hotFluid.outletTemp)) / 2;
-    if (!isNaN(avgTemp) && hotFluidType !== "custom") updateFluidFromDatabase(hotFluidType, avgTemp, setHotFluid, hotFluid);
-  }, [hotFluidType]);
+  // Fluid type change handlers are now handled by FluidTypeSelector component
 
+  // API 660 Validation Effect
   useEffect(() => {
-    const avgTemp = (parseFloat(coldFluid.inletTemp) + parseFloat(coldFluid.outletTemp)) / 2;
-    if (!isNaN(avgTemp) && coldFluidType !== "custom") updateFluidFromDatabase(coldFluidType, avgTemp, setColdFluid, coldFluid);
-  }, [coldFluidType]);
+    if (!results) {
+      setApiValidation(null);
+      return;
+    }
+
+    const isImperial = unitSystem === 'imperial';
+    const convLen = (val: string) => isImperial ? parseFloat(val) * 0.0254 : parseFloat(val) / 1000;
+    
+    const shellDia = convLen(tubeGeometry.shellDiameter) * 1000; // back to mm for validation
+    const tubeOD = parseFloat(tubeGeometry.outerDiameter);
+    const tubePitch = parseFloat(tubeGeometry.tubePitch);
+    const baffleSpacing = parseFloat(tubeGeometry.baffleSpacing);
+    const baffleCut = parseFloat(tubeGeometry.baffleCut);
+    const tubeLength = parseFloat(tubeGeometry.tubeLength);
+    const numberOfTubes = parseInt(tubeGeometry.numberOfTubes);
+
+    // Determine tube layout enum
+    let layout: TubeLayout = TubeLayout.TRIANGULAR_30;
+    if (tubeGeometry.tubePattern === 'square') layout = TubeLayout.SQUARE_90;
+    else if (tubeGeometry.tubePattern === 'rotatedSquare') layout = TubeLayout.SQUARE_45;
+
+    const mechanicalDesign: MechanicalDesign = {
+      tubeOD: isImperial ? tubeOD * 25.4 : tubeOD, // Convert to mm if imperial
+      tubeThickness: isImperial ? parseFloat(tubeGeometry.wallThickness) * 25.4 : parseFloat(tubeGeometry.wallThickness),
+      tubeLength: isImperial ? tubeLength / 3.28084 : tubeLength, // Convert to m
+      tubePitch: isImperial ? tubePitch * 25.4 : tubePitch,
+      tubeLayout: layout,
+      numberOfPasses: parseInt(tubeGeometry.tubePasses),
+      baffleCut: baffleCut,
+      baffleSpacing: isImperial ? baffleSpacing * 25.4 : baffleSpacing
+    };
+
+    const validation = validateAPI660(
+      mechanicalDesign,
+      isImperial ? shellDia * 25.4 : shellDia,
+      numberOfTubes,
+      results.shellSideVelocity,
+      results.tubeSideVelocity
+    );
+
+    setApiValidation(validation);
+  }, [results, tubeGeometry, unitSystem]);
 
   useEffect(() => { // ASME
     const P = parseFloat(designPressure);
@@ -823,29 +867,66 @@ const HeatExchangerSizing = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FluidInputCard
-              title="Hot Fluid (Shell Side)"
-              fluid={hotFluid} setFluid={setHotFluid}
-              colorClass="bg-red-500" isCustom={hotFluidType === "custom"}
-              unitSystem={unitSystem} tempUnit={tempUnit} calculationMode={calculationMode}
-            />
-            <FluidInputCard
-              title="Cold Fluid (Tube Side)"
-              fluid={coldFluid} setFluid={setColdFluid}
-              colorClass="bg-blue-500" isCustom={coldFluidType === "custom"}
-              unitSystem={unitSystem} tempUnit={tempUnit} calculationMode={calculationMode}
-              extraContent={
-                <div className="space-y-1.5 pt-2 border-t border-border/50">
-                  <Label className="text-xs text-muted-foreground">Speed of Sound ({getVelocityUnit()})</Label>
-                  <Input
-                    type="number" value={speedOfSound}
-                    onChange={(e) => setSpeedOfSound(e.target.value)}
-                    className="h-9 no-spinner"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Required for vibration analysis</p>
-                </div>
-              }
-            />
+            <Card className="border-border/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500" />
+                  Hot Fluid (Shell Side)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FluidTypeSelector
+                  selectedType={hotFluidType}
+                  onTypeChange={setHotFluidType}
+                  onPropertiesUpdate={(props) => setHotFluid(prev => ({ ...prev, ...props }))}
+                  unitSystem={unitSystem}
+                  label="Fluid Type"
+                  colorClass="bg-red-500"
+                />
+                <FluidInputCard
+                  title=""
+                  fluid={hotFluid} setFluid={setHotFluid}
+                  colorClass="bg-red-500" isCustom={hotFluidType === FluidType.CUSTOM}
+                  unitSystem={unitSystem} tempUnit={tempUnit} calculationMode={calculationMode}
+                />
+              </CardContent>
+            </Card>
+            
+            <Card className="border-border/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  Cold Fluid (Tube Side)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FluidTypeSelector
+                  selectedType={coldFluidType}
+                  onTypeChange={setColdFluidType}
+                  onPropertiesUpdate={(props) => setColdFluid(prev => ({ ...prev, ...props }))}
+                  unitSystem={unitSystem}
+                  label="Fluid Type"
+                  colorClass="bg-blue-500"
+                />
+                <FluidInputCard
+                  title=""
+                  fluid={coldFluid} setFluid={setColdFluid}
+                  colorClass="bg-blue-500" isCustom={coldFluidType === FluidType.CUSTOM}
+                  unitSystem={unitSystem} tempUnit={tempUnit} calculationMode={calculationMode}
+                  extraContent={
+                    <div className="space-y-1.5 pt-2 border-t border-border/50">
+                      <Label className="text-xs text-muted-foreground">Speed of Sound ({getVelocityUnit()})</Label>
+                      <Input
+                        type="number" value={speedOfSound}
+                        onChange={(e) => setSpeedOfSound(e.target.value)}
+                        className="h-9 no-spinner"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Required for vibration analysis</p>
+                    </div>
+                  }
+                />
+              </CardContent>
+            </Card>
           </div>
 
           <Card className="border-border/50">
@@ -877,13 +958,97 @@ const HeatExchangerSizing = () => {
 
           {/* ... Tube Geometry Card ... */}
 
+          {/* API Validation Panel - Always visible when there are results */}
+          {results && (
+            <APIValidationPanel
+              apiValidation={apiValidation}
+              vibrationCheck={results.vibration ? {
+                isSafe: !results.vibration.isVibrationRisk && !results.vibration.isAcousticRisk,
+                naturalFrequency: results.vibration.naturalFrequency,
+                vortexSheddingFrequency: results.vibration.vortexSheddingFrequency,
+                fluidElasticInstability: results.vibration.damageNumber || 0,
+                acousticResonanceFrequency: results.vibration.acousticResonanceFrequency || 0,
+                message: results.vibration.vibrationMessage || 'Vibration analysis passed',
+                warnings: results.vibration.isVibrationRisk || results.vibration.isAcousticRisk 
+                  ? [results.vibration.vibrationMessage] 
+                  : []
+              } : null}
+              calculationWarnings={results.warnings}
+              calculationErrors={results.errors}
+            />
+          )}
+
           {results && (
             <Card className="border-primary/30">
-              {/* ... Warnings/Errors ... */}
-              {/* Use toDisplay helper for all values */}
-              {/* Display Duty: formatNumber(toDisplay.duty(results.heatDuty)) */}
-              {/* Display Area: formatNumber(toDisplay.area(results.requiredArea)) */}
-              {/* ... */}
+              <CardHeader>
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Calculation Results</span>
+                  <div className="flex gap-2">
+                    <Badge variant={results.errors.length > 0 ? "destructive" : "secondary"} className="text-xs">
+                      {results.errors.length > 0 ? `${results.errors.length} Error(s)` : 'Valid'}
+                    </Badge>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Results Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Heat Duty</Label>
+                    <div className="font-medium">{formatNumber(toDisplay.duty(results.heatDuty))} {getDutyUnit()}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">LMTD (Corrected)</Label>
+                    <div className="font-medium">{formatNumber(results.effectiveLmtd, 1)} {getTempUnitLabel()}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Required Area</Label>
+                    <div className="font-medium">{formatNumber(toDisplay.area(results.requiredArea))} {getAreaUnit()}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Overall U (Fouled)</Label>
+                    <div className="font-medium">{formatNumber(toDisplay.htc(results.fouledU))} {getHTCUnit()}</div>
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                {/* Hydraulic Results */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Tube Velocity</Label>
+                    <div className="font-medium">{formatNumber(toDisplay.vel(results.tubeSideVelocity))} {getVelocityUnit()}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Shell Velocity</Label>
+                    <div className="font-medium">{formatNumber(toDisplay.vel(results.shellSideVelocity))} {getVelocityUnit()}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Tube ΔP</Label>
+                    <div className="font-medium">{formatNumber(toDisplay.press(results.tubeSidePressureDrop))} {getPressureUnit()}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Shell ΔP</Label>
+                    <div className="font-medium">{formatNumber(toDisplay.press(results.shellSidePressureDrop))} {getPressureUnit()}</div>
+                  </div>
+                </div>
+                
+                {/* Effectiveness & NTU */}
+                <div className="grid grid-cols-3 gap-4 text-sm pt-2 border-t border-border/50">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">NTU</Label>
+                    <div className="font-medium">{formatNumber(results.ntu, 3)}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Effectiveness (ε)</Label>
+                    <div className="font-medium">{formatNumber(results.effectiveness * 100, 1)}%</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">F-Factor</Label>
+                    <div className="font-medium">{formatNumber(results.correctionFactor, 3)}</div>
+                  </div>
+                </div>
+              </CardContent>
             </Card>
           )}
 
