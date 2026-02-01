@@ -331,6 +331,7 @@ const HeatExchangerSizing = () => {
 
   // Unit system
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("metric");
+  const [isUnitTransitioning, setIsUnitTransitioning] = useState(false);
 
   // Reference table selector
   const [selectedTemaRefTable, setSelectedTemaRefTable] = useState("3/4\" OD on 1\" pitch (standard)");
@@ -1092,6 +1093,10 @@ const HeatExchangerSizing = () => {
     setTubeFouling(prev => convertFouling(prev));
     setOverallU(prev => convertHTC(prev));
     setArea(prev => convertArea(prev));
+
+    // Trigger animation
+    setIsUnitTransitioning(true);
+    setTimeout(() => setIsUnitTransitioning(false), 500);
 
   }, [unitSystem]);
 

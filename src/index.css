@@ -273,6 +273,57 @@
   animation: float 6s ease-in-out infinite;
 }
 
+/* Unit transition animations */
+@keyframes unitValueChange {
+  0% { 
+    background-color: hsl(42 85% 55% / 0.15);
+    transform: scale(1.02);
+  }
+  100% { 
+    background-color: transparent;
+    transform: scale(1);
+  }
+}
+
+@keyframes valueFlash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.unit-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.unit-value-changed {
+  animation: unitValueChange 0.5s ease-out forwards;
+}
+
+.value-updating {
+  animation: valueFlash 0.3s ease-in-out;
+}
+
+/* Smooth number transitions */
+.transition-value {
+  transition: color 0.2s ease, background-color 0.3s ease;
+}
+
+/* Input field smooth transitions */
+input.unit-transition,
+.unit-transition input {
+  transition: background-color 0.3s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Badge and label transitions */
+.unit-label-transition {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Card highlight on unit change */
+.unit-changed-highlight {
+  animation: unitValueChange 0.6s ease-out;
+  border-color: hsl(42 85% 55% / 0.5) !important;
+}
+
 /* Hide number input spinners globally */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
@@ -282,4 +333,24 @@ input[type="number"]::-webkit-inner-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* Animated input container */
+.input-animate-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.input-animate-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, hsl(42 85% 55% / 0.1), transparent);
+  transform: translateX(-100%);
+  transition: transform 0s;
+}
+
+.input-animate-container.animating::after {
+  transform: translateX(100%);
+  transition: transform 0.5s ease-out;
 }
