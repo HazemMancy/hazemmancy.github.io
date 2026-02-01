@@ -22,8 +22,14 @@ import { HTRIRatingSummary, type HTRIRatingData } from "./HTRIRatingSummary";
 import { generateExcelDatasheet, type ExcelDatasheetData, unitConversions } from "@/lib/excelDatasheet";
 import APIValidationPanel from "./components/APIValidationPanel";
 import FluidTypeSelector from "./components/FluidTypeSelector";
-import { FluidType, UnitSystem as HXUnitSystem, TubeLayout, MechanicalDesign, APIValidationResult, VibrationCheckResult } from "@/lib/heatExchangerTypes";
+import { FluidType, FluidCategory, FluidPhase, UnitSystem as HXUnitSystem, TubeLayout, MechanicalDesign, APIValidationResult, VibrationCheckResult, FluidSide } from "@/lib/heatExchangerTypes";
 import { validateAPI660 } from "@/lib/heatExchangerAPIValidation";
+import { 
+  fluidLibrary,
+  getFluidDefinition,
+  calculateSpeedOfSound,
+  getPropertiesAtTemperature
+} from "@/lib/fluidLibraryExpanded";
 import {
   toKelvin,
   fromKelvin,
@@ -264,12 +270,15 @@ const HeatExchangerSizing = () => {
   const [tempUnit, setTempUnit] = useState<TemperatureUnit>("C");
   const [shellSideMethod, setShellSideMethod] = useState<ShellSideMethod>("bell-delaware");
 
-  // Fluid selection - use new FluidType enum
-  const [hotFluidType, setHotFluidType] = useState<FluidType>(FluidType.CUSTOM);
-  const [coldFluidType, setColdFluidType] = useState<FluidType>(FluidType.WATER);
+  // Fluid selection with flexible side assignment
+  const [shellFluidType, setShellFluidType] = useState<FluidType>(FluidType.CRUDE_OIL_MEDIUM);
+  const [tubeFluidType, setTubeFluidType] = useState<FluidType>(FluidType.COOLING_WATER);
   
   // API Validation state
   const [apiValidation, setApiValidation] = useState<APIValidationResult | null>(null);
+  
+  // Extreme value warnings
+  const [extremeWarnings, setExtremeWarnings] = useState<string[]>([]);
 
   // ASME inputs
   const [designPressure, setDesignPressure] = useState("10"); // barg
@@ -305,9 +314,24 @@ const HeatExchangerSizing = () => {
 
   // U Mode
   const [uMode, setUMode] = useState<UMode>("user-fouled");
-  const [speedOfSound, setSpeedOfSound] = useState("1450"); // m/s default
+  
+  // Speed of sound - AUTO-CALCULATED from shell-side fluid properties
+  const [calculatedSpeedOfSound, setCalculatedSpeedOfSound] = useState<number>(1450);
 
-  const [hotFluid, setHotFluid] = useState<FluidInputs>({
+  // Shell-side fluid (user decides which fluid)
+  const [shellFluid, setShellFluid] = useState<FluidInputs>({
+    inletTemp: "150",
+    outletTemp: "90",
+    flowRate: "50000",
+    specificHeat: "2.1",
+    density: "750",
+    viscosity: "0.5",
+    thermalConductivity: "0.12",
+    prandtl: "8.75"
+  });
+
+  // Tube-side fluid (user decides which fluid)
+  const [tubeFluid, setTubeFluid] = useState<FluidInputs>({
     inletTemp: "150",
     outletTemp: "90",
     flowRate: "50000",
@@ -321,7 +345,7 @@ const HeatExchangerSizing = () => {
   const [coldFluid, setColdFluid] = useState<FluidInputs>({
     inletTemp: "25",
     outletTemp: "70",
-    flowRate: "33500", // Balanced for ~1.75 MW
+    flowRate: "33500",
     specificHeat: "4.18",
     density: "995",
     viscosity: "0.8",
@@ -329,10 +353,23 @@ const HeatExchangerSizing = () => {
     prandtl: "5.57"
   });
 
+  // Auto-calculate speed of sound from shell-side fluid
+  useEffect(() => {
+    const shellFluidDef = getFluidDefinition(shellFluidType);
+    if (shellFluidDef) {
+      const avgTemp = (parseFloat(shellFluid.inletTemp) + parseFloat(shellFluid.outletTemp)) / 2;
+      const sos = calculateSpeedOfSound(shellFluidDef, isNaN(avgTemp) ? 25 : avgTemp);
+      setCalculatedSpeedOfSound(sos);
+    }
+  }, [shellFluidType, shellFluid.inletTemp, shellFluid.outletTemp]);
+
+  // Extreme value warnings effect - moved after results declaration
+  // See below after results state declaration
+
   const [overallU, setOverallU] = useState("350");
   const [area, setArea] = useState("50");
-  const [hotFouling, setHotFouling] = useState("0.00035");
-  const [coldFouling, setColdFouling] = useState("0.00018");
+  const [shellFouling, setShellFouling] = useState("0.00035");
+  const [tubeFouling, setTubeFouling] = useState("0.00018");
 
   const [tubeGeometry, setTubeGeometry] = useState<TubeGeometry>({
     outerDiameter: "19.05",
@@ -427,36 +464,36 @@ const HeatExchangerSizing = () => {
 
   // Main calculation effect
   useEffect(() => {
-    // 1. Initial Parsing and Validation
-    const Thi = parseFloat(hotFluid.inletTemp);
-    const Tho = parseFloat(hotFluid.outletTemp);
-    const Tci = parseFloat(coldFluid.inletTemp);
-    const Tco = parseFloat(coldFluid.outletTemp);
-    const mh = parseFloat(hotFluid.flowRate);
-    const mc = parseFloat(coldFluid.flowRate);
-    const Cph = parseFloat(hotFluid.specificHeat);
-    const Cpc = parseFloat(coldFluid.specificHeat);
-    const rhoHot = parseFloat(hotFluid.density);
-    const rhoCold = parseFloat(coldFluid.density);
-    const muHot = parseFloat(hotFluid.viscosity);
-    const muCold = parseFloat(coldFluid.viscosity);
-    const kHot = parseFloat(hotFluid.thermalConductivity);
-    const kCold = parseFloat(coldFluid.thermalConductivity);
-    const PrHot = parseFloat(hotFluid.prandtl);
-    const PrCold = parseFloat(coldFluid.prandtl);
+    // 1. Initial Parsing and Validation - Shell/Tube assignment (user chooses)
+    const Thi = parseFloat(shellFluid.inletTemp);
+    const Tho = parseFloat(shellFluid.outletTemp);
+    const Tci = parseFloat(tubeFluid.inletTemp);
+    const Tco = parseFloat(tubeFluid.outletTemp);
+    const mh = parseFloat(shellFluid.flowRate);
+    const mc = parseFloat(tubeFluid.flowRate);
+    const Cph = parseFloat(shellFluid.specificHeat);
+    const Cpc = parseFloat(tubeFluid.specificHeat);
+    const rhoShell = parseFloat(shellFluid.density);
+    const rhoTube = parseFloat(tubeFluid.density);
+    const muShell = parseFloat(shellFluid.viscosity);
+    const muTube = parseFloat(tubeFluid.viscosity);
+    const kShell = parseFloat(shellFluid.thermalConductivity);
+    const kTube = parseFloat(tubeFluid.thermalConductivity);
+    const PrShell = parseFloat(shellFluid.prandtl);
+    const PrTube = parseFloat(tubeFluid.prandtl);
     const U_input = parseFloat(overallU);
     const A_input = parseFloat(area);
-    const Rfo = parseFloat(hotFouling);
-    const Rfi = parseFloat(coldFouling);
-    const sos_input = parseFloat(speedOfSound);
+    const Rfo = parseFloat(shellFouling);
+    const Rfi = parseFloat(tubeFouling);
+    const sos_input = calculatedSpeedOfSound; // Auto-calculated
 
-    if ([Thi, Tho, Tci, Tco, mh, mc, Cph, Cpc, rhoHot, rhoCold, muHot, muCold, kHot, kCold, PrHot, PrCold].some(isNaN)) {
+    if ([Thi, Tho, Tci, Tco, mh, mc, Cph, Cpc, rhoShell, rhoTube, muShell, muTube, kShell, kTube, PrShell, PrTube].some(isNaN)) {
       setResults(null);
       return;
     }
 
     // Safety guards for negatives
-    if (mh < 0 || mc < 0 || rhoHot <= 0 || rhoCold <= 0 || muHot <= 0 || muCold <= 0 || kHot <= 0 || kCold <= 0) {
+    if (mh < 0 || mc < 0 || rhoShell <= 0 || rhoTube <= 0 || muShell <= 0 || muTube <= 0 || kShell <= 0 || kTube <= 0) {
       setResults(null); // Or show specific input error
       return;
     }
@@ -466,12 +503,12 @@ const HeatExchangerSizing = () => {
 
     const mh_kgs = isImperial ? mh * 0.45359237 / 3600 : mh / 3600;
     const mc_kgs = isImperial ? mc * 0.45359237 / 3600 : mc / 3600;
-    const rhoHotSI = isImperial ? rhoHot * 16.01846 : rhoHot;
-    const rhoColdSI = isImperial ? rhoCold * 16.01846 : rhoCold;
-    const muHotSI = muHot * 0.001; // cP -> Pa.s
-    const muColdSI = muCold * 0.001; // cP -> Pa.s
-    const kHotSI = isImperial ? kHot * 1.730735 : kHot;
-    const kColdSI = isImperial ? kCold * 1.730735 : kCold;
+    const rhoShellSI = isImperial ? rhoShell * 16.01846 : rhoShell;
+    const rhoTubeSI = isImperial ? rhoTube * 16.01846 : rhoTube;
+    const muShellSI = muShell * 0.001; // cP -> Pa.s
+    const muTubeSI = muTube * 0.001; // cP -> Pa.s
+    const kShellSI = isImperial ? kShell * 1.730735 : kShell;
+    const kTubeSI = isImperial ? kTube * 1.730735 : kTube;
     const CphSI = isImperial ? Cph * 4186.8 : Cph * 1000;
     const CpcSI = isImperial ? Cpc * 4186.8 : Cpc * 1000;
 
@@ -552,28 +589,28 @@ const HeatExchangerSizing = () => {
     const flowAreaPerPass = (numberOfTubes / tubePasses) * (Math.PI / 4) * Math.pow(Di, 2);
 
     // CORRECTED TUBE VELOCITY: kg/s / (kg/m3 * m2) -> m/s
-    const tubeSideVelocity = mc_kgs / (rhoColdSI * flowAreaPerPass);
+    const tubeSideVelocity = mc_kgs / (rhoTubeSI * flowAreaPerPass);
 
-    const tubeSideCalc = calculateTubeSidePressureDrop(tubeSideVelocity, rhoColdSI, muColdSI, Di, tubeLengthM, tubePasses);
-    const tubeHTC = calculateTubeSideHTC(tubeSideCalc.reynolds, PrCold, kColdSI, Di, true);
+    const tubeSideCalc = calculateTubeSidePressureDrop(tubeSideVelocity, rhoTubeSI, muTubeSI, Di, tubeLengthM, tubePasses);
+    const tubeHTC = calculateTubeSideHTC(tubeSideCalc.reynolds, PrTube, kTubeSI, Di, true);
 
     let shellSideCalc;
     if (shellSideMethod === "bell-delaware") {
       shellSideCalc = calculateBellDelaware(
-        mh_kgs, rhoHotSI, muHotSI, shellDiameter, baffleSpacing, baffleCut,
+        mh_kgs, rhoShellSI, muShellSI, shellDiameter, baffleSpacing, baffleCut,
         Do, tubePitch, tubeLengthM, tubeGeometry.tubePattern, numberOfTubes,
         shellBaffleLeakage, tubeBaffleLeakage, bundleBypass
       );
     } else {
       const kernResult = calculateKernShellSide(
-        mh_kgs, rhoHotSI, muHotSI, shellDiameter, baffleSpacing,
+        mh_kgs, rhoShellSI, muShellSI, shellDiameter, baffleSpacing,
         Do, tubePitch, tubeLengthM, tubeGeometry.tubePattern
       );
       shellSideCalc = { ...kernResult, Jc: 1, Jl: 1, Jb: 1, Jr: 1, Js: 1 };
     }
 
     const shellHTC = calculateShellSideHTC(
-      shellSideCalc.reynolds, PrHot, kHotSI, shellSideCalc.equivalentDiameter,
+      shellSideCalc.reynolds, PrShell, kShellSI, shellSideCalc.equivalentDiameter,
       shellSideCalc.Gs, CphSI, tubeGeometry.tubePattern,
       shellSideCalc.Jc || 1, shellSideCalc.Jl || 1, shellSideCalc.Jb || 1, shellSideCalc.Jr || 1, shellSideCalc.Js || 1
     );
@@ -610,9 +647,9 @@ const HeatExchangerSizing = () => {
 
     // 7. Vibration
     const vibration = calculateVibrationAnalysis(
-      shellSideCalc.velocity, rhoHotSI, Do, tubePitch, tubeGeometry.tubePattern,
+      shellSideCalc.velocity, rhoShellSI, Do, tubePitch, tubeGeometry.tubePattern,
       tubeE, tubeDensity, wallThickness, unsupportedLength, shellDiameter,
-      rhoColdSI, speedOfSoundSI
+      rhoTubeSI, speedOfSoundSI
     );
 
     // 8. Result Compilation
@@ -695,7 +732,7 @@ const HeatExchangerSizing = () => {
       });
     }
 
-  }, [hotFluid, coldFluid, overallU, area, flowArrangement, calculationMode, tempUnit, hotFouling, coldFouling, tubeGeometry, shellSideMethod, unitSystem, uMode, speedOfSound]);
+  }, [shellFluid, tubeFluid, overallU, area, flowArrangement, calculationMode, tempUnit, shellFouling, tubeFouling, tubeGeometry, shellSideMethod, unitSystem, uMode, calculatedSpeedOfSound]);
 
   // ... (Keep existing Auto-Update logic and ASME effects) ...
   // Auto-update fluid properties
@@ -769,12 +806,12 @@ const HeatExchangerSizing = () => {
     const shellDia = parseFloat(tubeGeometry.shellDiameter);
     const tubeOD = parseFloat(tubeGeometry.outerDiameter);
     const pitch = parseFloat(tubeGeometry.tubePitch);
-    const designTemp = Math.max(parseFloat(hotFluid.inletTemp), parseFloat(coldFluid.inletTemp));
+    const designTemp = Math.max(parseFloat(shellFluid.inletTemp), parseFloat(tubeFluid.inletTemp));
     if ([P, CA, E, shellDia, tubeOD, pitch, designTemp].some(isNaN)) return;
     const pressureMPa = P / 10;
     const result = calculateASMEThickness(shellDia, tubeOD, pitch, pressureMPa, designTemp, CA, shellMaterial, E);
     setAsmeResults(result);
-  }, [designPressure, corrosionAllowance, shellMaterial, jointEfficiency, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, hotFluid.inletTemp, coldFluid.inletTemp]);
+  }, [designPressure, corrosionAllowance, shellMaterial, jointEfficiency, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, shellFluid.inletTemp, tubeFluid.inletTemp]);
 
 
   // Live unit conversion effect (KEEP AS IS mostly, add Speed of Sound conversion)
@@ -804,14 +841,12 @@ const HeatExchangerSizing = () => {
     const convertFouling = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num / 5.67826).toFixed(5) : (num * 5.67826).toFixed(5); };
     const convertArea = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num / 10.7639).toFixed(2) : (num * 10.7639).toFixed(2); };
 
-    // NEW: Speed of Sound Conversion (m/s <-> ft/s)
-    const convertVelocity = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num / 3.28084).toFixed(1) : (num * 3.28084).toFixed(1); };
-    setSpeedOfSound(prev => convertVelocity(prev));
+    // Speed of Sound is auto-calculated, no need to convert
 
-    setHotFluid(prev => ({ ...prev, flowRate: convertFlowRate(prev.flowRate), density: convertDensity(prev.density), specificHeat: convertSpecificHeat(prev.specificHeat), thermalConductivity: convertConductivity(prev.thermalConductivity) }));
-    setColdFluid(prev => ({ ...prev, flowRate: convertFlowRate(prev.flowRate), density: convertDensity(prev.density), specificHeat: convertSpecificHeat(prev.specificHeat), thermalConductivity: convertConductivity(prev.thermalConductivity) }));
-    setHotFouling(prev => convertFouling(prev));
-    setColdFouling(prev => convertFouling(prev));
+    setShellFluid(prev => ({ ...prev, flowRate: convertFlowRate(prev.flowRate), density: convertDensity(prev.density), specificHeat: convertSpecificHeat(prev.specificHeat), thermalConductivity: convertConductivity(prev.thermalConductivity) }));
+    setTubeFluid(prev => ({ ...prev, flowRate: convertFlowRate(prev.flowRate), density: convertDensity(prev.density), specificHeat: convertSpecificHeat(prev.specificHeat), thermalConductivity: convertConductivity(prev.thermalConductivity) }));
+    setShellFouling(prev => convertFouling(prev));
+    setTubeFouling(prev => convertFouling(prev));
     setOverallU(prev => convertU(prev));
     setArea(prev => convertArea(prev));
 
@@ -870,60 +905,54 @@ const HeatExchangerSizing = () => {
             <Card className="border-border/50">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-500" />
-                  Hot Fluid (Shell Side)
+                  <div className="w-3 h-3 rounded-full bg-orange-500" />
+                  Shell Side Fluid
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FluidTypeSelector
-                  selectedType={hotFluidType}
-                  onTypeChange={setHotFluidType}
-                  onPropertiesUpdate={(props) => setHotFluid(prev => ({ ...prev, ...props }))}
+                  selectedType={shellFluidType}
+                  onTypeChange={setShellFluidType}
+                  onPropertiesUpdate={(props) => setShellFluid(prev => ({ ...prev, ...props }))}
                   unitSystem={unitSystem}
                   label="Fluid Type"
-                  colorClass="bg-red-500"
+                  colorClass="bg-orange-500"
+                  side="shell"
                 />
                 <FluidInputCard
                   title=""
-                  fluid={hotFluid} setFluid={setHotFluid}
-                  colorClass="bg-red-500" isCustom={hotFluidType === FluidType.CUSTOM}
+                  fluid={shellFluid} setFluid={setShellFluid}
+                  colorClass="bg-orange-500" isCustom={shellFluidType === FluidType.CUSTOM}
                   unitSystem={unitSystem} tempUnit={tempUnit} calculationMode={calculationMode}
                 />
+                <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">
+                  Speed of Sound: {calculatedSpeedOfSound.toFixed(0)} {unitSystem === 'metric' ? 'm/s' : 'ft/s'} (auto-calculated)
+                </div>
               </CardContent>
             </Card>
             
             <Card className="border-border/50">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500" />
-                  Cold Fluid (Tube Side)
+                  <div className="w-3 h-3 rounded-full bg-cyan-500" />
+                  Tube Side Fluid
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FluidTypeSelector
-                  selectedType={coldFluidType}
-                  onTypeChange={setColdFluidType}
-                  onPropertiesUpdate={(props) => setColdFluid(prev => ({ ...prev, ...props }))}
+                  selectedType={tubeFluidType}
+                  onTypeChange={setTubeFluidType}
+                  onPropertiesUpdate={(props) => setTubeFluid(prev => ({ ...prev, ...props }))}
                   unitSystem={unitSystem}
                   label="Fluid Type"
-                  colorClass="bg-blue-500"
+                  colorClass="bg-cyan-500"
+                  side="tube"
                 />
                 <FluidInputCard
                   title=""
-                  fluid={coldFluid} setFluid={setColdFluid}
-                  colorClass="bg-blue-500" isCustom={coldFluidType === FluidType.CUSTOM}
+                  fluid={tubeFluid} setFluid={setTubeFluid}
+                  colorClass="bg-cyan-500" isCustom={tubeFluidType === FluidType.CUSTOM}
                   unitSystem={unitSystem} tempUnit={tempUnit} calculationMode={calculationMode}
-                  extraContent={
-                    <div className="space-y-1.5 pt-2 border-t border-border/50">
-                      <Label className="text-xs text-muted-foreground">Speed of Sound ({getVelocityUnit()})</Label>
-                      <Input
-                        type="number" value={speedOfSound}
-                        onChange={(e) => setSpeedOfSound(e.target.value)}
-                        className="h-9 no-spinner"
-                      />
-                      <p className="text-[10px] text-muted-foreground">Required for vibration analysis</p>
-                    </div>
-                  }
                 />
               </CardContent>
             </Card>
@@ -950,8 +979,8 @@ const HeatExchangerSizing = () => {
                     disabled={uMode === "calculated"} />
                 </div>
                 {/* Fouling Factors Inputs */}
-                <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Hot Fouling</Label><Input value={hotFouling} onChange={e => setHotFouling(e.target.value)} className="h-9" /></div>
-                <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Cold Fouling</Label><Input value={coldFouling} onChange={e => setColdFouling(e.target.value)} className="h-9" /></div>
+                <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Shell Fouling</Label><Input value={shellFouling} onChange={e => setShellFouling(e.target.value)} className="h-9" /></div>
+                <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Tube Fouling</Label><Input value={tubeFouling} onChange={e => setTubeFouling(e.target.value)} className="h-9" /></div>
               </div>
             </CardContent>
           </Card>
