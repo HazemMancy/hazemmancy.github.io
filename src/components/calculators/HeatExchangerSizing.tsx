@@ -1771,6 +1771,51 @@ const HeatExchangerSizing = () => {
                 <CardTitle className="text-base flex items-center justify-between">
                   <span>Calculation Results</span>
                   <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const designName = `Design ${savedDesigns.length + 1} (${parseFloat(tubeGeometry.shellDiameter).toFixed(0)}mm)`;
+                        const newDesign: SavedDesign = {
+                          id: Date.now().toString(),
+                          name: designName,
+                          timestamp: new Date(),
+                          shellDiameter: parseFloat(tubeGeometry.shellDiameter),
+                          tubeOD: parseFloat(tubeGeometry.outerDiameter),
+                          tubeLength: parseFloat(tubeGeometry.tubeLength),
+                          numberOfTubes: parseInt(tubeGeometry.numberOfTubes),
+                          tubePasses: parseInt(tubeGeometry.tubePasses),
+                          tubePitch: parseFloat(tubeGeometry.tubePitch),
+                          tubePattern: tubeGeometry.tubePattern,
+                          baffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
+                          baffleCut: parseFloat(tubeGeometry.baffleCut),
+                          heatDuty: results.heatDuty / 1000, // Convert to kW
+                          requiredArea: results.requiredArea,
+                          actualArea: results.heatTransferArea,
+                          overallU: results.fouledU,
+                          calculatedU: results.calculatedU,
+                          effectiveness: results.effectiveness,
+                          tubeSidePressureDrop: results.tubeSidePressureDrop / 1000, // Convert to kPa
+                          shellSidePressureDrop: results.shellSidePressureDrop / 1000, // Convert to kPa
+                          tubeSideVelocity: results.tubeSideVelocity,
+                          shellSideVelocity: results.shellSideVelocity,
+                          hi: results.hi,
+                          ho: results.ho,
+                          isVibrationRisk: results.vibration?.isVibrationRisk || false,
+                          shellThickness: asmeResults?.shellRecommended,
+                          shellMaterial: shellMaterial
+                        };
+                        setSavedDesigns(prev => [...prev, newDesign]);
+                        toast({
+                          title: "Design Saved",
+                          description: `${designName} added to comparison`,
+                        });
+                      }}
+                      className="text-xs"
+                    >
+                      <Save className="h-3.5 w-3.5 mr-1" />
+                      Save Design
+                    </Button>
                     <Badge variant={results.errors.length > 0 ? "destructive" : "secondary"} className="text-xs">
                       {results.errors.length > 0 ? `${results.errors.length} Error(s)` : 'Valid'}
                     </Badge>
@@ -1837,6 +1882,21 @@ const HeatExchangerSizing = () => {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Design Comparison Panel */}
+          {savedDesigns.length > 0 && (
+            <DesignComparison
+              savedDesigns={savedDesigns}
+              onDeleteDesign={(id) => setSavedDesigns(prev => prev.filter(d => d.id !== id))}
+              onClearAll={() => {
+                setSavedDesigns([]);
+                toast({
+                  title: "All Designs Cleared",
+                  description: "Design comparison has been reset",
+                });
+              }}
+            />
           )}
 
         </TabsContent>
