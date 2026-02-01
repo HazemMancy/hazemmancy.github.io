@@ -501,35 +501,114 @@ const HeatExchangerSizing = () => {
     errors: string[];
   } | null>(null);
 
-  // Get suggested tube count from selected TEMA table
+  // Get suggested tube count from TEMA tables based on actual geometry
   const getSuggestedTubeCount = useMemo(() => {
-    const selectedTable = allTubeCountTables.find(t => t.name === selectedTemaTable);
-    if (!selectedTable) return null;
+    const tubeOD = parseFloat(tubeGeometry.outerDiameter);
+    const tubePitch = parseFloat(tubeGeometry.tubePitch);
     const shellDia = parseFloat(tubeGeometry.shellDiameter);
     const passes = parseInt(tubeGeometry.tubePasses);
     const pattern = tubeGeometry.tubePattern === "triangular" ? "triangular" : "square";
-    const shellSizes = Object.keys(selectedTable.counts).map(Number).sort((a, b) => a - b);
+    
+    if (isNaN(tubeOD) || isNaN(tubePitch) || isNaN(shellDia)) return null;
+    
+    // Find best matching TEMA table based on actual OD and pitch
+    let bestTable: typeof allTubeCountTables[0] | null = null;
+    let minDist = Infinity;
+    
+    for (const table of allTubeCountTables) {
+      const dist = Math.abs(table.tubeOD - tubeOD) + Math.abs(table.tubePitch - tubePitch);
+      if (dist < minDist) {
+        minDist = dist;
+        bestTable = table;
+      }
+    }
+    
+    if (!bestTable || minDist > 5) {
+      // Fall back to calculation if no matching table
+      const calcResult = calculateTubeCount(
+        shellDia, tubeOD, tubePitch, 
+        tubeGeometry.tubePattern, passes, 
+        shellType === 'fixed-tubesheet' ? 'fixed' : shellType === 'floating-head' ? 'floating' : 'u-tube'
+      );
+      return {
+        count: calcResult.count,
+        shellSize: shellDia,
+        pattern,
+        passes: passes <= 1 ? 1 : passes <= 2 ? 2 : 4,
+        tubeOD,
+        tubePitch,
+        method: calcResult.method,
+        bundleDiameter: calcResult.bundleDiameter
+      };
+    }
+    
+    // Find closest shell size in table
+    const shellSizes = Object.keys(bestTable.counts).map(Number).sort((a, b) => a - b);
     if (shellSizes.length === 0) return null;
+    
     let closestSize = shellSizes[0];
-    let minDiff = Math.abs(shellDia - closestSize);
+    let shellMinDiff = Math.abs(shellDia - closestSize);
     for (const size of shellSizes) {
       const diff = Math.abs(shellDia - size);
-      if (diff < minDiff) { minDiff = diff; closestSize = size; }
+      if (diff < shellMinDiff) { shellMinDiff = diff; closestSize = size; }
     }
-    const passData = selectedTable.counts[closestSize];
+    
+    const passData = bestTable.counts[closestSize];
     if (!passData) return null;
+    
     const passKey = passes <= 1 ? 1 : passes <= 2 ? 2 : 4;
     const tubeData = passData[passKey];
     if (!tubeData) return null;
+    
     return {
       count: tubeData[pattern],
       shellSize: closestSize,
       pattern,
       passes: passKey,
-      tubeOD: selectedTable.tubeOD,
-      tubePitch: selectedTable.tubePitch
+      tubeOD: bestTable.tubeOD,
+      tubePitch: bestTable.tubePitch,
+      method: `TEMA Table (${bestTable.name})`,
+      bundleDiameter: closestSize - 25 // Approximate bundle diameter
     };
-  }, [selectedTemaTable, tubeGeometry.shellDiameter, tubeGeometry.tubePasses, tubeGeometry.tubePattern]);
+  }, [tubeGeometry.outerDiameter, tubeGeometry.tubePitch, tubeGeometry.shellDiameter, tubeGeometry.tubePasses, tubeGeometry.tubePattern, shellType]);
+
+  // Auto-apply TEMA tube count when geometry changes (optional: can be enabled)
+  const [autoApplyTubeCount, setAutoApplyTubeCount] = useState(true);
+  const prevGeometryRef = useRef<string>('');
+  
+  useEffect(() => {
+    if (!autoApplyTubeCount || !getSuggestedTubeCount) return;
+    
+    // Create a key from geometry to detect changes
+    const geoKey = `${tubeGeometry.shellDiameter}-${tubeGeometry.outerDiameter}-${tubeGeometry.tubePitch}-${tubeGeometry.tubePattern}-${tubeGeometry.tubePasses}`;
+    
+    if (prevGeometryRef.current && prevGeometryRef.current !== geoKey) {
+      // Geometry changed, auto-apply new tube count
+      setTubeGeometry(prev => ({
+        ...prev,
+        numberOfTubes: getSuggestedTubeCount.count.toString()
+      }));
+    }
+    
+    prevGeometryRef.current = geoKey;
+  }, [autoApplyTubeCount, getSuggestedTubeCount, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, tubeGeometry.tubePattern, tubeGeometry.tubePasses]);
+
+  // Calculate number of baffles for geometry panel when results not available
+  const calculatedNumberOfBaffles = useMemo(() => {
+    const tubeLength = parseFloat(tubeGeometry.tubeLength);
+    const baffleSpacing = parseFloat(tubeGeometry.baffleSpacing);
+    if (isNaN(tubeLength) || isNaN(baffleSpacing) || baffleSpacing <= 0) return 0;
+    return Math.floor((tubeLength * 1000) / baffleSpacing) - 1;
+  }, [tubeGeometry.tubeLength, tubeGeometry.baffleSpacing]);
+
+  // Calculate heat transfer area for geometry panel when results not available  
+  const calculatedHeatTransferArea = useMemo(() => {
+    const tubeOD = parseFloat(tubeGeometry.outerDiameter) / 1000; // mm to m
+    const tubeLength = parseFloat(tubeGeometry.tubeLength);
+    const numberOfTubes = parseInt(tubeGeometry.numberOfTubes);
+    if (isNaN(tubeOD) || isNaN(tubeLength) || isNaN(numberOfTubes)) return 0;
+    return numberOfTubes * Math.PI * tubeOD * tubeLength;
+  }, [tubeGeometry.outerDiameter, tubeGeometry.tubeLength, tubeGeometry.numberOfTubes]);
 
   // Main calculation effect
   useEffect(() => {
@@ -1490,45 +1569,108 @@ const HeatExchangerSizing = () => {
                 </div>
               </div>
 
-              {/* TEMA Tube Count Reference */}
+              {/* TEMA Tube Count Auto-Calculation */}
               {getSuggestedTubeCount && (
-                <div className="bg-muted/30 p-3 rounded-lg text-xs">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Database className="h-3.5 w-3.5 text-primary" />
-                    <span className="font-medium">TEMA Tube Count Reference</span>
+                <div className="bg-primary/5 border border-primary/20 p-3 rounded-lg text-xs">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-medium">TEMA Tube Count (Auto-Calculated)</span>
+                      {getSuggestedTubeCount.method && (
+                        <Badge variant="outline" className="text-xs">{getSuggestedTubeCount.method}</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={autoApplyTubeCount}
+                          onChange={(e) => setAutoApplyTubeCount(e.target.checked)}
+                          className="w-3 h-3"
+                        />
+                        Auto-apply
+                      </Label>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-xs px-2"
+                        onClick={() => {
+                          if (getSuggestedTubeCount) {
+                            setTubeGeometry(prev => ({
+                              ...prev,
+                              numberOfTubes: getSuggestedTubeCount.count.toString()
+                            }));
+                            toast({
+                              title: "Tube Count Applied",
+                              description: `Set to ${getSuggestedTubeCount.count} tubes per TEMA`,
+                            });
+                          }
+                        }}
+                      >
+                        Apply Now
+                      </Button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-muted-foreground">
-                    <div>Shell: {getSuggestedTubeCount.shellSize} mm</div>
-                    <div>Pattern: {getSuggestedTubeCount.pattern}</div>
-                    <div>Passes: {getSuggestedTubeCount.passes}</div>
-                    <div className="font-medium text-foreground">Suggested: {getSuggestedTubeCount.count} tubes</div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-muted-foreground">
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground/70">Shell ID</span>
+                      <span className="font-mono">{getSuggestedTubeCount.shellSize} mm</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground/70">Tube OD</span>
+                      <span className="font-mono">{getSuggestedTubeCount.tubeOD.toFixed(2)} mm</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground/70">Pitch</span>
+                      <span className="font-mono">{getSuggestedTubeCount.tubePitch.toFixed(2)} mm</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground/70">Pattern / Passes</span>
+                      <span>{getSuggestedTubeCount.pattern} / {getSuggestedTubeCount.passes}-pass</span>
+                    </div>
+                    <div className="flex flex-col bg-primary/10 rounded px-2 py-1">
+                      <span className="text-primary font-medium">TEMA Count</span>
+                      <span className="font-bold text-lg text-primary">{getSuggestedTubeCount.count}</span>
+                    </div>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Shell & Tube Geometry Summary Panel */}
-          {results && (
+          {/* Geometry Visualization Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Shell & Tube Geometry Summary Panel - Always Visible */}
             <GeometrySummaryPanel
-              tubeOD={parseFloat(tubeGeometry.outerDiameter)}
-              tubeID={parseFloat(tubeGeometry.outerDiameter) - 2 * parseFloat(tubeGeometry.wallThickness)}
-              tubeLength={parseFloat(tubeGeometry.tubeLength)}
-              tubePitch={parseFloat(tubeGeometry.tubePitch)}
+              tubeOD={parseFloat(tubeGeometry.outerDiameter) || 19.05}
+              tubeID={(parseFloat(tubeGeometry.outerDiameter) || 19.05) - 2 * (parseFloat(tubeGeometry.wallThickness) || 2.11)}
+              tubeLength={parseFloat(tubeGeometry.tubeLength) || 6.1}
+              tubePitch={parseFloat(tubeGeometry.tubePitch) || 25.4}
               tubePattern={tubeGeometry.tubePattern}
-              numberOfTubes={parseInt(tubeGeometry.numberOfTubes)}
-              tubePasses={parseInt(tubeGeometry.tubePasses)}
+              numberOfTubes={parseInt(tubeGeometry.numberOfTubes) || 200}
+              tubePasses={parseInt(tubeGeometry.tubePasses) || 2}
               tubeMaterial={tubeGeometry.tubeMaterial}
-              shellDiameter={parseFloat(tubeGeometry.shellDiameter)}
+              shellDiameter={parseFloat(tubeGeometry.shellDiameter) || 591}
               shellType={shellTypeClearances[shellType]?.name || shellType}
-              baffleSpacing={parseFloat(tubeGeometry.baffleSpacing)}
-              baffleCut={parseFloat(tubeGeometry.baffleCut)}
-              numberOfBaffles={results.numberOfBaffles}
-              heatTransferArea={results.heatTransferArea}
-              bundleDiameter={getSuggestedTubeCount?.shellSize}
+              baffleSpacing={parseFloat(tubeGeometry.baffleSpacing) || 300}
+              baffleCut={parseFloat(tubeGeometry.baffleCut) || 25}
+              numberOfBaffles={results?.numberOfBaffles || calculatedNumberOfBaffles}
+              heatTransferArea={results?.heatTransferArea || calculatedHeatTransferArea}
+              bundleDiameter={getSuggestedTubeCount?.bundleDiameter}
               unitSystem={unitSystem}
             />
-          )}
+
+            {/* Tube Bundle Visualization - Always Visible */}
+            <TubeBundleVisualization
+              shellDiameter={parseFloat(tubeGeometry.shellDiameter) || 591}
+              tubeOD={parseFloat(tubeGeometry.outerDiameter) || 19.05}
+              tubePitch={parseFloat(tubeGeometry.tubePitch) || 25.4}
+              numberOfTubes={parseInt(tubeGeometry.numberOfTubes) || 200}
+              tubePattern={tubeGeometry.tubePattern}
+              tubePasses={parseInt(tubeGeometry.tubePasses) || 2}
+              baffleCut={parseFloat(tubeGeometry.baffleCut) || 25}
+            />
+          </div>
 
           {/* Consolidated Validation Summary Panel */}
           {results && (
