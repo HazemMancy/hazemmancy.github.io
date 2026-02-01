@@ -55,6 +55,13 @@ import {
   calculateKernShellSide,
   type VibrationResults
 } from "@/lib/heatExchangerCalculations";
+import { 
+  useHeatExchangerUnits,
+  safeParseFloat,
+  formatNumber,
+  CONVERSION_FACTORS,
+  temperatureConvert
+} from "./hooks/useHeatExchangerUnits";
 
 // ============================================================================
 // ENGINEERING CONSTANTS & TYPES
@@ -649,23 +656,61 @@ const HeatExchangerSizing = () => {
       return;
     }
 
-    // 2. Strict SI Unit Conversion
+    // =========================================================================
+    // 2. STRICT SI UNIT CONVERSION (OPTIMIZED)
+    // All calculations use SI units internally for accuracy
+    // Conversion factors from NIST reference values
+    // =========================================================================
     const isImperial = unitSystem === 'imperial';
 
-    const mh_kgs = isImperial ? mh * 0.45359237 / 3600 : mh / 3600;
-    const mc_kgs = isImperial ? mc * 0.45359237 / 3600 : mc / 3600;
-    const rhoShellSI = isImperial ? rhoShell * 16.01846 : rhoShell;
-    const rhoTubeSI = isImperial ? rhoTube * 16.01846 : rhoTube;
-    const muShellSI = muShell * 0.001; // cP -> Pa.s
-    const muTubeSI = muTube * 0.001; // cP -> Pa.s
-    const kShellSI = isImperial ? kShell * 1.730735 : kShell;
-    const kTubeSI = isImperial ? kTube * 1.730735 : kTube;
-    const CphSI = isImperial ? Cph * 4186.8 : Cph * 1000;
-    const CpcSI = isImperial ? Cpc * 4186.8 : Cpc * 1000;
+    // Mass flow: kg/hr or lb/hr → kg/s
+    // lb → kg: 0.45359237, hr → s: /3600
+    const mh_kgs = isImperial 
+      ? mh / CONVERSION_FACTORS.KG_HR_TO_LB_HR / 3600 
+      : mh / 3600;
+    const mc_kgs = isImperial 
+      ? mc / CONVERSION_FACTORS.KG_HR_TO_LB_HR / 3600 
+      : mc / 3600;
 
-    // Geometry Conversions
-    const convLen = (val: string) => isImperial ? parseFloat(val) * 0.0254 : parseFloat(val) / 1000;
-    const convLenLong = (val: string) => isImperial ? parseFloat(val) * 0.3048 : parseFloat(val);
+    // Density: kg/m³ or lb/ft³ → kg/m³
+    const rhoShellSI = isImperial 
+      ? rhoShell / CONVERSION_FACTORS.KG_M3_TO_LB_FT3 
+      : rhoShell;
+    const rhoTubeSI = isImperial 
+      ? rhoTube / CONVERSION_FACTORS.KG_M3_TO_LB_FT3 
+      : rhoTube;
+
+    // Viscosity: cP → Pa·s (universal)
+    const muShellSI = muShell * 0.001;
+    const muTubeSI = muTube * 0.001;
+
+    // Thermal conductivity: W/m·K or BTU/hr·ft·°F → W/m·K
+    const kShellSI = isImperial 
+      ? kShell / CONVERSION_FACTORS.W_MK_TO_BTU_HR_FT_F 
+      : kShell;
+    const kTubeSI = isImperial 
+      ? kTube / CONVERSION_FACTORS.W_MK_TO_BTU_HR_FT_F 
+      : kTube;
+
+    // Specific heat: kJ/kg·K or BTU/lb·°F → J/kg·K
+    const CphSI = isImperial 
+      ? Cph / CONVERSION_FACTORS.KJ_KGK_TO_BTU_LB_F * 1000 
+      : Cph * 1000;
+    const CpcSI = isImperial 
+      ? Cpc / CONVERSION_FACTORS.KJ_KGK_TO_BTU_LB_F * 1000 
+      : Cpc * 1000;
+
+    // Geometry Conversions: mm/in → m, m/ft → m
+    const convLen = (val: string): number => {
+      const num = parseFloat(val);
+      if (isNaN(num)) return 0;
+      return isImperial ? num * 0.0254 : num / 1000;
+    };
+    const convLenLong = (val: string): number => {
+      const num = parseFloat(val);
+      if (isNaN(num)) return 0;
+      return isImperial ? num / CONVERSION_FACTORS.M_TO_FT : num;
+    };
 
     const Do = convLen(tubeGeometry.outerDiameter);
     const wallThickness = convLen(tubeGeometry.wallThickness);
@@ -689,8 +734,10 @@ const HeatExchangerSizing = () => {
     const tubeDensity = parseFloat(tubeGeometry.tubeDensity) || 7850;
     const tubeK = tubeMat.k;
 
-    // Speed of Sound
-    const speedOfSoundSI = isImperial ? sos_input * 0.3048 : sos_input;
+    // Speed of Sound: m/s or ft/s → m/s
+    const speedOfSoundSI = isImperial 
+      ? sos_input / CONVERSION_FACTORS.M_S_TO_FT_S 
+      : sos_input;
 
     // Temperatures
     const ThiK = toKelvin(Thi, tempUnit);
@@ -965,40 +1012,85 @@ const HeatExchangerSizing = () => {
   }, [designPressure, corrosionAllowance, shellMaterial, jointEfficiency, tubeGeometry.shellDiameter, tubeGeometry.outerDiameter, tubeGeometry.tubePitch, shellFluid.inletTemp, tubeFluid.inletTemp]);
 
 
-  // Live unit conversion effect (KEEP AS IS mostly, add Speed of Sound conversion)
+  // =========================================================================
+  // OPTIMIZED UNIT CONVERSION EFFECT
+  // Uses centralized conversion factors from useHeatExchangerUnits hook
+  // Ensures bidirectional conversion with correct precision
+  // =========================================================================
   const prevUnitSystem = useRef(unitSystem);
+  
   useEffect(() => {
     if (prevUnitSystem.current === unitSystem) return;
-    const fromImperial = prevUnitSystem.current === 'imperial';
+    
+    const fromSystem = prevUnitSystem.current;
+    const toSystem = unitSystem;
     prevUnitSystem.current = unitSystem;
 
-    // ... (Keep existing helpers: convertLength, convertFlowRate etc) ...
-    const convertLength = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num * 25.4).toFixed(2) : (num / 25.4).toFixed(3); };
-    const convertLengthLong = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num / 3.28084).toFixed(2) : (num * 3.28084).toFixed(2); };
+    // Conversion helper using centralized factors
+    const convertValue = (
+      val: string, 
+      metricToImpFactor: number, 
+      metricDecimals: number,
+      impDecimals: number
+    ): string => {
+      const num = parseFloat(val);
+      if (isNaN(num)) return val;
+      
+      // fromSystem → toSystem
+      if (fromSystem === 'metric' && toSystem === 'imperial') {
+        return (num * metricToImpFactor).toFixed(impDecimals);
+      } else {
+        return (num / metricToImpFactor).toFixed(metricDecimals);
+      }
+    };
 
+    // Geometry conversions (mm ↔ in, m ↔ ft)
+    const convertLengthSmall = (val: string) => convertValue(val, CONVERSION_FACTORS.MM_TO_INCH, 2, 3);
+    const convertLengthLarge = (val: string) => convertValue(val, CONVERSION_FACTORS.M_TO_FT, 2, 2);
+    
     setTubeGeometry(prev => ({
-      ...prev, outerDiameter: convertLength(prev.outerDiameter), wallThickness: convertLength(prev.wallThickness),
-      tubePitch: convertLength(prev.tubePitch), shellDiameter: convertLength(prev.shellDiameter),
-      baffleSpacing: convertLength(prev.baffleSpacing), unsupportedSpanLength: convertLength(prev.unsupportedSpanLength),
-      shellBaffleLeakage: convertLength(prev.shellBaffleLeakage), tubeBaffleLeakage: convertLength(prev.tubeBaffleLeakage),
-      tubeLength: convertLengthLong(prev.tubeLength),
+      ...prev,
+      outerDiameter: convertLengthSmall(prev.outerDiameter),
+      wallThickness: convertLengthSmall(prev.wallThickness),
+      tubePitch: convertLengthSmall(prev.tubePitch),
+      shellDiameter: convertLengthSmall(prev.shellDiameter),
+      baffleSpacing: convertLengthSmall(prev.baffleSpacing),
+      unsupportedSpanLength: convertLengthSmall(prev.unsupportedSpanLength),
+      shellBaffleLeakage: convertLengthSmall(prev.shellBaffleLeakage),
+      tubeBaffleLeakage: convertLengthSmall(prev.tubeBaffleLeakage),
+      tubeLength: convertLengthLarge(prev.tubeLength),
     }));
 
-    const convertFlowRate = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num / 2.20462).toFixed(0) : (num * 2.20462).toFixed(0); };
-    const convertDensity = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num * 16.0185).toFixed(1) : (num * 0.062428).toFixed(3); };
-    const convertSpecificHeat = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num * 4.1868).toFixed(3) : (num / 4.1868).toFixed(3); };
-    const convertConductivity = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num * 1.7307).toFixed(4) : (num / 1.7307).toFixed(4); };
-    const convertU = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num * 5.67826).toFixed(1) : (num / 5.67826).toFixed(1); };
-    const convertFouling = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num / 5.67826).toFixed(5) : (num * 5.67826).toFixed(5); };
-    const convertArea = (val: string) => { const num = parseFloat(val); if (isNaN(num)) return val; return fromImperial ? (num / 10.7639).toFixed(2) : (num * 10.7639).toFixed(2); };
+    // Fluid property conversions
+    const convertFlowRate = (val: string) => convertValue(val, CONVERSION_FACTORS.KG_HR_TO_LB_HR, 0, 0);
+    const convertDensity = (val: string) => convertValue(val, CONVERSION_FACTORS.KG_M3_TO_LB_FT3, 1, 3);
+    const convertSpecificHeat = (val: string) => convertValue(val, CONVERSION_FACTORS.KJ_KGK_TO_BTU_LB_F, 3, 3);
+    const convertConductivity = (val: string) => convertValue(val, CONVERSION_FACTORS.W_MK_TO_BTU_HR_FT_F, 4, 4);
+    const convertHTC = (val: string) => convertValue(val, CONVERSION_FACTORS.W_M2K_TO_BTU_HR_FT2_F, 1, 2);
+    const convertFouling = (val: string) => convertValue(val, CONVERSION_FACTORS.M2K_W_TO_HR_FT2_F_BTU, 6, 5);
+    const convertArea = (val: string) => convertValue(val, CONVERSION_FACTORS.M2_TO_FT2, 2, 2);
 
-    // Speed of Sound is auto-calculated, no need to convert
+    // Apply fluid conversions
+    setShellFluid(prev => ({
+      ...prev,
+      flowRate: convertFlowRate(prev.flowRate),
+      density: convertDensity(prev.density),
+      specificHeat: convertSpecificHeat(prev.specificHeat),
+      thermalConductivity: convertConductivity(prev.thermalConductivity)
+    }));
+    
+    setTubeFluid(prev => ({
+      ...prev,
+      flowRate: convertFlowRate(prev.flowRate),
+      density: convertDensity(prev.density),
+      specificHeat: convertSpecificHeat(prev.specificHeat),
+      thermalConductivity: convertConductivity(prev.thermalConductivity)
+    }));
 
-    setShellFluid(prev => ({ ...prev, flowRate: convertFlowRate(prev.flowRate), density: convertDensity(prev.density), specificHeat: convertSpecificHeat(prev.specificHeat), thermalConductivity: convertConductivity(prev.thermalConductivity) }));
-    setTubeFluid(prev => ({ ...prev, flowRate: convertFlowRate(prev.flowRate), density: convertDensity(prev.density), specificHeat: convertSpecificHeat(prev.specificHeat), thermalConductivity: convertConductivity(prev.thermalConductivity) }));
+    // Heat transfer parameters
     setShellFouling(prev => convertFouling(prev));
     setTubeFouling(prev => convertFouling(prev));
-    setOverallU(prev => convertU(prev));
+    setOverallU(prev => convertHTC(prev));
     setArea(prev => convertArea(prev));
 
   }, [unitSystem]);
