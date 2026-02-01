@@ -1,10 +1,12 @@
 /**
  * Shell Diameter Auto-Sizing Panel
  * Calculates optimal shell diameter based on required heat transfer area and flow constraints
- * References: API 660, TEMA RCB-4, GPSA Engineering Data Book
+ * 
+ * @api API 660 §7, TEMA RCB-4
+ * @reference GPSA Engineering Data Book Chapter 9
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, forwardRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,15 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
-  Maximize2, 
   Info,
-  CheckCircle2,
   AlertTriangle,
   ArrowRight,
-  Calculator,
   Target
 } from "lucide-react";
-import { standardShellSizes, standardTubeSizes, standardPitches, calculateTubeCount } from "@/lib/temaGeometry";
+import { standardShellSizes, calculateTubeCount } from "@/lib/temaGeometry";
 
 interface ShellAutoSizingProps {
   requiredArea: number; // m²
@@ -60,20 +59,25 @@ const VELOCITY_LIMITS = {
   shell: { min: 0.3, max: 3.0, optimal: 0.8 }, // m/s
 };
 
-// L/D ratio limits
+// L/D ratio limits per API 660 §7
 const LD_LIMITS = { min: 3, max: 15, optimal: { min: 6, max: 10 } };
 
-export function ShellAutoSizingPanel({
-  requiredArea,
-  tubeOD,
-  tubeWall,
-  tubePitch,
-  tubePattern,
-  tubePasses,
-  shellType,
-  onApplyShellSize,
-  unitSystem
-}: ShellAutoSizingProps) {
+/**
+ * Shell Auto-Sizing Panel Component
+ * @api API 660, TEMA RCB-4
+ */
+export const ShellAutoSizingPanel = forwardRef<HTMLDivElement, ShellAutoSizingProps>(
+  function ShellAutoSizingPanel({
+    requiredArea,
+    tubeOD,
+    tubeWall,
+    tubePitch,
+    tubePattern,
+    tubePasses,
+    shellType,
+    onApplyShellSize,
+    unitSystem
+  }, ref) {
   const [targetArea, setTargetArea] = useState(requiredArea.toFixed(1));
   const [designMargin, setDesignMargin] = useState("15"); // % over-design
   const [preferredLength, setPreferredLength] = useState<string>("auto");
@@ -325,6 +329,6 @@ export function ShellAutoSizingPanel({
       </CardContent>
     </Card>
   );
-}
+});
 
 export default ShellAutoSizingPanel;

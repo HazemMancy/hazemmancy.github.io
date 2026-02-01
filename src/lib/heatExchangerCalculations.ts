@@ -101,6 +101,29 @@ export interface HtcResult extends CalculationResult {
  * Calculate Tube-Side Heat Transfer Coefficient (hi)
  * ...
  */
+/**
+ * Calculate Tube-Side Heat Transfer Coefficient
+ * 
+ * @api TEMA RGP-4.4, API 660 §5.3
+ * @reference Gnielinski (1976) Int. Chem. Eng. 16, 359-368
+ * @reference Dittus-Boelter (1930) McAdams Heat Transmission 3rd Ed
+ * @reference Sieder-Tate (1936) Ind. Eng. Chem. 28, 1429
+ * 
+ * Correlations:
+ * - Laminar (Re < 2300): Nu = 3.66 (fully developed, constant wall temp)
+ * - Transition (2300 ≤ Re < 10000): Gnielinski: Nu = (f/8)(Re-1000)Pr / [1 + 12.7√(f/8)(Pr^(2/3)-1)]
+ * - Turbulent (Re ≥ 10000): Dittus-Boelter: Nu = 0.023 × Re^0.8 × Pr^n
+ *   where n = 0.4 (heating), n = 0.3 (cooling)
+ * - Sieder-Tate viscosity correction: Nu_corrected = Nu × (μ_bulk/μ_wall)^0.14
+ * 
+ * @param Re - Reynolds number (dimensionless)
+ * @param Pr - Prandtl number (dimensionless), valid: 0.6 < Pr < 160
+ * @param k - Thermal conductivity (W/m·K)
+ * @param Di - Inner diameter (m)
+ * @param isHeating - True if fluid is being heated
+ * @param viscosityRatio - Optional μ_bulk/μ_wall for Sieder-Tate correction
+ * @returns Heat transfer coefficient h (W/m²·K) and Nusselt number
+ */
 export const calculateTubeSideHTC = (
     Re: number,
     Pr: number,
@@ -116,19 +139,28 @@ export const calculateTubeSideHTC = (
         return { h: 0, Nu: 0, warnings, errors: ["Invalid input parameters for tube-side HTC"] };
     }
 
+    // Prandtl number validity check per Dittus-Boelter
+    if (Pr < 0.6 || Pr > 160) {
+        warnings.push(`Prandtl number (${Pr.toFixed(2)}) outside Dittus-Boelter validity range (0.6-160)`);
+    }
+
     let Nu: number;
 
     if (Re < 2300) {
+        // Laminar: Constant wall temperature, fully developed
         Nu = 3.66;
     } else if (Re < 10000) {
-        const f = Math.pow(1.82 * Math.log10(Re) - 1.64, -2);
+        // Transition: Gnielinski correlation (valid 2300 < Re < 5×10^6)
+        const f = Math.pow(1.82 * Math.log10(Re) - 1.64, -2); // Petukhov friction factor
         Nu = (f / 8) * (Re - 1000) * Pr / (1 + 12.7 * Math.sqrt(f / 8) * (Math.pow(Pr, 2 / 3) - 1));
         Nu = Math.max(Nu, 3.66);
     } else {
+        // Turbulent: Dittus-Boelter correlation
         const n = isHeating ? 0.4 : 0.3;
         Nu = 0.023 * Math.pow(Re, 0.8) * Math.pow(Pr, n);
     }
 
+    // Sieder-Tate viscosity correction for large ΔT
     if (viscosityRatio && viscosityRatio > 0 && Re >= 10000) {
         Nu = Nu * Math.pow(viscosityRatio, 0.14);
     }
@@ -138,8 +170,30 @@ export const calculateTubeSideHTC = (
 };
 
 /**
- * Calculate Shell-Side Heat Transfer Coefficient (ho)
- * ...
+ * Calculate Shell-Side Heat Transfer Coefficient using Bell-Delaware J-factors
+ * 
+ * @api API 660 §5.3, TEMA RGP-T-4
+ * @reference Bell, K.J. (1963) Delaware Method, Final Report
+ * @reference Taborek, J. (1983) Heat Exchanger Design Handbook, Chapter 3.3
+ * 
+ * J-factor correlation (Colburn analogy):
+ * h_ideal = j × Cp × Gs × Pr^(-2/3)
+ * 
+ * Correction factors:
+ * - Jc: Baffle cut effect (fraction in crossflow)
+ * - Jl: Baffle leakage (shell-baffle & tube-baffle)
+ * - Jb: Bundle bypass (clearance between bundle & shell)
+ * - Jr: Adverse temperature gradient (low Re)
+ * - Js: Unequal baffle spacing at ends
+ * 
+ * @param Re - Shell-side Reynolds number (De × Gs / μ)
+ * @param Pr - Prandtl number
+ * @param k - Thermal conductivity (W/m·K)
+ * @param De - Equivalent diameter (m)
+ * @param Gs - Shell-side mass velocity (kg/m²·s)
+ * @param Cp - Specific heat (J/kg·K)
+ * @param tubePattern - "triangular" or "square"
+ * @param Jc, Jl, Jb, Jr, Js - Bell-Delaware correction factors
  */
 export const calculateShellSideHTC = (
     Re: number,
@@ -162,6 +216,7 @@ export const calculateShellSideHTC = (
         return { h: 0, Nu: 0, warnings, errors: ["Invalid input parameters for shell-side HTC"] };
     }
 
+    // Bell-Delaware j-factor correlations (Taborek, 1983)
     let jFactor: number;
 
     if (tubePattern === "triangular") {
@@ -175,6 +230,7 @@ export const calculateShellSideHTC = (
             jFactor = 1.04 * Math.pow(Re, -0.451);
         }
     } else {
+        // Square pitch
         if (Re > 10000) {
             jFactor = 0.249 * Math.pow(Re, -0.382);
         } else if (Re > 1000) {
@@ -186,7 +242,10 @@ export const calculateShellSideHTC = (
         }
     }
 
+    // Ideal heat transfer coefficient (Colburn analogy)
     const h_ideal = jFactor * Cp * Gs * Math.pow(Pr, -2 / 3);
+    
+    // Apply Bell-Delaware correction factors
     const h = h_ideal * Jc * Jl * Jb * Jr * Js;
     const Nu = h * De / k;
 
@@ -375,7 +434,28 @@ export interface PressureDropResult extends CalculationResult {
 }
 
 /**
- * Tube-side pressure drop per Kern's Method
+ * Tube-Side Pressure Drop Calculation
+ * 
+ * @api API 660 §5.4, TEMA RGP-4.6
+ * @reference Kern, D.Q. (1950) Process Heat Transfer, McGraw-Hill
+ * 
+ * Total pressure drop = Friction + Return losses
+ * 
+ * ΔP_friction = 4 × f × (L × Np / Di) × (ρV²/2)
+ * ΔP_return = 4 × Np × (ρV²/2)
+ * 
+ * Friction factor correlations:
+ * - Laminar (Re < 2300): f = 16/Re (Hagen-Poiseuille)
+ * - Transition/Turbulent (2300 ≤ Re < 100000): f = 0.079 × Re^(-0.25) (Blasius)
+ * - Highly Turbulent (Re ≥ 100000): f = 0.046 × Re^(-0.2)
+ * 
+ * @param velocity - Fluid velocity (m/s)
+ * @param density - Fluid density (kg/m³)
+ * @param viscosity - Dynamic viscosity (Pa·s)
+ * @param innerDiameter - Tube inner diameter (m)
+ * @param tubeLength - Tube length (m)
+ * @param tubePasses - Number of tube passes
+ * @returns Pressure drop (Pa) and Reynolds number
  */
 export const calculateTubeSidePressureDrop = (
     velocity: number,
@@ -392,17 +472,25 @@ export const calculateTubeSidePressureDrop = (
 
     const reynolds = (density * velocity * innerDiameter) / viscosity;
 
+    // Fanning friction factor correlations
     let frictionFactor: number;
     if (reynolds < 2300) {
+        // Laminar: Hagen-Poiseuille
         frictionFactor = 16 / reynolds;
     } else if (reynolds < 100000) {
+        // Blasius correlation (smooth pipes)
         frictionFactor = 0.079 * Math.pow(reynolds, -0.25);
     } else {
+        // High Reynolds modification
         frictionFactor = 0.046 * Math.pow(reynolds, -0.2);
     }
 
+    // Straight tube friction loss
     const straightDrop = (4 * frictionFactor * tubeLength * tubePasses * density * velocity * velocity) / (2 * innerDiameter);
+    
+    // Return bend losses (4 velocity heads per pass)
     const returnLoss = (4 * tubePasses * density * velocity * velocity) / 2;
+    
     const totalPressureDrop = straightDrop + returnLoss;
 
     return { pressureDrop: totalPressureDrop, reynolds, warnings, errors };
