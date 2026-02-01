@@ -1775,6 +1775,28 @@ const HeatExchangerSizing = () => {
                       size="sm"
                       variant="outline"
                       onClick={() => {
+                        // Check for duplicate geometry
+                        const isDuplicate = savedDesigns.some(existing => 
+                          Math.abs(existing.shellDiameter - parseFloat(tubeGeometry.shellDiameter)) < 0.1 &&
+                          Math.abs(existing.tubeOD - parseFloat(tubeGeometry.outerDiameter)) < 0.01 &&
+                          Math.abs(existing.tubeLength - parseFloat(tubeGeometry.tubeLength)) < 0.01 &&
+                          existing.numberOfTubes === parseInt(tubeGeometry.numberOfTubes) &&
+                          existing.tubePasses === parseInt(tubeGeometry.tubePasses) &&
+                          Math.abs(existing.tubePitch - parseFloat(tubeGeometry.tubePitch)) < 0.1 &&
+                          existing.tubePattern === tubeGeometry.tubePattern &&
+                          Math.abs(existing.baffleSpacing - parseFloat(tubeGeometry.baffleSpacing)) < 0.1 &&
+                          Math.abs(existing.baffleCut - parseFloat(tubeGeometry.baffleCut)) < 0.1
+                        );
+
+                        if (isDuplicate) {
+                          toast({
+                            title: "Duplicate Design Detected",
+                            description: "A design with identical geometry parameters already exists",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+
                         const designName = `Design ${savedDesigns.length + 1} (${parseFloat(tubeGeometry.shellDiameter).toFixed(0)}mm)`;
                         const newDesign: SavedDesign = {
                           id: Date.now().toString(),
@@ -1789,6 +1811,11 @@ const HeatExchangerSizing = () => {
                           tubePattern: tubeGeometry.tubePattern,
                           baffleSpacing: parseFloat(tubeGeometry.baffleSpacing),
                           baffleCut: parseFloat(tubeGeometry.baffleCut),
+                          wallThickness: parseFloat(tubeGeometry.wallThickness),
+                          selectedShellSize: tubeGeometry.selectedShellSize,
+                          selectedTubeSize: tubeGeometry.selectedTubeSize,
+                          selectedPitch: tubeGeometry.selectedPitch,
+                          selectedTubeLength: tubeGeometry.selectedTubeLength,
                           heatDuty: results.heatDuty / 1000, // Convert to kW
                           requiredArea: results.requiredArea,
                           actualArea: results.heatTransferArea,
@@ -1908,6 +1935,11 @@ const HeatExchangerSizing = () => {
                   tubePattern: design.tubePattern as "triangular" | "square" | "rotatedSquare",
                   baffleSpacing: design.baffleSpacing.toString(),
                   baffleCut: design.baffleCut.toString(),
+                  wallThickness: design.wallThickness.toString(),
+                  selectedShellSize: design.selectedShellSize,
+                  selectedTubeSize: design.selectedTubeSize,
+                  selectedPitch: design.selectedPitch,
+                  selectedTubeLength: design.selectedTubeLength,
                 }));
                 toast({
                   title: "Design Loaded",

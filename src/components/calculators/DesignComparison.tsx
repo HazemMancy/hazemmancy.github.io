@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,12 @@ export interface SavedDesign {
   tubePattern: string;
   baffleSpacing: number;
   baffleCut: number;
+  wallThickness: number;
+  // Standard selection keys for dropdown sync
+  selectedShellSize: string;
+  selectedTubeSize: string;
+  selectedPitch: string;
+  selectedTubeLength: string;
   // Results
   heatDuty: number;
   requiredArea: number;
@@ -46,35 +52,35 @@ interface DesignComparisonProps {
 }
 
 const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll, onLoadDesign }: DesignComparisonProps) => {
-  const formatNumber = (num: number, decimals: number = 2): string => {
+  const formatNumber = useCallback((num: number, decimals: number = 2): string => {
     if (isNaN(num) || !isFinite(num)) return "—";
     return num.toLocaleString(undefined, { 
       minimumFractionDigits: decimals, 
       maximumFractionDigits: decimals 
     });
-  };
-
-  // Find best values for highlighting
-  const getBestValue = useCallback((
-    designs: SavedDesign[],
-    key: keyof SavedDesign,
-    preferLow: boolean = false
-  ): number | null => {
-    const values = designs.map(d => d[key] as number).filter(v => !isNaN(v) && isFinite(v));
-    if (values.length === 0) return null;
-    return preferLow ? Math.min(...values) : Math.max(...values);
   }, []);
 
-  const bestEffectiveness = getBestValue(savedDesigns, "effectiveness");
-  const bestTubeDp = getBestValue(savedDesigns, "tubeSidePressureDrop", true);
-  const bestShellDp = getBestValue(savedDesigns, "shellSidePressureDrop", true);
-  const bestCalculatedU = getBestValue(savedDesigns, "calculatedU");
-  const lowestArea = getBestValue(savedDesigns, "requiredArea", true);
+  // Memoized best values for highlighting
+  const bestValues = useMemo(() => {
+    const getBestValue = (key: keyof SavedDesign, preferLow: boolean = false): number | null => {
+      const values = savedDesigns.map(d => d[key] as number).filter(v => !isNaN(v) && isFinite(v));
+      if (values.length === 0) return null;
+      return preferLow ? Math.min(...values) : Math.max(...values);
+    };
 
-  const isBest = (value: number, best: number | null) => {
+    return {
+      effectiveness: getBestValue("effectiveness"),
+      tubeDp: getBestValue("tubeSidePressureDrop", true),
+      shellDp: getBestValue("shellSidePressureDrop", true),
+      calculatedU: getBestValue("calculatedU"),
+      requiredArea: getBestValue("requiredArea", true),
+    };
+  }, [savedDesigns]);
+
+  const isBest = useCallback((value: number, best: number | null) => {
     if (best === null) return false;
     return Math.abs(value - best) < 0.001;
-  };
+  }, []);
 
   if (savedDesigns.length === 0) {
     return (
@@ -124,6 +130,7 @@ const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll, onLoadDesi
                           size="sm"
                           className="h-5 px-1.5 text-[10px]"
                           onClick={() => onLoadDesign(design)}
+                          aria-label={`Load design ${design.name}`}
                         >
                           <Upload className="h-2.5 w-2.5 mr-0.5" />
                           Load
@@ -133,6 +140,7 @@ const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll, onLoadDesi
                           size="icon"
                           className="h-5 w-5 text-destructive hover:text-destructive"
                           onClick={() => onDeleteDesign(design.id)}
+                          aria-label={`Delete design ${design.name}`}
                         >
                           <Trash2 className="h-2.5 w-2.5" />
                         </Button>
@@ -191,9 +199,9 @@ const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll, onLoadDesi
               <TableRow>
                 <TableCell className="text-xs text-muted-foreground">Required Area (m²)</TableCell>
                 {savedDesigns.map((d) => (
-                  <TableCell key={d.id} className={`text-xs ${isBest(d.requiredArea, lowestArea) ? "text-primary font-semibold" : ""}`}>
+                  <TableCell key={d.id} className={`text-xs ${isBest(d.requiredArea, bestValues.requiredArea) ? "text-primary font-semibold" : ""}`}>
                     {formatNumber(d.requiredArea, 2)}
-                    {isBest(d.requiredArea, lowestArea) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
+                    {isBest(d.requiredArea, bestValues.requiredArea) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
                   </TableCell>
                 ))}
               </TableRow>
@@ -206,18 +214,18 @@ const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll, onLoadDesi
               <TableRow>
                 <TableCell className="text-xs text-muted-foreground">Effectiveness (%)</TableCell>
                 {savedDesigns.map((d) => (
-                  <TableCell key={d.id} className={`text-xs ${isBest(d.effectiveness, bestEffectiveness) ? "text-primary font-semibold" : ""}`}>
+                  <TableCell key={d.id} className={`text-xs ${isBest(d.effectiveness, bestValues.effectiveness) ? "text-primary font-semibold" : ""}`}>
                     {formatNumber(d.effectiveness * 100, 1)}
-                    {isBest(d.effectiveness, bestEffectiveness) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
+                    {isBest(d.effectiveness, bestValues.effectiveness) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
                   </TableCell>
                 ))}
               </TableRow>
               <TableRow>
                 <TableCell className="text-xs text-muted-foreground">Calc U (W/m²·K)</TableCell>
                 {savedDesigns.map((d) => (
-                  <TableCell key={d.id} className={`text-xs ${isBest(d.calculatedU, bestCalculatedU) ? "text-primary font-semibold" : ""}`}>
+                  <TableCell key={d.id} className={`text-xs ${isBest(d.calculatedU, bestValues.calculatedU) ? "text-primary font-semibold" : ""}`}>
                     {formatNumber(d.calculatedU, 1)}
-                    {isBest(d.calculatedU, bestCalculatedU) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
+                    {isBest(d.calculatedU, bestValues.calculatedU) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
                   </TableCell>
                 ))}
               </TableRow>
@@ -250,18 +258,18 @@ const DesignComparison = ({ savedDesigns, onDeleteDesign, onClearAll, onLoadDesi
               <TableRow>
                 <TableCell className="text-xs text-muted-foreground">Tube ΔP (kPa)</TableCell>
                 {savedDesigns.map((d) => (
-                  <TableCell key={d.id} className={`text-xs ${isBest(d.tubeSidePressureDrop, bestTubeDp) ? "text-primary font-semibold" : ""}`}>
+                  <TableCell key={d.id} className={`text-xs ${isBest(d.tubeSidePressureDrop, bestValues.tubeDp) ? "text-primary font-semibold" : ""}`}>
                     {formatNumber(d.tubeSidePressureDrop, 2)}
-                    {isBest(d.tubeSidePressureDrop, bestTubeDp) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
+                    {isBest(d.tubeSidePressureDrop, bestValues.tubeDp) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
                   </TableCell>
                 ))}
               </TableRow>
               <TableRow>
                 <TableCell className="text-xs text-muted-foreground">Shell ΔP (kPa)</TableCell>
                 {savedDesigns.map((d) => (
-                  <TableCell key={d.id} className={`text-xs ${isBest(d.shellSidePressureDrop, bestShellDp) ? "text-primary font-semibold" : ""}`}>
+                  <TableCell key={d.id} className={`text-xs ${isBest(d.shellSidePressureDrop, bestValues.shellDp) ? "text-primary font-semibold" : ""}`}>
                     {formatNumber(d.shellSidePressureDrop, 2)}
-                    {isBest(d.shellSidePressureDrop, bestShellDp) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
+                    {isBest(d.shellSidePressureDrop, bestValues.shellDp) && <Trophy className="w-3 h-3 inline ml-1 text-primary" />}
                   </TableCell>
                 ))}
               </TableRow>
