@@ -38,6 +38,8 @@ import {
   getFoulingServicesByCategory
 } from "@/lib/temaFoulingFactors";
 import { GeometrySummaryPanel } from "./components/GeometrySummaryPanel";
+import { TubeCountComparisonPanel } from "./components/TubeCountComparisonPanel";
+import { ShellAutoSizingPanel } from "./components/ShellAutoSizingPanel";
 import {
   toKelvin,
   fromKelvin,
@@ -1669,6 +1671,63 @@ const HeatExchangerSizing = () => {
               tubePattern={tubeGeometry.tubePattern}
               tubePasses={parseInt(tubeGeometry.tubePasses) || 2}
               baffleCut={parseFloat(tubeGeometry.baffleCut) || 25}
+            />
+          </div>
+
+          {/* Tube Count Comparison & Shell Auto-Sizing Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Tube Count Comparison Panel */}
+            {getSuggestedTubeCount && (
+              <TubeCountComparisonPanel
+                userTubeCount={parseInt(tubeGeometry.numberOfTubes) || 0}
+                temaCalculatedCount={getSuggestedTubeCount.count}
+                calculationMethod={getSuggestedTubeCount.method}
+                shellDiameter={parseFloat(tubeGeometry.shellDiameter) || 591}
+                tubeOD={parseFloat(tubeGeometry.outerDiameter) || 19.05}
+                tubePitch={parseFloat(tubeGeometry.tubePitch) || 25.4}
+                tubePattern={tubeGeometry.tubePattern}
+                tubePasses={parseInt(tubeGeometry.tubePasses) || 2}
+                onApplyTema={() => {
+                  if (getSuggestedTubeCount) {
+                    setTubeGeometry(prev => ({
+                      ...prev,
+                      numberOfTubes: getSuggestedTubeCount.count.toString()
+                    }));
+                    toast({
+                      title: "TEMA Tube Count Applied",
+                      description: `Set to ${getSuggestedTubeCount.count} tubes`,
+                    });
+                  }
+                }}
+                unitSystem={unitSystem}
+              />
+            )}
+
+            {/* Shell Auto-Sizing Panel */}
+            <ShellAutoSizingPanel
+              requiredArea={results?.requiredArea || calculatedHeatTransferArea || 50}
+              tubeOD={parseFloat(tubeGeometry.outerDiameter) || 19.05}
+              tubeWall={parseFloat(tubeGeometry.wallThickness) || 2.11}
+              tubePitch={parseFloat(tubeGeometry.tubePitch) || 25.4}
+              tubePattern={tubeGeometry.tubePattern}
+              tubePasses={parseInt(tubeGeometry.tubePasses) || 2}
+              shellType={shellType === 'fixed-tubesheet' ? 'fixed' : shellType === 'floating-head' ? 'floating' : 'u-tube'}
+              onApplyShellSize={(shellDia, tubeCount, tubeLength) => {
+                setTubeGeometry(prev => ({
+                  ...prev,
+                  shellDiameter: shellDia.toString(),
+                  selectedShellSize: shellDia.toString(),
+                  numberOfTubes: tubeCount.toString(),
+                  tubeLength: tubeLength.toString(),
+                  selectedTubeLength: tubeLength.toString(),
+                  baffleSpacing: Math.max(shellDia * 0.3, 150).toFixed(0)
+                }));
+                toast({
+                  title: "Shell Size Applied",
+                  description: `Shell: ${shellDia}mm, Tubes: ${tubeCount}, Length: ${tubeLength}m`,
+                });
+              }}
+              unitSystem={unitSystem}
             />
           </div>
 
