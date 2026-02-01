@@ -32,6 +32,13 @@ import {
   getPropertiesAtTemperature
 } from "@/lib/fluidLibraryExpanded";
 import {
+  getTEMAFoulingFactor,
+  getCrudeOilFoulingFactor,
+  TEMA_FOULING_FACTORS,
+  getFoulingServicesByCategory
+} from "@/lib/temaFoulingFactors";
+import { GeometrySummaryPanel } from "./components/GeometrySummaryPanel";
+import {
   toKelvin,
   fromKelvin,
   calculateTubeSideHTC,
@@ -363,6 +370,47 @@ const HeatExchangerSizing = () => {
       setCalculatedSpeedOfSound(sos);
     }
   }, [shellFluidType, shellFluid.inletTemp, shellFluid.outletTemp]);
+
+  // Auto-populate TEMA RGP-T-2.4 fouling factors based on fluid type selection
+  useEffect(() => {
+    // Shell side fouling factor
+    if (shellFluidType !== FluidType.CUSTOM) {
+      const avgTemp = (parseFloat(shellFluid.inletTemp) + parseFloat(shellFluid.outletTemp)) / 2;
+      
+      // Use temperature-dependent fouling for crude oil
+      let foulingData;
+      if (shellFluidType === FluidType.CRUDE_OIL || 
+          shellFluidType === FluidType.CRUDE_OIL_LIGHT ||
+          shellFluidType === FluidType.CRUDE_OIL_MEDIUM ||
+          shellFluidType === FluidType.CRUDE_OIL_HEAVY) {
+        foulingData = getCrudeOilFoulingFactor(isNaN(avgTemp) ? 100 : avgTemp, unitSystem);
+      } else {
+        foulingData = getTEMAFoulingFactor(shellFluidType, unitSystem);
+      }
+      
+      setShellFouling(foulingData.rf.toFixed(6));
+    }
+  }, [shellFluidType, shellFluid.inletTemp, shellFluid.outletTemp, unitSystem]);
+
+  useEffect(() => {
+    // Tube side fouling factor
+    if (tubeFluidType !== FluidType.CUSTOM) {
+      const avgTemp = (parseFloat(tubeFluid.inletTemp) + parseFloat(tubeFluid.outletTemp)) / 2;
+      
+      // Use temperature-dependent fouling for crude oil
+      let foulingData;
+      if (tubeFluidType === FluidType.CRUDE_OIL || 
+          tubeFluidType === FluidType.CRUDE_OIL_LIGHT ||
+          tubeFluidType === FluidType.CRUDE_OIL_MEDIUM ||
+          tubeFluidType === FluidType.CRUDE_OIL_HEAVY) {
+        foulingData = getCrudeOilFoulingFactor(isNaN(avgTemp) ? 100 : avgTemp, unitSystem);
+      } else {
+        foulingData = getTEMAFoulingFactor(tubeFluidType, unitSystem);
+      }
+      
+      setTubeFouling(foulingData.rf.toFixed(6));
+    }
+  }, [tubeFluidType, tubeFluid.inletTemp, tubeFluid.outletTemp, unitSystem]);
 
   // Extreme value warnings effect - moved after results declaration
   // See below after results state declaration
@@ -1029,14 +1077,80 @@ const HeatExchangerSizing = () => {
                   <Input value={overallU} onChange={e => setOverallU(e.target.value)} className="h-9 no-spinner"
                     disabled={uMode === "calculated"} />
                 </div>
-                {/* Fouling Factors Inputs */}
-                <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Shell Fouling</Label><Input value={shellFouling} onChange={e => setShellFouling(e.target.value)} className="h-9" /></div>
-                <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Tube Fouling</Label><Input value={tubeFouling} onChange={e => setTubeFouling(e.target.value)} className="h-9" /></div>
+                {/* Fouling Factors Inputs - TEMA RGP-T-2.4 Auto-populated */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    Shell Fouling (m²·K/W)
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 text-muted-foreground/60 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs font-medium mb-1">TEMA RGP-T-2.4</p>
+                        <p className="text-xs">{getTEMAFoulingFactor(shellFluidType, unitSystem).service}</p>
+                        {getTEMAFoulingFactor(shellFluidType, unitSystem).notes && (
+                          <p className="text-xs text-muted-foreground mt-1">{getTEMAFoulingFactor(shellFluidType, unitSystem).notes}</p>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <Input 
+                    value={shellFouling} 
+                    onChange={e => setShellFouling(e.target.value)} 
+                    className="h-9 no-spinner"
+                    disabled={shellFluidType !== FluidType.CUSTOM}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    Tube Fouling (m²·K/W)
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 text-muted-foreground/60 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs font-medium mb-1">TEMA RGP-T-2.4</p>
+                        <p className="text-xs">{getTEMAFoulingFactor(tubeFluidType, unitSystem).service}</p>
+                        {getTEMAFoulingFactor(tubeFluidType, unitSystem).notes && (
+                          <p className="text-xs text-muted-foreground mt-1">{getTEMAFoulingFactor(tubeFluidType, unitSystem).notes}</p>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <Input 
+                    value={tubeFouling} 
+                    onChange={e => setTubeFouling(e.target.value)} 
+                    className="h-9 no-spinner"
+                    disabled={tubeFluidType !== FluidType.CUSTOM}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* ... Tube Geometry Card ... */}
+
+          {/* Shell & Tube Geometry Summary Panel */}
+          {results && (
+            <GeometrySummaryPanel
+              tubeOD={parseFloat(tubeGeometry.outerDiameter)}
+              tubeID={parseFloat(tubeGeometry.outerDiameter) - 2 * parseFloat(tubeGeometry.wallThickness)}
+              tubeLength={parseFloat(tubeGeometry.tubeLength)}
+              tubePitch={parseFloat(tubeGeometry.tubePitch)}
+              tubePattern={tubeGeometry.tubePattern}
+              numberOfTubes={parseInt(tubeGeometry.numberOfTubes)}
+              tubePasses={parseInt(tubeGeometry.tubePasses)}
+              tubeMaterial={tubeGeometry.tubeMaterial}
+              shellDiameter={parseFloat(tubeGeometry.shellDiameter)}
+              shellType={shellTypeClearances[shellType]?.name || shellType}
+              baffleSpacing={parseFloat(tubeGeometry.baffleSpacing)}
+              baffleCut={parseFloat(tubeGeometry.baffleCut)}
+              numberOfBaffles={results.numberOfBaffles}
+              heatTransferArea={results.heatTransferArea}
+              bundleDiameter={getSuggestedTubeCount?.shellSize}
+              unitSystem={unitSystem}
+            />
+          )}
 
           {/* Consolidated Validation Summary Panel */}
           {results && (
