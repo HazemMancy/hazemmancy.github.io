@@ -1,13 +1,11 @@
-
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
-// Add declaration for autotable
-declare module "jspdf" {
-    interface jsPDF {
-        autoTable: (options: any) => jsPDF;
-    }
-}
+// Helper to apply autoTable
+const applyAutoTable = (doc: jsPDF, options: any) => {
+    autoTable(doc, options);
+    return doc;
+};
 
 export interface PumpDatasheetData {
     // Metadata
@@ -105,7 +103,7 @@ export const generatePumpPDF = (data: PumpDatasheetData): void => {
         ["Unit System", data.unitSystem, "Revision", "A"],
     ];
 
-    doc.autoTable({
+    autoTable(doc, {
         startY: yPos,
         head: [],
         body: generalData,
@@ -129,7 +127,7 @@ export const generatePumpPDF = (data: PumpDatasheetData): void => {
         ["Vapor Pressure", `${data.vaporPressure} ${data.vaporPressureUnit}`, "Flow Rate", `${data.flowRate} ${data.flowUnit}`],
     ];
 
-    doc.autoTable({
+    autoTable(doc, {
         startY: yPos,
         body: processData,
         theme: "striped",
@@ -155,7 +153,7 @@ export const generatePumpPDF = (data: PumpDatasheetData): void => {
         ["Discharge Velocity", `${data.dischargeVel} ${data.velUnit}`, "", ""],
     ];
 
-    doc.autoTable({
+    autoTable(doc, {
         startY: yPos,
         body: hydraulicsData,
         theme: "grid",
