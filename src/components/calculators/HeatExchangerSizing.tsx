@@ -21,6 +21,7 @@ import DesignComparison, { type SavedDesign } from "./DesignComparison";
 import { HTRIRatingSummary, type HTRIRatingData } from "./HTRIRatingSummary";
 import { generateExcelDatasheet, type ExcelDatasheetData, unitConversions } from "@/lib/excelDatasheet";
 import APIValidationPanel from "./components/APIValidationPanel";
+import ValidationSummaryPanel from "./components/ValidationSummaryPanel";
 import FluidTypeSelector from "./components/FluidTypeSelector";
 import { FluidType, FluidCategory, FluidPhase, UnitSystem as HXUnitSystem, TubeLayout, MechanicalDesign, APIValidationResult, VibrationCheckResult, FluidSide } from "@/lib/heatExchangerTypes";
 import { validateAPI660 } from "@/lib/heatExchangerAPIValidation";
@@ -895,10 +896,60 @@ const HeatExchangerSizing = () => {
           {/* ... Inputs Structure ... */}
           {/* KEEPING EXISTING UI STRUCTURE, JUST ADDING NEW FIELDS */}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Mode, Flow Arr, Shell Method, Unit System cards... */}
-            {/* (Abbreviated generic rendering for brevity in plan, but full in code) */}
-            {/* ... */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Calculation Mode</Label>
+              <Select value={calculationMode} onValueChange={(v: CalculationMode) => setCalculationMode(v)}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="design">Design</SelectItem>
+                  <SelectItem value="rating">Rating</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Flow Arrangement</Label>
+              <Select value={flowArrangement} onValueChange={(v: FlowArrangement) => setFlowArrangement(v)}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="counter">Counter-Flow</SelectItem>
+                  <SelectItem value="parallel">Parallel-Flow</SelectItem>
+                  <SelectItem value="shell-tube-1-2">Shell & Tube 1-2</SelectItem>
+                  <SelectItem value="shell-tube-1-4">Shell & Tube 1-4</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Shell-Side Method</Label>
+              <Select value={shellSideMethod} onValueChange={(v: ShellSideMethod) => setShellSideMethod(v)}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bell-delaware">Bell-Delaware</SelectItem>
+                  <SelectItem value="kern">Kern</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Temperature Unit</Label>
+              <Select value={tempUnit} onValueChange={(v: TemperatureUnit) => setTempUnit(v)}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="C">°C</SelectItem>
+                  <SelectItem value="F">°F</SelectItem>
+                  <SelectItem value="K">K</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Unit System</Label>
+              <Select value={unitSystem} onValueChange={(v: UnitSystem) => setUnitSystem(v)}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="metric">Metric (SI)</SelectItem>
+                  <SelectItem value="imperial">Imperial (US)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -987,9 +1038,9 @@ const HeatExchangerSizing = () => {
 
           {/* ... Tube Geometry Card ... */}
 
-          {/* API Validation Panel - Always visible when there are results */}
+          {/* Consolidated Validation Summary Panel */}
           {results && (
-            <APIValidationPanel
+            <ValidationSummaryPanel
               apiValidation={apiValidation}
               vibrationCheck={results.vibration ? {
                 isSafe: !results.vibration.isVibrationRisk && !results.vibration.isAcousticRisk,
@@ -1004,6 +1055,20 @@ const HeatExchangerSizing = () => {
               } : null}
               calculationWarnings={results.warnings}
               calculationErrors={results.errors}
+              extremeValueWarnings={extremeWarnings}
+              velocities={{
+                tube: results.tubeSideVelocity,
+                shell: results.shellSideVelocity,
+                tubeLimits: { min: 0.5, max: 4.0 },
+                shellLimits: { min: 0.3, max: 3.0 }
+              }}
+              pressureDrops={{
+                tube: unitSystem === 'metric' ? results.tubeSidePressureDrop / 1000 : results.tubeSidePressureDrop / 6894.76,
+                shell: unitSystem === 'metric' ? results.shellSidePressureDrop / 1000 : results.shellSidePressureDrop / 6894.76,
+                tubeAllowed: parseFloat(allowedDPTube) || 50,
+                shellAllowed: parseFloat(allowedDPShell) || 50
+              }}
+              unitSystem={unitSystem}
             />
           )}
 
