@@ -1128,7 +1128,206 @@ const HeatExchangerSizing = () => {
             </CardContent>
           </Card>
 
-          {/* ... Tube Geometry Card ... */}
+          {/* Tube Geometry Card - Full User Input */}
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Grid3X3 className="h-4 w-4" />
+                Shell & Tube Geometry
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Row 1: Tube dimensions */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tube OD ({getLengthUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.outerDiameter}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, outerDiameter: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Wall Thickness ({getLengthUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.wallThickness}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, wallThickness: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tube Length ({getLengthLongUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.tubeLength}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, tubeLength: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tube Pitch ({getLengthUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.tubePitch}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, tubePitch: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">No. of Tubes</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.numberOfTubes}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, numberOfTubes: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Shell and Baffle */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Shell ID ({getLengthUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.shellDiameter}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, shellDiameter: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Baffle Spacing ({getLengthUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.baffleSpacing}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, baffleSpacing: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Baffle Cut (%)</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.baffleCut}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, baffleCut: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tube Passes</Label>
+                  <Select 
+                    value={tubeGeometry.tubePasses} 
+                    onValueChange={v => setTubeGeometry(prev => ({ ...prev, tubePasses: v }))}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1</SelectItem>
+                      <SelectItem value="2">2</SelectItem>
+                      <SelectItem value="4">4</SelectItem>
+                      <SelectItem value="6">6</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tube Pattern</Label>
+                  <Select 
+                    value={tubeGeometry.tubePattern} 
+                    onValueChange={v => setTubeGeometry(prev => ({ ...prev, tubePattern: v as "triangular" | "square" | "rotatedSquare" }))}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="triangular">Triangular (30°)</SelectItem>
+                      <SelectItem value="square">Square (90°)</SelectItem>
+                      <SelectItem value="rotatedSquare">Rotated Square (45°)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Row 3: Material and Leakage */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tube Material</Label>
+                  <Select 
+                    value={tubeGeometry.tubeMaterial} 
+                    onValueChange={v => setTubeGeometry(prev => ({ ...prev, tubeMaterial: v }))}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="carbon-steel">Carbon Steel</SelectItem>
+                      <SelectItem value="stainless-304">SS 304</SelectItem>
+                      <SelectItem value="stainless-316">SS 316</SelectItem>
+                      <SelectItem value="copper">Copper</SelectItem>
+                      <SelectItem value="admiralty-brass">Admiralty Brass</SelectItem>
+                      <SelectItem value="titanium">Titanium</SelectItem>
+                      <SelectItem value="inconel-600">Inconel 600</SelectItem>
+                      <SelectItem value="monel-400">Monel 400</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Shell Type</Label>
+                  <Select 
+                    value={shellType} 
+                    onValueChange={(v: ShellType) => setShellType(v)}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed-tubesheet">Fixed Tubesheet</SelectItem>
+                      <SelectItem value="u-tube">U-Tube</SelectItem>
+                      <SelectItem value="floating-head">Floating Head</SelectItem>
+                      <SelectItem value="kettle">Kettle Reboiler</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Unsupported Span ({getLengthUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.unsupportedSpanLength}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, unsupportedSpanLength: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Shell-Baffle Gap ({getLengthUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.shellBaffleLeakage}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, shellBaffleLeakage: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tube-Baffle Gap ({getLengthUnit()})</Label>
+                  <Input
+                    type="number"
+                    value={tubeGeometry.tubeBaffleLeakage}
+                    onChange={e => setTubeGeometry(prev => ({ ...prev, tubeBaffleLeakage: e.target.value }))}
+                    className="h-9 no-spinner"
+                  />
+                </div>
+              </div>
+
+              {/* TEMA Tube Count Reference */}
+              {getSuggestedTubeCount && (
+                <div className="bg-muted/30 p-3 rounded-lg text-xs">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Database className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-medium">TEMA Tube Count Reference</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-muted-foreground">
+                    <div>Shell: {getSuggestedTubeCount.shellSize} mm</div>
+                    <div>Pattern: {getSuggestedTubeCount.pattern}</div>
+                    <div>Passes: {getSuggestedTubeCount.passes}</div>
+                    <div className="font-medium text-foreground">Suggested: {getSuggestedTubeCount.count} tubes</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Shell & Tube Geometry Summary Panel */}
           {results && (
