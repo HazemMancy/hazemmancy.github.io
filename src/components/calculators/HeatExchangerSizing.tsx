@@ -388,6 +388,20 @@ const HeatExchangerSizing = () => {
     }
   }, [shellFluidType, shellFluid.inletTemp, shellFluid.outletTemp]);
 
+  // Auto-sync tube passes when flow arrangement changes
+  useEffect(() => {
+    const passMap: Record<string, string> = {
+      'shell-tube-1-2': '2',
+      'shell-tube-1-4': '4',
+      'shell-tube-2-4': '4',
+      'shell-tube-2-6': '6',
+    };
+    const newPasses = passMap[flowArrangement];
+    if (newPasses && tubeGeometry.tubePasses !== newPasses) {
+      setTubeGeometry(prev => ({ ...prev, tubePasses: newPasses }));
+    }
+  }, [flowArrangement]);
+
   // Auto-populate TEMA RGP-T-2.4 fouling factors based on fluid type selection
   useEffect(() => {
     // Shell side fouling factor
@@ -1218,7 +1232,7 @@ const HeatExchangerSizing = () => {
               </Label>
               <Select value={flowArrangement} onValueChange={(v: FlowArrangement) => setFlowArrangement(v)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent className="min-w-[280px]">
+                <SelectContent className="min-w-[320px]">
                   <div className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Pure Flow Patterns</div>
                   <SelectItem value="counter">
                     <span className="flex items-center justify-between w-full gap-3">
@@ -1239,41 +1253,43 @@ const HeatExchangerSizing = () => {
                     </span>
                   </SelectItem>
                   <Separator className="my-1" />
-                  <div className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">TEMA Shell & Tube</div>
+                  <div className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">TEMA E-Shell (Single Pass)</div>
                   <SelectItem value="shell-tube-1-2">
                     <span className="flex items-center justify-between w-full gap-3">
                       <span className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono bg-muted px-1 rounded">1-2</span>
-                        1 Shell / 2 Tube Passes
+                        <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 h-4 border-primary/30 text-primary">E</Badge>
+                        <span>1-2 Pass</span>
                       </span>
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-muted-foreground">Most Common</Badge>
+                      <span className="text-[10px] text-muted-foreground">Standard</span>
                     </span>
                   </SelectItem>
                   <SelectItem value="shell-tube-1-4">
                     <span className="flex items-center justify-between w-full gap-3">
                       <span className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono bg-muted px-1 rounded">1-4</span>
-                        1 Shell / 4 Tube Passes
+                        <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 h-4 border-primary/30 text-primary">E</Badge>
+                        <span>1-4 Pass</span>
                       </span>
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-muted-foreground">High Velocity</Badge>
+                      <span className="text-[10px] text-muted-foreground">High Velocity</span>
                     </span>
                   </SelectItem>
+                  <Separator className="my-1" />
+                  <div className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">TEMA F-Shell (Two Pass)</div>
                   <SelectItem value="shell-tube-2-4">
                     <span className="flex items-center justify-between w-full gap-3">
                       <span className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono bg-muted px-1 rounded">2-4</span>
-                        2 Shell / 4 Tube Passes
+                        <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 h-4 border-amber-500/50 text-amber-500">F</Badge>
+                        <span>2-4 Pass</span>
                       </span>
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-muted-foreground">High ΔT</Badge>
+                      <span className="text-[10px] text-muted-foreground">Temp Cross</span>
                     </span>
                   </SelectItem>
                   <SelectItem value="shell-tube-2-6">
                     <span className="flex items-center justify-between w-full gap-3">
                       <span className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono bg-muted px-1 rounded">2-6</span>
-                        2 Shell / 6 Tube Passes
+                        <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 h-4 border-amber-500/50 text-amber-500">F</Badge>
+                        <span>2-6 Pass</span>
                       </span>
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-muted-foreground">Industrial</Badge>
+                      <span className="text-[10px] text-muted-foreground">Industrial</span>
                     </span>
                   </SelectItem>
                 </SelectContent>
