@@ -1173,12 +1173,25 @@ const HeatExchangerSizing = () => {
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Calculation Mode</Label>
+              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                Calculation Mode
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground/70 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs">
+                    <p className="font-semibold mb-1">Design Mode (LMTD)</p>
+                    <p className="text-muted-foreground mb-2">Calculate required heat transfer area from known inlet/outlet temperatures. Uses Log Mean Temperature Difference with F-correction factors.</p>
+                    <p className="font-semibold mb-1">Rating Mode (ε-NTU)</p>
+                    <p className="text-muted-foreground">Evaluate performance of existing geometry. Uses Effectiveness-NTU method to predict outlet temperatures from known area and flow rates.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </Label>
               <Select value={calculationMode} onValueChange={(v: CalculationMode) => setCalculationMode(v)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="design">Design</SelectItem>
-                  <SelectItem value="rating">Rating</SelectItem>
+                  <SelectItem value="design">Design (LMTD)</SelectItem>
+                  <SelectItem value="rating">Rating (ε-NTU)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
