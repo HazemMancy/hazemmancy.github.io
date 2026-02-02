@@ -1196,7 +1196,22 @@ const HeatExchangerSizing = () => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Flow Arrangement</Label>
+              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                Flow Arrangement
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground/70 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs">
+                    <p className="font-semibold mb-1">Counter-Flow</p>
+                    <p className="text-muted-foreground mb-2">Maximum ΔT and efficiency. Fluids flow in opposite directions. Best for high heat recovery.</p>
+                    <p className="font-semibold mb-1">Parallel-Flow</p>
+                    <p className="text-muted-foreground mb-2">Lower efficiency but useful when limiting hot-side outlet temperature is critical.</p>
+                    <p className="font-semibold mb-1">Shell & Tube 1-2 / 1-4</p>
+                    <p className="text-muted-foreground">Multi-pass configurations. 1-2 = 1 shell pass, 2 tube passes. Requires F-factor correction (F &gt; 0.75 recommended).</p>
+                  </TooltipContent>
+                </Tooltip>
+              </Label>
               <Select value={flowArrangement} onValueChange={(v: FlowArrangement) => setFlowArrangement(v)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
