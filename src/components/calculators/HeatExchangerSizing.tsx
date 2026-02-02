@@ -46,6 +46,7 @@ import {
   fromKelvin,
   calculateTubeSideHTC,
   calculateShellSideHTC,
+  calculateKernShellSideHTC,
   calculateVibrationAnalysis,
   calculateCorrectionFactor,
   calculateEffectivenessCounter,
@@ -809,11 +810,22 @@ const HeatExchangerSizing = () => {
       shellSideCalc = { ...kernResult, Jc: 1, Jl: 1, Jb: 1, Jr: 1, Js: 1 };
     }
 
-    const shellHTC = calculateShellSideHTC(
-      shellSideCalc.reynolds, PrShell, kShellSI, shellSideCalc.equivalentDiameter,
-      shellSideCalc.Gs, CphSI, tubeGeometry.tubePattern,
-      shellSideCalc.Jc || 1, shellSideCalc.Jl || 1, shellSideCalc.Jb || 1, shellSideCalc.Jr || 1, shellSideCalc.Js || 1
-    );
+    // Calculate Shell-Side HTC using the appropriate method
+    let shellHTC;
+    if (shellSideMethod === "bell-delaware") {
+      // Bell-Delaware: Uses J-factors for correction
+      shellHTC = calculateShellSideHTC(
+        shellSideCalc.reynolds, PrShell, kShellSI, shellSideCalc.equivalentDiameter,
+        shellSideCalc.Gs, CphSI, tubeGeometry.tubePattern,
+        shellSideCalc.Jc || 1, shellSideCalc.Jl || 1, shellSideCalc.Jb || 1, shellSideCalc.Jr || 1, shellSideCalc.Js || 1
+      );
+    } else {
+      // Kern: Simplified correlation without J-factors
+      // Nu = 0.36 × Re^0.55 × Pr^(1/3)
+      shellHTC = calculateKernShellSideHTC(
+        shellSideCalc.reynolds, PrShell, kShellSI, shellSideCalc.equivalentDiameter
+      );
+    }
 
     // 6. U-Factor Logic
     const tubeWallResistance = (Do * Math.log(Do / Di)) / (2 * tubeK);
@@ -1278,7 +1290,12 @@ const HeatExchangerSizing = () => {
               <CardTitle className="text-base flex items-center gap-2">
                 <Thermometer className="h-4 w-4" />
                 Heat Transfer Coefficients
-                <Badge variant="outline" className="ml-2 text-xs">Bell-Delaware</Badge>
+                <Badge 
+                  variant="outline" 
+                  className={`ml-2 text-xs ${shellSideMethod === 'kern' ? 'border-amber-500 text-amber-600' : 'border-primary text-primary'}`}
+                >
+                  {shellSideMethod === 'kern' ? 'Kern' : 'Bell-Delaware'}
+                </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1464,11 +1481,14 @@ const HeatExchangerSizing = () => {
                   >
                     <SelectTrigger className="h-9"><SelectValue placeholder="Select tube size" /></SelectTrigger>
                     <SelectContent>
-                      {standardTubeSizes.map(tube => (
-                        <SelectItem key={tube.name} value={tube.name}>
-                          {tube.name} (ID: {tube.di.toFixed(2)} mm)
-                        </SelectItem>
-                      ))}
+                      {standardTubeSizes.map(tube => {
+                        const displayDi = unitSystem === 'metric' ? tube.di : (tube.di / 25.4);
+                        return (
+                          <SelectItem key={tube.name} value={tube.name}>
+                            {tube.name} (ID: {displayDi.toFixed(unitSystem === 'metric' ? 2 : 3)} {getLengthUnit()})
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1528,7 +1548,7 @@ const HeatExchangerSizing = () => {
                           : pitchData?.triangular || [tubeOD * 1.25, tubeOD * 1.33];
                         return pitches.map(p => (
                           <SelectItem key={p} value={p.toString()}>
-                            {p.toFixed(2)} mm ({(p / tubeOD).toFixed(2)}× OD)
+                            {p.toFixed(2)} {getLengthUnit()} ({(p / tubeOD).toFixed(2)}× OD)
                           </SelectItem>
                         ));
                       })()}
@@ -1590,11 +1610,17 @@ const HeatExchangerSizing = () => {
                   >
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {standardShellSizes.map(size => (
-                        <SelectItem key={size} value={size.toString()}>
-                          {size} mm ({(size / 25.4).toFixed(1)}")
-                        </SelectItem>
-                      ))}
+                      {standardShellSizes.map(size => {
+                        const displaySize = unitSystem === 'metric' ? size : (size / 25.4);
+                        const displayUnit = unitSystem === 'metric' ? 'mm' : 'in';
+                        const altSize = unitSystem === 'metric' ? (size / 25.4).toFixed(1) : size.toFixed(0);
+                        const altUnit = unitSystem === 'metric' ? '"' : 'mm';
+                        return (
+                          <SelectItem key={size} value={size.toString()}>
+                            {displaySize.toFixed(unitSystem === 'metric' ? 0 : 2)} {displayUnit} ({altSize}{altUnit})
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
