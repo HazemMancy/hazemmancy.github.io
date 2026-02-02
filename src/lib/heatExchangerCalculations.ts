@@ -708,17 +708,23 @@ export const calculateKernShellSide = (
     const Gs = massFlowRate / crossFlowArea;
     const velocity = Gs / density;
 
+    // Kern equivalent diameter formulas
     let De: number;
     if (tubePattern === "triangular") {
+        // Kern (1950): De = 4 × (flow area) / (wetted perimeter)
+        // For triangular pitch: De = 1.1/Do × (Pt² - 0.917×Do²)
         De = (4 * ((tubePitch * tubePitch * Math.sqrt(3) / 4) - (Math.PI * tubeOuterDiameter * tubeOuterDiameter / 8))) /
             (Math.PI * tubeOuterDiameter / 2);
     } else {
+        // For square pitch: De = 4 × (Pt² - π×Do²/4) / (π×Do)
         De = (4 * (tubePitch * tubePitch - Math.PI * tubeOuterDiameter * tubeOuterDiameter / 4)) /
             (Math.PI * tubeOuterDiameter);
     }
 
+    // Kern uses equivalent diameter for Reynolds number
     const reynolds = (De * Gs) / viscosity;
 
+    // Kern friction factor correlation
     let frictionFactor: number;
     if (reynolds > 500) {
         frictionFactor = Math.exp(0.576 - 0.19 * Math.log(reynolds));
@@ -728,6 +734,7 @@ export const calculateKernShellSide = (
 
     const numberOfBaffles = Math.floor(tubeLength / baffleSpacing) - 1;
 
+    // Kern pressure drop formula
     const pressureDrop = (frictionFactor * Gs * Gs * shellDiameter * (numberOfBaffles + 1)) /
         (2 * density * De);
 
@@ -736,6 +743,71 @@ export const calculateKernShellSide = (
         velocity, reynolds, crossFlowArea, numberOfBaffles, equivalentDiameter: De, Gs,
         warnings, errors
     };
+};
+
+/**
+ * Calculate Shell-Side Heat Transfer Coefficient using Kern Method
+ * 
+ * @api Kern, D.Q. (1950) Process Heat Transfer, McGraw-Hill
+ * @reference TEMA Standards Section RGP-4.4
+ * 
+ * Kern Correlation (simplified, more conservative):
+ * Nu = 0.36 × Re^0.55 × Pr^(1/3) × (μ/μw)^0.14
+ * 
+ * Note: Kern method does NOT use Bell-Delaware J-factors.
+ * It's a simpler, more conservative approach suitable for screening.
+ * 
+ * @param Re - Shell-side Reynolds number based on equivalent diameter
+ * @param Pr - Prandtl number
+ * @param k - Thermal conductivity (W/m·K)
+ * @param De - Equivalent diameter from Kern method (m)
+ * @param viscosityRatio - Optional μ_bulk/μ_wall for viscosity correction
+ * @returns Heat transfer coefficient h (W/m²·K) and Nusselt number
+ */
+export const calculateKernShellSideHTC = (
+    Re: number,
+    Pr: number,
+    k: number,
+    De: number,
+    viscosityRatio: number = 1.0
+): HtcResult => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
+    if (Re <= 0 || Pr <= 0 || k <= 0 || De <= 0) {
+        return { h: 0, Nu: 0, warnings, errors: ["Invalid input parameters for Kern shell-side HTC"] };
+    }
+
+    // Prandtl validity check
+    if (Pr < 0.6 || Pr > 500) {
+        warnings.push(`Prandtl number (${Pr.toFixed(2)}) outside typical validity range (0.6-500)`);
+    }
+
+    // Reynolds validity check
+    if (Re < 2000) {
+        warnings.push(`Low Reynolds number (${Re.toFixed(0)}) - Kern correlation less accurate in laminar regime`);
+    }
+
+    // Kern correlation: Nu = 0.36 × Re^0.55 × Pr^(1/3) × (μ/μw)^0.14
+    // Standard Kern coefficients for turbulent flow over tube banks
+    let Nu: number;
+    
+    if (Re >= 2000) {
+        // Turbulent/transition: Standard Kern equation
+        Nu = 0.36 * Math.pow(Re, 0.55) * Math.pow(Pr, 1/3);
+    } else {
+        // Laminar: Modified coefficient for low Re
+        Nu = 1.86 * Math.pow(Re * Pr * De, 1/3);
+        Nu = Math.max(Nu, 3.66); // Minimum for developed laminar flow
+    }
+
+    // Apply viscosity correction if provided
+    if (viscosityRatio > 0 && viscosityRatio !== 1.0) {
+        Nu = Nu * Math.pow(viscosityRatio, 0.14);
+    }
+
+    const h = Nu * k / De;
+    return { h, Nu, warnings, errors };
 };
 
 // ============================================================================
