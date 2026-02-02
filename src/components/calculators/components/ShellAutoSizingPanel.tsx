@@ -33,7 +33,8 @@ import {
 import { standardShellSizes, calculateTubeCount } from "@/lib/temaGeometry";
 
 interface ShellAutoSizingProps {
-  requiredArea: number; // m²
+  requiredArea: number; // m² - calculated from heat duty
+  heatDuty?: number; // kW - for display and validation
   tubeOD: number; // mm
   tubeWall: number; // mm
   tubePitch: number; // mm
@@ -55,56 +56,81 @@ interface SizingResult {
   isValid: boolean;
   score: number; // 0-100 ranking score
   warnings: string[];
+  // Additional metrics for better decision making
+  estimatedWeight: number; // kg - rough estimate for economic comparison
+  baffleSpacing: number; // mm - auto-calculated
 }
 
-// Standard tube lengths per API 660
-const STANDARD_TUBE_LENGTHS = [2.44, 3.05, 3.66, 4.88, 6.10, 7.32]; // m
+// Standard tube lengths per API 660 (in m)
+const STANDARD_TUBE_LENGTHS = [2.44, 3.05, 3.66, 4.88, 6.10, 7.32];
 
 // L/D ratio limits per API 660 §7
 const LD_LIMITS = { min: 3, max: 15, optimal: { min: 6, max: 10 } };
 
-// Design margin presets
+// Design margin presets with engineering context
 const MARGIN_PRESETS = [
-  { value: "10", label: "10% (Minimum)", description: "Clean service" },
-  { value: "15", label: "15% (Standard)", description: "Normal fouling" },
-  { value: "20", label: "20% (Fouling)", description: "Moderate fouling" },
-  { value: "25", label: "25% (Severe)", description: "Heavy fouling" },
+  { value: "10", label: "10% Minimum", description: "Clean service, well-defined duty" },
+  { value: "15", label: "15% Standard", description: "Normal fouling, typical design" },
+  { value: "20", label: "20% Fouling", description: "Moderate fouling expected" },
+  { value: "25", label: "25% Severe", description: "Heavy fouling, uncertain duty" },
+  { value: "30", label: "30% Critical", description: "Corrosive/scaling service" },
 ];
 
 /**
- * Calculate a ranking score for each configuration
- * Higher is better (0-100 scale)
+ * Calculate a ranking score for each configuration (0-100)
+ * Higher is better. Considers: L/D ratio, area margin, economics, practicality
+ * 
+ * @api API 660 §7 - L/D optimization
+ * @reference GPSA Engineering Data Book Ch. 9
  */
-function calculateScore(result: SizingResult): number {
+function calculateScore(result: SizingResult, targetArea: number): number {
   let score = 100;
   
-  // L/D ratio penalty (optimal is 6-10)
+  // L/D ratio scoring (0-30 points possible deduction)
+  // Optimal is 6-10 per API 660
   if (result.ldRatio >= LD_LIMITS.optimal.min && result.ldRatio <= LD_LIMITS.optimal.max) {
-    score -= 0; // Optimal
+    // Perfect L/D range
+    score -= 0;
   } else if (result.ldRatio >= LD_LIMITS.min && result.ldRatio <= LD_LIMITS.max) {
+    // Acceptable but not optimal
     const deviation = result.ldRatio < LD_LIMITS.optimal.min 
       ? LD_LIMITS.optimal.min - result.ldRatio
       : result.ldRatio - LD_LIMITS.optimal.max;
-    score -= deviation * 3; // Minor penalty
+    score -= deviation * 5; // 5 points per unit deviation
   } else {
-    score -= 30; // Major penalty for out-of-range
+    // Out of acceptable range
+    score -= 30;
   }
   
-  // Area margin penalty (15-25% is ideal)
+  // Area margin scoring (0-25 points possible deduction)
+  // Ideal margin is 15-25% per industry practice
   if (result.areaMargin >= 15 && result.areaMargin <= 25) {
     score -= 0;
-  } else if (result.areaMargin >= 10 && result.areaMargin <= 40) {
-    score -= Math.abs(result.areaMargin - 20) * 0.5;
+  } else if (result.areaMargin >= 10 && result.areaMargin <= 35) {
+    // Acceptable range
+    const optimalMid = 20;
+    score -= Math.abs(result.areaMargin - optimalMid) * 0.8;
+  } else if (result.areaMargin >= 5 && result.areaMargin <= 50) {
+    score -= 15;
   } else {
-    score -= 20;
+    score -= 25;
   }
   
-  // Prefer smaller shells (economy)
-  score -= (result.shellDiameter / 100); // Small penalty for larger shells
+  // Economic factor: prefer smaller shells (0-15 points)
+  // Shell cost scales roughly with D^2
+  const shellCostFactor = (result.shellDiameter / 1000) ** 2; // normalized
+  score -= Math.min(15, shellCostFactor * 5);
   
-  // Prefer moderate tube lengths (3-5m)
-  if (result.tubeLength >= 3 && result.tubeLength <= 5) {
-    score += 5;
+  // Tube length preference: 3-6m is most practical (0-10 points)
+  if (result.tubeLength >= 3 && result.tubeLength <= 6) {
+    score += 5; // Bonus for practical length
+  } else if (result.tubeLength < 2.5 || result.tubeLength > 7) {
+    score -= 5; // Penalty for extreme lengths
+  }
+  
+  // Number of tubes penalty for very high counts (maintenance difficulty)
+  if (result.tubeCount > 1000) {
+    score -= (result.tubeCount - 1000) / 200;
   }
   
   return Math.max(0, Math.min(100, score));
@@ -117,6 +143,7 @@ function calculateScore(result: SizingResult): number {
 export const ShellAutoSizingPanel = forwardRef<HTMLDivElement, ShellAutoSizingProps>(
   function ShellAutoSizingPanel({
     requiredArea,
+    heatDuty,
     tubeOD,
     tubeWall,
     tubePitch,
@@ -126,10 +153,23 @@ export const ShellAutoSizingPanel = forwardRef<HTMLDivElement, ShellAutoSizingPr
     onApplyShellSize,
     unitSystem
   }, ref) {
+  // Auto-sync target area with calculated required area when it changes significantly
   const [targetArea, setTargetArea] = useState(requiredArea > 0 ? requiredArea.toFixed(1) : "50");
   const [designMargin, setDesignMargin] = useState("15");
   const [preferredLength, setPreferredLength] = useState<string>("auto");
   const [hoveredOption, setHoveredOption] = useState<number | null>(null);
+  const [hasUserModifiedArea, setHasUserModifiedArea] = useState(false);
+  
+  // Sync target area with calculated required area if user hasn't modified it
+  useMemo(() => {
+    if (!hasUserModifiedArea && requiredArea > 0) {
+      const currentTarget = parseFloat(targetArea);
+      // Only auto-update if difference is more than 10%
+      if (isNaN(currentTarget) || Math.abs(requiredArea - currentTarget) / currentTarget > 0.1) {
+        setTargetArea(requiredArea.toFixed(1));
+      }
+    }
+  }, [requiredArea, hasUserModifiedArea]);
   
   // Calculate optimal shell sizes for the target area
   const sizingOptions = useMemo(() => {
@@ -161,6 +201,14 @@ export const ShellAutoSizingPanel = forwardRef<HTMLDivElement, ShellAutoSizingPr
           const areaMargin = ((actualArea / targetAreaNum) - 1) * 100;
           const ldRatio = (tubeLength * 1000) / shellDia;
           
+          // Auto-calculate baffle spacing (30% of shell ID per TEMA)
+          const baffleSpacing = Math.round(shellDia * 0.3);
+          
+          // Rough weight estimate for economic comparison (steel shell + tubes)
+          const shellWeight = Math.PI * shellDia / 1000 * tubeLength * 10 * 7850 / 1000; // ~10mm wall
+          const tubeWeight = tubeCountResult.count * Math.PI * ((tubeOD/1000)**2 - ((tubeOD - 2*tubeWall)/1000)**2) / 4 * tubeLength * 7850;
+          const estimatedWeight = shellWeight + tubeWeight;
+          
           const warnings: string[] = [];
           let isValid = true;
           let isOptimal = true;
@@ -185,6 +233,12 @@ export const ShellAutoSizingPanel = forwardRef<HTMLDivElement, ShellAutoSizingPr
             isOptimal = false;
           }
           
+          // Check for under-design
+          if (areaMargin < 5) {
+            warnings.push(`Insufficient margin (${areaMargin.toFixed(0)}%)`);
+            isOptimal = false;
+          }
+          
           const result: SizingResult = {
             shellDiameter: shellDia,
             tubeCount: tubeCountResult.count,
@@ -195,10 +249,12 @@ export const ShellAutoSizingPanel = forwardRef<HTMLDivElement, ShellAutoSizingPr
             isOptimal,
             isValid,
             score: 0,
-            warnings
+            warnings,
+            estimatedWeight,
+            baffleSpacing
           };
           
-          result.score = calculateScore(result);
+          result.score = calculateScore(result, targetAreaNum);
           results.push(result);
           
           // Only add the first (smallest) shell for this length
@@ -283,9 +339,24 @@ export const ShellAutoSizingPanel = forwardRef<HTMLDivElement, ShellAutoSizingPr
               onChange={e => {
                 const val = parseFloat(e.target.value);
                 setTargetArea(unitSystem === 'metric' ? e.target.value : (val / 10.764).toFixed(1));
+                setHasUserModifiedArea(true);
               }}
               className="h-9 text-sm no-spinner bg-background/50 focus:bg-background transition-colors"
             />
+            {/* Sync button */}
+            {hasUserModifiedArea && requiredArea > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 text-[10px] px-1.5 mt-1"
+                onClick={() => {
+                  setTargetArea(requiredArea.toFixed(1));
+                  setHasUserModifiedArea(false);
+                }}
+              >
+                Sync from calculation
+              </Button>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground flex items-center gap-1">
