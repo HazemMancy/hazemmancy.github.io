@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   ArrowRight,
   AlertTriangle,
@@ -22,7 +23,6 @@ import PipePropertiesCard from "./components/PipePropertiesCard";
 import FlowPropertiesCard from "./components/FlowPropertiesCard";
 import ResultsCard from "./components/ResultsCard";
 import { useHydraulicCalculations } from "./hooks/useHydraulicCalculations";
-import { useUnitSystem } from "./hooks/useUnitSystem";
 import { generateHydraulicPDF } from "@/lib/hydraulicPdfDatasheet";
 import { generateHydraulicExcelDatasheet } from "@/lib/hydraulicExcelDatasheet";
 import {
@@ -46,8 +46,10 @@ interface HydraulicSizingCalculatorProps {
 }
 
 const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps) => {
-  // Unit system
-  const { unitSystem, handleUnitSystemChange, convertValue } = useUnitSystem();
+  // Unit system with transition state for visual feedback
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>('metric');
+  const [isUnitTransitioning, setIsUnitTransitioning] = useState(false);
+  const prevUnitSystem = useRef<UnitSystem>(unitSystem);
 
   // Pipe properties state
   const [pipeLength, setPipeLength] = useState<string>("18");
@@ -98,6 +100,92 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
   const [mixedLiquidViscosity, setMixedLiquidViscosity] = useState<string>("1.0");
   const [mixedGasMW, setMixedGasMW] = useState<string>("20.3");
   const [pressureType, setPressureType] = useState<string>("gauge");
+
+  // Handle unit system change with value conversion
+  const handleUnitSystemChange = (isImperial: boolean) => {
+    const toSystem = isImperial ? 'imperial' : 'metric';
+    const fromSystem = unitSystem;
+    
+    if (toSystem === fromSystem) return;
+    
+    setIsUnitTransitioning(true);
+    
+    // Conversion helpers
+    const cvt = (val: string, factor: number, decimals = 4) => {
+      const num = parseFloat(val);
+      return isNaN(num) ? val : (num * factor).toFixed(decimals);
+    };
+    const cvtTemp = (val: string, toF: boolean) => {
+      const num = parseFloat(val);
+      if (isNaN(num)) return val;
+      return toF ? ((num * 9/5) + 32).toFixed(1) : ((num - 32) * 5/9).toFixed(1);
+    };
+
+    if (toSystem === 'imperial') {
+      // Metric → Imperial
+      setFluidTemperature(prev => cvtTemp(prev, true));
+      setDensity(prev => cvt(prev, 0.062428, 3));
+      setDensityUnit("lb/ft³");
+      setInletPressure(prev => cvt(prev, 14.5038, 2));
+      setBaseTemperature(prev => cvtTemp(prev, true));
+      setBasePressure(prev => cvt(prev, 14.5038, 4));
+      setPipeLength(prev => cvt(prev, 0.621371, 2)); // km → miles
+      setLengthUnit("miles");
+      setCustomRoughness(prev => cvt(prev, 0.0393701, 6)); // mm → inch
+      setRoughnessUnit("inch");
+      setPressureUnit("psi");
+      
+      // Mixed-phase specific
+      setMixedOpTemp(prev => cvtTemp(prev, true));
+      setMixedOpPressure(prev => cvt(prev, 14.5038, 2));
+      setMixedGasDensity(prev => cvt(prev, 0.062428, 3));
+      setMixedLiquidDensity(prev => cvt(prev, 0.062428, 3));
+      
+      // Liquid flow rate (if m³/h)
+      if (flowRateUnit === "m³/h") {
+        setFlowRate(prev => cvt(prev, 4.40287, 2));
+        setFlowRateUnit("gpm");
+      }
+      if (mixedLiquidFlowRateUnit === "m³/h") {
+        setMixedLiquidFlowRate(prev => cvt(prev, 4.40287, 2));
+        setMixedLiquidFlowRateUnit("gpm");
+      }
+    } else {
+      // Imperial → Metric
+      setFluidTemperature(prev => cvtTemp(prev, false));
+      setDensity(prev => cvt(prev, 1/0.062428, 1));
+      setDensityUnit("kg/m³");
+      setInletPressure(prev => cvt(prev, 1/14.5038, 2));
+      setBaseTemperature(prev => cvtTemp(prev, false));
+      setBasePressure(prev => cvt(prev, 1/14.5038, 5));
+      setPipeLength(prev => cvt(prev, 1/0.621371, 2)); // miles → km
+      setLengthUnit("km");
+      setCustomRoughness(prev => cvt(prev, 1/0.0393701, 4)); // inch → mm
+      setRoughnessUnit("mm");
+      setPressureUnit("bar");
+      
+      // Mixed-phase specific
+      setMixedOpTemp(prev => cvtTemp(prev, false));
+      setMixedOpPressure(prev => cvt(prev, 1/14.5038, 2));
+      setMixedGasDensity(prev => cvt(prev, 1/0.062428, 1));
+      setMixedLiquidDensity(prev => cvt(prev, 1/0.062428, 1));
+      
+      // Liquid flow rate (if gpm)
+      if (flowRateUnit === "gpm") {
+        setFlowRate(prev => cvt(prev, 1/4.40287, 2));
+        setFlowRateUnit("m³/h");
+      }
+      if (mixedLiquidFlowRateUnit === "gpm") {
+        setMixedLiquidFlowRate(prev => cvt(prev, 1/4.40287, 2));
+        setMixedLiquidFlowRateUnit("m³/h");
+      }
+    }
+    
+    setUnitSystem(toSystem);
+    prevUnitSystem.current = toSystem;
+    
+    setTimeout(() => setIsUnitTransitioning(false), 500);
+  };
 
   // Get current criteria based on line type
   const currentGasCriteria = useMemo((): GasServiceCriteria | null => {
@@ -349,18 +437,26 @@ const HydraulicSizingCalculator = ({ lineType }: HydraulicSizingCalculatorProps)
             </div>
 
             {/* Unit System Toggle */}
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+            <div className={`flex items-center gap-3 p-3 rounded-lg bg-muted/50 border transition-all duration-500 ${isUnitTransitioning ? 'border-primary/50 bg-primary/5' : 'border-border'}`}>
               <Ruler className="w-4 h-4 text-muted-foreground" />
-              <span className={`text-sm font-medium ${unitSystem === 'metric' ? 'text-primary' : 'text-muted-foreground'}`}>
+              <span className={`text-sm font-medium transition-colors ${unitSystem === 'metric' ? 'text-primary' : 'text-muted-foreground'}`}>
                 Metric
               </span>
               <Switch
                 checked={unitSystem === 'imperial'}
                 onCheckedChange={handleUnitSystemChange}
               />
-              <span className={`text-sm font-medium ${unitSystem === 'imperial' ? 'text-primary' : 'text-muted-foreground'}`}>
+              <span className={`text-sm font-medium transition-colors ${unitSystem === 'imperial' ? 'text-primary' : 'text-muted-foreground'}`}>
                 Imperial
               </span>
+              {isUnitTransitioning && (
+                <Badge 
+                  variant="secondary" 
+                  className="text-[10px] px-1.5 py-0 h-4 animate-pulse bg-primary/20 text-primary border-primary/30"
+                >
+                  Converting...
+                </Badge>
+              )}
             </div>
 
             {/* Export Buttons */}
