@@ -1188,9 +1188,21 @@ const HeatExchangerSizing = () => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Unit System</Label>
+              <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                Unit System
+                {isUnitTransitioning && (
+                  <Badge 
+                    variant="secondary" 
+                    className="text-[10px] px-1.5 py-0 h-4 animate-pulse bg-primary/20 text-primary border-primary/30"
+                  >
+                    Converting...
+                  </Badge>
+                )}
+              </Label>
               <Select value={unitSystem} onValueChange={(v: UnitSystem) => setUnitSystem(v)}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`h-9 ${isUnitTransitioning ? 'unit-changed-highlight' : ''}`}>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="metric">Metric (SI)</SelectItem>
                   <SelectItem value="imperial">Imperial (US)</SelectItem>
