@@ -1195,12 +1195,35 @@ const HeatExchangerSizing = () => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Shell-Side Method</Label>
+              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                Shell-Side Method
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground/70 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs">
+                    <p className="font-semibold mb-1">Bell-Delaware (Recommended)</p>
+                    <p className="text-muted-foreground mb-2">Industry-standard detailed design method using J-factors for baffle leakage, bypass, and end-zone corrections.</p>
+                    <p className="font-semibold mb-1">Kern (Legacy Screening)</p>
+                    <p className="text-muted-foreground">Simplified conservative method for quick estimates. Uses equivalent diameter without correction factors. ~15-30% lower U-values.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </Label>
               <Select value={shellSideMethod} onValueChange={(v: ShellSideMethod) => setShellSideMethod(v)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bell-delaware">Bell-Delaware</SelectItem>
-                  <SelectItem value="kern">Kern</SelectItem>
+                  <SelectItem value="bell-delaware">
+                    <span className="flex items-center gap-2">
+                      Bell-Delaware
+                      <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-primary/10 text-primary">Recommended</Badge>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="kern">
+                    <span className="flex items-center gap-2">
+                      Kern
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-muted-foreground">Screening</Badge>
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
