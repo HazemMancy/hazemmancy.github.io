@@ -32,7 +32,7 @@
  * - Thermal Conductivity: W/m·K
  */
 
-export type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "crossflow-unmixed" | "crossflow-mixed";
+export type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "shell-tube-2-4" | "shell-tube-2-6" | "crossflow-unmixed" | "crossflow-mixed";
 export type TemperatureUnit = "C" | "F" | "K";
 
 export interface VibrationResults {
@@ -381,11 +381,27 @@ export const calculateVibrationAnalysis = (
  * LMTD Correction Factor (F)
  * ...
  */
+/**
+ * Calculate LMTD Correction Factor (F) for multi-pass heat exchangers
+ * 
+ * @api TEMA Standards RGP-4.3
+ * @reference Bowman, Mueller & Nagle (1940) for multi-shell pass correction
+ * 
+ * For 1-shell pass exchangers: Standard formula
+ * For N-shell pass exchangers: Bowman-Mueller-Nagle method converts
+ *   multi-pass P to equivalent single-pass P_eff
+ * 
+ * @param R - Heat capacity ratio (C_min/C_max)
+ * @param P - Temperature effectiveness ((T_cold_out - T_cold_in) / (T_hot_in - T_cold_in))
+ * @param arrangement - Flow arrangement type
+ * @returns F-factor (0.5-1.0), warning flag, and message
+ */
 export const calculateCorrectionFactor = (
     R: number,
     P: number,
     arrangement: FlowArrangement
 ): { F: number; warning: boolean; message?: string } => {
+    // Pure counter-flow and parallel-flow: F = 1.0
     if (arrangement === "counter" || arrangement === "parallel") {
         return { F: 1.0, warning: false };
     }
@@ -394,15 +410,38 @@ export const calculateCorrectionFactor = (
         return { F: 0.9, warning: true, message: "Invalid P or R values" };
     }
 
+    // Determine number of shell passes from arrangement
+    let shellPasses = 1;
+    if (arrangement === "shell-tube-2-4" || arrangement === "shell-tube-2-6") {
+        shellPasses = 2;
+    }
+
+    // For multi-shell pass: Convert P to effective single-pass P_eff
+    // Bowman-Mueller-Nagle method: P_eff = [(1-PR)/(1-P)]^(1/N) relationship
+    let Peff = P;
+    if (shellPasses > 1 && Math.abs(R - 1) > 0.001) {
+        const term = Math.pow((1 - P * R) / (1 - P), 1 / shellPasses);
+        if (term > 0 && isFinite(term) && term !== R) {
+            Peff = (term - 1) / (term - R);
+            Peff = Math.max(0.001, Math.min(0.999, Peff));
+        }
+    } else if (shellPasses > 1 && Math.abs(R - 1) <= 0.001) {
+        // Special case when R ≈ 1 for multi-pass
+        Peff = P / shellPasses;
+    }
+
     let F: number;
 
+    // Calculate F using single-pass formula with Peff
     if (Math.abs(R - 1) < 0.001) {
-        const F_calc = (P * Math.sqrt(2)) / ((1 - P) * Math.log((2 - P * (2 - Math.sqrt(2))) / (2 - P * (2 + Math.sqrt(2)))));
+        // Special case when R ≈ 1
+        const F_calc = (Peff * Math.sqrt(2)) / ((1 - Peff) * Math.log((2 - Peff * (2 - Math.sqrt(2))) / (2 - Peff * (2 + Math.sqrt(2)))));
         F = Math.min(1, Math.max(0.5, isNaN(F_calc) || !isFinite(F_calc) ? 0.9 : F_calc));
     } else {
+        // General case
         const sqrtTerm = Math.sqrt(R * R + 1);
-        const numerator = sqrtTerm * Math.log((1 - P) / (1 - P * R));
-        const term1 = (2 - P * (R + 1 - sqrtTerm)) / (2 - P * (R + 1 + sqrtTerm));
+        const numerator = sqrtTerm * Math.log((1 - Peff) / (1 - Peff * R));
+        const term1 = (2 - Peff * (R + 1 - sqrtTerm)) / (2 - Peff * (R + 1 + sqrtTerm));
         const denominator = (R - 1) * Math.log(term1);
 
         F = numerator / denominator;
@@ -410,9 +449,15 @@ export const calculateCorrectionFactor = (
     }
 
     const warning = F < 0.75;
-    const message = warning
-        ? `F-factor (${F.toFixed(3)}) is below TEMA recommended minimum of 0.75. Consider increasing shell passes or changing flow arrangement.`
-        : undefined;
+    let message: string | undefined;
+    
+    if (warning) {
+        if (shellPasses === 1) {
+            message = `F-factor (${F.toFixed(3)}) below 0.75. Consider 2-shell pass configuration (2-4 or 2-6) for higher efficiency.`;
+        } else {
+            message = `F-factor (${F.toFixed(3)}) below 0.75 even with ${shellPasses} shell passes. Check temperature approach.`;
+        }
+    }
 
     return { F, warning, message };
 };

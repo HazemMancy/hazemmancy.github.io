@@ -1202,23 +1202,80 @@ const HeatExchangerSizing = () => {
                   <TooltipTrigger asChild>
                     <Info className="h-3 w-3 text-muted-foreground/70 cursor-help" />
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-xs">
-                    <p className="font-semibold mb-1">Counter-Flow</p>
-                    <p className="text-muted-foreground mb-2">Maximum ΔT and efficiency. Fluids flow in opposite directions. Best for high heat recovery.</p>
-                    <p className="font-semibold mb-1">Parallel-Flow</p>
-                    <p className="text-muted-foreground mb-2">Lower efficiency but useful when limiting hot-side outlet temperature is critical.</p>
-                    <p className="font-semibold mb-1">Shell & Tube 1-2 / 1-4</p>
-                    <p className="text-muted-foreground">Multi-pass configurations. 1-2 = 1 shell pass, 2 tube passes. Requires F-factor correction (F &gt; 0.75 recommended).</p>
+                  <TooltipContent className="max-w-md text-xs p-3">
+                    <div className="space-y-2">
+                      <div>
+                        <p className="font-semibold text-primary">Pure Flow Patterns</p>
+                        <p className="text-muted-foreground text-[11px]">Idealized arrangements for theoretical analysis</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-amber-500">TEMA Shell & Tube</p>
+                        <p className="text-muted-foreground text-[11px]">Industry-standard multi-pass configurations per TEMA Standards. F-factor correction applied automatically.</p>
+                      </div>
+                    </div>
                   </TooltipContent>
                 </Tooltip>
               </Label>
               <Select value={flowArrangement} onValueChange={(v: FlowArrangement) => setFlowArrangement(v)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="counter">Counter-Flow</SelectItem>
-                  <SelectItem value="parallel">Parallel-Flow</SelectItem>
-                  <SelectItem value="shell-tube-1-2">Shell & Tube 1-2</SelectItem>
-                  <SelectItem value="shell-tube-1-4">Shell & Tube 1-4</SelectItem>
+                <SelectContent className="min-w-[280px]">
+                  <div className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Pure Flow Patterns</div>
+                  <SelectItem value="counter">
+                    <span className="flex items-center justify-between w-full gap-3">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs">↔</span>
+                        Counter-Flow
+                      </span>
+                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 bg-green-500/10 text-green-500 border-green-500/20">F=1.0</Badge>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="parallel">
+                    <span className="flex items-center justify-between w-full gap-3">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs">→→</span>
+                        Parallel-Flow
+                      </span>
+                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-500 border-amber-500/20">F=1.0</Badge>
+                    </span>
+                  </SelectItem>
+                  <Separator className="my-1" />
+                  <div className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">TEMA Shell & Tube</div>
+                  <SelectItem value="shell-tube-1-2">
+                    <span className="flex items-center justify-between w-full gap-3">
+                      <span className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono bg-muted px-1 rounded">1-2</span>
+                        1 Shell / 2 Tube Passes
+                      </span>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-muted-foreground">Most Common</Badge>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="shell-tube-1-4">
+                    <span className="flex items-center justify-between w-full gap-3">
+                      <span className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono bg-muted px-1 rounded">1-4</span>
+                        1 Shell / 4 Tube Passes
+                      </span>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-muted-foreground">High Velocity</Badge>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="shell-tube-2-4">
+                    <span className="flex items-center justify-between w-full gap-3">
+                      <span className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono bg-muted px-1 rounded">2-4</span>
+                        2 Shell / 4 Tube Passes
+                      </span>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-muted-foreground">High ΔT</Badge>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="shell-tube-2-6">
+                    <span className="flex items-center justify-between w-full gap-3">
+                      <span className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono bg-muted px-1 rounded">2-6</span>
+                        2 Shell / 6 Tube Passes
+                      </span>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-muted-foreground">Industrial</Badge>
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
