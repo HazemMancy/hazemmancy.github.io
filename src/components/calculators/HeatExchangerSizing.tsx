@@ -77,7 +77,7 @@ type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1
 type TemperatureUnit = "C" | "F";  // K removed - tied to unit system
 type ShellSideMethod = "kern" | "bell-delaware";
 type UnitSystem = "metric" | "imperial";
-type UMode = "user-fouled" | "user-clean" | "calculated";
+type UValueMode = 'auto' | 'manual';
 
 interface FluidInputs {
   inletTemp: string;
@@ -333,8 +333,8 @@ const HeatExchangerSizing = () => {
   // Reference table selector
   const [selectedTemaRefTable, setSelectedTemaRefTable] = useState("3/4\" OD on 1\" pitch (standard)");
 
-  // U Mode
-  const [uMode, setUMode] = useState<UMode>("user-fouled");
+  // U-value mode: 'auto' = use calculated from correlations, 'manual' = user enters override
+  const [uValueMode, setUValueMode] = useState<UValueMode>('auto');
   
   // Speed of sound - AUTO-CALCULATED from shell-side fluid properties
   const [calculatedSpeedOfSound, setCalculatedSpeedOfSound] = useState<number>(1450);
@@ -431,7 +431,8 @@ const HeatExchangerSizing = () => {
   // Extreme value warnings effect - moved after results declaration
   // See below after results state declaration
 
-  const [overallU, setOverallU] = useState("350");
+  // Manual U override (only used when uValueMode === 'manual')
+  const [manualU, setManualU] = useState("400");
   const [area, setArea] = useState("50");
   const [shellFouling, setShellFouling] = useState("0.00035");
   const [tubeFouling, setTubeFouling] = useState("0.00018");
@@ -640,7 +641,7 @@ const HeatExchangerSizing = () => {
     const kTube = parseFloat(tubeFluid.thermalConductivity);
     const PrShell = parseFloat(shellFluid.prandtl);
     const PrTube = parseFloat(tubeFluid.prandtl);
-    const U_input = parseFloat(overallU);
+    const U_manual = parseFloat(manualU);
     const A_input = parseFloat(area);
     const Rfo = parseFloat(shellFouling);
     const Rfi = parseFloat(tubeFouling);
@@ -823,25 +824,24 @@ const HeatExchangerSizing = () => {
     let usedCleanU: number;
     let usedFouledU: number;
 
-    const uInputSI = isImperial ? U_input * 5.67826 : U_input; // BTU->W or W->W
-
-    if (uMode === "user-fouled") {
-      usedFouledU = uInputSI;
-      usedCleanU = 0; // Not strictly defined in this mode back-calc
-    } else if (uMode === "user-clean") {
-      usedCleanU = uInputSI;
-      usedFouledU = 1 / ((1 / usedCleanU) + Rfo + (Rfi * (Do / Di)));
+    // New simplified logic: auto vs manual mode
+    if (uValueMode === 'manual') {
+      // User has provided a manual override U value
+      const uManualSI = isImperial ? U_manual * 5.67826 : U_manual; // BTU->W or W->W
+      usedFouledU = uManualSI;
+      usedCleanU = calculatedU_clean; // Still use calculated clean U for reference
+      
+      // Warning if manual value differs significantly from calculated
+      if (calculatedU_fouled > 0) {
+        const diff = Math.abs(usedFouledU - calculatedU_fouled) / calculatedU_fouled;
+        if (diff > MAX_U_DIFF_WARN) {
+          warnings.push(`Manual U (${usedFouledU.toFixed(1)} W/m²K) differs >${(MAX_U_DIFF_WARN * 100).toFixed(0)}% from calculated U (${calculatedU_fouled.toFixed(1)} W/m²K).`);
+        }
+      }
     } else {
+      // Auto mode: use calculated values from correlations
       usedCleanU = calculatedU_clean;
       usedFouledU = calculatedU_fouled;
-    }
-
-    // U Warning
-    if (uMode !== "calculated" && calculatedU_fouled > 0) {
-      const diff = Math.abs(usedFouledU - calculatedU_fouled) / calculatedU_fouled;
-      if (diff > MAX_U_DIFF_WARN) {
-        warnings.push(`Selected U defines (${usedFouledU.toFixed(1)}) deviates >${(MAX_U_DIFF_WARN * 100).toFixed(0)}% from correlation-based U (${calculatedU_fouled.toFixed(1)}).`);
-      }
     }
 
     // 7. Vibration
@@ -931,7 +931,7 @@ const HeatExchangerSizing = () => {
       });
     }
 
-  }, [shellFluid, tubeFluid, overallU, area, flowArrangement, calculationMode, tempUnit, shellFouling, tubeFouling, tubeGeometry, shellSideMethod, unitSystem, uMode, calculatedSpeedOfSound]);
+  }, [shellFluid, tubeFluid, manualU, area, flowArrangement, calculationMode, tempUnit, shellFouling, tubeFouling, tubeGeometry, shellSideMethod, unitSystem, uValueMode, calculatedSpeedOfSound]);
 
   // ... (Keep existing Auto-Update logic and ASME effects) ...
   // Auto-update fluid properties
@@ -1107,7 +1107,7 @@ const HeatExchangerSizing = () => {
     // Heat transfer parameters
     setShellFouling(prev => convertFouling(prev));
     setTubeFouling(prev => convertFouling(prev));
-    setOverallU(prev => convertHTC(prev));
+    setManualU(prev => convertHTC(prev));
     setArea(prev => convertArea(prev));
 
     // Trigger animation
@@ -1274,71 +1274,143 @@ const HeatExchangerSizing = () => {
           </div>
 
           <Card className="border-border/50">
-            <CardHeader><CardTitle className="text-base">Heat Transfer Parameters</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Thermometer className="h-4 w-4" />
+                Heat Transfer Coefficients
+                <Badge variant="outline" className="ml-2 text-xs">Bell-Delaware</Badge>
+              </CardTitle>
+            </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">U Basis Mode</Label>
-                  <Select value={uMode} onValueChange={(v: UMode) => setUMode(v)}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user-fouled">User (Fouled)</SelectItem>
-                      <SelectItem value="user-clean">User (Clean)</SelectItem>
-                      <SelectItem value="calculated">Calculated (Correlation)</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-4">
+                {/* Calculated U values display */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      Clean U ({getHTCUnit()})
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3 h-3 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs">Calculated overall heat transfer coefficient without fouling resistance.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <div className="h-9 flex items-center px-3 bg-muted/40 rounded-md border border-border/50">
+                      <span className="font-mono text-sm">
+                        {results?.cleanU ? (unitSystem === 'metric' ? results.cleanU.toFixed(1) : (results.cleanU * 0.17611).toFixed(2)) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      Fouled U ({getHTCUnit()})
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3 h-3 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs">Service heat transfer coefficient including shell and tube fouling resistances per TEMA RGP-T-2.4.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <div className="h-9 flex items-center px-3 bg-primary/10 rounded-md border border-primary/30">
+                      <span className="font-mono text-sm font-semibold text-primary">
+                        {results?.fouledU ? (unitSystem === 'metric' ? results.fouledU.toFixed(1) : (results.fouledU * 0.17611).toFixed(2)) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Manual Override */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      <input 
+                        type="checkbox" 
+                        checked={uValueMode === 'manual'}
+                        onChange={(e) => setUValueMode(e.target.checked ? 'manual' : 'auto')}
+                        className="mr-1.5 h-3 w-3 rounded border-primary"
+                      />
+                      Manual U Override
+                    </Label>
+                    <Input 
+                      value={manualU} 
+                      onChange={e => setManualU(e.target.value)} 
+                      className="h-9 no-spinner"
+                      disabled={uValueMode === 'auto'}
+                      placeholder={unitSystem === 'metric' ? 'W/m²K' : 'BTU/hr·ft²·°F'}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">U Used for Design</Label>
+                    <div className={`h-9 flex items-center px-3 rounded-md border ${
+                      uValueMode === 'manual' 
+                        ? 'bg-amber-500/10 border-amber-500/30' 
+                        : 'bg-emerald-500/10 border-emerald-500/30'
+                    }`}>
+                      <span className="font-mono text-sm font-medium">
+                        {uValueMode === 'manual' 
+                          ? `${manualU} (Manual)` 
+                          : results?.fouledU 
+                            ? `${(unitSystem === 'metric' ? results.fouledU.toFixed(1) : (results.fouledU * 0.17611).toFixed(2))} (Calc)` 
+                            : '—'
+                        }
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Overall U ({getHTCUnit()})</Label>
-                  <Input value={overallU} onChange={e => setOverallU(e.target.value)} className="h-9 no-spinner"
-                    disabled={uMode === "calculated"} />
-                </div>
-                {/* Fouling Factors Inputs - TEMA RGP-T-2.4 Auto-populated */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    Shell Fouling (m²·K/W)
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3 h-3 text-muted-foreground/60 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="text-xs font-medium mb-1">TEMA RGP-T-2.4</p>
-                        <p className="text-xs">{getTEMAFoulingFactor(shellFluidType, unitSystem).service}</p>
-                        {getTEMAFoulingFactor(shellFluidType, unitSystem).notes && (
-                          <p className="text-xs text-muted-foreground mt-1">{getTEMAFoulingFactor(shellFluidType, unitSystem).notes}</p>
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  </Label>
-                  <Input 
-                    value={shellFouling} 
-                    onChange={e => setShellFouling(e.target.value)} 
-                    className="h-9 no-spinner"
-                    disabled={shellFluidType !== FluidType.CUSTOM}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    Tube Fouling (m²·K/W)
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3 h-3 text-muted-foreground/60 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="text-xs font-medium mb-1">TEMA RGP-T-2.4</p>
-                        <p className="text-xs">{getTEMAFoulingFactor(tubeFluidType, unitSystem).service}</p>
-                        {getTEMAFoulingFactor(tubeFluidType, unitSystem).notes && (
-                          <p className="text-xs text-muted-foreground mt-1">{getTEMAFoulingFactor(tubeFluidType, unitSystem).notes}</p>
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  </Label>
-                  <Input 
-                    value={tubeFouling} 
-                    onChange={e => setTubeFouling(e.target.value)} 
-                    className="h-9 no-spinner"
-                    disabled={tubeFluidType !== FluidType.CUSTOM}
-                  />
+                
+                <Separator className="bg-border/40" />
+                
+                {/* Fouling Factors - TEMA RGP-T-2.4 */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      Shell Fouling Resistance ({unitSystem === 'metric' ? 'm²·K/W' : 'hr·ft²·°F/BTU'})
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3 h-3 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs font-medium mb-1">TEMA RGP-T-2.4</p>
+                          <p className="text-xs">{getTEMAFoulingFactor(shellFluidType, unitSystem).service}</p>
+                          {getTEMAFoulingFactor(shellFluidType, unitSystem).notes && (
+                            <p className="text-xs text-muted-foreground mt-1">{getTEMAFoulingFactor(shellFluidType, unitSystem).notes}</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                      <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">Auto</Badge>
+                    </Label>
+                    <Input 
+                      value={shellFouling} 
+                      onChange={e => setShellFouling(e.target.value)} 
+                      className="h-9 no-spinner"
+                      disabled={shellFluidType !== FluidType.CUSTOM}
+                    />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      Tube Fouling Resistance ({unitSystem === 'metric' ? 'm²·K/W' : 'hr·ft²·°F/BTU'})
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3 h-3 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs font-medium mb-1">TEMA RGP-T-2.4</p>
+                          <p className="text-xs">{getTEMAFoulingFactor(tubeFluidType, unitSystem).service}</p>
+                          {getTEMAFoulingFactor(tubeFluidType, unitSystem).notes && (
+                            <p className="text-xs text-muted-foreground mt-1">{getTEMAFoulingFactor(tubeFluidType, unitSystem).notes}</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                      <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">Auto</Badge>
+                    </Label>
+                    <Input 
+                      value={tubeFouling} 
+                      onChange={e => setTubeFouling(e.target.value)} 
+                      className="h-9 no-spinner"
+                      disabled={tubeFluidType !== FluidType.CUSTOM}
+                    />
+                  </div>
                 </div>
               </div>
             </CardContent>
