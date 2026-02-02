@@ -74,7 +74,7 @@ const MAX_U_DIFF_WARN = 0.30;    // 30% Calc vs User U warning
 
 type CalculationMode = "design" | "rating";
 type FlowArrangement = "counter" | "parallel" | "shell-tube-1-2" | "shell-tube-1-4" | "crossflow-unmixed" | "crossflow-mixed";
-type TemperatureUnit = "C" | "F" | "K";
+type TemperatureUnit = "C" | "F";  // K removed - tied to unit system
 type ShellSideMethod = "kern" | "bell-delaware";
 type UnitSystem = "metric" | "imperial";
 type UMode = "user-fouled" | "user-clean" | "calculated";
@@ -160,13 +160,7 @@ const FluidInputCard = ({
   calculationMode,
   extraContent
 }: FluidInputCardProps) => {
-  const getTempUnitLabel = () => {
-    switch (tempUnit) {
-      case "C": return "°C";
-      case "F": return "°F";
-      case "K": return "K";
-    }
-  };
+  const getTempUnitLabel = () => tempUnit === "C" ? "°C" : "°F";
 
   const getFlowRateUnit = () => unitSystem === 'metric' ? 'kg/hr' : 'lb/hr';
   const getDensityUnit = () => unitSystem === 'metric' ? 'kg/m³' : 'lb/ft³';
@@ -290,7 +284,6 @@ const FluidInputCard = ({
 const HeatExchangerSizing = () => {
   const [calculationMode, setCalculationMode] = useState<CalculationMode>("design");
   const [flowArrangement, setFlowArrangement] = useState<FlowArrangement>("shell-tube-1-2");
-  const [tempUnit, setTempUnit] = useState<TemperatureUnit>("C");
   const [shellSideMethod, setShellSideMethod] = useState<ShellSideMethod>("bell-delaware");
 
   // Fluid selection with flexible side assignment
@@ -332,6 +325,10 @@ const HeatExchangerSizing = () => {
   // Unit system
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("metric");
   const [isUnitTransitioning, setIsUnitTransitioning] = useState(false);
+  
+  // Temperature unit is derived from unit system (no separate toggle needed)
+  // Metric → °C, Imperial → °F
+  const tempUnit: TemperatureUnit = unitSystem === 'metric' ? 'C' : 'F';
 
   // Reference table selector
   const [selectedTemaRefTable, setSelectedTemaRefTable] = useState("3/4\" OD on 1\" pitch (standard)");
@@ -343,38 +340,41 @@ const HeatExchangerSizing = () => {
   const [calculatedSpeedOfSound, setCalculatedSpeedOfSound] = useState<number>(1450);
 
   // Shell-side fluid (user decides which fluid)
+  // Default: Crude oil being cooled from 120°C to 60°C (typical refinery cooling)
   const [shellFluid, setShellFluid] = useState<FluidInputs>({
-    inletTemp: "150",
-    outletTemp: "90",
-    flowRate: "50000",
+    inletTemp: "120",   // Hot crude from process unit
+    outletTemp: "60",   // Cooled for storage/export
+    flowRate: "45000",  // ~12.5 kg/s, typical medium-sized HX
     specificHeat: "2.1",
-    density: "750",
-    viscosity: "0.5",
-    thermalConductivity: "0.12",
-    prandtl: "8.75"
+    density: "830",     // Medium crude at ~90°C avg
+    viscosity: "4.5",   // Crude viscosity at elevated temp
+    thermalConductivity: "0.13",
+    prandtl: "72.7"     // Calculated: Pr = Cp*μ/k
   });
 
   // Tube-side fluid (user decides which fluid)
+  // Default: Cooling water from 25°C to 45°C (typical industrial CW)
   const [tubeFluid, setTubeFluid] = useState<FluidInputs>({
-    inletTemp: "150",
-    outletTemp: "90",
-    flowRate: "50000",
-    specificHeat: "2.1",
-    density: "750",
-    viscosity: "0.5",
-    thermalConductivity: "0.12",
-    prandtl: "8.75"
-  });
-
-  const [coldFluid, setColdFluid] = useState<FluidInputs>({
-    inletTemp: "25",
-    outletTemp: "70",
-    flowRate: "33500",
+    inletTemp: "25",    // Cooling tower outlet
+    outletTemp: "45",   // Acceptable CW return temp
+    flowRate: "67000",  // Balanced for heat duty (~5.6 MW)
     specificHeat: "4.18",
     density: "995",
     viscosity: "0.8",
     thermalConductivity: "0.60",
-    prandtl: "5.57"
+    prandtl: "5.5"
+  });
+
+  // Cold fluid state kept for backwards compatibility but initialized logically
+  const [coldFluid, setColdFluid] = useState<FluidInputs>({
+    inletTemp: "25",
+    outletTemp: "45",
+    flowRate: "67000",
+    specificHeat: "4.18",
+    density: "995",
+    viscosity: "0.8",
+    thermalConductivity: "0.60",
+    prandtl: "5.5"
   });
 
   // Auto-calculate speed of sound from shell-side fluid
@@ -1071,9 +1071,23 @@ const HeatExchangerSizing = () => {
     const convertFouling = (val: string) => convertValue(val, CONVERSION_FACTORS.M2K_W_TO_HR_FT2_F_BTU, 6, 5);
     const convertArea = (val: string) => convertValue(val, CONVERSION_FACTORS.M2_TO_FT2, 2, 2);
 
-    // Apply fluid conversions
+    // Temperature conversion: °C ↔ °F
+    const convertTemperature = (val: string) => {
+      const num = parseFloat(val);
+      if (isNaN(num)) return val;
+      // Converting TO Imperial means C→F, TO Metric means F→C
+      if (toSystem === 'imperial') {
+        return (num * 9/5 + 32).toFixed(1);
+      } else {
+        return ((num - 32) * 5/9).toFixed(1);
+      }
+    };
+
+    // Apply fluid conversions INCLUDING temperatures
     setShellFluid(prev => ({
       ...prev,
+      inletTemp: convertTemperature(prev.inletTemp),
+      outletTemp: convertTemperature(prev.outletTemp),
       flowRate: convertFlowRate(prev.flowRate),
       density: convertDensity(prev.density),
       specificHeat: convertSpecificHeat(prev.specificHeat),
@@ -1082,6 +1096,8 @@ const HeatExchangerSizing = () => {
     
     setTubeFluid(prev => ({
       ...prev,
+      inletTemp: convertTemperature(prev.inletTemp),
+      outletTemp: convertTemperature(prev.outletTemp),
       flowRate: convertFlowRate(prev.flowRate),
       density: convertDensity(prev.density),
       specificHeat: convertSpecificHeat(prev.specificHeat),
@@ -1112,7 +1128,7 @@ const HeatExchangerSizing = () => {
     return num.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
 
-  const getTempUnitLabel = () => { switch (tempUnit) { case "C": return "°C"; case "F": return "°F"; case "K": return "K"; } };
+  const getTempUnitLabel = () => tempUnit === "C" ? "°C" : "°F";
   const getLengthUnit = () => unitSystem === 'metric' ? 'mm' : 'in';
   const getLengthLongUnit = () => unitSystem === 'metric' ? 'm' : 'ft';
   const getPressureUnit = () => unitSystem === 'metric' ? 'kPa' : 'psi';
@@ -1173,17 +1189,6 @@ const HeatExchangerSizing = () => {
                 <SelectContent>
                   <SelectItem value="bell-delaware">Bell-Delaware</SelectItem>
                   <SelectItem value="kern">Kern</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Temperature Unit</Label>
-              <Select value={tempUnit} onValueChange={(v: TemperatureUnit) => setTempUnit(v)}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="C">°C</SelectItem>
-                  <SelectItem value="F">°F</SelectItem>
-                  <SelectItem value="K">K</SelectItem>
                 </SelectContent>
               </Select>
             </div>
