@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Button } from "@/components/ui/button";
 import PumpPerformanceCurves from "./PumpPerformanceCurves";
 import PumpSizingGuide from "./guides/PumpSizingGuide";
+import PumpSystemDiagram from "./PumpSystemDiagram";
 import { generatePumpPDF, PumpDatasheetData } from "@/lib/pumpPdfDatasheet";
 import { generatePumpExcelDatasheet, PumpExcelData } from "@/lib/pumpExcelDatasheet";
 import { toast } from "@/components/ui/use-toast";
@@ -66,6 +67,33 @@ const nominalDiameters = Object.keys(pipeScheduleData);
 const getSchedulesForDiameter = (nd: string): string[] => {
   const available = Object.keys(pipeScheduleData[nd] || {});
   return scheduleOrder.filter(sch => available.includes(sch));
+};
+
+/**
+ * Recommends optimal pipe diameter based on flow rate and target velocity.
+ * Suction target: 1.0-1.5 m/s (API 610 recommendation for suction)
+ * Discharge target: 2.0-3.0 m/s (typical process piping)
+ * @param Q_m3s Flow rate in m³/s
+ * @param targetVelocity Target velocity in m/s
+ * @param schedule Pipe schedule to use for ID lookup
+ * @returns Recommended nominal diameter string
+ */
+const getRecommendedDiameter = (Q_m3s: number, targetVelocity: number, schedule: string): string | undefined => {
+  if (Q_m3s <= 0 || targetVelocity <= 0) return undefined;
+  // Required area = Q / V, then D = sqrt(4A/π)
+  const requiredArea = Q_m3s / targetVelocity;
+  const requiredDia_mm = Math.sqrt(4 * requiredArea / Math.PI) * 1000;
+
+  // Find closest nominal diameter with ID >= required
+  let bestNd: string | undefined;
+  for (const nd of nominalDiameters) {
+    const id_mm = pipeScheduleData[nd]?.[schedule];
+    if (id_mm && id_mm >= requiredDia_mm * 0.85) { // Allow 15% tolerance
+      bestNd = nd;
+      break;
+    }
+  }
+  return bestNd;
 };
 
 const parseNominalDiameter = (nd: string): number => {
@@ -452,6 +480,10 @@ const PumpSizingCalculator = () => {
       viscosityCorrections = calculateHICorrections(Q_m3s * 3600, totalHead || 10, parseFloat(pumpRpm), nu_cSt);
     }
 
+    // 13. Recommended Pipe Diameters (Atlas Copco-style)
+    const recommendedSuctionDia = getRecommendedDiameter(Q_m3s, 1.2, suctionSchedule); // Target 1.2 m/s suction
+    const recommendedDischargeDia = getRecommendedDiameter(Q_m3s, 2.5, dischargeSchedule); // Target 2.5 m/s discharge
+
     return {
       Q_m3s, suctionVelocity, dischargeVelocity, suctionRe, dischargeRe,
       suctionTotalLoss, dischargeTotalLoss, totalFrictionLoss,
@@ -464,7 +496,8 @@ const PumpSizingCalculator = () => {
       suctionVelLimit, dischargeVelLimit, suctionDpBarKm, dischargeDpBarKm,
       suctionCriteriaData, dischargeCriteriaData,
       viscosityPaS: mu,
-      viscosityCorrections // Return corrections
+      viscosityCorrections,
+      recommendedSuctionDia, recommendedDischargeDia
     };
   }, [
     flowRate, flowRateUnit, density, densityUnit, viscosity, viscosityUnit,
@@ -564,6 +597,31 @@ const PumpSizingCalculator = () => {
         </div>
 
         <TabsContent value="calculator" className="space-y-6">
+          {/* Atlas Copco-inspired System Diagram */}
+          <PumpSystemDiagram
+            suctionHead={suctionStaticHead}
+            dischargeHead={dischargeStaticHead}
+            suctionLength={suctionPipeLength}
+            dischargeLength={dischargePipeLength}
+            suctionDia={suctionNominalDia}
+            dischargeDia={dischargeNominalDia}
+            suctionDiaMM={calculations.suctionDia_mm}
+            dischargeDiaMM={calculations.dischargeDia_mm}
+            flowRate={flowRate}
+            flowRateUnit={flowRateUnit}
+            totalHead={calculations.totalHead}
+            npsha={calculations.npshaValue}
+            hydraulicPower={calculations.hydraulicPower_kW}
+            brakePower={calculations.brakePower_kW}
+            suctionVelocity={calculations.suctionVelocity}
+            dischargeVelocity={calculations.dischargeVelocity}
+            unitSystem={unitSystem}
+            headUnit={unitSystem === 'metric' ? 'm' : 'ft'}
+            lengthUnit={unitSystem === 'metric' ? 'm' : 'ft'}
+            recommendedSuctionDia={calculations.recommendedSuctionDia}
+            recommendedDischargeDia={calculations.recommendedDischargeDia}
+          />
+
           <Tabs defaultValue="flow" className="w-full">
             <TabsList className="grid w-full grid-cols-5 bg-muted/50 rounded-lg p-1">
               <TabsTrigger value="flow" className="text-xs py-2"><Droplets className="w-4 h-4 mr-2 hidden sm:inline" />Flow</TabsTrigger>
