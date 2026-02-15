@@ -4,22 +4,99 @@ export const STANDARD_PRESSURE = 101325; // Pa (1 atm)
 export const GRAVITY = 9.80665; // m/s²
 export const PI = Math.PI;
 
-export const PIPE_SCHEDULES: Record<string, Record<string, number>> = {
-  "STD": {
-    "2": 0.04925,
-    "3": 0.07391,
-    "4": 0.10226,
-    "6": 0.15405,
-    "8": 0.20272,
-    "10": 0.25448,
-    "12": 0.30480,
-    "14": 0.33325,
-    "16": 0.38100,
-    "18": 0.42863,
-    "20": 0.47788,
-    "24": 0.57468,
-  },
-};
+export interface PipeSpec {
+  nps: string;
+  od_mm: number;
+  schedule: string;
+  wt_mm: number;
+  id_mm: number;
+}
+
+export const PIPE_SPECS: PipeSpec[] = [
+  { nps: "1/2\"", od_mm: 21.3, schedule: "STD", wt_mm: 2.77, id_mm: 15.76 },
+  { nps: "1/2\"", od_mm: 21.3, schedule: "XS", wt_mm: 3.73, id_mm: 13.84 },
+  { nps: "3/4\"", od_mm: 26.7, schedule: "STD", wt_mm: 2.87, id_mm: 20.96 },
+  { nps: "3/4\"", od_mm: 26.7, schedule: "XS", wt_mm: 3.91, id_mm: 18.88 },
+  { nps: "1\"", od_mm: 33.4, schedule: "STD", wt_mm: 3.38, id_mm: 26.64 },
+  { nps: "1\"", od_mm: 33.4, schedule: "XS", wt_mm: 4.55, id_mm: 24.30 },
+  { nps: "1-1/4\"", od_mm: 42.2, schedule: "STD", wt_mm: 3.56, id_mm: 35.08 },
+  { nps: "1-1/4\"", od_mm: 42.2, schedule: "XS", wt_mm: 4.85, id_mm: 32.50 },
+  { nps: "1-1/2\"", od_mm: 48.3, schedule: "STD", wt_mm: 3.68, id_mm: 40.94 },
+  { nps: "1-1/2\"", od_mm: 48.3, schedule: "XS", wt_mm: 5.08, id_mm: 38.14 },
+  { nps: "2\"", od_mm: 60.3, schedule: "STD", wt_mm: 3.91, id_mm: 52.48 },
+  { nps: "2\"", od_mm: 60.3, schedule: "XS", wt_mm: 5.54, id_mm: 49.22 },
+  { nps: "2\"", od_mm: 60.3, schedule: "SCH 160", wt_mm: 8.74, id_mm: 42.82 },
+  { nps: "2-1/2\"", od_mm: 73.0, schedule: "STD", wt_mm: 5.16, id_mm: 62.68 },
+  { nps: "2-1/2\"", od_mm: 73.0, schedule: "XS", wt_mm: 7.01, id_mm: 58.98 },
+  { nps: "3\"", od_mm: 88.9, schedule: "STD", wt_mm: 5.49, id_mm: 77.92 },
+  { nps: "3\"", od_mm: 88.9, schedule: "XS", wt_mm: 7.62, id_mm: 73.66 },
+  { nps: "3\"", od_mm: 88.9, schedule: "SCH 160", wt_mm: 11.13, id_mm: 66.64 },
+  { nps: "4\"", od_mm: 114.3, schedule: "STD", wt_mm: 6.02, id_mm: 102.26 },
+  { nps: "4\"", od_mm: 114.3, schedule: "XS", wt_mm: 8.56, id_mm: 97.18 },
+  { nps: "4\"", od_mm: 114.3, schedule: "SCH 120", wt_mm: 11.13, id_mm: 92.04 },
+  { nps: "4\"", od_mm: 114.3, schedule: "SCH 160", wt_mm: 13.49, id_mm: 87.32 },
+  { nps: "6\"", od_mm: 168.3, schedule: "STD", wt_mm: 7.11, id_mm: 154.08 },
+  { nps: "6\"", od_mm: 168.3, schedule: "XS", wt_mm: 10.97, id_mm: 146.36 },
+  { nps: "6\"", od_mm: 168.3, schedule: "SCH 120", wt_mm: 14.27, id_mm: 139.76 },
+  { nps: "6\"", od_mm: 168.3, schedule: "SCH 160", wt_mm: 18.26, id_mm: 131.78 },
+  { nps: "8\"", od_mm: 219.1, schedule: "STD", wt_mm: 8.18, id_mm: 202.74 },
+  { nps: "8\"", od_mm: 219.1, schedule: "XS", wt_mm: 12.70, id_mm: 193.70 },
+  { nps: "8\"", od_mm: 219.1, schedule: "SCH 120", wt_mm: 18.26, id_mm: 182.58 },
+  { nps: "8\"", od_mm: 219.1, schedule: "SCH 160", wt_mm: 23.01, id_mm: 173.08 },
+  { nps: "10\"", od_mm: 273.1, schedule: "STD", wt_mm: 9.27, id_mm: 254.56 },
+  { nps: "10\"", od_mm: 273.1, schedule: "XS", wt_mm: 12.70, id_mm: 247.70 },
+  { nps: "10\"", od_mm: 273.1, schedule: "SCH 120", wt_mm: 21.44, id_mm: 230.22 },
+  { nps: "10\"", od_mm: 273.1, schedule: "SCH 160", wt_mm: 28.58, id_mm: 215.94 },
+  { nps: "12\"", od_mm: 323.9, schedule: "STD", wt_mm: 9.53, id_mm: 304.84 },
+  { nps: "12\"", od_mm: 323.9, schedule: "XS", wt_mm: 12.70, id_mm: 298.50 },
+  { nps: "12\"", od_mm: 323.9, schedule: "SCH 120", wt_mm: 25.40, id_mm: 273.10 },
+  { nps: "12\"", od_mm: 323.9, schedule: "SCH 160", wt_mm: 33.32, id_mm: 257.26 },
+  { nps: "14\"", od_mm: 355.6, schedule: "STD", wt_mm: 9.53, id_mm: 336.54 },
+  { nps: "14\"", od_mm: 355.6, schedule: "XS", wt_mm: 12.70, id_mm: 330.20 },
+  { nps: "14\"", od_mm: 355.6, schedule: "SCH 120", wt_mm: 27.79, id_mm: 300.02 },
+  { nps: "14\"", od_mm: 355.6, schedule: "SCH 160", wt_mm: 35.71, id_mm: 284.18 },
+  { nps: "16\"", od_mm: 406.4, schedule: "STD", wt_mm: 9.53, id_mm: 387.34 },
+  { nps: "16\"", od_mm: 406.4, schedule: "XS", wt_mm: 12.70, id_mm: 381.00 },
+  { nps: "16\"", od_mm: 406.4, schedule: "SCH 120", wt_mm: 30.96, id_mm: 344.48 },
+  { nps: "16\"", od_mm: 406.4, schedule: "SCH 160", wt_mm: 40.49, id_mm: 325.42 },
+  { nps: "18\"", od_mm: 457.2, schedule: "STD", wt_mm: 9.53, id_mm: 438.14 },
+  { nps: "18\"", od_mm: 457.2, schedule: "XS", wt_mm: 12.70, id_mm: 431.80 },
+  { nps: "18\"", od_mm: 457.2, schedule: "SCH 120", wt_mm: 34.93, id_mm: 387.34 },
+  { nps: "18\"", od_mm: 457.2, schedule: "SCH 160", wt_mm: 45.24, id_mm: 366.72 },
+  { nps: "20\"", od_mm: 508.0, schedule: "STD", wt_mm: 9.53, id_mm: 488.94 },
+  { nps: "20\"", od_mm: 508.0, schedule: "XS", wt_mm: 12.70, id_mm: 482.60 },
+  { nps: "20\"", od_mm: 508.0, schedule: "SCH 120", wt_mm: 38.10, id_mm: 431.80 },
+  { nps: "20\"", od_mm: 508.0, schedule: "SCH 160", wt_mm: 50.01, id_mm: 407.98 },
+  { nps: "24\"", od_mm: 609.6, schedule: "STD", wt_mm: 9.53, id_mm: 590.54 },
+  { nps: "24\"", od_mm: 609.6, schedule: "XS", wt_mm: 12.70, id_mm: 584.20 },
+  { nps: "24\"", od_mm: 609.6, schedule: "SCH 120", wt_mm: 46.02, id_mm: 517.56 },
+  { nps: "24\"", od_mm: 609.6, schedule: "SCH 160", wt_mm: 59.54, id_mm: 490.52 },
+  { nps: "30\"", od_mm: 762.0, schedule: "STD", wt_mm: 9.53, id_mm: 742.94 },
+  { nps: "30\"", od_mm: 762.0, schedule: "XS", wt_mm: 12.70, id_mm: 736.60 },
+  { nps: "36\"", od_mm: 914.4, schedule: "STD", wt_mm: 9.53, id_mm: 895.34 },
+  { nps: "36\"", od_mm: 914.4, schedule: "XS", wt_mm: 12.70, id_mm: 889.00 },
+  { nps: "42\"", od_mm: 1066.8, schedule: "STD", wt_mm: 9.53, id_mm: 1047.74 },
+  { nps: "42\"", od_mm: 1066.8, schedule: "XS", wt_mm: 12.70, id_mm: 1041.40 },
+  { nps: "48\"", od_mm: 1219.2, schedule: "STD", wt_mm: 9.53, id_mm: 1200.14 },
+  { nps: "48\"", od_mm: 1219.2, schedule: "XS", wt_mm: 12.70, id_mm: 1193.80 },
+];
+
+export function getNPSList(): string[] {
+  const seen = new Set<string>();
+  return PIPE_SPECS.filter((s) => {
+    if (seen.has(s.nps)) return false;
+    seen.add(s.nps);
+    return true;
+  }).map((s) => s.nps);
+}
+
+export function getSchedulesForNPS(nps: string): string[] {
+  return PIPE_SPECS.filter((s) => s.nps === nps).map((s) => s.schedule);
+}
+
+export function getPipeSpec(nps: string, schedule: string): PipeSpec | undefined {
+  return PIPE_SPECS.find((s) => s.nps === nps && s.schedule === schedule);
+}
 
 export const PIPE_ROUGHNESS: Record<string, number> = {
   "Carbon Steel": 0.0000457,

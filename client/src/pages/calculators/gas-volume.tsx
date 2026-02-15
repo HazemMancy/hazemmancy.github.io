@@ -14,6 +14,7 @@ import {
 } from "@/lib/engineering/gasVolume";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI } from "@/lib/engineering/unitConversion";
+import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { ArrowLeftRight, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -36,6 +37,16 @@ const defaultForm: FormState = {
   zFactorActual: "0.9",
 };
 
+const fieldUnitMap: FieldUnitMap = {
+  flowRate: null,
+  pressureStd: "pressure",
+  temperatureStd: "temperature",
+  pressureActual: "pressure",
+  temperatureActual: "temperature",
+  zFactorStd: null,
+  zFactorActual: null,
+};
+
 export default function GasVolumePage() {
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -44,6 +55,12 @@ export default function GasVolumePage() {
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUnitToggle = (newSystem: UnitSystem) => {
+    const converted = convertFormValues(form, fieldUnitMap, unitSystem, newSystem);
+    setForm(converted);
+    setUnitSystem(newSystem);
   };
 
   const handleCalculate = () => {
@@ -95,7 +112,7 @@ export default function GasVolumePage() {
     <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
             <ArrowLeftRight className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -107,7 +124,7 @@ export default function GasVolumePage() {
             </p>
           </div>
         </div>
-        <UnitSelector value={unitSystem} onChange={setUnitSystem} />
+        <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">

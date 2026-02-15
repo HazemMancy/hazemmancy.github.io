@@ -14,14 +14,16 @@ import { UnitSelector } from "@/components/engineering/unit-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
+import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
 import {
   calculatePumpSizing,
   PUMP_SIZING_TEST_CASE,
   type PumpSizingResult,
 } from "@/lib/engineering/pumpSizing";
-import { COMMON_LIQUIDS, PIPE_ROUGHNESS, FITTING_K_VALUES } from "@/lib/engineering/constants";
+import { COMMON_LIQUIDS, FITTING_K_VALUES } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
+import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { Droplets, FlaskConical, RotateCcw, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -67,6 +69,27 @@ const defaultForm: FormState = {
   suctionVesselPressure: "0",
 };
 
+const fieldUnitMap: FieldUnitMap = {
+  flowRate: "flowLiquid",
+  liquidDensity: null,
+  viscosity: null,
+  suctionStaticHead: "head",
+  dischargeStaticHead: "head",
+  suctionPipeLength: "length",
+  dischargePipeLength: "length",
+  suctionPipeDiameter: "diameter",
+  dischargePipeDiameter: "diameter",
+  suctionRoughness: null,
+  dischargeRoughness: null,
+  suctionFittingsK: null,
+  dischargeFittingsK: null,
+  pumpEfficiency: null,
+  motorEfficiency: null,
+  vaporPressure: null,
+  atmosphericPressure: null,
+  suctionVesselPressure: null,
+};
+
 interface FittingEntry {
   name: string;
   count: number;
@@ -82,6 +105,12 @@ export default function PumpSizingPage() {
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUnitToggle = (newSystem: UnitSystem) => {
+    const converted = convertFormValues(form, fieldUnitMap, unitSystem, newSystem);
+    setForm(converted);
+    setUnitSystem(newSystem);
   };
 
   const computeKTotal = (fittings: FittingEntry[]): number => {
@@ -202,20 +231,6 @@ export default function PumpSizingPage() {
     }
   };
 
-  const handleSuctionRoughnessSelect = (material: string) => {
-    const r = PIPE_ROUGHNESS[material];
-    if (r !== undefined) {
-      setForm((prev) => ({ ...prev, suctionRoughness: String(r * 1000) }));
-    }
-  };
-
-  const handleDischargeRoughnessSelect = (material: string) => {
-    const r = PIPE_ROUGHNESS[material];
-    if (r !== undefined) {
-      setForm((prev) => ({ ...prev, dischargeRoughness: String(r * 1000) }));
-    }
-  };
-
   const renderFittingsSection = (
     side: "suction" | "discharge",
     fittings: FittingEntry[],
@@ -270,7 +285,7 @@ export default function PumpSizingPage() {
             </p>
           </div>
         </div>
-        <UnitSelector value={unitSystem} onChange={setUnitSystem} />
+        <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
@@ -373,40 +388,6 @@ export default function PumpSizingPage() {
                 </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Pipe Diameter ({getUnit("diameter", unitSystem)})
-                  </Label>
-                  <Input
-                    type="number"
-                    value={form.suctionPipeDiameter}
-                    onChange={(e) => updateField("suctionPipeDiameter", e.target.value)}
-                    placeholder="e.g. 203.2"
-                    data-testid="input-suction-diameter"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">Pipe Material</Label>
-                  <Select onValueChange={handleSuctionRoughnessSelect}>
-                    <SelectTrigger data-testid="select-suction-material">
-                      <SelectValue placeholder="Select material..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(PIPE_ROUGHNESS).map((mat) => (
-                        <SelectItem key={mat} value={mat}>{mat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-                  <Input
-                    type="number"
-                    value={form.suctionRoughness}
-                    onChange={(e) => updateField("suctionRoughness", e.target.value)}
-                    data-testid="input-suction-roughness"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
                     Vessel Gauge Pressure ({getUnit("pressure", unitSystem)})
                   </Label>
                   <Input
@@ -415,6 +396,17 @@ export default function PumpSizingPage() {
                     onChange={(e) => updateField("suctionVesselPressure", e.target.value)}
                     placeholder="0 for atmospheric"
                     data-testid="input-vessel-pressure"
+                  />
+                </div>
+                <div className="sm:col-span-2 pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Suction Pipe</p>
+                  <PipeSizeSelector
+                    unitSystem={unitSystem}
+                    innerDiameter={form.suctionPipeDiameter}
+                    roughness={form.suctionRoughness}
+                    onDiameterChange={(v) => updateField("suctionPipeDiameter", v)}
+                    onRoughnessChange={(v) => updateField("suctionRoughness", v)}
+                    testIdPrefix="suction"
                   />
                 </div>
               </div>
@@ -452,38 +444,15 @@ export default function PumpSizingPage() {
                     data-testid="input-discharge-length"
                   />
                 </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
-                    Pipe Diameter ({getUnit("diameter", unitSystem)})
-                  </Label>
-                  <Input
-                    type="number"
-                    value={form.dischargePipeDiameter}
-                    onChange={(e) => updateField("dischargePipeDiameter", e.target.value)}
-                    placeholder="e.g. 154.1"
-                    data-testid="input-discharge-diameter"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">Pipe Material</Label>
-                  <Select onValueChange={handleDischargeRoughnessSelect}>
-                    <SelectTrigger data-testid="select-discharge-material">
-                      <SelectValue placeholder="Select material..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(PIPE_ROUGHNESS).map((mat) => (
-                        <SelectItem key={mat} value={mat}>{mat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-                  <Input
-                    type="number"
-                    value={form.dischargeRoughness}
-                    onChange={(e) => updateField("dischargeRoughness", e.target.value)}
-                    data-testid="input-discharge-roughness"
+                <div className="sm:col-span-2 pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Discharge Pipe</p>
+                  <PipeSizeSelector
+                    unitSystem={unitSystem}
+                    innerDiameter={form.dischargePipeDiameter}
+                    roughness={form.dischargeRoughness}
+                    onDiameterChange={(v) => updateField("dischargePipeDiameter", v)}
+                    onRoughnessChange={(v) => updateField("dischargeRoughness", v)}
+                    testIdPrefix="discharge"
                   />
                 </div>
               </div>

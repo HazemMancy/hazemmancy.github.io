@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { UnitSelector } from "@/components/engineering/unit-selector";
+import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
+import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import {
   calculateMultiphase,
   MULTIPHASE_TEST_CASE,
@@ -25,6 +27,7 @@ interface FormState {
   innerDiameter: string;
   pipeLength: string;
   cFactor: string;
+  roughness: string;
 }
 
 const defaultForm: FormState = {
@@ -35,6 +38,18 @@ const defaultForm: FormState = {
   innerDiameter: "",
   pipeLength: "",
   cFactor: "150",
+  roughness: "0.0457",
+};
+
+const fieldUnitMap: FieldUnitMap = {
+  gasFlowRate: "flowVolume",
+  liquidFlowRate: "flowVolume",
+  gasDensity: "density",
+  liquidDensity: "density",
+  innerDiameter: "diameter",
+  pipeLength: "length",
+  cFactor: null,
+  roughness: null,
 };
 
 export default function MultiphaseLinePage() {
@@ -45,6 +60,12 @@ export default function MultiphaseLinePage() {
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUnitToggle = (newSystem: UnitSystem) => {
+    const converted = convertFormValues(form, fieldUnitMap, unitSystem, newSystem);
+    setForm(converted);
+    setUnitSystem(newSystem);
   };
 
   const handleCalculate = () => {
@@ -81,6 +102,7 @@ export default function MultiphaseLinePage() {
       innerDiameter: String(tc.innerDiameter),
       pipeLength: String(tc.pipeLength),
       cFactor: String(tc.cFactor),
+      roughness: "0.0457",
     });
     setResult(null);
     setError(null);
@@ -96,7 +118,7 @@ export default function MultiphaseLinePage() {
     <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
             <Gauge className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -110,7 +132,7 @@ export default function MultiphaseLinePage() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">Screening Tool</Badge>
-          <UnitSelector value={unitSystem} onChange={setUnitSystem} />
+          <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
         </div>
       </div>
 
@@ -181,16 +203,14 @@ export default function MultiphaseLinePage() {
                     data-testid="input-liquid-density"
                   />
                 </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
-                    Inner Diameter ({getUnit("diameter", unitSystem)})
-                  </Label>
-                  <Input
-                    type="number"
-                    value={form.innerDiameter}
-                    onChange={(e) => updateField("innerDiameter", e.target.value)}
-                    placeholder="e.g. 254.5"
-                    data-testid="input-diameter"
+                <div className="sm:col-span-2 pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Pipe Selection</p>
+                  <PipeSizeSelector
+                    unitSystem={unitSystem}
+                    innerDiameter={form.innerDiameter}
+                    roughness={form.roughness}
+                    onDiameterChange={(v) => updateField("innerDiameter", v)}
+                    onRoughnessChange={(v) => updateField("roughness", v)}
                   />
                 </div>
                 <div>

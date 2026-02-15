@@ -10,8 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { UnitSelector } from "@/components/engineering/unit-selector";
+import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
@@ -20,9 +20,10 @@ import {
   GAS_SIZING_TEST_CASE,
   type GasSizingResult,
 } from "@/lib/engineering/gasSizing";
-import { PIPE_ROUGHNESS, COMMON_GASES } from "@/lib/engineering/constants";
+import { COMMON_GASES } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
+import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { Wind, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -51,6 +52,19 @@ const defaultForm: FormState = {
   viscosity: "0.012",
 };
 
+const fieldUnitMap: FieldUnitMap = {
+  flowRate: "flowMass",
+  pressure: "pressure",
+  temperature: "temperature",
+  innerDiameter: "diameter",
+  pipeLength: "length",
+  molecularWeight: null,
+  roughness: null,
+  compressibilityFactor: null,
+  specificHeatRatio: null,
+  viscosity: null,
+};
+
 export default function GasLineSizingPage() {
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -59,6 +73,12 @@ export default function GasLineSizingPage() {
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUnitToggle = (newSystem: UnitSystem) => {
+    const converted = convertFormValues(form, fieldUnitMap, unitSystem, newSystem);
+    setForm(converted);
+    setUnitSystem(newSystem);
   };
 
   const handleCalculate = () => {
@@ -123,18 +143,11 @@ export default function GasLineSizingPage() {
     }
   };
 
-  const handleRoughnessSelect = (material: string) => {
-    const r = PIPE_ROUGHNESS[material];
-    if (r !== undefined) {
-      setForm((prev) => ({ ...prev, roughness: String(r * 1000) }));
-    }
-  };
-
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
             <Wind className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -146,7 +159,7 @@ export default function GasLineSizingPage() {
             </p>
           </div>
         </div>
-        <UnitSelector value={unitSystem} onChange={setUnitSystem} />
+        <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
@@ -235,18 +248,6 @@ export default function GasLineSizingPage() {
                 </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Inner Diameter ({getUnit("diameter", unitSystem)})
-                  </Label>
-                  <Input
-                    type="number"
-                    value={form.innerDiameter}
-                    onChange={(e) => updateField("innerDiameter", e.target.value)}
-                    placeholder="e.g. 254.5"
-                    data-testid="input-diameter"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
                     Pipe Length ({getUnit("length", unitSystem)})
                   </Label>
                   <Input
@@ -257,23 +258,19 @@ export default function GasLineSizingPage() {
                     data-testid="input-length"
                   />
                 </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
-                    Pipe Material
-                  </Label>
-                  <Select onValueChange={handleRoughnessSelect}>
-                    <SelectTrigger data-testid="select-material">
-                      <SelectValue placeholder="Select material..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(PIPE_ROUGHNESS).map((mat) => (
-                        <SelectItem key={mat} value={mat}>
-                          {mat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              </div>
+
+              <div className="pt-2 border-t">
+                <p className="text-xs font-medium text-muted-foreground mb-3">
+                  Pipe Selection
+                </p>
+                <PipeSizeSelector
+                  unitSystem={unitSystem}
+                  innerDiameter={form.innerDiameter}
+                  roughness={form.roughness}
+                  onDiameterChange={(v) => updateField("innerDiameter", v)}
+                  onRoughnessChange={(v) => updateField("roughness", v)}
+                />
               </div>
 
               <div className="pt-2 border-t">
@@ -281,15 +278,6 @@ export default function GasLineSizingPage() {
                   Gas Properties
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-                    <Input
-                      type="number"
-                      value={form.roughness}
-                      onChange={(e) => updateField("roughness", e.target.value)}
-                      data-testid="input-roughness"
-                    />
-                  </div>
                   <div>
                     <Label className="text-xs mb-1.5 block">Z-factor</Label>
                     <Input
@@ -355,30 +343,30 @@ export default function GasLineSizingPage() {
                     highlight: true,
                   },
                   {
-                    label: "ΔP per 100m",
+                    label: "\u0394P per 100m",
                     value: result.pressureDropPer100m,
                     unit: "bar/100m",
                   },
                   {
                     label: "Reynolds Number",
                     value: result.reynoldsNumber,
-                    unit: "—",
+                    unit: "\u2014",
                   },
                   {
                     label: "Friction Factor (f)",
                     value: result.frictionFactor,
-                    unit: "—",
+                    unit: "\u2014",
                   },
                   {
                     label: "Mach Number",
                     value: result.machNumber,
-                    unit: "—",
+                    unit: "\u2014",
                     highlight: result.machNumber > 0.3,
                   },
                   {
-                    label: "ρv²",
+                    label: "\u03C1v\u00B2",
                     value: result.rhoV2,
-                    unit: "kg/(m·s²)",
+                    unit: "kg/(m\u00B7s\u00B2)",
                   },
                   {
                     label: "Gas Density",
@@ -416,7 +404,7 @@ export default function GasLineSizingPage() {
           references={[
             "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
             "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
-            "Swamee, P.K. and Jain, A.K. (1976) — Explicit equations for pipe-flow problems",
+            "Swamee, P.K. and Jain, A.K. (1976) \u2014 Explicit equations for pipe-flow problems",
             "Perry's Chemical Engineers' Handbook, 9th Edition",
           ]}
         />

@@ -3,25 +3,19 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { UnitSelector } from "@/components/engineering/unit-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
+import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
 import {
   calculateLiquidLineSizing,
   LIQUID_SIZING_TEST_CASE,
   type LiquidSizingResult,
 } from "@/lib/engineering/liquidSizing";
-import { PIPE_ROUGHNESS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
+import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { Droplets, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -44,6 +38,16 @@ const defaultForm: FormState = {
   elevationChange: "0",
 };
 
+const fieldUnitMap: FieldUnitMap = {
+  flowRate: "flowVolume",
+  density: "density",
+  viscosity: null,
+  innerDiameter: "diameter",
+  pipeLength: "length",
+  roughness: null,
+  elevationChange: "length",
+};
+
 export default function LiquidLineSizingPage() {
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -52,6 +56,12 @@ export default function LiquidLineSizingPage() {
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUnitToggle = (newSystem: UnitSystem) => {
+    const converted = convertFormValues(form, fieldUnitMap, unitSystem, newSystem);
+    setForm(converted);
+    setUnitSystem(newSystem);
   };
 
   const handleCalculate = () => {
@@ -99,18 +109,11 @@ export default function LiquidLineSizingPage() {
     setError(null);
   };
 
-  const handleRoughnessSelect = (material: string) => {
-    const r = PIPE_ROUGHNESS[material];
-    if (r !== undefined) {
-      setForm((prev) => ({ ...prev, roughness: String(r * 1000) }));
-    }
-  };
-
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
             <Droplets className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -122,7 +125,7 @@ export default function LiquidLineSizingPage() {
             </p>
           </div>
         </div>
-        <UnitSelector value={unitSystem} onChange={setUnitSystem} />
+        <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
@@ -182,18 +185,6 @@ export default function LiquidLineSizingPage() {
                 </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Inner Diameter ({getUnit("diameter", unitSystem)})
-                  </Label>
-                  <Input
-                    type="number"
-                    value={form.innerDiameter}
-                    onChange={(e) => updateField("innerDiameter", e.target.value)}
-                    placeholder="e.g. 154.1"
-                    data-testid="input-diameter"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
                     Pipe Length ({getUnit("length", unitSystem)})
                   </Label>
                   <Input
@@ -204,44 +195,30 @@ export default function LiquidLineSizingPage() {
                     data-testid="input-length"
                   />
                 </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
-                    Pipe Material
-                  </Label>
-                  <Select onValueChange={handleRoughnessSelect}>
-                    <SelectTrigger data-testid="select-material">
-                      <SelectValue placeholder="Select material..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(PIPE_ROUGHNESS).map((mat) => (
-                        <SelectItem key={mat} value={mat}>
-                          {mat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-                  <Input
-                    type="number"
-                    value={form.roughness}
-                    onChange={(e) => updateField("roughness", e.target.value)}
-                    data-testid="input-roughness"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
-                    Elevation Change ({getUnit("length", unitSystem)})
-                  </Label>
-                  <Input
-                    type="number"
-                    value={form.elevationChange}
-                    onChange={(e) => updateField("elevationChange", e.target.value)}
-                    placeholder="e.g. 10 (positive = uphill)"
-                    data-testid="input-elevation"
-                  />
-                </div>
+              </div>
+
+              <div className="pt-2 border-t">
+                <p className="text-xs font-medium text-muted-foreground mb-3">Pipe Selection</p>
+                <PipeSizeSelector
+                  unitSystem={unitSystem}
+                  innerDiameter={form.innerDiameter}
+                  roughness={form.roughness}
+                  onDiameterChange={(v) => updateField("innerDiameter", v)}
+                  onRoughnessChange={(v) => updateField("roughness", v)}
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs mb-1.5 block">
+                  Elevation Change ({getUnit("length", unitSystem)})
+                </Label>
+                <Input
+                  type="number"
+                  value={form.elevationChange}
+                  onChange={(e) => updateField("elevationChange", e.target.value)}
+                  placeholder="e.g. 10 (positive = uphill)"
+                  data-testid="input-elevation"
+                />
               </div>
 
               {error && (
