@@ -12,6 +12,7 @@ import LiquidLineSizingPage from "@/pages/calculators/liquid-line-sizing";
 import MultiphaseLinePage from "@/pages/calculators/multiphase-line";
 import GasMixingPage from "@/pages/calculators/gas-mixing";
 import GasVolumePage from "@/pages/calculators/gas-volume";
+import PumpSizingPage from "@/pages/calculators/pump-sizing";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/calculators/multiphase-line" component={MultiphaseLinePage} />
       <Route path="/calculators/gas-mixing" component={GasMixingPage} />
       <Route path="/calculators/gas-volume" component={GasVolumePage} />
+      <Route path="/calculators/pump-sizing" component={PumpSizingPage} />
       <Route component={NotFound} />
     </Switch>
   );

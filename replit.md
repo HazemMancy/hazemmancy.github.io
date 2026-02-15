@@ -9,6 +9,7 @@ Professional engineering portfolio website with validated process engineering ca
 - **Routing**: wouter (client-side)
 - **State**: React local state (no database needed - static portfolio + client-side calculators)
 - **Engineering Library**: Separate calculation modules in `client/src/lib/engineering/`
+- **Theme**: Dark navy (#0c1222) + golden amber (#d4a04a), single-page scrolling portfolio
 
 ## Project Structure
 ```
@@ -16,23 +17,27 @@ client/src/
   components/
     engineering/     - Reusable calculator UI components
     layout/          - Navbar, Footer
-    theme-provider   - Dark/light mode
+    theme-provider   - Dark mode (always dark)
     theme-toggle
   lib/engineering/   - Engineering calculation modules
-    constants.ts     - Physical constants, pipe data
-    unitConversion.ts - SI/Field unit conversion
+    constants.ts     - Physical constants, pipe data, common liquids, fitting K values
+    unitConversion.ts - SI/Field unit conversion (pressure, head, power, flow, etc.)
     validation.ts    - Zod schemas for calc inputs
     gasSizing.ts     - Gas line sizing (Darcy-Weisbach)
     liquidSizing.ts  - Liquid line sizing
     multiphase.ts    - Multiphase screening (API RP 14E)
     gasMixing.ts     - Gas mixture MW calculation
     gasVolume.ts     - Standard/actual volume conversion
+    pumpSizing.ts    - Centrifugal pump sizing (TDH, power, NPSH)
   pages/
-    home.tsx         - Landing page
-    about.tsx        - Professional profile
-    experience.tsx   - Work experience
-    projects.tsx     - Project portfolio
-    calculators/     - 5 calculator pages
+    home.tsx         - Single-page portfolio (Hero, About, Experience, Projects, Skills, Contact)
+    calculators/     - 6 calculator pages
+      gas-line-sizing.tsx
+      liquid-line-sizing.tsx
+      multiphase-line.tsx
+      gas-mixing.tsx
+      gas-volume.tsx
+      pump-sizing.tsx
 ```
 
 ## Running
@@ -42,5 +47,7 @@ client/src/
 ## Key Decisions
 - No database: All content is hardcoded (portfolio) or computed client-side (calculators)
 - Engineering calculations separated from UI in dedicated library modules
-- Dark mode support via ThemeProvider
+- Dark mode only (dark navy theme)
 - Unit system toggle (SI / Field units) on every calculator
+- Single-page scrolling portfolio with section anchors (#home, #about, etc.)
+- Calculator pages on separate routes (/calculators/*)

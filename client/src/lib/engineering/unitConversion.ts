@@ -86,6 +86,41 @@ export const UNITS: Record<string, UnitDefinition> = {
     toSI: (psi100ft: number) => psi100ft * 0.0689476 / 0.3048,
     fromSI: (bar100m: number) => bar100m * 0.3048 / 0.0689476,
   },
+  head: {
+    label: "Head",
+    si: "m",
+    field: "ft",
+    toSI: (ft: number) => ft * 0.3048,
+    fromSI: (m: number) => m / 0.3048,
+  },
+  power: {
+    label: "Power",
+    si: "kW",
+    field: "hp",
+    toSI: (hp: number) => hp * 0.7457,
+    fromSI: (kw: number) => kw / 0.7457,
+  },
+  flowLiquid: {
+    label: "Liquid Flow",
+    si: "m³/h",
+    field: "gpm",
+    toSI: (gpm: number) => gpm * 0.227125,
+    fromSI: (m3h: number) => m3h / 0.227125,
+  },
+  pressureAbs: {
+    label: "Absolute Pressure",
+    si: "bar",
+    field: "psia",
+    toSI: (psia: number) => psia * 0.0689476,
+    fromSI: (bar: number) => bar / 0.0689476,
+  },
+  pressureKpa: {
+    label: "Pressure (kPa)",
+    si: "kPa",
+    field: "psia",
+    toSI: (psia: number) => psia * 6.89476,
+    fromSI: (kpa: number) => kpa / 6.89476,
+  },
 };
 
 export function getUnit(param: string, system: UnitSystem): string {

@@ -23,6 +23,7 @@ const calculatorItems = [
   { label: "Multiphase Screening", href: "/calculators/multiphase-line" },
   { label: "Gas Mixing", href: "/calculators/gas-mixing" },
   { label: "Gas Volume Conversion", href: "/calculators/gas-volume" },
+  { label: "Pump Sizing", href: "/calculators/pump-sizing" },
 ];
 
 export function Navbar() {
