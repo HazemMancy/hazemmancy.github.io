@@ -20,8 +20,9 @@ client/src/
     theme-provider   - Dark mode (always dark)
     theme-toggle
   lib/engineering/   - Engineering calculation modules
-    constants.ts     - Physical constants, pipe data, common liquids, fitting K values
+    constants.ts     - Physical constants, PIPE_SPECS (66 NPS entries), common liquids, fitting K values
     unitConversion.ts - SI/Field unit conversion (pressure, head, power, flow, etc.)
+    unitToggle.ts    - convertFormValues helper for in-place unit conversion on toggle
     validation.ts    - Zod schemas for calc inputs
     gasSizing.ts     - Gas line sizing (Darcy-Weisbach)
     liquidSizing.ts  - Liquid line sizing
@@ -49,5 +50,7 @@ client/src/
 - Engineering calculations separated from UI in dedicated library modules
 - Dark mode only (dark navy theme)
 - Unit system toggle (SI / Field units) on every calculator
+- Unit toggle converts input values in-place when switching between SI and Field
+- NPS pipe size selector with auto-fill of OD/WT/ID dimensions, manual override supported
 - Single-page scrolling portfolio with section anchors (#home, #about, etc.)
 - Calculator pages on separate routes (/calculators/*)
