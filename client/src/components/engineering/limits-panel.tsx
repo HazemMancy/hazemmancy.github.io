@@ -59,7 +59,7 @@ export function LimitsPanel({ serviceName, warnings, notes }: LimitsPanelProps) 
         <div className="flex items-start gap-2 pt-2 border-t border-muted/30">
           <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
           <p className="text-[11px] text-muted-foreground leading-relaxed" data-testid="limit-reference">
-            These are recommended limits per industry guidelines and company practice, not absolute hard limits.
+            These are recommended limits per industry guidelines and engineering companies best practices, not absolute hard limits.
             Exceeding a recommended value does not necessarily indicate a design failure — it flags the need for
             further engineering review, detailed simulation, or project-specific justification. Hard limits
             (e.g. code-mandated maximum allowable velocities or pressure drops) are governed by applicable codes
