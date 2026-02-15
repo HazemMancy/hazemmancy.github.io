@@ -12,7 +12,7 @@ interface ResultItem {
 interface ResultsPanelProps {
   title: string;
   results: ResultItem[];
-  rawData?: Record<string, unknown>;
+  rawData?: object;
 }
 
 export function ResultsPanel({ title, results, rawData }: ResultsPanelProps) {
@@ -42,7 +42,7 @@ export function ResultsPanel({ title, results, rawData }: ResultsPanelProps) {
     <Card data-testid="results-panel">
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+          <CheckCircle2 className="w-5 h-5 text-green-400" />
           <h3 className="font-semibold text-base">{title}</h3>
         </div>
         <Button
@@ -62,7 +62,7 @@ export function ResultsPanel({ title, results, rawData }: ResultsPanelProps) {
               key={index}
               className={`flex items-center justify-between py-2 px-3 rounded-md ${
                 item.highlight
-                  ? "bg-primary/5 dark:bg-primary/10"
+                  ? "bg-primary/10"
                   : index % 2 === 0
                     ? "bg-muted/50"
                     : ""

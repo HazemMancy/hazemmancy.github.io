@@ -7,9 +7,6 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import Home from "@/pages/home";
-import About from "@/pages/about";
-import Experience from "@/pages/experience";
-import Projects from "@/pages/projects";
 import GasLineSizingPage from "@/pages/calculators/gas-line-sizing";
 import LiquidLineSizingPage from "@/pages/calculators/liquid-line-sizing";
 import MultiphaseLinePage from "@/pages/calculators/multiphase-line";
@@ -21,9 +18,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/about" component={About} />
-      <Route path="/experience" component={Experience} />
-      <Route path="/projects" component={Projects} />
       <Route path="/calculators/gas-line-sizing" component={GasLineSizingPage} />
       <Route path="/calculators/liquid-line-sizing" component={LiquidLineSizingPage} />
       <Route path="/calculators/multiphase-line" component={MultiphaseLinePage} />
