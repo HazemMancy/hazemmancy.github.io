@@ -638,12 +638,18 @@ export default function PumpSizingPage() {
                 rawData={result}
               />
               <PumpCurveChart
-                designFlow={parseFloat(form.flowRate) || 0}
-                totalDynamicHead={convertFromSI("head", result.totalDynamicHead, unitSystem)}
-                staticHead={convertFromSI("head", result.staticHead, unitSystem)}
+                designFlowSI={convertToSI("flowLiquid", parseFloat(form.flowRate) || 0, unitSystem)}
+                tdhSI={result.totalDynamicHead}
+                staticHeadSI={result.staticHead}
+                brakePowerSI={result.brakePower}
+                pumpEfficiency={parseFloat(form.pumpEfficiency) || 75}
+                liquidDensity={parseFloat(form.liquidDensity) || 998}
                 flowUnit={getUnit("flowLiquid", unitSystem)}
                 headUnit={getUnit("head", unitSystem)}
-                npshaAvailable={convertFromSI("head", result.npshaAvailable, unitSystem)}
+                powerUnit={getUnit("power", unitSystem)}
+                convertFlow={(si) => convertFromSI("flowLiquid", si, unitSystem)}
+                convertHead={(si) => convertFromSI("head", si, unitSystem)}
+                convertPower={(si) => convertFromSI("power", si, unitSystem)}
               />
             </>
           )}
