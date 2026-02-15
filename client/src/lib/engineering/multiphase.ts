@@ -7,6 +7,7 @@ export interface MultiphaseResult {
   mixtureVelocity: number;
   erosionalVelocity: number;
   mixtureDensity: number;
+  rhoV2: number;
   liquidHoldup: number;
   velocityRatio: number;
   warnings: string[];
@@ -30,6 +31,7 @@ export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
 
   const erosionalVelocity = input.cFactor / Math.sqrt(mixtureDensity);
 
+  const rhoV2 = mixtureDensity * Vm * Vm;
   const velocityRatio = Vm / erosionalVelocity;
 
   if (Vm > erosionalVelocity) {
@@ -56,6 +58,7 @@ export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
     mixtureVelocity: Vm,
     erosionalVelocity,
     mixtureDensity,
+    rhoV2,
     liquidHoldup: lambdaL,
     velocityRatio,
     warnings,

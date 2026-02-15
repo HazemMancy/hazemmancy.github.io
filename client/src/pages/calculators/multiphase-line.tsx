@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UnitSelector } from "@/components/engineering/unit-selector";
 import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
+import { LimitsPanel } from "@/components/engineering/limits-panel";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import {
   calculateMultiphase,
@@ -17,6 +19,8 @@ import {
 } from "@/lib/engineering/multiphase";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
+import { MIXED_PHASE_SERVICE_LIMITS, type MixedPhaseServiceLimit } from "@/lib/engineering/constants";
+import { checkMixedPhaseLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
 import { Gauge, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -57,6 +61,8 @@ export default function MultiphaseLinePage() {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [result, setResult] = useState<MultiphaseResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<string>("");
+  const [limitWarnings, setLimitWarnings] = useState<LimitWarning[]>([]);
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -85,6 +91,16 @@ export default function MultiphaseLinePage() {
       }
       const res = calculateMultiphase(input);
       setResult(res);
+      
+      if (selectedService) {
+        const service = MIXED_PHASE_SERVICE_LIMITS.find(s => s.service === selectedService);
+        if (service) {
+          const lw = checkMixedPhaseLimits(service, res.rhoV2);
+          setLimitWarnings(lw);
+        }
+      } else {
+        setLimitWarnings([]);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);
@@ -112,6 +128,8 @@ export default function MultiphaseLinePage() {
     setForm(defaultForm);
     setResult(null);
     setError(null);
+    setSelectedService("");
+    setLimitWarnings([]);
   };
 
   return (
@@ -155,6 +173,19 @@ export default function MultiphaseLinePage() {
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs mb-1.5 block">Service Type</Label>
+                  <Select value={selectedService} onValueChange={setSelectedService}>
+                    <SelectTrigger data-testid="select-service">
+                      <SelectValue placeholder="Select service type for limit check..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MIXED_PHASE_SERVICE_LIMITS.map((s) => (
+                        <SelectItem key={s.service} value={s.service}>{s.service}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
                     Gas Volume Flow ({getUnit("flowVolume", unitSystem)})
@@ -256,6 +287,13 @@ export default function MultiphaseLinePage() {
           {result && (
             <>
               <WarningPanel warnings={result.warnings} />
+              {selectedService && limitWarnings.length > 0 && (
+                <LimitsPanel
+                  serviceName={selectedService}
+                  warnings={limitWarnings}
+                  notes={MIXED_PHASE_SERVICE_LIMITS.find(s => s.service === selectedService)?.notes}
+                />
+              )}
               <ResultsPanel
                 title="Multiphase Screening Results"
                 results={[
@@ -296,6 +334,11 @@ export default function MultiphaseLinePage() {
                     label: "Liquid Holdup (λL)",
                     value: result.liquidHoldup,
                     unit: "—",
+                  },
+                  {
+                    label: "\u03C1v\u00B2",
+                    value: result.rhoV2,
+                    unit: "kg/(m\u00B7s\u00B2)",
                   },
                 ]}
                 rawData={result}

@@ -3,16 +3,20 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UnitSelector } from "@/components/engineering/unit-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
+import { LimitsPanel } from "@/components/engineering/limits-panel";
 import {
   calculateLiquidLineSizing,
   LIQUID_SIZING_TEST_CASE,
   type LiquidSizingResult,
 } from "@/lib/engineering/liquidSizing";
+import { LIQUID_SERVICE_LIMITS, type LiquidServiceLimit, getNPSBandFromDiameter } from "@/lib/engineering/constants";
+import { checkLiquidLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
@@ -53,6 +57,8 @@ export default function LiquidLineSizingPage() {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [result, setResult] = useState<LiquidSizingResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<string>("");
+  const [limitWarnings, setLimitWarnings] = useState<LimitWarning[]>([]);
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -81,6 +87,19 @@ export default function LiquidLineSizingPage() {
       }
       const res = calculateLiquidLineSizing(input);
       setResult(res);
+
+      if (selectedService) {
+        const service = LIQUID_SERVICE_LIMITS.find(s => s.service === selectedService);
+        if (service) {
+          const dpBarPerKm = res.pressureDropPer100m * 10;
+          const diamMm = convertToSI("diameter", parseFloat(form.innerDiameter), unitSystem);
+          const npsBand = getNPSBandFromDiameter(diamMm);
+          const lw = checkLiquidLimits(service, res.velocity, dpBarPerKm, npsBand);
+          setLimitWarnings(lw);
+        }
+      } else {
+        setLimitWarnings([]);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);
@@ -107,6 +126,8 @@ export default function LiquidLineSizingPage() {
     setForm(defaultForm);
     setResult(null);
     setError(null);
+    setLimitWarnings([]);
+    setSelectedService("");
   };
 
   return (
@@ -197,6 +218,20 @@ export default function LiquidLineSizingPage() {
                 </div>
               </div>
 
+              <div>
+                <Label className="text-xs mb-1.5 block">Service Type</Label>
+                <Select value={selectedService} onValueChange={setSelectedService}>
+                  <SelectTrigger data-testid="select-service">
+                    <SelectValue placeholder="Select service type for limit check..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LIQUID_SERVICE_LIMITS.map((s) => (
+                      <SelectItem key={s.service} value={s.service}>{s.service}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="pt-2 border-t">
                 <p className="text-xs font-medium text-muted-foreground mb-3">Pipe Selection</p>
                 <PipeSizeSelector
@@ -238,6 +273,13 @@ export default function LiquidLineSizingPage() {
           {result && (
             <>
               <WarningPanel warnings={result.warnings} />
+              {selectedService && limitWarnings.length > 0 && (
+                <LimitsPanel
+                  serviceName={selectedService}
+                  warnings={limitWarnings}
+                  notes={LIQUID_SERVICE_LIMITS.find(s => s.service === selectedService)?.notes}
+                />
+              )}
               <ResultsPanel
                 title="Liquid Line Sizing Results"
                 results={[

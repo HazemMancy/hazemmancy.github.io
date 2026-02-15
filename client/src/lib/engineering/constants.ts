@@ -142,6 +142,124 @@ export const VELOCITY_LIMITS = {
 export const MACH_LIMIT = 0.3;
 export const RHO_V2_LIMIT = 6000; // kg/(m·s²) for AIV/FIV screening
 
+export interface GasServiceLimit {
+  service: string;
+  dpLimit?: number;
+  dpType?: "bar/km" | "%Pop";
+  velocityLimit?: number;
+  rhoV2Limit?: number;
+  machLimit?: number;
+  notes?: string;
+}
+
+export const GAS_SERVICE_LIMITS: GasServiceLimit[] = [
+  { service: "Continuous – Vacuum", dpType: "%Pop", dpLimit: 10, velocityLimit: 60 },
+  { service: "Continuous – Pop atm to 2 barg", dpLimit: 0.5, dpType: "bar/km", velocityLimit: 50 },
+  { service: "Continuous – Pop 2 to 7 barg", dpLimit: 1, dpType: "bar/km", velocityLimit: 45 },
+  { service: "Continuous – Pop 7 to 35 barg", dpLimit: 1.5, dpType: "bar/km", rhoV2Limit: 15000 },
+  { service: "Continuous – Pop 35 to 140 barg", dpLimit: 3, dpType: "bar/km", rhoV2Limit: 20000 },
+  { service: "Continuous – Pop above 140 barg", dpLimit: 5, dpType: "bar/km", rhoV2Limit: 25000 },
+  { service: "Compressor suction – Vacuum", dpLimit: 0.05, dpType: "bar/km", velocityLimit: 35 },
+  { service: "Compressor suction – Pop atm to 2 barg", dpLimit: 0.15, dpType: "bar/km", velocityLimit: 30 },
+  { service: "Compressor suction – Pop 2 to 7 barg", dpLimit: 0.4, dpType: "bar/km", velocityLimit: 25 },
+  { service: "Compressor suction – Pop 7 to 35 barg", dpLimit: 1, dpType: "bar/km", rhoV2Limit: 6000 },
+  { service: "Compressor suction – Pop > 35 barg", dpLimit: 2, dpType: "bar/km", rhoV2Limit: 15000 },
+  { service: "Column overhead to condenser", dpLimit: 0.15, dpType: "bar/km", velocityLimit: 30, notes: "Same criteria as compressor suction (atm–2 barg)" },
+  { service: "Kettle reboiler return", dpLimit: 0.15, dpType: "bar/km", velocityLimit: 30, notes: "Same criteria as compressor suction (atm–2 barg)" },
+  { service: "Discontinuous – Pop < 35 barg", velocityLimit: 60, rhoV2Limit: 15000 },
+  { service: "Discontinuous – Pop >= 35 barg", rhoV2Limit: 25000 },
+  { service: "Flare – upstream PSV", dpLimit: 3, dpType: "%Pop", notes: "DP < 3% of PRV set pressure (based on set pressure, not operating)" },
+  { service: "Flare – upstream BDV", velocityLimit: 60, rhoV2Limit: 30000 },
+  { service: "Flare tail pipe", machLimit: 0.7 },
+  { service: "Flare tail pipe (downstream BDV)", machLimit: 1.0 },
+  { service: "Flare header", machLimit: 0.5 },
+  { service: "Steam – Superheated 150#", dpLimit: 2, dpType: "bar/km", velocityLimit: 45 },
+  { service: "Steam – Superheated 300#", dpLimit: 3, dpType: "bar/km", velocityLimit: 60 },
+  { service: "Steam – Superheated 600#", dpLimit: 6, dpType: "bar/km", velocityLimit: 60 },
+  { service: "Steam – Superheated >= 900#", dpLimit: 8, dpType: "bar/km", velocityLimit: 70 },
+  { service: "Steam – Saturated 150#", dpLimit: 1, dpType: "bar/km", velocityLimit: 45 },
+  { service: "Steam – Saturated 300#", dpLimit: 3, dpType: "bar/km", velocityLimit: 35 },
+  { service: "Steam – Saturated 600#", dpLimit: 6, dpType: "bar/km", velocityLimit: 30 },
+  { service: "Superheated steam header – 150#", dpLimit: 1, dpType: "bar/km", velocityLimit: 45 },
+  { service: "Superheated steam header – 300#", dpLimit: 1.5, dpType: "bar/km", velocityLimit: 45 },
+  { service: "Superheated steam header – 600#", dpLimit: 2, dpType: "bar/km", velocityLimit: 45 },
+  { service: "Fuel gas", dpLimit: 0.5, dpType: "bar/km", velocityLimit: 50, notes: "Same criteria as continuous service" },
+];
+
+export type NPSBand = "<=2\"" | "3\"-6\"" | "8\"-12\"" | "14\"-18\"" | ">=20\"";
+
+export interface LiquidServiceLimit {
+  service: string;
+  dpLimit?: number;
+  velocityByNPS?: Record<NPSBand, number>;
+  velocityFixed?: number;
+  notes?: string;
+}
+
+export const LIQUID_SERVICE_LIMITS: LiquidServiceLimit[] = [
+  { service: "Gravity flow", velocityByNPS: { "<=2\"": 0.3, "3\"-6\"": 0.4, "8\"-12\"": 0.6, "14\"-18\"": 0.8, ">=20\"": 0.9 } },
+  { service: "Pump suction – boiling point", dpLimit: 0.5, velocityByNPS: { "<=2\"": 0.6, "3\"-6\"": 0.9, "8\"-12\"": 1.3, "14\"-18\"": 1.8, ">=20\"": 2.2 } },
+  { service: "Pump suction – sub-cooled", dpLimit: 1, velocityByNPS: { "<=2\"": 0.7, "3\"-6\"": 1.2, "8\"-12\"": 1.6, "14\"-18\"": 2.1, ">=20\"": 2.6 } },
+  { service: "Pump discharge – Pop < 35 barg", dpLimit: 4.5, velocityByNPS: { "<=2\"": 1.4, "3\"-6\"": 1.9, "8\"-12\"": 3.1, "14\"-18\"": 4.1, ">=20\"": 5.0 } },
+  { service: "Pump discharge – Pop > 35 barg", dpLimit: 6, velocityByNPS: { "<=2\"": 1.5, "3\"-6\"": 2.0, "8\"-12\"": 3.5, "14\"-18\"": 4.6, ">=20\"": 5.0 } },
+  { service: "Condenser out – Pop < 10 barg", velocityByNPS: { "<=2\"": 0.3, "3\"-6\"": 0.4, "8\"-12\"": 0.6, "14\"-18\"": 0.8, ">=20\"": 0.9 } },
+  { service: "Condenser out – Pop > 10 barg", dpLimit: 0.5, velocityByNPS: { "<=2\"": 0.6, "3\"-6\"": 0.9, "8\"-12\"": 1.3, "14\"-18\"": 1.8, ">=20\"": 2.2 } },
+  { service: "Cooling water manifold", velocityFixed: 3.5, notes: "3.5 m/s steel pipe / 2.5 m/s fibre glass" },
+  { service: "Cooling water sub-manifold", velocityByNPS: { "<=2\"": 1.5, "3\"-6\"": 2.0, "8\"-12\"": 3.1, "14\"-18\"": 3.5, ">=20\"": 3.5 } },
+  { service: "Diathermic oil", dpLimit: 4.5, velocityByNPS: { "<=2\"": 1.4, "3\"-6\"": 1.9, "8\"-12\"": 3.1, "14\"-18\"": 4.1, ">=20\"": 5.0 }, notes: "Same as pump discharge" },
+  { service: "Liquid sulphur", velocityFixed: 1.8, notes: "0.9 m/s minimum" },
+  { service: "Column side-stream draw-off", velocityByNPS: { "<=2\"": 0.3, "3\"-6\"": 0.4, "8\"-12\"": 0.6, "14\"-18\"": 0.8, ">=20\"": 0.9 } },
+];
+
+export interface MixedPhaseServiceLimit {
+  service: string;
+  rhoV2Limit: number;
+  notes?: string;
+}
+
+export const MIXED_PHASE_SERVICE_LIMITS: MixedPhaseServiceLimit[] = [
+  { service: "Continuous – P < 7 barg", rhoV2Limit: 6000 },
+  { service: "Continuous – P > 7 barg", rhoV2Limit: 15000 },
+  { service: "Discontinuous", rhoV2Limit: 15000 },
+  { service: "Erosive fluid – continuous", rhoV2Limit: 3750 },
+  { service: "Erosive fluid – discontinuous", rhoV2Limit: 6000 },
+  { service: "Partial condenser outlet", rhoV2Limit: 6000 },
+  { service: "Reboiler return (natural circ.)", rhoV2Limit: 1500 },
+  { service: "Flare tail pipe (with liquids)", rhoV2Limit: 50000, notes: "Also recommended: Mach < 0.25 (not checked — requires detailed multiphase simulation)" },
+  { service: "Flare header (with liquids)", rhoV2Limit: 50000, notes: "Also recommended: Mach < 0.25 (not checked — requires detailed multiphase simulation)" },
+];
+
+export function getNPSBand(nps: string): NPSBand {
+  const npsNum = parseNPSToInches(nps);
+  if (npsNum <= 2) return "<=2\"";
+  if (npsNum <= 6) return "3\"-6\"";
+  if (npsNum <= 12) return "8\"-12\"";
+  if (npsNum <= 18) return "14\"-18\"";
+  return ">=20\"";
+}
+
+export function getNPSBandFromDiameter(id_mm: number): NPSBand {
+  if (id_mm <= 60.3) return "<=2\"";
+  if (id_mm <= 168.3) return "3\"-6\"";
+  if (id_mm <= 323.9) return "8\"-12\"";
+  if (id_mm <= 457.2) return "14\"-18\"";
+  return ">=20\"";
+}
+
+function parseNPSToInches(nps: string): number {
+  const cleaned = nps.replace('"', '').trim();
+  if (cleaned.includes('/')) {
+    if (cleaned.includes('-')) {
+      const [whole, frac] = cleaned.split('-');
+      const [num, den] = frac.split('/');
+      return parseInt(whole) + parseInt(num) / parseInt(den);
+    }
+    const [num, den] = cleaned.split('/');
+    return parseInt(num) / parseInt(den);
+  }
+  return parseFloat(cleaned);
+}
+
 export const COMMON_LIQUIDS: Record<string, { density: number; viscosity: number; vaporPressure: number }> = {
   "Water (20°C)": { density: 998.2, viscosity: 1.002, vaporPressure: 2.338 },
   "Water (40°C)": { density: 992.2, viscosity: 0.653, vaporPressure: 7.384 },

@@ -15,12 +15,14 @@ import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
+import { LimitsPanel } from "@/components/engineering/limits-panel";
 import {
   calculateGasLineSizing,
   GAS_SIZING_TEST_CASE,
   type GasSizingResult,
 } from "@/lib/engineering/gasSizing";
-import { COMMON_GASES } from "@/lib/engineering/constants";
+import { COMMON_GASES, GAS_SERVICE_LIMITS, type GasServiceLimit } from "@/lib/engineering/constants";
+import { checkGasLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
@@ -70,6 +72,8 @@ export default function GasLineSizingPage() {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [result, setResult] = useState<GasSizingResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<string>("");
+  const [limitWarnings, setLimitWarnings] = useState<LimitWarning[]>([]);
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -101,6 +105,18 @@ export default function GasLineSizingPage() {
       }
       const res = calculateGasLineSizing(input);
       setResult(res);
+      
+      if (selectedService) {
+        const service = GAS_SERVICE_LIMITS.find(s => s.service === selectedService);
+        if (service) {
+          const dpBarPerKm = res.pressureDropPer100m * 10;
+          const opPressureBar = convertToSI("pressure", parseFloat(form.pressure), unitSystem);
+          const lw = checkGasLimits(service, res.velocity, dpBarPerKm, res.rhoV2, res.machNumber, opPressureBar);
+          setLimitWarnings(lw);
+        }
+      } else {
+        setLimitWarnings([]);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);
@@ -130,6 +146,8 @@ export default function GasLineSizingPage() {
     setForm(defaultForm);
     setResult(null);
     setError(null);
+    setLimitWarnings([]);
+    setSelectedService("");
   };
 
   const handleGasSelect = (gasName: string) => {
@@ -260,6 +278,20 @@ export default function GasLineSizingPage() {
                 </div>
               </div>
 
+              <div className="sm:col-span-2">
+                <Label className="text-xs mb-1.5 block">Service Type</Label>
+                <Select value={selectedService} onValueChange={setSelectedService}>
+                  <SelectTrigger data-testid="select-service">
+                    <SelectValue placeholder="Select service type for limit check..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GAS_SERVICE_LIMITS.map((s) => (
+                      <SelectItem key={s.service} value={s.service}>{s.service}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="pt-2 border-t">
                 <p className="text-xs font-medium text-muted-foreground mb-3">
                   Pipe Selection
@@ -327,6 +359,13 @@ export default function GasLineSizingPage() {
           {result && (
             <>
               <WarningPanel warnings={result.warnings} />
+              {selectedService && limitWarnings.length > 0 && (
+                <LimitsPanel
+                  serviceName={selectedService}
+                  warnings={limitWarnings}
+                  notes={GAS_SERVICE_LIMITS.find(s => s.service === selectedService)?.notes}
+                />
+              )}
               <ResultsPanel
                 title="Gas Line Sizing Results"
                 results={[
