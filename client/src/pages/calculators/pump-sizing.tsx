@@ -26,6 +26,7 @@ import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConve
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { Droplets, FlaskConical, RotateCcw, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { PumpCurveChart } from "@/components/engineering/pump-curve-chart";
 
 interface FormState {
   flowRate: string;
@@ -635,6 +636,14 @@ export default function PumpSizingPage() {
                   },
                 ]}
                 rawData={result}
+              />
+              <PumpCurveChart
+                designFlow={parseFloat(form.flowRate) || 0}
+                totalDynamicHead={convertFromSI("head", result.totalDynamicHead, unitSystem)}
+                staticHead={convertFromSI("head", result.staticHead, unitSystem)}
+                flowUnit={getUnit("flowLiquid", unitSystem)}
+                headUnit={getUnit("head", unitSystem)}
+                npshaAvailable={convertFromSI("head", result.npshaAvailable, unitSystem)}
               />
             </>
           )}
