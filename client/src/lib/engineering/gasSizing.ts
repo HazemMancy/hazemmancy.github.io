@@ -1,0 +1,100 @@
+import { PI, GAS_CONSTANT, MACH_LIMIT, RHO_V2_LIMIT, VELOCITY_LIMITS } from "./constants";
+import type { GasLineSizingInput } from "./validation";
+
+export interface GasSizingResult {
+  velocity: number;
+  reynoldsNumber: number;
+  frictionFactor: number;
+  pressureDrop: number;
+  pressureDropPer100m: number;
+  machNumber: number;
+  rhoV2: number;
+  gasDensity: number;
+  warnings: string[];
+}
+
+function swameeJainFriction(Re: number, roughness: number, diameter: number): number {
+  if (Re < 2300) {
+    return 64 / Re;
+  }
+  const relRoughness = roughness / diameter;
+  const term = Math.log10(relRoughness / 3.7 + 5.74 / Math.pow(Re, 0.9));
+  return 0.25 / Math.pow(term, 2);
+}
+
+export function calculateGasLineSizing(input: GasLineSizingInput): GasSizingResult {
+  const warnings: string[] = [];
+
+  const T_K = input.temperature + 273.15;
+  const P_Pa = input.pressure * 1e5;
+  const D_m = input.innerDiameter / 1000;
+  const A = PI * Math.pow(D_m, 2) / 4;
+
+  const rho = (P_Pa * input.molecularWeight) / (input.compressibilityFactor * GAS_CONSTANT * T_K);
+
+  const massFlow_kgs = input.flowRate / 3600;
+  const velocity = massFlow_kgs / (rho * A);
+
+  const mu_Pas = input.viscosity * 1e-3;
+  const Re = (rho * velocity * D_m) / mu_Pas;
+
+  const roughness_m = input.roughness / 1000;
+  const f = swameeJainFriction(Re, roughness_m, D_m);
+
+  const dP_Pa = f * (input.pipeLength / D_m) * 0.5 * rho * Math.pow(velocity, 2);
+  const dP_bar = dP_Pa / 1e5;
+  const dP_per100m = (dP_bar / input.pipeLength) * 100;
+
+  const sonicVelocity = Math.sqrt(
+    (input.specificHeatRatio * input.compressibilityFactor * GAS_CONSTANT * T_K) / input.molecularWeight
+  );
+  const machNumber = velocity / sonicVelocity;
+
+  const rhoV2 = rho * Math.pow(velocity, 2);
+
+  if (velocity > VELOCITY_LIMITS.gas.max) {
+    warnings.push(`Velocity ${velocity.toFixed(1)} m/s exceeds maximum recommended limit of ${VELOCITY_LIMITS.gas.max} m/s`);
+  } else if (velocity > VELOCITY_LIMITS.gas.warning) {
+    warnings.push(`Velocity ${velocity.toFixed(1)} m/s is approaching the upper limit of ${VELOCITY_LIMITS.gas.max} m/s`);
+  }
+  if (velocity < VELOCITY_LIMITS.gas.min) {
+    warnings.push(`Velocity ${velocity.toFixed(1)} m/s is below minimum recommended velocity of ${VELOCITY_LIMITS.gas.min} m/s`);
+  }
+
+  if (machNumber > MACH_LIMIT) {
+    warnings.push(`Mach number ${machNumber.toFixed(3)} exceeds ${MACH_LIMIT} — risk of choking/noise issues`);
+  }
+
+  if (rhoV2 > RHO_V2_LIMIT) {
+    warnings.push(`ρv² = ${rhoV2.toFixed(0)} kg/(m·s²) exceeds ${RHO_V2_LIMIT} — potential AIV/FIV concern`);
+  }
+
+  if (Re < 2300) {
+    warnings.push("Laminar flow regime detected (Re < 2300). Verify operating conditions.");
+  }
+
+  return {
+    velocity,
+    reynoldsNumber: Re,
+    frictionFactor: f,
+    pressureDrop: dP_bar,
+    pressureDropPer100m: dP_per100m,
+    machNumber,
+    rhoV2,
+    gasDensity: rho,
+    warnings,
+  };
+}
+
+export const GAS_SIZING_TEST_CASE: GasLineSizingInput = {
+  flowRate: 50000,
+  pressure: 30,
+  temperature: 40,
+  molecularWeight: 18.5,
+  innerDiameter: 254.5,
+  pipeLength: 500,
+  roughness: 0.0457,
+  compressibilityFactor: 0.92,
+  specificHeatRatio: 1.27,
+  viscosity: 0.012,
+};
