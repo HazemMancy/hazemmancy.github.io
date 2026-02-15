@@ -164,8 +164,8 @@ export const GAS_SERVICE_LIMITS: GasServiceLimit[] = [
   { service: "Compressor suction – Pop 2 to 7 barg", dpLimit: 0.4, dpType: "bar/km", velocityLimit: 25 },
   { service: "Compressor suction – Pop 7 to 35 barg", dpLimit: 1, dpType: "bar/km", rhoV2Limit: 6000 },
   { service: "Compressor suction – Pop > 35 barg", dpLimit: 2, dpType: "bar/km", rhoV2Limit: 15000 },
-  { service: "Column overhead to condenser", dpLimit: 0.15, dpType: "bar/km", velocityLimit: 30, notes: "Same criteria as compressor suction (atm–2 barg)" },
-  { service: "Kettle reboiler return", dpLimit: 0.15, dpType: "bar/km", velocityLimit: 30, notes: "Same criteria as compressor suction (atm–2 barg)" },
+  { service: "Column overhead to condenser", notes: "Same criteria as compressor suction (select matching pressure range above)" },
+  { service: "Kettle reboiler return", notes: "Same criteria as compressor suction (select matching pressure range above)" },
   { service: "Discontinuous – Pop < 35 barg", velocityLimit: 60, rhoV2Limit: 15000 },
   { service: "Discontinuous – Pop >= 35 barg", rhoV2Limit: 25000 },
   { service: "Flare – upstream PSV", dpLimit: 3, dpType: "%Pop", notes: "DP < 3% of PRV set pressure (based on set pressure, not operating)" },
@@ -183,7 +183,12 @@ export const GAS_SERVICE_LIMITS: GasServiceLimit[] = [
   { service: "Superheated steam header – 150#", dpLimit: 1, dpType: "bar/km", velocityLimit: 45 },
   { service: "Superheated steam header – 300#", dpLimit: 1.5, dpType: "bar/km", velocityLimit: 45 },
   { service: "Superheated steam header – 600#", dpLimit: 2, dpType: "bar/km", velocityLimit: 45 },
-  { service: "Fuel gas", dpLimit: 0.5, dpType: "bar/km", velocityLimit: 50, notes: "Same criteria as continuous service" },
+  { service: "Fuel Gas – Vacuum", dpType: "%Pop", dpLimit: 10, velocityLimit: 60 },
+  { service: "Fuel Gas – Pop atm to 2 barg", dpLimit: 0.5, dpType: "bar/km", velocityLimit: 50 },
+  { service: "Fuel Gas – Pop 2 to 7 barg", dpLimit: 1, dpType: "bar/km", velocityLimit: 45 },
+  { service: "Fuel Gas – Pop 7 to 35 barg", dpLimit: 1.5, dpType: "bar/km", rhoV2Limit: 15000 },
+  { service: "Fuel Gas – Pop 35 to 140 barg", dpLimit: 3, dpType: "bar/km", rhoV2Limit: 20000 },
+  { service: "Fuel Gas – Pop above 140 barg", dpLimit: 5, dpType: "bar/km", rhoV2Limit: 25000 },
 ];
 
 export type NPSBand = "<=2\"" | "3\"-6\"" | "8\"-12\"" | "14\"-18\"" | ">=20\"";
@@ -206,7 +211,8 @@ export const LIQUID_SERVICE_LIMITS: LiquidServiceLimit[] = [
   { service: "Condenser out – Pop > 10 barg", dpLimit: 0.5, velocityByNPS: { "<=2\"": 0.6, "3\"-6\"": 0.9, "8\"-12\"": 1.3, "14\"-18\"": 1.8, ">=20\"": 2.2 } },
   { service: "Cooling water manifold", velocityFixed: 3.5, notes: "3.5 m/s steel pipe / 2.5 m/s fibre glass" },
   { service: "Cooling water sub-manifold", velocityByNPS: { "<=2\"": 1.5, "3\"-6\"": 2.0, "8\"-12\"": 3.1, "14\"-18\"": 3.5, ">=20\"": 3.5 } },
-  { service: "Diathermic oil", dpLimit: 4.5, velocityByNPS: { "<=2\"": 1.4, "3\"-6\"": 1.9, "8\"-12\"": 3.1, "14\"-18\"": 4.1, ">=20\"": 5.0 }, notes: "Same as pump discharge" },
+  { service: "Diathermic oil – Pop < 35 barg", dpLimit: 4.5, velocityByNPS: { "<=2\"": 1.4, "3\"-6\"": 1.9, "8\"-12\"": 3.1, "14\"-18\"": 4.1, ">=20\"": 5.0 } },
+  { service: "Diathermic oil – Pop > 35 barg", dpLimit: 6, velocityByNPS: { "<=2\"": 1.5, "3\"-6\"": 2.0, "8\"-12\"": 3.5, "14\"-18\"": 4.6, ">=20\"": 5.0 } },
   { service: "Liquid sulphur", velocityFixed: 1.8, notes: "0.9 m/s minimum" },
   { service: "Column side-stream draw-off", velocityByNPS: { "<=2\"": 0.3, "3\"-6\"": 0.4, "8\"-12\"": 0.6, "14\"-18\"": 0.8, ">=20\"": 0.9 } },
 ];

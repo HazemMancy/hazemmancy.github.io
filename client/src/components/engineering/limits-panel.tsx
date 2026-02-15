@@ -9,7 +9,7 @@ interface LimitsPanelProps {
 }
 
 export function LimitsPanel({ serviceName, warnings, notes }: LimitsPanelProps) {
-  if (warnings.length === 0) return null;
+  if (warnings.length === 0 && !notes) return null;
 
   const hasExceeded = warnings.some((w) => w.exceeded);
 
