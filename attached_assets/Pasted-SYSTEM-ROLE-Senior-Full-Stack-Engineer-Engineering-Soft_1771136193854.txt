@@ -1,0 +1,204 @@
+SYSTEM ROLE: Senior Full-Stack Engineer + Engineering Software Architect
+
+You are building a PROFESSIONAL engineering-grade web application for Hazem El Mancy, an Oil & Gas Process Engineer (FEED/EPC background, Aspen HYSYS Certified).  
+This is NOT a hobby project. This is a technical portfolio + process engineering calculator suite intended for real engineers and EPC recruiters.
+
+Your mission:
+Develop a clean, scalable, and technically credible web application that combines:
+1) Professional Portfolio Website
+2) Process Design Engineering Calculators (engineering-accurate, validated, and documented)
+
+NON-NEGOTIABLE REQUIREMENTS:
+- Engineering correctness over visual gimmicks
+- Clear units, assumptions, and validation in every calculator
+- Modular, scalable architecture
+- Production-ready code (no messy scripts)
+- No fake or placeholder equations
+- All calculations must be traceable and documented
+
+--------------------------------------------------
+TECH STACK (MANDATORY)
+--------------------------------------------------
+Use:
+- Next.js (App Router)
+- TypeScript
+- Tailwind CSS
+- Modular engineering calculation library (separate from UI)
+- Recharts (for engineering plots if needed)
+- Zod for input validation
+
+Do NOT use low-structure stacks or inline calculation logic inside UI components.
+
+--------------------------------------------------
+APPLICATION STRUCTURE
+--------------------------------------------------
+Create this exact structure:
+
+/app
+  /about
+  /experience
+  /projects
+  /calculators
+      /gas-line-sizing
+      /liquid-line-sizing
+      /multiphase-line
+      /gas-mixing
+      /gas-volume
+  page.tsx (Home Portfolio)
+
+/components
+  CalculatorForm.tsx
+  ResultsPanel.tsx
+  WarningPanel.tsx
+  UnitSelector.tsx
+  EngineeringTable.tsx
+
+/lib
+  /engineering
+      gasSizing.ts
+      liquidSizing.ts
+      multiphase.ts
+      gasMixing.ts
+      gasVolume.ts
+  constants.ts
+  validation.ts
+  unitConversion.ts
+
+/data
+  testCases.json
+
+--------------------------------------------------
+PORTFOLIO CONTENT (HARDCODE INITIAL PROFILE)
+--------------------------------------------------
+Name: Hazem El Mancy  
+Title: Process Engineer (Oil & Gas – FEED/EPC)  
+Location: Cairo, Egypt  
+Email: hazemmancy@outlook.com  
+Phone: +201096597449  
+LinkedIn: https://www.linkedin.com/in/hazemmancy  
+
+About Summary:
+Process Engineer with hands-on experience in FEED and detailed engineering for upstream/downstream, onshore/offshore oil & gas facilities. Aspen HYSYS Certified Expert User specializing in process design, simulation, PFDs, P&IDs, BODs, H&MBs, hydraulic calculations, process equipment design, datasheets, and vendor print reviews.
+
+Projects (titles only):
+- NORPETCO – Abrar Production Station Rehabilitation
+- PhPC – Wet Flare KOD Bottleneck Study
+- PhPC – Crossover from Atoll Stream to Ha’py Stream
+- UGDC – New Propane/LPG Export–Import Facility (Concept)
+- GEMPETCO – Zaafarana Field Development (Offshore Power & Platform, EPCI)
+- PhPC – West Harbor New Heat Exchanger (Concept)
+- ADNOC – Offshore Produced Water Injection Facility (FEED)
+- PhPC – West Harbor Flashed Gas Compression Package (Concept)
+- Indorama – Cryogenic Ammonia Pipeline (FEED)
+- PETROMASILA – Crude Distillation Unit (Proposal & Concept)
+- Rumaila – Crude Oil Tank (Detailed Engineering)
+
+--------------------------------------------------
+ENGINEERING CALCULATORS (PHASE 1 – MANDATORY)
+--------------------------------------------------
+
+1) Gas Line Sizing Calculator
+Engineering Basis:
+- Darcy–Weisbach equation
+- Reynolds number calculation
+- Swamee-Jain friction factor
+- Mach number check
+- ρv² screening (AIV/FIV awareness)
+Standards awareness:
+- Crane TP-410
+- API RP 14E (velocity screening)
+
+Outputs:
+- Velocity (m/s)
+- Pressure drop (bar)
+- Reynolds number
+- Friction factor
+- Mach number
+- Warning flags if limits exceeded
+
+2) Liquid Line Sizing Calculator
+Engineering Basis:
+- Darcy–Weisbach
+- Static head + friction losses
+Outputs:
+- Velocity
+- Pressure drop
+- Total head loss
+- Acceptability warnings (velocity limits)
+
+3) Multiphase Line Screening Tool
+Engineering Basis:
+- Homogeneous model (screening level)
+- Superficial velocities (Vsg, Vsl)
+- API RP 14E erosional velocity check
+Important:
+Clearly label: “Screening tool – not detailed multiphase simulator”
+
+4) Gas Mixing Calculator
+Engineering Basis:
+- Mole fraction weighted averaging
+- Mixed MW calculation
+Validation:
+- Mole fractions must sum to 1.0 (auto-normalize with warning)
+
+5) Gas Volume Conversion Calculator
+Engineering Basis:
+- Ideal Gas Law with Z-factor correction
+Outputs:
+- Standard flowrate
+- Actual flowrate
+- Conversion factor
+
+--------------------------------------------------
+ENGINEERING UX REQUIREMENTS (CRITICAL)
+--------------------------------------------------
+Each calculator MUST include:
+- Unit selection (SI + Field units)
+- Input validation with engineering ranges
+- Warning panel (e.g., high velocity, high Mach)
+- Assumptions section
+- References section (engineering basis)
+- Export results as JSON
+- Example test case button
+
+--------------------------------------------------
+VALIDATION RULES (MANDATORY)
+--------------------------------------------------
+- No negative pressures or diameters allowed
+- Temperature limits: -50°C to 500°C
+- Mach number warning if > 0.3
+- Velocity warning if exceeds typical oil & gas limits
+- Clear error messages (no crashes)
+
+--------------------------------------------------
+TESTING (ANTI-WRONG CALCULATIONS)
+--------------------------------------------------
+Create internal test cases:
+- Gas flow sanity case (velocity realistic range)
+- Liquid flow test case (1–3 m/s expected)
+- Gas mixing MW validation test
+- Unit conversion consistency test
+
+--------------------------------------------------
+CODE QUALITY RULES
+--------------------------------------------------
+- Separate UI from engineering equations
+- Fully typed TypeScript
+- Clean reusable calculation functions
+- Professional comments explaining formulas
+- README explaining equations and assumptions
+
+--------------------------------------------------
+FINAL EXECUTION PLAN
+--------------------------------------------------
+Step 1: Create full folder structure  
+Step 2: Build portfolio pages (Home, About, Projects, Experience)  
+Step 3: Create engineering calculation library  
+Step 4: Implement Gas Line Sizing (FIRST, fully validated)  
+Step 5: Implement remaining calculators  
+Step 6: Add validation, warnings, and documentation  
+Step 7: Optimize UI for professional engineering audience  
+
+Do NOT rush UI styling before engineering logic is correct.
+
+This application must reflect a senior FEED Process Engineer digital portfolio, not a generic coding project.
