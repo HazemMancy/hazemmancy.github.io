@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { CheckCircle, XCircle, Shield } from "lucide-react";
+import { CheckCircle, XCircle, Shield, Info } from "lucide-react";
 import type { LimitWarning } from "@/lib/engineering/limitCheck";
 
 interface LimitsPanelProps {
@@ -18,7 +18,7 @@ export function LimitsPanel({ serviceName, warnings, notes }: LimitsPanelProps) 
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-primary" />
-          <h4 className="text-sm font-semibold">Limit Check: {serviceName}</h4>
+          <h4 className="text-sm font-semibold">Recommended Limits: {serviceName}</h4>
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-2">
@@ -56,6 +56,16 @@ export function LimitsPanel({ serviceName, warnings, notes }: LimitsPanelProps) 
         {notes && (
           <p className="text-xs text-muted-foreground pt-1" data-testid="limit-notes">{notes}</p>
         )}
+        <div className="flex items-start gap-2 pt-2 border-t border-muted/30">
+          <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+          <p className="text-[11px] text-muted-foreground leading-relaxed" data-testid="limit-reference">
+            These are recommended limits per industry guidelines and company practice, not absolute hard limits.
+            Exceeding a recommended value does not necessarily indicate a design failure — it flags the need for
+            further engineering review, detailed simulation, or project-specific justification. Hard limits
+            (e.g. code-mandated maximum allowable velocities or pressure drops) are governed by applicable codes
+            and standards and must be verified separately.
+          </p>
+        </div>
       </CardContent>
     </Card>
   );
