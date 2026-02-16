@@ -36,7 +36,7 @@ client/src/
     heatExchanger.ts - Heat exchanger area (LMTD/Kern)
     prdSizing.ts     - PRD/Flare relief device sizing (API 521/520/526, 9-tab wizard engine)
     psvSizing.ts     - (Legacy) PSV sizing screening — replaced by prdSizing.ts
-    thermalRelief.ts - Thermal expansion relief screening (API 521)
+    thermalRelief.ts - Thermal expansion relief screening (API 521, API 526 orifice selection)
     compressorSizing.ts - Compressor sizing (polytropic/isentropic, multi-stage, API 617/618)
   pages/
     home.tsx         - Single-page portfolio (Hero, About, Experience, Projects, Skills, Contact)
@@ -100,6 +100,15 @@ client/src/
   - K-value guidance: typical ranges for vertical/horizontal/KO drum with mesh/vane/none
   - Test cases: Flare KO Drum (2-case) and Horizontal Production Separator (2-case)
   - Legacy calculateSeparatorSizing interface preserved for backward compatibility
+- Thermal Relief Calculator: 9-tab wizard (Project → Equipment → Heat Source → Fluid → Temperature → Relief Rate → Sizing → Piping → Results)
+  - Engine module: thermalRelief.ts with blocked-in liquid expansion, API 520 liquid sizing, API 526 orifice selection
+  - Heat sources: solar bare/insulated (API 521), process heating, manual heat input
+  - Relief rate: heat input method (API 521) and volume/time method, governing by maximum
+  - TRV sizing: liquid relief equation A = Q / (N₁ × Kd × √(ΔP/G))
+  - API 526 orifice selection: standard designations D through T with effective areas and flange sizes
+  - Piping checks: inlet/outlet pressure drop vs 3% of set pressure
+  - Test case: Lean/Rich MEG Heat Exchanger (solar bare, Water 20°C)
+  - Legacy calculateThermalRelief interface preserved for backward compatibility
 - Control Valve Calculator: 7-tab wizard (Project → Service Data → Valve Type → Sizing → Selection → Risk → Results)
   - Engine module: controlValve.ts with multi-point Cv sizing (min/normal/max), liquid/gas/steam modes
   - Valve selection: opening %, rangeability check, valve authority assessment

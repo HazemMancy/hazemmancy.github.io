@@ -24,9 +24,13 @@
  * Required TRV orifice area (liquid, API 520):
  *   A = Q_Lpm / (N₁ × Kd × √(ΔP / G))
  *
+ * Orifice selection per API 526:
+ *   Standard orifice designations D through T with effective areas.
+ *
  * Reference:
  * - API 521 Section 5.18 (Thermal Expansion)
  * - API 520 Part I (Relief valve sizing)
+ * - API 526: Flanged Steel Pressure-Relief Valves (standard orifice areas)
  * - ASME B31.3 (blocked-in liquid overpressure requirement)
  */
 
@@ -116,8 +120,11 @@ export interface ThermalSizingResult {
 
 export interface TRVSelection {
   nps: string;
+  designation: string;
   area_mm2: number;
   margin: number; // %
+  inletFlange: string;
+  outletFlange: string;
 }
 
 export interface ThermalPipingResult {
@@ -172,6 +179,23 @@ export const TRV_SIZES: { nps: string; area: number }[] = [
   { nps: "1-1/2\" x 2\"", area: 1140 },
   { nps: "2\" x 3\"", area: 2027 },
   { nps: "3\" x 4\"", area: 4560 },
+];
+
+export const API_526_ORIFICES: { designation: string; area: number; inletFlange: string; outletFlange: string }[] = [
+  { designation: "D", area: 71, inletFlange: "1\"", outletFlange: "2\"" },
+  { designation: "E", area: 126, inletFlange: "1\"", outletFlange: "2\"" },
+  { designation: "F", area: 198, inletFlange: "1.5\"", outletFlange: "2.5\"" },
+  { designation: "G", area: 325, inletFlange: "1.5\"", outletFlange: "3\"" },
+  { designation: "H", area: 506, inletFlange: "2\"", outletFlange: "3\"" },
+  { designation: "J", area: 830, inletFlange: "3\"", outletFlange: "4\"" },
+  { designation: "K", area: 1186, inletFlange: "3\"", outletFlange: "4\"" },
+  { designation: "L", area: 1841, inletFlange: "4\"", outletFlange: "6\"" },
+  { designation: "M", area: 2323, inletFlange: "4\"", outletFlange: "6\"" },
+  { designation: "N", area: 2800, inletFlange: "4\"", outletFlange: "6\"" },
+  { designation: "P", area: 4116, inletFlange: "6\"", outletFlange: "8\"" },
+  { designation: "Q", area: 7126, inletFlange: "6\"", outletFlange: "10\"" },
+  { designation: "R", area: 10323, inletFlange: "8\"", outletFlange: "10\"" },
+  { designation: "T", area: 16774, inletFlange: "8\"", outletFlange: "12\"" },
 ];
 
 export const COMMON_THERMAL_EXPANSION: Record<string, number> = {
@@ -310,20 +334,26 @@ export function calculateTRVSizing(
 }
 
 export function selectTRV(requiredArea: number): TRVSelection {
-  for (const size of TRV_SIZES) {
-    if (size.area >= requiredArea) {
+  for (const orifice of API_526_ORIFICES) {
+    if (orifice.area >= requiredArea) {
       return {
-        nps: size.nps,
-        area_mm2: size.area,
-        margin: requiredArea > 0 ? ((size.area - requiredArea) / requiredArea) * 100 : 100,
+        nps: `${orifice.inletFlange} x ${orifice.outletFlange}`,
+        designation: orifice.designation,
+        area_mm2: orifice.area,
+        margin: requiredArea > 0 ? ((orifice.area - requiredArea) / requiredArea) * 100 : 100,
+        inletFlange: orifice.inletFlange,
+        outletFlange: orifice.outletFlange,
       };
     }
   }
-  const last = TRV_SIZES[TRV_SIZES.length - 1];
+  const last = API_526_ORIFICES[API_526_ORIFICES.length - 1];
   return {
-    nps: last.nps,
+    nps: `${last.inletFlange} x ${last.outletFlange}`,
+    designation: last.designation + " (multiple required)",
     area_mm2: last.area,
     margin: requiredArea > 0 ? ((last.area - requiredArea) / requiredArea) * 100 : 0,
+    inletFlange: last.inletFlange,
+    outletFlange: last.outletFlange,
   };
 }
 
@@ -419,7 +449,7 @@ export function buildThermalFinalResult(
   if (outletPiping && !outletPiping.pass) warnings.push("Outlet piping pressure drop exceeds recommended limits");
 
   const actionItems: string[] = [];
-  actionItems.push(`Install TRV size ${trvSelection.nps} (area: ${trvSelection.area_mm2} mm²) at blocked-in section`);
+  actionItems.push(`Install TRV with API 526 orifice "${trvSelection.designation}" (${trvSelection.inletFlange} x ${trvSelection.outletFlange}, area: ${trvSelection.area_mm2} mm²) at blocked-in section`);
   if (sizingResult.requiredOrificeArea_mm2 > 0) {
     actionItems.push(`Required orifice area: ${sizingResult.requiredOrificeArea_mm2.toFixed(1)} mm² — margin: +${trvSelection.margin.toFixed(1)}%`);
   }

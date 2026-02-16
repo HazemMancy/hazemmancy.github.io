@@ -19,7 +19,7 @@ import {
   type ThermalHeatResult, type ThermalExpansionResult, type ThermalReliefRateResult,
   type ThermalSizingResult, type TRVSelection, type ThermalPipingResult, type ThermalFinalResult,
   type HeatSource,
-  COMMON_FLUIDS, TRV_SIZES,
+  COMMON_FLUIDS, API_526_ORIFICES,
   calculateHeatInput, calculateExpansion, calculateReliefRate,
   calculateRelievingPressure, calculateTRVSizing, selectTRV,
   calculateThermalPiping, buildThermalFinalResult,
@@ -551,12 +551,14 @@ export default function ThermalReliefPage() {
 
                   <Card className="border-primary/30">
                     <CardContent className="p-4">
-                      <h4 className="font-semibold text-sm mb-3">Selected TRV</h4>
+                      <h4 className="font-semibold text-sm mb-3">Selected Orifice (API 526)</h4>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <span className="text-muted-foreground">TRV Size:</span>
-                        <span className="font-mono font-bold text-primary" data-testid="text-trv-size">{trvSelection.nps}</span>
-                        <span className="text-muted-foreground">Orifice Area:</span>
-                        <span className="font-mono">{trvSelection.area_mm2} mm²</span>
+                        <span className="text-muted-foreground">Orifice Designation:</span>
+                        <span className="font-mono font-bold text-primary" data-testid="text-trv-designation">{trvSelection.designation}</span>
+                        <span className="text-muted-foreground">Flanges (Inlet x Outlet):</span>
+                        <span className="font-mono" data-testid="text-trv-flanges">{trvSelection.inletFlange} x {trvSelection.outletFlange}</span>
+                        <span className="text-muted-foreground">Effective Area:</span>
+                        <span className="font-mono" data-testid="text-trv-area">{trvSelection.area_mm2} mm²</span>
                         <span className="text-muted-foreground">Margin:</span>
                         <span className="font-mono text-green-400">+{trvSelection.margin.toFixed(1)}%</span>
                       </div>
@@ -564,24 +566,28 @@ export default function ThermalReliefPage() {
                   </Card>
 
                   <Card><CardContent className="p-4">
-                    <h4 className="font-semibold text-sm mb-3">Standard TRV Sizes</h4>
+                    <h4 className="font-semibold text-sm mb-3">API 526 Standard Orifice Sizes</h4>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead><tr className="border-b">
-                          <th className="text-left py-1.5 pr-4">NPS</th>
-                          <th className="text-right py-1.5 pr-4">Area (mm²)</th>
+                          <th className="text-left py-1.5 pr-3">Orifice</th>
+                          <th className="text-right py-1.5 pr-3">Area (mm²)</th>
+                          <th className="text-left py-1.5 pr-3">Inlet</th>
+                          <th className="text-left py-1.5 pr-3">Outlet</th>
                           <th className="text-right py-1.5">Status</th>
                         </tr></thead>
-                        <tbody>{TRV_SIZES.map(s => {
-                          const isSelected = s.nps === trvSelection.nps;
+                        <tbody>{API_526_ORIFICES.map(o => {
+                          const isSelected = trvSelection.designation.startsWith(o.designation);
                           return (
-                            <tr key={s.nps} className={`border-b border-muted/20 ${isSelected ? "bg-primary/10" : ""}`}>
-                              <td className={`py-1.5 pr-4 font-mono ${isSelected ? "text-primary font-bold" : ""}`}>{s.nps}</td>
-                              <td className="text-right py-1.5 pr-4 font-mono">{s.area}</td>
+                            <tr key={o.designation} className={`border-b border-muted/20 ${isSelected ? "bg-primary/10" : ""}`} data-testid={`row-orifice-${o.designation}`}>
+                              <td className={`py-1.5 pr-3 font-mono ${isSelected ? "text-primary font-bold" : ""}`}>{o.designation}</td>
+                              <td className="text-right py-1.5 pr-3 font-mono">{o.area}</td>
+                              <td className="py-1.5 pr-3 font-mono text-muted-foreground">{o.inletFlange}</td>
+                              <td className="py-1.5 pr-3 font-mono text-muted-foreground">{o.outletFlange}</td>
                               <td className="text-right py-1.5">
                                 {isSelected && <Badge className="text-[10px]">Selected</Badge>}
-                                {!isSelected && s.area >= sizingResult.requiredOrificeArea_mm2 && <span className="text-green-400">OK</span>}
-                                {!isSelected && s.area < sizingResult.requiredOrificeArea_mm2 && <span className="text-muted-foreground/50">Too small</span>}
+                                {!isSelected && o.area >= sizingResult.requiredOrificeArea_mm2 && <span className="text-green-400">OK</span>}
+                                {!isSelected && o.area < sizingResult.requiredOrificeArea_mm2 && <span className="text-muted-foreground/50">Too small</span>}
                               </td>
                             </tr>
                           );
@@ -726,11 +732,15 @@ export default function ThermalReliefPage() {
                           <span className="font-mono">{finalResult.sizingResult.requiredOrificeArea_mm2.toFixed(1)} mm²</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
-                          <span className="text-muted-foreground">Selected TRV:</span>
-                          <span className="font-mono text-primary font-bold" data-testid="text-result-trv">{finalResult.trvSelection.nps}</span>
+                          <span className="text-muted-foreground">API 526 Orifice:</span>
+                          <span className="font-mono text-primary font-bold" data-testid="text-result-trv">{finalResult.trvSelection.designation}</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
-                          <span className="text-muted-foreground">TRV Area:</span>
+                          <span className="text-muted-foreground">Flanges (Inlet x Outlet):</span>
+                          <span className="font-mono" data-testid="text-result-flanges">{finalResult.trvSelection.inletFlange} x {finalResult.trvSelection.outletFlange}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-muted/20">
+                          <span className="text-muted-foreground">Effective Area:</span>
                           <span className="font-mono">{finalResult.trvSelection.area_mm2} mm² (+{finalResult.trvSelection.margin.toFixed(1)}%)</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
@@ -767,6 +777,7 @@ export default function ThermalReliefPage() {
                     references={[
                       "API 521: Pressure-Relieving and Depressuring Systems, Section 5.18",
                       "API 520 Part I: Sizing of pressure-relieving devices",
+                      "API 526: Flanged Steel Pressure-Relief Valves (standard orifice designations D–T)",
                       "ASME B31.3: Process Piping (blocked-in liquid overpressure)",
                       "Perry's Chemical Engineers' Handbook, Chapter 2 (thermal properties)",
                     ]}
