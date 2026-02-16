@@ -178,11 +178,25 @@ export default function CalculatorsIndexPage() {
               SI/Field unit toggle, built-in test cases, export capability, and documented assumptions
               with industry standard references.
             </p>
-            <div className="flex items-center justify-center gap-4 md:gap-6 mt-4 md:mt-6 flex-wrap">
+            <div className="flex items-center justify-center gap-2 md:gap-3 mt-5 md:mt-8 flex-wrap">
               {categories.map((cat) => (
-                <div key={cat.label} className="flex items-center gap-1.5 md:gap-2 text-xs">
-                  <div className={`w-2 h-2 rounded-full ${cat.color.replace("text-", "bg-")}`} />
-                  <span className="text-muted-foreground">{cat.label}</span>
+                <div
+                  key={cat.label}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 md:px-4 md:py-2 rounded-md border text-xs md:text-sm font-medium transition-colors ${
+                    cat.label === "Hydraulics"
+                      ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                      : cat.label === "Fluids"
+                      ? "border-green-500/30 bg-green-500/10 text-green-400"
+                      : cat.label === "Equipment"
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                      : "border-red-500/30 bg-red-500/10 text-red-400"
+                  }`}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${cat.color.replace("text-", "bg-")}`} />
+                  {cat.label}
+                  <span className="text-[10px] md:text-xs opacity-60">
+                    {calculators.filter(c => c.category === cat.label).length}
+                  </span>
                 </div>
               ))}
             </div>
