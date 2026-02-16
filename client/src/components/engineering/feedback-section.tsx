@@ -11,22 +11,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MessageSquare, Send, CheckCircle } from "lucide-react";
+import { MessageSquare, Send, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 
 interface FeedbackSectionProps {
   calculatorName: string;
 }
 
-const RECIPIENT = "mancy.hazem@gmail.com";
+const FORMSUBMIT_URL = "https://formsubmit.co/ajax/mancy.hazem@gmail.com";
 
 export function FeedbackSection({ calculatorName }: FeedbackSectionProps) {
   const [feedbackType, setFeedbackType] = useState("bug");
   const [message, setMessage] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!message.trim()) return;
 
     const typeLabel =
@@ -38,34 +38,43 @@ export function FeedbackSection({ calculatorName }: FeedbackSectionProps) {
             ? "Equation Issue"
             : "General Feedback";
 
-    const subject = encodeURIComponent(
-      `[${typeLabel}] ${calculatorName} Calculator`
-    );
+    setStatus("sending");
 
-    const bodyParts = [
-      `Calculator: ${calculatorName}`,
-      `Feedback Type: ${typeLabel}`,
-      "",
-      message.trim(),
-    ];
+    try {
+      const response = await fetch(FORMSUBMIT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          _subject: `[${typeLabel}] ${calculatorName} Calculator`,
+          calculator: calculatorName,
+          feedbackType: typeLabel,
+          name: name.trim() || "Anonymous",
+          email: email.trim() || "Not provided",
+          message: message.trim(),
+          _template: "table",
+        }),
+      });
 
-    if (name.trim()) {
-      bodyParts.push("", `From: ${name.trim()}`);
+      if (response.ok) {
+        setStatus("success");
+        setTimeout(() => {
+          setStatus("idle");
+          setMessage("");
+          setName("");
+          setEmail("");
+          setFeedbackType("bug");
+        }, 5000);
+      } else {
+        setStatus("error");
+        setTimeout(() => setStatus("idle"), 4000);
+      }
+    } catch {
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 4000);
     }
-    if (email.trim()) {
-      bodyParts.push(`Reply-to: ${email.trim()}`);
-    }
-
-    const body = encodeURIComponent(bodyParts.join("\n"));
-
-    window.open(`mailto:${RECIPIENT}?subject=${subject}&body=${body}`, "_self");
-
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setMessage("");
-      setFeedbackType("bug");
-    }, 4000);
   };
 
   return (
@@ -81,15 +90,24 @@ export function FeedbackSection({ calculatorName }: FeedbackSectionProps) {
             know — your feedback helps improve accuracy and usability.
           </p>
 
-          {submitted ? (
+          {status === "success" ? (
             <div
               className="flex items-center gap-3 py-6 justify-center text-green-400"
               data-testid="feedback-success"
             >
               <CheckCircle className="h-5 w-5" />
               <span className="font-medium">
-                Thank you! Your email client should open with the feedback
-                pre-filled.
+                Thank you! Your feedback has been sent successfully.
+              </span>
+            </div>
+          ) : status === "error" ? (
+            <div
+              className="flex items-center gap-3 py-6 justify-center text-red-400"
+              data-testid="feedback-error"
+            >
+              <AlertCircle className="h-5 w-5" />
+              <span className="font-medium">
+                Something went wrong. Please try again.
               </span>
             </div>
           ) : (
@@ -155,12 +173,16 @@ export function FeedbackSection({ calculatorName }: FeedbackSectionProps) {
 
               <Button
                 onClick={handleSubmit}
-                disabled={!message.trim()}
+                disabled={!message.trim() || status === "sending"}
                 className="w-full sm:w-auto"
                 data-testid="feedback-button-submit"
               >
-                <Send className="h-4 w-4 mr-2" />
-                Send Feedback
+                {status === "sending" ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                {status === "sending" ? "Sending..." : "Send Feedback"}
               </Button>
             </div>
           )}
