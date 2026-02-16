@@ -271,8 +271,10 @@ export default function GasVolumePage() {
         </div>
       )}
 
-      {isActual && (
+      {isActual ? (
         <p className="text-xs text-primary/80">Enter actual operating conditions below</p>
+      ) : (
+        <p className="text-xs text-muted-foreground/60">Reference conditions (fixed)</p>
       )}
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
@@ -282,6 +284,8 @@ export default function GasVolumePage() {
             value={side.pressure}
             onChange={(e) => setSide({ ...side, pressure: e.target.value })}
             placeholder={isActual ? "Actual P" : undefined}
+            disabled={!isActual}
+            className={!isActual ? "opacity-60" : ""}
             data-testid={`${testIdPrefix}-input-pressure`}
           />
         </div>
@@ -292,6 +296,8 @@ export default function GasVolumePage() {
             value={side.temperature}
             onChange={(e) => setSide({ ...side, temperature: e.target.value })}
             placeholder={isActual ? "Actual T" : undefined}
+            disabled={!isActual}
+            className={!isActual ? "opacity-60" : ""}
             data-testid={`${testIdPrefix}-input-temperature`}
           />
         </div>
@@ -301,6 +307,8 @@ export default function GasVolumePage() {
             type="number"
             value={side.zFactor}
             onChange={(e) => setSide({ ...side, zFactor: e.target.value })}
+            disabled={!isActual}
+            className={!isActual ? "opacity-60" : ""}
             data-testid={`${testIdPrefix}-input-z`}
           />
         </div>
