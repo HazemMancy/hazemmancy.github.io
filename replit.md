@@ -34,7 +34,8 @@ client/src/
     controlValve.ts  - Control valve Cv sizing (IEC 60534, liquid & gas)
     separatorSizing.ts - Separator/KO drum sizing (Souders-Brown)
     heatExchanger.ts - Heat exchanger area (LMTD/Kern)
-    psvSizing.ts     - PSV sizing screening (API 520/526)
+    prdSizing.ts     - PRD/Flare relief device sizing (API 521/520/526, 9-tab wizard engine)
+    psvSizing.ts     - (Legacy) PSV sizing screening — replaced by prdSizing.ts
     thermalRelief.ts - Thermal expansion relief screening (API 521)
     compressorSizing.ts - Compressor sizing (polytropic/isentropic, multi-stage, API 617/618)
   pages/
@@ -50,7 +51,7 @@ client/src/
       control-valve.tsx
       separator.tsx
       heat-exchanger.tsx
-      psv-sizing.tsx
+      psv-sizing.tsx   - Now: PRD/Flare Relief Calculator (9-tab wizard)
       thermal-relief.tsx
       compressor.tsx
 ```
@@ -69,8 +70,13 @@ client/src/
 - Single-page scrolling portfolio with section anchors (#home, #about, etc.)
 - Calculator pages on separate routes (/calculators/*)
 - Navbar dropdown categorizes 13 calculators by discipline: Hydraulics, Fluid Properties, Equipment, Relief
-- Relief calculators (PSV, Thermal) labeled as "SCREENING TOOL — NOT FOR FINAL DESIGN"
+- Relief calculators (PRD, Thermal) labeled as "SCREENING TOOL — NOT FOR FINAL DESIGN"
 - All engine modules include comprehensive equation references (API, ISO, IEC, TEMA standards)
-- Feedback section on every calculator page (mailto: to mancy.hazem@gmail.com) - no external email API needed
+- Feedback section on every calculator page (FormSubmit.co to mancy.hazem@gmail.com)
 - FeedbackSection component at `client/src/components/engineering/feedback-section.tsx`
 - Gas volume conversion: standard units (Nm3/h, Sm3/h, SCFM, MMSCFD) have disabled P/T/Z fields (fixed reference conditions)
+- PRD Calculator: 9-tab wizard (Project → Equipment → Scenarios → Governing → Device → Sizing → Orifice → Piping → Results)
+  - Engine module: prdSizing.ts with gas/vapor, steam, liquid sizing, API 526 orifice selection, inlet/outlet piping checks
+  - Supports API 521 scenario screening (blocked outlet, fire, CW failure, tube rupture, thermal expansion, etc.)
+  - Device type recommendation based on backpressure and service conditions
+  - Replaced simpler PSV sizing calculator (route path preserved at /calculators/psv-sizing)

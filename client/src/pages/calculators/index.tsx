@@ -138,14 +138,14 @@ const calculators: CalculatorEntry[] = [
     standards: ["API 617", "API 618", "GPSA"],
   },
   {
-    title: "PSV Sizing",
-    description: "Pressure safety valve sizing per API 520 Part I. Gas/vapor and liquid service with orifice selection per API 526. Correction factors for back pressure and combination.",
+    title: "PRD / Flare Relief",
+    description: "Comprehensive pressure relief device sizing with 9-step wizard. Scenario screening (API 521), gas/steam/liquid sizing (API 520), orifice selection (API 526), inlet/outlet piping checks, and device type recommendation.",
     href: "/calculators/psv-sizing",
     icon: Shield,
     category: "Relief",
     categoryColor: "text-red-400",
-    tags: ["API 520", "API 526 Orifice", "Gas/Liquid"],
-    standards: ["API 520", "API 526"],
+    tags: ["API 521", "API 520", "API 526", "9-Tab Wizard"],
+    standards: ["API 521", "API 520", "API 526"],
     screening: true,
   },
   {
