@@ -22,7 +22,7 @@ import {
 } from "@/lib/engineering/gasVolume";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
-import { ArrowLeftRight, FlaskConical, RotateCcw, ArrowDown, CheckCircle2, Download } from "lucide-react";
+import { ArrowLeftRight, FlaskConical, RotateCcw, ArrowDown, CheckCircle2 } from "lucide-react";
 
 const FLOW_UNIT_KEYS = Object.keys(FLOW_UNITS) as FlowUnitType[];
 
@@ -196,24 +196,6 @@ export default function GasVolumePage() {
     setUnitSystem("SI");
   };
 
-  const handleExport = () => {
-    if (!result) return;
-    const exportData = {
-      title: "Gas Volume Conversion",
-      timestamp: new Date().toISOString(),
-      input: { volume, fromUnit: from.unit, fromP: from.pressure, fromT: from.temperature, fromZ: from.zFactor, toUnit: to.unit, toP: to.pressure, toT: to.temperature, toZ: to.zFactor },
-      result: { outputVolume: result.outputVolume, outputUnit: result.outputUnit },
-      allUnits: result.allUnits,
-      steps: result.steps,
-    };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "gas_volume_conversion_results.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   const renderSide = (
     label: string,

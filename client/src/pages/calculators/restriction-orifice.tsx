@@ -25,7 +25,7 @@ import {
 import {
   CircleDot, FlaskConical, RotateCcw, ChevronLeft, ChevronRight,
   ClipboardList, Droplets, Settings2, BarChart3, ShieldCheck,
-  AlertTriangle, Download, CheckCircle2, Zap,
+  AlertTriangle, CheckCircle2, Zap,
 } from "lucide-react";
 
 const TABS = [
@@ -129,15 +129,6 @@ export default function RestrictionOrificePage() {
     }
   };
 
-  const handleExport = () => {
-    if (!result) return;
-    const exportData = { project, service, result, unitSystem, timestamp: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `ro_sizing_${project.caseId || "case"}.json`; a.click();
-    URL.revokeObjectURL(url);
-  };
 
   const tabIdx = TABS.findIndex(t => t.id === activeTab);
   const goNext = () => { if (tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id); };

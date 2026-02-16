@@ -11,11 +11,11 @@ import { UnitSelector } from "@/components/engineering/unit-selector";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
-import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
+import { getUnit, convertToSI } from "@/lib/engineering/unitConversion";
 import {
   type HXProject, type OperatingCase, type ExchangerConfig, type UInput,
   type HXFullResult, type CaseResult, type StreamSide, type FlowArrangement,
-  type FMode, type UMode, type DutyMode, type EngFlag,
+  type FMode, type UMode, type DutyMode,
   DEFAULT_PROJECT, DEFAULT_CASE, DEFAULT_CONFIG, DEFAULT_U_INPUT, DEFAULT_STREAM,
   HX_TEST_CASE_OIL_COOLER, HX_TEST_CONFIG, HX_TEST_U_INPUT,
   TYPICAL_U_VALUES, FLAG_LABELS, FLAG_SEVERITY,
@@ -23,7 +23,7 @@ import {
 } from "@/lib/engineering/heatExchanger";
 import {
   Thermometer, ClipboardList, Droplets, Settings2, BarChart3,
-  Ruler, ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
+  ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
   Calculator, Gauge, Box,
 } from "lucide-react";
@@ -133,46 +133,17 @@ export default function HeatExchangerPage() {
     setActiveTab("project");
   };
 
-  const handleExportJSON = () => {
-    const data = { project, cases, config, uInput, geoArea, result };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `hx_sizing_${project.caseId || "export"}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target?.result as string);
-        if (data.project) setProject(data.project);
-        if (data.cases) setCases(data.cases);
-        if (data.config) setConfig(data.config);
-        if (data.uInput) setUInput(data.uInput);
-        if (data.geoArea) setGeoArea(data.geoArea);
-        setResult(null); setError(null);
-      } catch { setError("Invalid JSON file"); }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleExportHTML = () => {
+  const handleExportPDF = () => {
     if (!result || !result.governingCase) return;
     const gc = result.governingCase;
     const html = buildCalcNoteHTML(result, gc, project);
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `hx_calc_note_${project.caseId || "export"}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
   };
 
   const tabIdx = TABS.findIndex(t => t.id === activeTab);
@@ -262,15 +233,6 @@ export default function HeatExchangerPage() {
                   <Label className="text-xs whitespace-nowrap">Energy balance tolerance (%)</Label>
                   <Input type="number" className="w-20" value={project.balanceTolerance} onChange={e => updateProject("balanceTolerance", parseFloat(e.target.value) || 5)} data-testid="input-balance-tol" />
                 </div>
-              </div>
-              <div className="pt-2 border-t flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={handleExportJSON} data-testid="button-save-json">
-                  <Download className="w-3.5 h-3.5 mr-1" /> Save JSON
-                </Button>
-                <label>
-                  <Button size="sm" variant="outline" asChild><span><ClipboardList className="w-3.5 h-3.5 mr-1" /> Load JSON</span></Button>
-                  <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} data-testid="input-load-json" />
-                </label>
               </div>
             </CardContent>
           </Card>
@@ -672,14 +634,9 @@ export default function HeatExchangerPage() {
                           <CheckCircle2 className="w-5 h-5 text-green-400" />
                           <h3 className="font-semibold">Results Summary — {result.governingCase.caseName} (Governing)</h3>
                         </div>
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="outline" onClick={handleExportJSON} data-testid="button-export-json">
-                            <Download className="w-3.5 h-3.5 mr-1" /> JSON
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={handleExportHTML} data-testid="button-export-html">
-                            <Download className="w-3.5 h-3.5 mr-1" /> Calc Note
-                          </Button>
-                        </div>
+                        <Button size="sm" variant="outline" onClick={handleExportPDF} data-testid="button-export-pdf">
+                          <Download className="w-3.5 h-3.5 mr-1" /> Calc Note (PDF)
+                        </Button>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -843,7 +800,7 @@ function buildCalcNoteHTML(result: HXFullResult, gc: CaseResult, project: HXProj
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>HX Calc Note — ${project.name || project.caseId}</title>
 <style>
-  body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; font-size: 12px; }
+  body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; font-size: 12px; color: #222; }
   h1 { font-size: 18px; border-bottom: 2px solid #333; padding-bottom: 8px; }
   h2 { font-size: 14px; margin-top: 20px; color: #555; }
   table { width: 100%; border-collapse: collapse; margin: 10px 0; }
@@ -852,6 +809,12 @@ function buildCalcNoteHTML(result: HXFullResult, gc: CaseResult, project: HXProj
   code { background: #f0f0f0; padding: 1px 4px; font-size: 10px; }
   .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; }
   .disclaimer { margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; font-size: 11px; }
+  @media print {
+    body { margin: 0; padding: 10px; }
+    h1 { font-size: 16px; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+  }
 </style></head><body>
 <h1>Heat Exchanger Sizing — Calculation Note</h1>
 <div class="summary-row"><span>Case: ${project.name} (${project.caseId})</span><span>Engineer: ${project.engineer}</span><span>Date: ${project.date}</span></div>

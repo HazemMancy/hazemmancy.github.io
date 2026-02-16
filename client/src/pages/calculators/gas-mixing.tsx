@@ -20,7 +20,7 @@ import {
 import {
   Blend, Plus, Trash2, FlaskConical, RotateCcw, Copy,
   ChevronLeft, ChevronRight, ClipboardList, Beaker, BarChart3, GitMerge,
-  AlertTriangle, CheckCircle2, Download,
+  AlertTriangle, CheckCircle2,
 } from "lucide-react";
 
 const TABS = [
@@ -151,21 +151,6 @@ export default function GasMixingPage() {
     }
   };
 
-  const handleExport = () => {
-    if (!result) return;
-    const exportData = {
-      project, components: result.components, mixtureMW: result.mixtureMW,
-      rMix: result.rMix, normalization: result.normalizationTrace,
-      calcSteps: result.calcSteps, flags: result.flags, timestamp: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `gas_mixing_${project.caseId || "case"}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   const tabIdx = TABS.findIndex(t => t.id === activeTab);
   const goNext = () => { if (tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id); };
