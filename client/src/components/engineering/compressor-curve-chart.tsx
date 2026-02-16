@@ -50,7 +50,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
     if (unitSystem === "Field") return kJkg * 334.553;
     return kJkg;
   };
-  const convertPower = (kW: number): number => convertFromSI(kW, "power", unitSystem);
+  const convertPower = (kW: number): number => convertFromSI("power", kW, unitSystem);
 
   const surgeFlowSI = designFlowSI * 0.7;
   const maxFlowSI = designFlowSI * 1.6;
