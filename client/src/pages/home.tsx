@@ -21,6 +21,13 @@ import {
   Gauge,
   Blend,
   ArrowLeftRight,
+  Waves,
+  CircleDot,
+  Container,
+  Thermometer,
+  Shield,
+  Flame,
+  Cog,
 } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 
@@ -175,36 +182,39 @@ const skillCategories = [
   },
 ];
 
-const calculators = [
+const calculatorCategories = [
   {
-    title: "Gas Line Sizing",
-    description: "Darcy-Weisbach with Swamee-Jain friction, Mach number check, and API RP 14E screening",
-    icon: Wind,
-    href: "/calculators/gas-line-sizing",
+    label: "Hydraulics",
+    items: [
+      { title: "Gas Line Sizing", description: "Darcy-Weisbach with Swamee-Jain friction, Mach number check, and API RP 14E screening", icon: Wind, href: "/calculators/gas-line-sizing" },
+      { title: "Liquid Line Sizing", description: "Friction and static head losses with velocity screening per industry standards", icon: Droplets, href: "/calculators/liquid-line-sizing" },
+      { title: "Multiphase Screening", description: "Homogeneous model with API RP 14E erosional velocity and flow regime indicators", icon: Waves, href: "/calculators/multiphase-line" },
+      { title: "Pump Sizing", description: "Centrifugal and PD pump sizing with TDH, BHP, and NPSH/NPIP analysis", icon: Gauge, href: "/calculators/pump-sizing" },
+    ],
   },
   {
-    title: "Liquid Line Sizing",
-    description: "Friction and static head losses with velocity screening per industry standards",
-    icon: Droplets,
-    href: "/calculators/liquid-line-sizing",
+    label: "Fluids",
+    items: [
+      { title: "Gas Mixing", description: "Mole fraction weighted MW calculation with auto-normalization and validation", icon: Blend, href: "/calculators/gas-mixing" },
+      { title: "Gas Volume Conversion", description: "Standard to actual volume conversion with compressibility factor correction", icon: ArrowLeftRight, href: "/calculators/gas-volume" },
+    ],
   },
   {
-    title: "Multiphase Screening",
-    description: "Homogeneous model with API RP 14E erosional velocity and flow regime indicators",
-    icon: Gauge,
-    href: "/calculators/multiphase-line",
+    label: "Equipment",
+    items: [
+      { title: "Restriction Orifice", description: "Liquid and gas orifice sizing with choked flow detection and beta ratio check", icon: CircleDot, href: "/calculators/restriction-orifice" },
+      { title: "Control Valve Cv", description: "Required Cv per IEC 60534 with choked flow, piping geometry, and expansion factor", icon: Gauge, href: "/calculators/control-valve" },
+      { title: "Separator / KO Drum", description: "Souders-Brown sizing for vertical and horizontal separators with holdup calculation", icon: Container, href: "/calculators/separator" },
+      { title: "Heat Exchanger", description: "LMTD-based area estimation with F-factor correction and fouling allowance", icon: Thermometer, href: "/calculators/heat-exchanger" },
+      { title: "Compressor Sizing", description: "Polytropic/isentropic compressor sizing with multi-stage and intercooling support", icon: Cog, href: "/calculators/compressor" },
+    ],
   },
   {
-    title: "Gas Mixing",
-    description: "Mole fraction weighted MW calculation with auto-normalization and validation",
-    icon: Blend,
-    href: "/calculators/gas-mixing",
-  },
-  {
-    title: "Gas Volume Conversion",
-    description: "Standard to actual volume conversion with compressibility factor correction",
-    icon: ArrowLeftRight,
-    href: "/calculators/gas-volume",
+    label: "Relief",
+    items: [
+      { title: "PRD / Flare Relief", description: "9-step wizard: scenario screening (API 521), sizing (API 520), orifice selection (API 526), piping checks", icon: Shield, href: "/calculators/psv-sizing" },
+      { title: "Thermal Relief", description: "Thermal expansion relief sizing for blocked-in liquid scenarios per API 521", icon: Flame, href: "/calculators/thermal-relief" },
+    ],
   },
 ];
 
@@ -499,27 +509,46 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {calculators.map((calc) => (
-              <Link key={calc.href} href={calc.href}>
-                <Card
-                  className="h-full hover-elevate active-elevate-2 cursor-pointer"
-                  data-testid={`card-calc-${calc.href.split("/").pop()}`}
-                >
-                  <CardContent className="p-5">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center">
-                        <calc.icon className="w-4.5 h-4.5 text-primary" />
-                      </div>
-                      <h3 className="font-semibold text-sm">{calc.title}</h3>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {calc.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
+          <div className="space-y-8">
+            {calculatorCategories.map((cat) => (
+              <div key={cat.label}>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-6 h-0.5 bg-primary" />
+                  <h3 className="font-semibold text-sm tracking-wide">{cat.label}</h3>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {cat.items.map((calc) => (
+                    <Link key={calc.href} href={calc.href}>
+                      <Card
+                        className="h-full hover-elevate active-elevate-2 cursor-pointer"
+                        data-testid={`card-calc-${calc.href.split("/").pop()}`}
+                      >
+                        <CardContent className="p-5">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center">
+                              <calc.icon className="w-4.5 h-4.5 text-primary" />
+                            </div>
+                            <h3 className="font-semibold text-sm">{calc.title}</h3>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {calc.description}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              </div>
             ))}
+          </div>
+
+          <div className="text-center mt-8">
+            <Link href="/calculators">
+              <Button variant="outline" data-testid="button-view-all-calcs">
+                <Calculator className="w-4 h-4 mr-2" />
+                View All Calculators
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
