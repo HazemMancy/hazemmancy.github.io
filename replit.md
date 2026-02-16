@@ -116,3 +116,56 @@ client/src/
   - Viscosity correction for high-viscosity liquids (Re-based FR factor)
   - Test cases: Cooling Water (liquid) and Natural Gas (gas)
   - Legacy calculateCVLiquid/calculateCVGas functions preserved for backward compatibility
+
+## User Preferences — Engineering Standards (Triple-Senior Builder)
+These guidelines govern all calculator development:
+
+### Engineering Discipline Rules
+- Always enforce correct workflow: define scenario/basis → compute governing case → sizing/result → checks → recommendations
+- If two-phase/phase uncertainty is likely, flag and block or require explicit user acknowledgement — never silently proceed as single-phase
+- Do not fabricate physical properties. Require inputs, or clearly label defaults as "assumed"
+- Show equations symbolically + step-by-step intermediate values in both UI and report
+- Maintain an "Assumptions Log" and "Warnings/Flags" list for every case
+- Never hide "magic constants." Every coefficient must be user-visible, editable, and traceable
+
+### Calculation Trace (Mandatory)
+Every solver/calc must return a structured trace object containing:
+- inputs (canonical SI + user units)
+- steps[] (name, equationId, variables, numericSubstitution, result)
+- intermediateValues map
+- assumptions[], warnings[], flags[]
+- Version stamps (engine/data/schema) where applicable
+
+### Units (Mandatory)
+- Store canonical internal units in SI
+- Every field displays units; tooltips show SI+USC equivalents where practical
+- Never mix gauge and absolute pressure silently; force user to choose and convert explicitly
+- Provide unit-safe typing via wrappers + conventions
+
+### Validation & Safety
+- Validate physical plausibility (e.g., Pabs>0, ρ>0, k>1, sum of mole fractions=1)
+- Do not "auto-fix" bad inputs without showing what changed
+- Provide "Normalize" or "Reject" options where relevant
+- Guard against NaN/Infinity; deterministic results (same inputs → same outputs)
+
+### Solvers
+- Use stable, bracketed root-finding (bisection) as default; optional Newton only if safe
+- Always report convergence details (iterations, tolerance, bracket)
+- If non-convergent, return diagnostics and recommended user actions
+
+### Code Quality
+- No large functions. Keep functions small and composable
+- Explicit naming, no cryptic variables; 100% typed inputs/outputs
+- Add docstrings for every public engine function (purpose, required inputs, assumptions, references)
+- All calculations MUST live in `client/src/lib/engineering/` as pure functions, separate from UI
+
+### UI/UX Rules
+- Wizard-style workflow with "cannot proceed" gates where necessary
+- Provide "Compare cases" view (min/normal/max) where applicable
+- Provide "copy as JSON" and "export report" always visible
+- Provide "Engineering Flags" banner always visible on results
+- Provide "Assumptions" panel editable by user where applicable
+
+### Reporting
+- Include: title block, basis, inputs+units, assumptions, step-by-step calculations, results+pass/fail, warnings/flags/action items
+- Stamp reports with engine version where available
