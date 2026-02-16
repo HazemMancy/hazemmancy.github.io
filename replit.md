@@ -30,15 +30,27 @@ client/src/
     gasMixing.ts     - Gas mixture MW calculation
     gasVolume.ts     - Standard/actual volume conversion
     pumpSizing.ts    - Centrifugal pump sizing (TDH, power, NPSH)
+    restrictionOrifice.ts - Restriction orifice sizing (ISO 5167, liquid & gas)
+    controlValve.ts  - Control valve Cv sizing (IEC 60534, liquid & gas)
+    separatorSizing.ts - Separator/KO drum sizing (Souders-Brown)
+    heatExchanger.ts - Heat exchanger area (LMTD/Kern)
+    psvSizing.ts     - PSV sizing screening (API 520/526)
+    thermalRelief.ts - Thermal expansion relief screening (API 521)
   pages/
     home.tsx         - Single-page portfolio (Hero, About, Experience, Projects, Skills, Contact)
-    calculators/     - 6 calculator pages
+    calculators/     - 12 calculator pages
       gas-line-sizing.tsx
       liquid-line-sizing.tsx
       multiphase-line.tsx
       gas-mixing.tsx
       gas-volume.tsx
       pump-sizing.tsx
+      restriction-orifice.tsx
+      control-valve.tsx
+      separator.tsx
+      heat-exchanger.tsx
+      psv-sizing.tsx
+      thermal-relief.tsx
 ```
 
 ## Running
@@ -54,3 +66,6 @@ client/src/
 - NPS pipe size selector with auto-fill of OD/WT/ID dimensions, manual override supported
 - Single-page scrolling portfolio with section anchors (#home, #about, etc.)
 - Calculator pages on separate routes (/calculators/*)
+- Navbar dropdown categorizes 12 calculators by discipline: Hydraulics, Fluid Properties, Equipment, Relief
+- Relief calculators (PSV, Thermal) labeled as "SCREENING TOOL — NOT FOR FINAL DESIGN"
+- All engine modules include comprehensive equation references (API, ISO, IEC, TEMA standards)

@@ -18,16 +18,22 @@ const sectionLinks = [
 ];
 
 const calculatorItems = [
-  { label: "Gas Line Sizing", href: "/calculators/gas-line-sizing" },
-  { label: "Liquid Line Sizing", href: "/calculators/liquid-line-sizing" },
-  { label: "Multiphase Screening", href: "/calculators/multiphase-line" },
-  { label: "Gas Mixing", href: "/calculators/gas-mixing" },
-  { label: "Gas Volume Conversion", href: "/calculators/gas-volume" },
-  { label: "Pump Sizing", href: "/calculators/pump-sizing" },
+  { label: "Gas Line Sizing", href: "/calculators/gas-line-sizing", group: "Hydraulics" },
+  { label: "Liquid Line Sizing", href: "/calculators/liquid-line-sizing", group: "Hydraulics" },
+  { label: "Multiphase Screening", href: "/calculators/multiphase-line", group: "Hydraulics" },
+  { label: "Gas Mixing", href: "/calculators/gas-mixing", group: "Fluids" },
+  { label: "Gas Volume Conversion", href: "/calculators/gas-volume", group: "Fluids" },
+  { label: "Pump Sizing", href: "/calculators/pump-sizing", group: "Hydraulics" },
+  { label: "Restriction Orifice", href: "/calculators/restriction-orifice", group: "Equipment" },
+  { label: "Control Valve Cv", href: "/calculators/control-valve", group: "Equipment" },
+  { label: "Separator / KO Drum", href: "/calculators/separator", group: "Equipment" },
+  { label: "Heat Exchanger", href: "/calculators/heat-exchanger", group: "Equipment" },
+  { label: "PSV Sizing", href: "/calculators/psv-sizing", group: "Relief" },
+  { label: "Thermal Relief", href: "/calculators/thermal-relief", group: "Relief" },
 ];
 
 export function Navbar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [calcDropdown, setCalcDropdown] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -46,7 +52,7 @@ export function Navbar() {
       const el = document.querySelector(href);
       if (el) el.scrollIntoView({ behavior: "smooth" });
     } else {
-      window.location.href = "/" + href;
+      setLocation("/" + href);
     }
   };
 
@@ -94,7 +100,7 @@ export function Navbar() {
               <ChevronDown className="w-3 h-3" />
             </button>
             <div
-              className={`absolute top-full right-0 mt-1 w-56 rounded-md border bg-popover p-1 shadow-lg transition-all ${
+              className={`absolute top-full right-0 mt-1 w-56 max-h-[70vh] overflow-y-auto rounded-md border bg-popover p-1 shadow-lg transition-all ${
                 calcDropdown
                   ? "opacity-100 visible translate-y-0"
                   : "opacity-0 invisible -translate-y-1"
@@ -111,20 +117,30 @@ export function Navbar() {
                   All Calculators
                 </Button>
               </Link>
-              <div className="my-1 border-t border-muted/30" />
-              {calculatorItems.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  <Button
-                    variant={location === item.href ? "secondary" : "ghost"}
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => setCalcDropdown(false)}
-                    data-testid={`link-calc-${item.href.split("/").pop()}`}
-                  >
-                    {item.label}
-                  </Button>
-                </Link>
-              ))}
+              {["Hydraulics", "Fluids", "Equipment", "Relief"].map((group) => {
+                const items = calculatorItems.filter((i) => i.group === group);
+                if (items.length === 0) return null;
+                return (
+                  <div key={group}>
+                    <div className="px-2 pt-2 pb-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">{group}</span>
+                    </div>
+                    {items.map((item) => (
+                      <Link key={item.href} href={item.href}>
+                        <Button
+                          variant={location === item.href ? "secondary" : "ghost"}
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={() => setCalcDropdown(false)}
+                          data-testid={`link-calc-${item.href.split("/").pop()}`}
+                        >
+                          {item.label}
+                        </Button>
+                      </Link>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </nav>

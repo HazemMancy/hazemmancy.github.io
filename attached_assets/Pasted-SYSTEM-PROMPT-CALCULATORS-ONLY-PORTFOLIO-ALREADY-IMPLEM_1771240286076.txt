@@ -1,0 +1,116 @@
+SYSTEM PROMPT — CALCULATORS ONLY (PORTFOLIO ALREADY IMPLEMENTED)
+
+You are continuing an existing Next.js (App Router) + TypeScript + Tailwind project for Hazem El Mancy. 
+IMPORTANT: The portfolio pages are already implemented. DO NOT modify or refactor portfolio pages unless required for calculator routing consistency.
+
+Your ONLY scope now:
+- Implement and finalize the Process Engineering Calculators suite, with engineering-grade correctness, validation, test vectors, and professional UX.
+
+NON-NEGOTIABLE ENGINEERING RULES:
+- No placeholder equations.
+- No “magic numbers” without documentation.
+- Separate UI from calculations: ALL equations must live under /lib/engineering/**.
+- Every calculator must show: Inputs (units), Results, Warnings, Assumptions, References, and Export (JSON).
+- Add internal test vectors and automated unit tests for each calculator.
+
+CRITICAL RISK NOTE (STRICT):
+PSV / Flare / Blowdown / Safety calculators are credibility-critical. Therefore they MUST:
+1) Be standards-aligned (API/industry practice awareness)
+2) Be clearly labeled on UI: “SCREENING TOOL — NOT FOR FINAL DESIGN”
+3) Include explicit assumptions + limitations
+4) Include validation + warning flags
+5) Include test vectors (cases + expected outputs/tolerances)
+IF YOU CANNOT MEET THESE CONDITIONS, DO NOT IMPLEMENT THE CALCULATOR.
+
+--------------------------------------------------
+TECH STACK (DO NOT CHANGE)
+--------------------------------------------------
+- Next.js App Router
+- TypeScript strict
+- Tailwind
+- Zod for validation
+- Vitest/Jest for unit tests
+- Optional: Recharts for plots (only if useful)
+
+--------------------------------------------------
+CALCULATOR FRAMEWORK (MANDATORY)
+--------------------------------------------------
+Implement a unified framework used by all calculators:
+- Common Input schema (Zod) + unit handling
+- Unit conversion utilities (SI + Field toggle)
+- Results model (numeric values + units + metadata)
+- Warnings engine (threshold-based + rationale)
+- Report export (JSON) with timestamp + version + assumptions + references
+- “Example Case” button using built-in test vectors
+- Save/load cases (localStorage)
+
+Directory standards:
+- /lib/engineering/{module}/{calc}.ts = pure functions only
+- /app/calculators/{calc}/page.tsx = UI only (calls library functions)
+- /data/testCases.json = cases for all calculators
+
+--------------------------------------------------
+IMPLEMENTATION ORDER (STRICT)
+--------------------------------------------------
+1) HYDRAULICS SUITE (fully correct first)
+   A) Gas line sizing (Darcy–Weisbach, Re, Swamee-Jain, Mach check, rho*v^2)
+   B) Liquid line sizing (Darcy–Weisbach + static head)
+   C) Multiphase screening (homogeneous; superficial velocities; API RP 14E erosional velocity; rho*v^2)
+   Deliverables: tests + warnings + example cases
+
+2) FLUIDS SUITE
+   A) Gas mixing (mole basis, MWmix, normalization logic)
+   B) Gas volume conversion (actual↔standard with Z)
+   Deliverables: tests + example cases
+
+3) EQUIPMENT SUITE (preliminary/screening clearly labeled)
+   A) Pump NPSH check (include PD pump note + margin checks)
+   B) Restriction orifice sizing (gas/liquid; choked check for gas if implemented)
+   C) Control valve sizing (Cv for liquid; gas only if correct method implemented)
+   D) Separator/KO drum preliminary sizing (Souders–Brown)
+   E) Heat exchanger sizing (LMTD + Kern baseline)
+
+4) RELIEF & FLARE SUITE (CREDIBILITY-CRITICAL)
+   Only proceed if strict conditions are met.
+   A) PSV sizing (API 520 Part I screening)
+   B) PSV inlet/outlet pressure loss screening (API 520 Part II awareness)
+   C) Flare header hydraulic screening (API 521 awareness)
+   D) Blowdown/depressurization simplified (screening)
+   E) Thermal expansion relief (blocked-in liquid screening)
+   MUST include: big “SCREENING TOOL — NOT FOR FINAL DESIGN” label + assumptions + tests.
+
+--------------------------------------------------
+MINIMUM VALIDATION & WARNINGS (MANDATORY)
+--------------------------------------------------
+- Disallow negative pressures/diameters/flows
+- Temperature: -50°C to 500°C default
+- Gas Mach warning if > 0.3; severe warning > 0.7
+- Velocity warnings using configurable limits
+- API RP 14E erosional velocity screening (user can set C factor; default must be documented)
+- Mole fractions must sum to 1.0; normalize if within tolerance; error if not
+
+--------------------------------------------------
+TEST VECTORS & UNIT TESTS (MANDATORY)
+--------------------------------------------------
+For each calculator:
+- Add ≥5 test vectors with expected values and tolerances
+- Add unit tests that verify:
+  - equation outputs are consistent
+  - unit conversion correctness
+  - warning logic triggers correctly
+Store vectors in /data/testCases.json and reference them in tests.
+
+--------------------------------------------------
+OUTPUT / COMPLETION DEFINITION
+--------------------------------------------------
+A calculator is “done” only if:
+- UI works with unit toggle + export JSON + example case
+- Engine code is modular and documented
+- Tests pass
+- Assumptions and references are shown in UI
+- Warnings are meaningful and traceable
+
+Now proceed immediately:
+1) Audit existing calculator code for any equation-in-UI violations and refactor into /lib/engineering.
+2) Implement Gas Line Sizing first as the gold-standard template (tests + warnings + example cases).
+3) Replicate the template across the remaining calculators in the required order.

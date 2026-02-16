@@ -13,6 +13,12 @@ import MultiphaseLinePage from "@/pages/calculators/multiphase-line";
 import GasMixingPage from "@/pages/calculators/gas-mixing";
 import GasVolumePage from "@/pages/calculators/gas-volume";
 import PumpSizingPage from "@/pages/calculators/pump-sizing";
+import RestrictionOrificePage from "@/pages/calculators/restriction-orifice";
+import ControlValvePage from "@/pages/calculators/control-valve";
+import SeparatorPage from "@/pages/calculators/separator";
+import HeatExchangerPage from "@/pages/calculators/heat-exchanger";
+import PSVSizingPage from "@/pages/calculators/psv-sizing";
+import ThermalReliefPage from "@/pages/calculators/thermal-relief";
 import CalculatorsIndexPage from "@/pages/calculators/index";
 import NotFound from "@/pages/not-found";
 
@@ -27,6 +33,12 @@ function Router() {
       <Route path="/calculators/gas-mixing" component={GasMixingPage} />
       <Route path="/calculators/gas-volume" component={GasVolumePage} />
       <Route path="/calculators/pump-sizing" component={PumpSizingPage} />
+      <Route path="/calculators/restriction-orifice" component={RestrictionOrificePage} />
+      <Route path="/calculators/control-valve" component={ControlValvePage} />
+      <Route path="/calculators/separator" component={SeparatorPage} />
+      <Route path="/calculators/heat-exchanger" component={HeatExchangerPage} />
+      <Route path="/calculators/psv-sizing" component={PSVSizingPage} />
+      <Route path="/calculators/thermal-relief" component={ThermalReliefPage} />
       <Route component={NotFound} />
     </Switch>
   );

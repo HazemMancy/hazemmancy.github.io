@@ -3,14 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Wind,
-  Droplets,
-  Gauge,
-  Blend,
-  ArrowLeftRight,
-  ArrowRight,
-  Calculator,
-  Waves,
+  Wind, Droplets, Gauge, Blend, ArrowLeftRight, ArrowRight, Calculator,
+  Waves, CircleDot, Container, Thermometer, Shield, Flame,
 } from "lucide-react";
 
 interface CalculatorEntry {
@@ -22,12 +16,14 @@ interface CalculatorEntry {
   categoryColor: string;
   tags: string[];
   standards: string[];
+  screening?: boolean;
 }
 
 const categories = [
   { label: "Hydraulics", color: "text-blue-400" },
   { label: "Fluids", color: "text-green-400" },
   { label: "Equipment", color: "text-amber-400" },
+  { label: "Relief", color: "text-red-400" },
 ];
 
 const calculators: CalculatorEntry[] = [
@@ -62,8 +58,18 @@ const calculators: CalculatorEntry[] = [
     standards: ["API RP 14E"],
   },
   {
+    title: "Pump Sizing",
+    description: "Comprehensive pump sizing for centrifugal and positive displacement pumps. Includes TDH, BHP, NPSH/NPIP analysis with API 674/676 compliance.",
+    href: "/calculators/pump-sizing",
+    icon: Gauge,
+    category: "Hydraulics",
+    categoryColor: "text-blue-400",
+    tags: ["Centrifugal", "PD Pumps", "NPSH/NPIP"],
+    standards: ["API 610", "API 674", "API 676"],
+  },
+  {
     title: "Gas Mixing",
-    description: "Calculate mixture molecular weight from gas composition on a mole basis. Supports normalization of mole fractions within tolerance and common natural gas components.",
+    description: "Calculate mixture molecular weight from gas composition on a mole basis. Supports normalization of mole fractions within tolerance.",
     href: "/calculators/gas-mixing",
     icon: Blend,
     category: "Fluids",
@@ -73,7 +79,7 @@ const calculators: CalculatorEntry[] = [
   },
   {
     title: "Gas Volume Conversion",
-    description: "Convert between standard and actual gas volumes using real gas law with compressibility factor (Z). Supports both directions with pressure and temperature input.",
+    description: "Convert between standard and actual gas volumes using real gas law with compressibility factor (Z). Supports both directions.",
     href: "/calculators/gas-volume",
     icon: ArrowLeftRight,
     category: "Fluids",
@@ -82,14 +88,66 @@ const calculators: CalculatorEntry[] = [
     standards: ["ISO 13443", "AGA Report No. 8"],
   },
   {
-    title: "Pump Sizing",
-    description: "Comprehensive pump sizing for centrifugal and positive displacement pumps. Includes TDH, BHP, NPSH/NPIP analysis, pump curves, and PD performance curves per API 674/676.",
-    href: "/calculators/pump-sizing",
+    title: "Restriction Orifice",
+    description: "Size restriction orifices for liquid and gas service. Calculates required bore diameter, beta ratio, and checks for choked (critical) flow in gas service.",
+    href: "/calculators/restriction-orifice",
+    icon: CircleDot,
+    category: "Equipment",
+    categoryColor: "text-amber-400",
+    tags: ["Liquid/Gas", "Choked Flow", "Beta Ratio"],
+    standards: ["ISO 5167", "Crane TP-410"],
+  },
+  {
+    title: "Control Valve Cv",
+    description: "Calculate required Cv for control valves per IEC 60534. Supports liquid and gas service with choked flow detection, piping geometry factor, and expansion factor.",
+    href: "/calculators/control-valve",
     icon: Gauge,
     category: "Equipment",
     categoryColor: "text-amber-400",
-    tags: ["Centrifugal", "PD Pumps", "NPSH/NPIP", "API 610"],
-    standards: ["API 610", "API 674", "API 676", "HI Standards"],
+    tags: ["IEC 60534", "Choked Flow", "Fp/FL/xT"],
+    standards: ["IEC 60534", "ISA S75.01"],
+  },
+  {
+    title: "Separator / KO Drum",
+    description: "Preliminary separator sizing using Souders-Brown equation. Vertical and horizontal configurations with liquid holdup and surge volume calculations.",
+    href: "/calculators/separator",
+    icon: Container,
+    category: "Equipment",
+    categoryColor: "text-amber-400",
+    tags: ["Souders-Brown", "K-Factor", "Holdup Time"],
+    standards: ["API 12J", "GPSA"],
+  },
+  {
+    title: "Heat Exchanger",
+    description: "LMTD-based heat exchanger area estimation. Supports counter-current, parallel, and multi-pass arrangements with F-factor correction and fouling allowance.",
+    href: "/calculators/heat-exchanger",
+    icon: Thermometer,
+    category: "Equipment",
+    categoryColor: "text-amber-400",
+    tags: ["LMTD", "F-Factor", "Fouling"],
+    standards: ["TEMA", "Kern Method"],
+  },
+  {
+    title: "PSV Sizing",
+    description: "Pressure safety valve sizing per API 520 Part I. Gas/vapor and liquid service with orifice selection per API 526. Correction factors for back pressure and combination.",
+    href: "/calculators/psv-sizing",
+    icon: Shield,
+    category: "Relief",
+    categoryColor: "text-red-400",
+    tags: ["API 520", "API 526 Orifice", "Gas/Liquid"],
+    standards: ["API 520", "API 526"],
+    screening: true,
+  },
+  {
+    title: "Thermal Relief",
+    description: "Thermal expansion relief sizing for blocked-in liquid scenarios. Calculates expansion volume, relief rate, and TRV size based on solar or process heating.",
+    href: "/calculators/thermal-relief",
+    icon: Flame,
+    category: "Relief",
+    categoryColor: "text-red-400",
+    tags: ["API 521", "Blocked-in Liquid", "Solar Heat"],
+    standards: ["API 521", "ASME B31.3"],
+    screening: true,
   },
 ];
 
@@ -132,9 +190,16 @@ export default function CalculatorsIndexPage() {
                       <div className="p-2.5 rounded-md bg-primary/10 shrink-0">
                         <calc.icon className="w-5 h-5 text-primary" />
                       </div>
-                      <Badge variant="outline" className={`text-[10px] shrink-0 ${calc.categoryColor}`}>
-                        {calc.category}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {calc.screening && (
+                          <Badge variant="outline" className="text-[10px] shrink-0 text-red-400 border-red-400/30">
+                            Screening
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className={`text-[10px] shrink-0 ${calc.categoryColor}`}>
+                          {calc.category}
+                        </Badge>
+                      </div>
                     </div>
 
                     <h3 className="font-semibold text-sm mb-2" data-testid={`text-calc-title-${calc.href.split("/").pop()}`}>
@@ -180,7 +245,7 @@ export default function CalculatorsIndexPage() {
                 <p className="text-xs text-muted-foreground leading-relaxed mb-4">
                   All calculators are intended for preliminary engineering screening and estimation.
                   Results must be verified against detailed engineering analysis and manufacturer data
-                  for final design decisions.
+                  for final design decisions. Relief & Flare calculators are screening tools only.
                 </p>
                 <div className="flex items-center justify-center gap-4 flex-wrap">
                   <Link href="/">
