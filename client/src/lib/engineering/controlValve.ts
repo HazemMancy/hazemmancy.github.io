@@ -193,27 +193,33 @@ export function calculateCVGas(input: CVGasInput): CVGasResult {
   };
 }
 
+// Liquid CV — per IEC 60534-2-1 / ISA-75.01
+// Water control valve, 6" pipe, ΔP = 5 bar (non-cavitating)
+// Expected: Cv ~80–150, non-choked service
 export const CV_LIQUID_TEST_CASE: CVLiquidInput = {
-  flowRate: 100,
-  liquidDensity: 998.2,
-  upstreamPressure: 10,
-  downstreamPressure: 5,
-  vaporPressure: 2.338,
-  criticalPressure: 220.64,
-  pipeSize: 154.08,
-  valveSize: 0,
-  fl: 0.90,
+  flowRate: 100,           // m³/h — cooling water or process water control
+  liquidDensity: 998.2,    // kg/m³ — water at 20°C (NIST)
+  upstreamPressure: 10,    // bara — supply header
+  downstreamPressure: 5,   // bara — downstream vessel/process
+  vaporPressure: 2.338,    // kPa — water at 20°C (Antoine equation)
+  criticalPressure: 220.64,// bar — water critical pressure (IAPWS)
+  pipeSize: 154.08,        // mm — 6" NPS Sch 40 (ASME B36.10)
+  valveSize: 0,            // mm — 0 = auto-select valve body
+  fl: 0.90,                // liquid pressure recovery factor (globe valve, IEC 60534)
 };
 
+// Gas CV — per IEC 60534-2-1 / ISA-75.01
+// Natural gas pressure control valve in 6" pipe, ΔP = 5 bar
+// Expected: Cv ~100–200, sub-critical flow
 export const CV_GAS_TEST_CASE: CVGasInput = {
-  massFlowRate: 10000,
-  molecularWeight: 18.5,
-  upstreamPressure: 30,
-  downstreamPressure: 25,
-  temperature: 40,
-  compressibilityFactor: 0.92,
-  specificHeatRatio: 1.27,
-  pipeSize: 154.08,
-  valveSize: 0,
-  xt: 0.70,
+  massFlowRate: 10000,       // kg/h — natural gas through control valve
+  molecularWeight: 18.5,     // sweet natural gas (GPSA)
+  upstreamPressure: 30,      // bara — inlet header
+  downstreamPressure: 25,    // bara — outlet, moderate ΔP
+  temperature: 40,           // °C — process temperature
+  compressibilityFactor: 0.92,// Z at 30 bara (GPSA Fig 23-4)
+  specificHeatRatio: 1.27,   // k for natural gas (GPSA Section 13)
+  pipeSize: 154.08,          // mm — 6" NPS Sch 40 (ASME B36.10)
+  valveSize: 0,              // mm — 0 = auto-select valve body
+  xt: 0.70,                  // pressure drop ratio factor (globe valve, IEC 60534)
 };

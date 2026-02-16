@@ -65,12 +65,15 @@ export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
   };
 }
 
+// Wellhead flowline — per API RP 14E erosional velocity screening
+// Gas-condensate multiphase flow in 10" Sch 40 CS pipe
+// Expected: erosional velocity ~8–15 m/s, ρV² < 10,000 Pa
 export const MULTIPHASE_TEST_CASE: MultiphaseInput = {
-  gasFlowRate: 5000,
-  liquidFlowRate: 50,
-  gasDensity: 25,
-  liquidDensity: 800,
-  innerDiameter: 254.5,
-  pipeLength: 1000,
-  cFactor: 150,
+  gasFlowRate: 5000,     // Sm³/h — gas from wellhead/manifold
+  liquidFlowRate: 50,    // m³/h — condensate/produced water
+  gasDensity: 25,        // kg/m³ — at operating P/T (from PVT)
+  liquidDensity: 800,    // kg/m³ — condensate + water weighted average
+  innerDiameter: 254.5,  // mm — 10" NPS Sch 40 (ASME B36.10)
+  pipeLength: 1000,      // m — flowline from wellhead to separator
+  cFactor: 150,          // API RP 14E C-factor (continuous service, inhibited)
 };

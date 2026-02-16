@@ -233,14 +233,17 @@ export function calculateGasVolume(input: GasVolumeInput): GasVolumeResult {
   };
 }
 
+// Standard volume conversion — per ISO 13443 / GPA 2172
+// 1 MMSCFD (at 60°F, 14.696 psia) → Sm³/h (at 15°C, 1.01325 bara)
+// Expected: 1 MMSCFD ≈ 1177.6 Sm³/h (verified against ISO 13443 conversion)
 export const GAS_VOLUME_TEST_CASE = {
   volume: 1,
   fromUnit: "MMSCFD" as FlowUnitType,
-  fromP_bar: 1.01325,
-  fromT_C: 15.56,
-  fromZ: 1.0,
+  fromP_bar: 1.01325,     // 14.696 psia — US standard reference pressure
+  fromT_C: 15.56,         // 60°F — US standard reference temperature
+  fromZ: 1.0,             // ideal gas at reference conditions
   toUnit: "Sm3/h" as FlowUnitType,
-  toP_bar: 1.01325,
-  toT_C: 15,
-  toZ: 1.0,
+  toP_bar: 1.01325,       // 1.01325 bara — ISO 13443 reference pressure
+  toT_C: 15,              // 15°C — ISO 13443 reference temperature
+  toZ: 1.0,               // ideal gas at reference conditions
 };

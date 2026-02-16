@@ -219,30 +219,36 @@ export function calculatePSVLiquid(input: PSVLiquidInput): PSVResult {
   };
 }
 
+// Gas PSV — per API 520 Part I, Section 4.3 (vapor service)
+// Blocked outlet relief on HP gas separator, conventional valve
+// Expected: orifice letter J–L (API 526), area ~1500–3000 mm²
 export const PSV_GAS_TEST_CASE: PSVGasInput = {
-  massFlowRate: 15000,
-  molecularWeight: 18.5,
-  setPressure: 50,
-  overpressure: 10,
-  backPressure: 3,
-  relievingTemperature: 120,
-  compressibilityFactor: 0.90,
-  specificHeatRatio: 1.27,
-  kd: 0.975,
-  kb: 1.0,
-  kc: 1.0,
-  atmosphericPressure: 1.01325,
+  massFlowRate: 15000,       // kg/h — blocked outlet relief rate (API 521 Section 5)
+  molecularWeight: 18.5,     // sweet natural gas (GPSA)
+  setPressure: 50,           // bar(g) — set at MAWP of HP separator
+  overpressure: 10,          // % — standard allowance for non-fire case (API 520)
+  backPressure: 3,           // bar(g) — atmospheric flare header back pressure
+  relievingTemperature: 120, // °C — gas at relieving conditions
+  compressibilityFactor: 0.90,// Z at relieving P/T (GPSA)
+  specificHeatRatio: 1.27,   // k for natural gas (GPSA Section 13)
+  kd: 0.975,                 // discharge coefficient — certified per API 520 (gas)
+  kb: 1.0,                   // back pressure correction — conventional valve
+  kc: 1.0,                   // combination factor — PSV only (no rupture disc)
+  atmosphericPressure: 1.01325, // bara — sea level (ISO 2533)
 };
 
+// Liquid PSV — per API 520 Part I, Section 4.6 (liquid service)
+// Blocked outlet relief on water system, conventional valve
+// Expected: orifice letter D–F (API 526), area ~200–800 mm²
 export const PSV_LIQUID_TEST_CASE: PSVLiquidInput = {
-  flowRate: 50,
-  liquidDensity: 998.2,
-  setPressure: 10,
-  overpressure: 10,
-  backPressure: 1,
-  viscosity: 1.0,
-  kd: 0.65,
-  kw: 1.0,
-  kc: 1.0,
-  atmosphericPressure: 1.01325,
+  flowRate: 50,              // m³/h — blocked outlet / thermal relief rate
+  liquidDensity: 998.2,      // kg/m³ — water at 20°C (NIST)
+  setPressure: 10,           // bar(g) — set at equipment MAWP
+  overpressure: 10,          // % — standard for non-fire liquid (API 520)
+  backPressure: 1,           // bar(g) — close-coupled discharge
+  viscosity: 1.0,            // cP — water at ~20°C
+  kd: 0.65,                  // discharge coefficient — liquid per API 520
+  kw: 1.0,                   // back pressure correction — conventional valve
+  kc: 1.0,                   // combination factor — PSV only
+  atmosphericPressure: 1.01325, // bara — sea level
 };

@@ -196,25 +196,31 @@ export function calculateROGas(input: ROGasInput): ROGasResult {
   };
 }
 
+// Liquid RO — per ISO 5167 / ASME MFC-3M
+// Water pressure letdown through 6" CS pipe, ΔP = 5 bar
+// Expected: orifice bore ~40–60 mm, β < 0.7
 export const RO_LIQUID_TEST_CASE: ROLiquidInput = {
-  flowRate: 50,
-  liquidDensity: 998.2,
-  upstreamPressure: 10,
-  downstreamPressure: 5,
-  orificeDiameter: 0,
-  pipeDiameter: 154.08,
-  dischargeCoefficient: 0.61,
+  flowRate: 50,              // m³/h — cooling water bypass or letdown
+  liquidDensity: 998.2,      // kg/m³ — water at 20°C (NIST)
+  upstreamPressure: 10,      // bara — upstream header pressure
+  downstreamPressure: 5,     // bara — downstream vessel pressure
+  orificeDiameter: 0,        // mm — 0 = auto-size (calculator sizes the bore)
+  pipeDiameter: 154.08,      // mm — 6" NPS Sch 40 (ASME B36.10)
+  dischargeCoefficient: 0.61,// thin sharp-edged orifice (ISO 5167 default)
 };
 
+// Gas RO — per ISO 5167 / ISA-75.01
+// Natural gas pressure letdown, 30 → 10 bara through 6" CS pipe
+// Expected: choked flow likely at P₂/P₁ < critical ratio
 export const RO_GAS_TEST_CASE: ROGasInput = {
-  massFlowRate: 5000,
-  molecularWeight: 18.5,
-  upstreamPressure: 30,
-  downstreamPressure: 10,
-  upstreamTemperature: 40,
-  orificeDiameter: 0,
-  pipeDiameter: 154.08,
-  specificHeatRatio: 1.27,
-  compressibilityFactor: 0.92,
-  dischargeCoefficient: 0.61,
+  massFlowRate: 5000,        // kg/h — gas from HP to LP system
+  molecularWeight: 18.5,     // sweet natural gas (GPSA)
+  upstreamPressure: 30,      // bara — HP header
+  downstreamPressure: 10,    // bara — LP system
+  upstreamTemperature: 40,   // °C — process temperature
+  orificeDiameter: 0,        // mm — 0 = auto-size
+  pipeDiameter: 154.08,      // mm — 6" NPS Sch 40 (ASME B36.10)
+  specificHeatRatio: 1.27,   // k for natural gas (GPSA Section 13)
+  compressibilityFactor: 0.92,// Z at 30 bara (GPSA Fig 23-4)
+  dischargeCoefficient: 0.61, // thin sharp-edged orifice (ISO 5167)
 };

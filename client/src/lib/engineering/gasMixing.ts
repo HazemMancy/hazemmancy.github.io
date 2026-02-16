@@ -58,6 +58,9 @@ export function calculateGasMixing(input: GasMixingInput): GasMixingResult {
   };
 }
 
+// Typical sweet natural gas composition — per GPSA Engineering Data Book, Table 2-2
+// North Sea / Gulf sweet gas composition, fractions sum to 1.00
+// Expected: mixture MW ≈ 18.5 g/mol, 100% mole fraction total
 export const GAS_MIXING_TEST_CASE: GasMixingInput = {
   components: [
     { name: "Methane (CH4)", moleFraction: 0.85, molecularWeight: 16.04 },

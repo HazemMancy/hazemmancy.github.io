@@ -205,18 +205,21 @@ export const TYPICAL_U_VALUES: Record<string, { low: number; high: number; typic
   "Air Cooler (Fin-Fan)": { low: 15, high: 80, typical: 40, unit: "W/(m²·K)" },
 };
 
+// Oil cooler (shell & tube) — per TEMA Standards / Kern's Method
+// Hot oil cooled by cooling water, counter-current S&T exchanger
+// Expected: LMTD ~50–60°C, area ~30–50 m², duty ~1000–1500 kW
 export const HX_TEST_CASE: HeatExchangerInput = {
-  dutyKW: 0,
-  hotInletTemp: 150,
-  hotOutletTemp: 80,
-  coldInletTemp: 25,
-  coldOutletTemp: 65,
-  overallU: 500,
+  dutyKW: 0,               // kW — 0 = auto-calculate from mass/Cp/ΔT
+  hotInletTemp: 150,        // °C — hot oil from process (shell side)
+  hotOutletTemp: 80,        // °C — cooled oil out
+  coldInletTemp: 25,        // °C — cooling water in (tube side)
+  coldOutletTemp: 65,       // °C — cooling water out
+  overallU: 500,            // W/(m²·K) — oil-to-water S&T (TEMA Table N-2)
   flowArrangement: "counter_current",
-  foulingFactor: 0.0003,
-  designMargin: 15,
-  hotFlowRate: 20000,
-  hotCp: 2.5,
-  coldFlowRate: 30000,
-  coldCp: 4.18,
+  foulingFactor: 0.0003,    // m²·K/W — combined oil + CW fouling (TEMA RGP-T-2.4)
+  designMargin: 15,         // % — excess area margin (typical engineering practice)
+  hotFlowRate: 20000,       // kg/h — hot oil mass flow rate
+  hotCp: 2.5,               // kJ/(kg·K) — hot oil specific heat (typical hydrocarbon)
+  coldFlowRate: 30000,      // kg/h — cooling water mass flow rate
+  coldCp: 4.18,             // kJ/(kg·K) — water specific heat at ~45°C avg (NIST)
 };

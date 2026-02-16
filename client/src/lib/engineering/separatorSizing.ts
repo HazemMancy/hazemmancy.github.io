@@ -173,34 +173,40 @@ export function calculateSeparatorSizing(input: SeparatorInput): SeparatorResult
   };
 }
 
+// Vertical KO drum — per GPSA Section 7 / API 12J
+// Gas scrubber before compressor suction, low liquid load
+// Expected: vessel ID ~1.0–1.5 m, allowable gas velocity ~0.05–0.10 m/s
 export const SEPARATOR_VERTICAL_TEST_CASE: SeparatorInput = {
-  gasFlowRate: 5000,
-  gasMolecularWeight: 18.5,
-  gasDensity: 25,
-  liquidFlowRate: 10,
-  liquidDensity: 800,
-  operatingPressure: 30,
-  operatingTemperature: 40,
-  kFactor: 0.07,
-  residenceTime: 5,
+  gasFlowRate: 5000,         // Sm³/h — compressor suction gas
+  gasMolecularWeight: 18.5,  // sweet natural gas (GPSA)
+  gasDensity: 25,            // kg/m³ — at 30 bara, 40°C (PVT)
+  liquidFlowRate: 10,        // m³/h — carryover condensate
+  liquidDensity: 800,        // kg/m³ — condensate (API 45°)
+  operatingPressure: 30,     // bara — typical HP separator pressure
+  operatingTemperature: 40,  // °C — process temperature
+  kFactor: 0.07,             // m/s — vertical with demister (GPSA Fig 7-9)
+  residenceTime: 5,          // min — liquid holdup (GPSA Table 7-3)
   orientation: "vertical",
-  ldRatio: 3,
-  surgeTime: 2,
-  demisterPadDP: 0.003,
+  ldRatio: 3,                // L/D = 3 — typical vertical separator (GPSA)
+  surgeTime: 2,              // min — surge volume allowance
+  demisterPadDP: 0.003,      // bar — wire mesh demister (GPSA Table 7-2)
 };
 
+// Horizontal production separator — per GPSA Section 7 / API 12J
+// Two-phase production separator, higher liquid load
+// Expected: vessel ID ~1.5–2.5 m, L/D = 4, liquid level 40–60%
 export const SEPARATOR_HORIZONTAL_TEST_CASE: SeparatorInput = {
-  gasFlowRate: 15000,
-  gasMolecularWeight: 18.5,
-  gasDensity: 25,
-  liquidFlowRate: 50,
-  liquidDensity: 800,
-  operatingPressure: 30,
-  operatingTemperature: 40,
-  kFactor: 0.10,
-  residenceTime: 5,
+  gasFlowRate: 15000,        // Sm³/h — production gas from wellhead
+  gasMolecularWeight: 18.5,  // sweet natural gas (GPSA)
+  gasDensity: 25,            // kg/m³ — at 30 bara, 40°C
+  liquidFlowRate: 50,        // m³/h — produced crude + water
+  liquidDensity: 800,        // kg/m³ — oil-water weighted average
+  operatingPressure: 30,     // bara — first-stage separation
+  operatingTemperature: 40,  // °C — process temperature
+  kFactor: 0.10,             // m/s — horizontal with demister (GPSA Fig 7-9)
+  residenceTime: 5,          // min — oil retention (GPSA Table 7-3)
   orientation: "horizontal",
-  ldRatio: 4,
-  surgeTime: 3,
-  demisterPadDP: 0.003,
+  ldRatio: 4,                // L/D = 4 — typical horizontal separator (GPSA)
+  surgeTime: 3,              // min — slug/surge volume
+  demisterPadDP: 0.003,      // bar — wire mesh demister
 };

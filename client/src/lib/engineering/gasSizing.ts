@@ -86,15 +86,18 @@ export function calculateGasLineSizing(input: GasLineSizingInput): GasSizingResu
   };
 }
 
+// Gas export pipeline — per GPSA Engineering Data Book, Section 17
+// Sweet natural gas at moderate pressure through 10" Sch 40 CS pipe
+// Expected: velocity ~12–18 m/s, ΔP/100m within API RP 14E limits
 export const GAS_SIZING_TEST_CASE: GasLineSizingInput = {
-  flowRate: 50000,
-  pressure: 30,
-  temperature: 40,
-  molecularWeight: 18.5,
-  innerDiameter: 254.5,
-  pipeLength: 500,
-  roughness: 0.0457,
-  compressibilityFactor: 0.92,
-  specificHeatRatio: 1.27,
-  viscosity: 0.012,
+  flowRate: 50000,             // Sm³/h — typical gas export/gathering rate
+  pressure: 30,                // bara — medium-pressure export header
+  temperature: 40,             // °C — typical process temperature
+  molecularWeight: 18.5,       // sweet natural gas (GPSA typical composition)
+  innerDiameter: 254.5,        // mm — 10" NPS Sch 40 (ID = 254.5 mm per ASME B36.10)
+  pipeLength: 500,             // m — moderate run between facilities
+  roughness: 0.0457,           // mm — commercial carbon steel (Moody, GPSA Table 17-7)
+  compressibilityFactor: 0.92, // Z at 30 bara, 40°C (GPSA Fig 23-4)
+  specificHeatRatio: 1.27,     // k for natural gas (GPSA Section 13)
+  viscosity: 0.012,            // cP — gas viscosity at conditions (GPSA Fig 23-27)
 };

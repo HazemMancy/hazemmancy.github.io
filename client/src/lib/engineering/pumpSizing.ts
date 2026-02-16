@@ -316,47 +316,53 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
   };
 }
 
+// Cooling water pump — per Hydraulic Institute Standards (HI 14.6)
+// Centrifugal pump, water at 20°C, 8" suction / 6" discharge CS pipe
+// Expected: TDH ~35–45 m, NPSH_A > 3 m, efficiency 70–80%
 export const PUMP_SIZING_TEST_CASE: PumpSizingInput = {
-  flowRate: 150,
-  liquidDensity: 998.2,
-  viscosity: 1.002,
-  suctionStaticHead: 3,
-  dischargeStaticHead: 30,
-  suctionPipeLength: 5,
-  dischargePipeLength: 150,
-  suctionPipeDiameter: 202.74,
-  dischargePipeDiameter: 154.08,
-  suctionRoughness: 0.0457,
-  dischargeRoughness: 0.0457,
-  suctionFittingsK: 1.5,
-  dischargeFittingsK: 8.0,
-  pumpEfficiency: 75,
-  motorEfficiency: 95,
-  vaporPressure: 2.338,
-  atmosphericPressure: 1.01325,
-  suctionVesselPressure: 0,
+  flowRate: 150,                // m³/h — typical cooling water circulation
+  liquidDensity: 998.2,         // kg/m³ — water at 20°C (NIST)
+  viscosity: 1.002,             // cP — water at 20°C (NIST)
+  suctionStaticHead: 3,         // m — tank level to pump centerline
+  dischargeStaticHead: 30,      // m — pipe rack + vessel nozzle elevation
+  suctionPipeLength: 5,         // m — short suction line (HI recommendation)
+  dischargePipeLength: 150,     // m — run to cooling tower / exchangers
+  suctionPipeDiameter: 202.74,  // mm — 8" NPS Sch 40 (ASME B36.10)
+  dischargePipeDiameter: 154.08,// mm — 6" NPS Sch 40 (ASME B36.10)
+  suctionRoughness: 0.0457,     // mm — commercial carbon steel
+  dischargeRoughness: 0.0457,   // mm — commercial carbon steel
+  suctionFittingsK: 1.5,        // Σk — gate valve + 90° elbow + strainer
+  dischargeFittingsK: 8.0,      // Σk — check valve + globe valve + 4× elbows
+  pumpEfficiency: 75,           // % — typical centrifugal pump BEP (HI)
+  motorEfficiency: 95,          // % — NEMA premium efficiency motor
+  vaporPressure: 2.338,         // kPa — water at 20°C (Antoine equation)
+  atmosphericPressure: 1.01325, // bara — sea level (ISO 2533)
+  suctionVesselPressure: 0,     // bar(g) — atmospheric tank
 };
 
+// Crude oil PD pump — per API 674 / API 675
+// Reciprocating or gear pump for viscous crude transfer
+// Expected: differential pressure ~10 bar, volumetric eff 85–95%
 export const PD_PUMP_TEST_CASE: PDPumpSizingInput = {
-  flowRate: 25,
-  liquidDensity: 900,
-  viscosity: 15.0,
-  suctionStaticHead: 2,
-  dischargeStaticHead: 10,
-  suctionPipeLength: 3,
-  dischargePipeLength: 50,
-  suctionPipeDiameter: 102.26,
-  dischargePipeDiameter: 77.92,
-  suctionRoughness: 0.0457,
-  dischargeRoughness: 0.0457,
-  suctionFittingsK: 1.0,
-  dischargeFittingsK: 5.0,
-  volumetricEfficiency: 90,
-  mechanicalEfficiency: 85,
-  motorEfficiency: 95,
-  vaporPressure: 20,
-  atmosphericPressure: 1.01325,
-  suctionVesselPressure: 0.5,
-  reliefValvePressure: 15,
-  dischargePressure: 10,
+  flowRate: 25,                 // m³/h — crude oil metering/injection rate
+  liquidDensity: 900,           // kg/m³ — medium crude (API 25°)
+  viscosity: 15.0,              // cP — crude at 40°C (field data)
+  suctionStaticHead: 2,         // m — positive head from charge pump
+  dischargeStaticHead: 10,      // m — vessel elevation
+  suctionPipeLength: 3,         // m — short suction
+  dischargePipeLength: 50,      // m — run to injection point
+  suctionPipeDiameter: 102.26,  // mm — 4" NPS Sch 40 (ASME B36.10)
+  dischargePipeDiameter: 77.92, // mm — 3" NPS Sch 40 (ASME B36.10)
+  suctionRoughness: 0.0457,     // mm — commercial carbon steel
+  dischargeRoughness: 0.0457,   // mm — commercial carbon steel
+  suctionFittingsK: 1.0,        // Σk — gate valve + elbow
+  dischargeFittingsK: 5.0,      // Σk — check valve + globe valve + elbows
+  volumetricEfficiency: 90,     // % — typical PD pump (API 674)
+  mechanicalEfficiency: 85,     // % — gear/bearing losses (API 674)
+  motorEfficiency: 95,          // % — NEMA premium efficiency motor
+  vaporPressure: 20,            // kPa — crude oil vapor pressure
+  atmosphericPressure: 1.01325, // bara — sea level
+  suctionVesselPressure: 0.5,   // bar(g) — pressurized suction vessel
+  reliefValvePressure: 15,      // bar(g) — safety relief on discharge
+  dischargePressure: 10,        // bar(g) — required discharge pressure
 };

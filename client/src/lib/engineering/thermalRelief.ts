@@ -200,18 +200,21 @@ export const COMMON_THERMAL_EXPANSION: Record<string, number> = {
   "Glycerol": 5.0,
 };
 
+// Thermal expansion relief — per API 521 Section 5.14 / ASME VIII
+// Water trapped in blocked-in heat exchanger, solar heating on bare vessel
+// Expected: expansion volume ~40–80 L, relief rate ~0.1–0.5 L/min
 export const THERMAL_RELIEF_TEST_CASE: ThermalReliefInput = {
-  liquidVolume: 5.0,
-  liquidDensity: 998.2,
-  specificHeat: 4.18,
-  thermalExpansion: 2.07,
-  initialTemperature: 20,
-  finalTemperature: 60,
-  heatingTime: 4,
-  heatSource: "solar_bare",
-  exposedArea: 10,
-  heatInputKW: 0,
-  setPressure: 10,
-  backPressure: 0,
-  atmosphericPressure: 1.01325,
+  liquidVolume: 5.0,          // m³ — trapped volume in exchanger/piping
+  liquidDensity: 998.2,       // kg/m³ — water at 20°C (NIST)
+  specificHeat: 4.18,         // kJ/(kg·K) — water (NIST)
+  thermalExpansion: 2.07,     // ×10⁻⁴ /°C — water at 20°C (Perry's Table 2-32)
+  initialTemperature: 20,     // °C — ambient / blocked-in temperature
+  finalTemperature: 60,       // °C — max temperature from solar + process heat
+  heatingTime: 4,             // h — time over which temperature rise occurs
+  heatSource: "solar_bare",   // API 521 solar heat input on uninsulated surface
+  exposedArea: 10,            // m² — external vessel surface area
+  heatInputKW: 0,             // kW — 0 = use solar heat flux only
+  setPressure: 10,            // bar(g) — TRV set pressure (at equipment MAWP)
+  backPressure: 0,            // bar(g) — atmospheric discharge
+  atmosphericPressure: 1.01325, // bara — sea level (ISO 2533)
 };

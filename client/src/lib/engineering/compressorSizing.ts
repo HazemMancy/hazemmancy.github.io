@@ -246,36 +246,42 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
   };
 }
 
+// Centrifugal compressor — per GPSA Section 13 / API 617
+// Natural gas export compressor, 3:1 ratio, single stage
+// Expected: polytropic head ~150–180 kJ/kg, discharge temp ~130–150°C
 export const COMPRESSOR_CENTRIFUGAL_TEST_CASE: CompressorInput = {
-  gasFlowRate: 5000,
-  molecularWeight: 18.5,
-  suctionPressure: 30,
-  dischargePressure: 90,
-  suctionTemperature: 35,
-  specificHeatRatio: 1.28,
-  compressibilityFactor: 0.95,
-  polytropicEfficiency: 78,
-  mechanicalEfficiency: 98,
-  motorEfficiency: 96,
+  gasFlowRate: 5000,           // Sm³/h — gas export rate
+  molecularWeight: 18.5,       // sweet natural gas (GPSA typical)
+  suctionPressure: 30,         // bara — separator outlet / suction scrubber
+  dischargePressure: 90,       // bara — export pipeline pressure
+  suctionTemperature: 35,      // °C — after suction cooler
+  specificHeatRatio: 1.28,     // k for natural gas (GPSA Section 13)
+  compressibilityFactor: 0.95, // Z at suction conditions (GPSA Fig 23-4)
+  polytropicEfficiency: 78,    // % — typical centrifugal (GPSA Table 13-3)
+  mechanicalEfficiency: 98,    // % — bearing/seal losses (API 617)
+  motorEfficiency: 96,         // % — electric motor driver
   compressorType: "centrifugal",
   compressionModel: "polytropic",
-  maxDischargeTemperature: 200,
+  maxDischargeTemperature: 200,// °C — API 617 limit for materials
 };
 
+// Reciprocating compressor — per GPSA Section 13 / API 618
+// Instrument air compressor, 8:1 ratio, multi-stage with intercooling
+// Expected: 2+ stages, discharge temp <150°C per stage
 export const COMPRESSOR_RECIPROCATING_TEST_CASE: CompressorInput = {
-  gasFlowRate: 1000,
-  molecularWeight: 28.97,
-  suctionPressure: 5,
-  dischargePressure: 40,
-  suctionTemperature: 25,
-  specificHeatRatio: 1.40,
-  compressibilityFactor: 0.98,
-  polytropicEfficiency: 85,
-  mechanicalEfficiency: 95,
-  motorEfficiency: 95,
+  gasFlowRate: 1000,           // Sm³/h — instrument air demand
+  molecularWeight: 28.97,      // air (standard molecular weight)
+  suctionPressure: 1,          // bara — atmospheric suction
+  dischargePressure: 8,        // bara — instrument air header (7 bar gauge)
+  suctionTemperature: 30,      // °C — ambient air, post-filter
+  specificHeatRatio: 1.40,     // k for air (NIST)
+  compressibilityFactor: 1.00, // Z ≈ 1.0 for air at low pressure
+  polytropicEfficiency: 85,    // % — typical reciprocating (GPSA Table 13-2)
+  mechanicalEfficiency: 95,    // % — crosshead/packing losses (API 618)
+  motorEfficiency: 95,         // % — electric motor driver
   compressorType: "reciprocating",
   compressionModel: "isentropic",
-  maxDischargeTemperature: 150,
+  maxDischargeTemperature: 150,// °C — API 618 limit for valve/packing life
 };
 
 export const COMMON_COMPRESSOR_GASES: Record<string, { mw: number; k: number; z: number }> = {
