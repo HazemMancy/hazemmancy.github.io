@@ -164,23 +164,23 @@ const calculators: CalculatorEntry[] = [
 export default function CalculatorsIndexPage() {
   return (
     <div className="min-h-screen">
-      <section className="py-16 md:py-24">
+      <section className="py-10 md:py-24">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="text-center mb-12 md:mb-16">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <Calculator className="w-8 h-8 text-primary" />
-              <h1 className="text-3xl md:text-4xl font-bold" data-testid="text-calculators-title">
+          <div className="text-center mb-8 md:mb-16">
+            <div className="flex items-center justify-center gap-2 md:gap-3 mb-4">
+              <Calculator className="w-6 h-6 md:w-8 md:h-8 text-primary" />
+              <h1 className="text-2xl md:text-4xl font-bold" data-testid="text-calculators-title">
                 Process Engineering Calculators
               </h1>
             </div>
-            <p className="text-muted-foreground max-w-2xl mx-auto text-sm md:text-base leading-relaxed">
+            <p className="text-muted-foreground max-w-2xl mx-auto text-xs md:text-base leading-relaxed px-2">
               Validated engineering calculators for Oil & Gas applications. Each tool features
               SI/Field unit toggle, built-in test cases, export capability, and documented assumptions
               with industry standard references.
             </p>
-            <div className="flex items-center justify-center gap-6 mt-6 flex-wrap">
+            <div className="flex items-center justify-center gap-4 md:gap-6 mt-4 md:mt-6 flex-wrap">
               {categories.map((cat) => (
-                <div key={cat.label} className="flex items-center gap-2 text-xs">
+                <div key={cat.label} className="flex items-center gap-1.5 md:gap-2 text-xs">
                   <div className={`w-2 h-2 rounded-full ${cat.color.replace("text-", "bg-")}`} />
                   <span className="text-muted-foreground">{cat.label}</span>
                 </div>
@@ -188,14 +188,14 @@ export default function CalculatorsIndexPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {calculators.map((calc) => (
               <Link key={calc.href} href={calc.href}>
                 <Card
                   className="h-full hover-elevate cursor-pointer transition-all group"
                   data-testid={`card-calc-${calc.href.split("/").pop()}`}
                 >
-                  <CardContent className="p-5 md:p-6 flex flex-col h-full">
+                  <CardContent className="p-4 md:p-6 flex flex-col h-full">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="p-2.5 rounded-md bg-primary/10 shrink-0">
                         <calc.icon className="w-5 h-5 text-primary" />

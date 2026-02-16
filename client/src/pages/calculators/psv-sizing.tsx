@@ -309,25 +309,25 @@ export default function PSVSizingPage() {
   const lU = getUnit("length", unitSystem);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
-      <Card className="mb-6 bg-amber-950/30 border-amber-800/50">
-        <CardContent className="flex items-center gap-3 p-4">
+    <div className="max-w-6xl mx-auto px-4 py-6 md:py-12">
+      <Card className="mb-4 md:mb-6 bg-amber-950/30 border-amber-800/50">
+        <CardContent className="flex items-center gap-3 p-3 md:p-4">
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY ENGINEERING TOOL — NOT FOR FINAL DESIGN</p>
-            <p className="text-xs text-amber-200/70">Final sizing must be confirmed by qualified engineers with vendor certified capacity data and detailed process simulation.</p>
+            <p className="text-xs md:text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY ENGINEERING TOOL — NOT FOR FINAL DESIGN</p>
+            <p className="text-[10px] md:text-xs text-amber-200/70">Final sizing must be confirmed by qualified engineers with vendor certified capacity data and detailed process simulation.</p>
           </div>
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 md:mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
             <Shield className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-calc-title">PRD / Flare Relief Calculator</h1>
-            <p className="text-sm text-muted-foreground">API 521 / 520 / 526 — Pressure Relief Device Sizing</p>
+            <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">PRD / Flare Relief Calculator</h1>
+            <p className="text-xs md:text-sm text-muted-foreground">API 521 / 520 / 526 — Pressure Relief Device Sizing</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -342,13 +342,13 @@ export default function PSVSizingPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="overflow-x-auto mb-4">
-          <TabsList className="inline-flex w-auto min-w-full" data-testid="tabs-prd">
+        <div className="overflow-x-auto -mx-4 px-4 mb-4 md:mb-6">
+          <TabsList className="inline-flex w-max min-w-full md:w-full md:min-w-0 h-auto p-1" data-testid="tabs-prd">
             {TABS.map(tab => (
-              <TabsTrigger key={tab.id} value={tab.id} className="gap-1.5 text-xs" data-testid={`tab-${tab.id}`}>
-                <tab.icon className="w-3.5 h-3.5" />
+              <TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-1 md:gap-1.5 text-[10px] md:text-xs px-2 md:px-3 py-1.5 whitespace-nowrap" data-testid={`tab-${tab.id}`}>
+                <tab.icon className="w-3 h-3 md:w-3.5 md:h-3.5" />
                 <span className="hidden sm:inline">{tab.label}</span>
-                <Badge variant="outline" className="text-[9px] ml-0.5 px-1">{tab.step}</Badge>
+                <span className="sm:hidden">{tab.step}</span>
               </TabsTrigger>
             ))}
           </TabsList>

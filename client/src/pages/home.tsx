@@ -499,38 +499,38 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-20 px-4">
+      <section className="py-12 md:py-20 px-4">
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-10">
+          <div className="text-center mb-6 md:mb-10">
             <p className="section-label mb-3">TOOLS</p>
-            <h2 className="text-3xl md:text-4xl font-bold">Engineering Calculators</h2>
-            <p className="text-muted-foreground text-sm mt-3">
+            <h2 className="text-2xl md:text-4xl font-bold">Engineering Calculators</h2>
+            <p className="text-muted-foreground text-xs md:text-sm mt-3">
               Validated process engineering tools built on industry-standard equations
             </p>
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-6 md:space-y-8">
             {calculatorCategories.map((cat) => (
               <div key={cat.label}>
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center gap-2 mb-3 md:mb-4">
                   <div className="w-6 h-0.5 bg-primary" />
-                  <h3 className="font-semibold text-sm tracking-wide">{cat.label}</h3>
+                  <h3 className="font-semibold text-xs md:text-sm tracking-wide">{cat.label}</h3>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {cat.items.map((calc) => (
                     <Link key={calc.href} href={calc.href}>
                       <Card
                         className="h-full hover-elevate active-elevate-2 cursor-pointer"
                         data-testid={`card-calc-${calc.href.split("/").pop()}`}
                       >
-                        <CardContent className="p-5">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center">
-                              <calc.icon className="w-4.5 h-4.5 text-primary" />
+                        <CardContent className="p-4 md:p-5">
+                          <div className="flex items-center gap-3 mb-2 md:mb-3">
+                            <div className="w-8 h-8 md:w-9 md:h-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                              <calc.icon className="w-4 h-4 md:w-4.5 md:h-4.5 text-primary" />
                             </div>
-                            <h3 className="font-semibold text-sm">{calc.title}</h3>
+                            <h3 className="font-semibold text-xs md:text-sm">{calc.title}</h3>
                           </div>
-                          <p className="text-xs text-muted-foreground leading-relaxed">
+                          <p className="text-[10px] md:text-xs text-muted-foreground leading-relaxed">
                             {calc.description}
                           </p>
                         </CardContent>
