@@ -387,10 +387,6 @@ export default function GasVolumePage() {
                     <CheckCircle2 className="w-5 h-5 text-green-400" />
                     <h3 className="font-semibold text-base">Conversion Result</h3>
                   </div>
-                  <Button size="sm" variant="outline" onClick={handleExport} data-testid="button-export-results">
-                    <Download className="w-3.5 h-3.5 mr-1.5" />
-                    Export JSON
-                  </Button>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-4">
                   <div className="bg-primary/10 p-4 rounded-md text-center" data-testid="result-primary">

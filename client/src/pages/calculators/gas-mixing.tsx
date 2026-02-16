@@ -368,9 +368,6 @@ export default function GasMixingPage() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                       <h4 className="font-semibold text-sm">Mixture Molecular Weight</h4>
-                      <Button size="sm" variant="outline" onClick={handleExport} data-testid="button-export">
-                        <Download className="w-3.5 h-3.5 mr-1" /> Export JSON
-                      </Button>
                     </div>
                     <p className="text-3xl font-mono font-bold text-primary" data-testid="text-mw-mix">
                       {result.mixtureMW.toFixed(4)} <span className="text-base text-muted-foreground font-normal">{project.mwUnits}</span>

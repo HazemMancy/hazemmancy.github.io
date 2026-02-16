@@ -439,9 +439,6 @@ export default function RestrictionOrificePage() {
                             {result.isChoked ? "CHOKED" : "SUBCRITICAL"}
                           </Badge>
                         )}
-                        <Button size="sm" variant="outline" onClick={handleExport} data-testid="button-export">
-                          <Download className="w-3.5 h-3.5 mr-1" /> JSON
-                        </Button>
                       </div>
                     </div>
 
