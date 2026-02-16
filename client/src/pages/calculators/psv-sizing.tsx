@@ -19,6 +19,7 @@ import { COMMON_GASES, COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Shield, FlaskConical, RotateCcw, AlertTriangle } from "lucide-react";
 
 type FluidMode = "gas" | "liquid";
@@ -299,6 +300,8 @@ export default function PSVSizingPage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="PSV Sizing" />
     </div>
   );
 }

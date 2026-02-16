@@ -21,6 +21,7 @@ import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { MIXED_PHASE_SERVICE_LIMITS, type MixedPhaseServiceLimit } from "@/lib/engineering/constants";
 import { checkMixedPhaseLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Gauge, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -374,6 +375,8 @@ export default function MultiphaseLinePage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="Multiphase Line Screening" />
     </div>
   );
 }

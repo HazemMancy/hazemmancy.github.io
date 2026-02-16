@@ -28,6 +28,7 @@ import { COMMON_LIQUIDS, FITTING_K_VALUES } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Droplets, FlaskConical, RotateCcw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PumpCurveChart } from "@/components/engineering/pump-curve-chart";
@@ -1063,6 +1064,8 @@ export default function PumpSizingPage() {
           />
         )}
       </div>
+
+      <FeedbackSection calculatorName="Pump Sizing" />
     </div>
   );
 }

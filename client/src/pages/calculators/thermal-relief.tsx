@@ -15,6 +15,7 @@ import {
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Flame, FlaskConical, RotateCcw, AlertTriangle } from "lucide-react";
 
 interface FormState {
@@ -240,6 +241,8 @@ export default function ThermalReliefPage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="Thermal Relief" />
     </div>
   );
 }

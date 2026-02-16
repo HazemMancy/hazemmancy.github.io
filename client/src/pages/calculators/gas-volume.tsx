@@ -21,6 +21,7 @@ import {
   type GasVolumeResult,
 } from "@/lib/engineering/gasVolume";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { ArrowLeftRight, FlaskConical, RotateCcw, ArrowDown, CheckCircle2, Download } from "lucide-react";
 
 const FLOW_UNIT_KEYS = Object.keys(FLOW_UNITS) as FlowUnitType[];
@@ -488,6 +489,8 @@ export default function GasVolumePage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="Gas Volume Conversion" />
     </div>
   );
 }

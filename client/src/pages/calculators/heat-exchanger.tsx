@@ -15,6 +15,7 @@ import {
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Thermometer, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -230,6 +231,8 @@ export default function HeatExchangerPage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="Heat Exchanger" />
     </div>
   );
 }

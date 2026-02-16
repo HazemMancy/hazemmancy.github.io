@@ -19,6 +19,7 @@ import {
   type GasMixingResult,
 } from "@/lib/engineering/gasMixing";
 import { COMMON_GASES } from "@/lib/engineering/constants";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Blend, Plus, Trash2, FlaskConical, RotateCcw } from "lucide-react";
 
 interface ComponentRow {
@@ -309,6 +310,8 @@ export default function GasMixingPage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="Gas Mixing" />
     </div>
   );
 }

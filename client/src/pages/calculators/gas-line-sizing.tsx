@@ -26,6 +26,7 @@ import { checkGasLimits, type LimitWarning } from "@/lib/engineering/limitCheck"
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Wind, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -448,6 +449,8 @@ export default function GasLineSizingPage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="Gas Line Sizing" />
     </div>
   );
 }

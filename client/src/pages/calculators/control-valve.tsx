@@ -19,6 +19,7 @@ import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Gauge, FlaskConical, RotateCcw } from "lucide-react";
 
 type FluidMode = "liquid" | "gas";
@@ -307,6 +308,8 @@ export default function ControlValvePage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="Control Valve Sizing" />
     </div>
   );
 }

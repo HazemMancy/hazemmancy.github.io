@@ -71,3 +71,6 @@ client/src/
 - Navbar dropdown categorizes 13 calculators by discipline: Hydraulics, Fluid Properties, Equipment, Relief
 - Relief calculators (PSV, Thermal) labeled as "SCREENING TOOL — NOT FOR FINAL DESIGN"
 - All engine modules include comprehensive equation references (API, ISO, IEC, TEMA standards)
+- Feedback section on every calculator page (mailto: to mancy.hazem@gmail.com) - no external email API needed
+- FeedbackSection component at `client/src/components/engineering/feedback-section.tsx`
+- Gas volume conversion: standard units (Nm3/h, Sm3/h, SCFM, MMSCFD) have disabled P/T/Z fields (fixed reference conditions)

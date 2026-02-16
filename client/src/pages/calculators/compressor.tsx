@@ -20,6 +20,7 @@ import {
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Cog, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -465,6 +466,8 @@ export default function CompressorPage() {
           />
         </div>
       </div>
+
+      <FeedbackSection calculatorName="Compressor Sizing" />
     </div>
   );
 }

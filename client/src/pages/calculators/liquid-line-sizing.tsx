@@ -20,6 +20,7 @@ import { checkLiquidLimits, type LimitWarning } from "@/lib/engineering/limitChe
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { Droplets, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -355,6 +356,8 @@ export default function LiquidLineSizingPage() {
           ]}
         />
       </div>
+
+      <FeedbackSection calculatorName="Liquid Line Sizing" />
     </div>
   );
 }
