@@ -1,83 +1,163 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { UnitSelector } from "@/components/engineering/unit-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
-import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import {
   calculateGasVolume,
+  FLOW_UNITS,
   GAS_VOLUME_TEST_CASE,
+  type FlowUnitType,
   type GasVolumeResult,
 } from "@/lib/engineering/gasVolume";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
-import { getUnit, convertToSI } from "@/lib/engineering/unitConversion";
-import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
-import { ArrowLeftRight, FlaskConical, RotateCcw } from "lucide-react";
+import { ArrowLeftRight, FlaskConical, RotateCcw, ArrowDown, CheckCircle2, Download } from "lucide-react";
 
-interface FormState {
-  flowRate: string;
-  pressureStd: string;
-  temperatureStd: string;
-  pressureActual: string;
-  temperatureActual: string;
-  zFactorStd: string;
-  zFactorActual: string;
+const FLOW_UNIT_KEYS = Object.keys(FLOW_UNITS) as FlowUnitType[];
+
+function barToDisplay(bar: number, system: UnitSystem): number {
+  return system === "Field" ? bar / 0.0689476 : bar;
+}
+function displayToBar(val: number, system: UnitSystem): number {
+  return system === "Field" ? val * 0.0689476 : val;
+}
+function cToDisplay(c: number, system: UnitSystem): number {
+  return system === "Field" ? c * 9 / 5 + 32 : c;
+}
+function displayToC(val: number, system: UnitSystem): number {
+  return system === "Field" ? (val - 32) * 5 / 9 : val;
+}
+function pUnit(system: UnitSystem): string {
+  return system === "Field" ? "psia" : "bar(a)";
+}
+function tUnit(system: UnitSystem): string {
+  return system === "Field" ? "\u00B0F" : "\u00B0C";
 }
 
-const defaultForm: FormState = {
-  flowRate: "",
-  pressureStd: "1.01325",
-  temperatureStd: "15",
-  pressureActual: "",
-  temperatureActual: "",
-  zFactorStd: "1.0",
-  zFactorActual: "0.9",
-};
+function getDefaultPT(unit: FlowUnitType, system: UnitSystem): { p: string; t: string } {
+  const def = FLOW_UNITS[unit];
+  const p_bar = def.refP_kPa / 100;
+  const t_c = def.refT_K - 273.15;
+  return {
+    p: barToDisplay(p_bar, system).toFixed(system === "Field" ? 3 : 5),
+    t: cToDisplay(t_c, system).toFixed(2),
+  };
+}
 
-const fieldUnitMap: FieldUnitMap = {
-  flowRate: null,
-  pressureStd: "pressure",
-  temperatureStd: "temperature",
-  pressureActual: "pressure",
-  temperatureActual: "temperature",
-  zFactorStd: null,
-  zFactorActual: null,
-};
+interface SideForm {
+  unit: FlowUnitType;
+  pressure: string;
+  temperature: string;
+  zFactor: string;
+}
+
+function fmtResult(n: number): string {
+  if (Math.abs(n) >= 1e6 || (Math.abs(n) < 0.001 && n !== 0)) {
+    return n.toExponential(4);
+  }
+  if (Math.abs(n) >= 1000) return n.toFixed(2);
+  if (Math.abs(n) >= 1) return n.toFixed(4);
+  return n.toFixed(6);
+}
 
 export default function GasVolumePage() {
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
-  const [form, setForm] = useState<FormState>(defaultForm);
+  const [volume, setVolume] = useState("");
+  const [from, setFrom] = useState<SideForm>({
+    unit: "MMSCFD",
+    pressure: "1.01325",
+    temperature: "15.56",
+    zFactor: "1.0",
+  });
+  const [to, setTo] = useState<SideForm>({
+    unit: "Sm3/h",
+    pressure: "1.01325",
+    temperature: "15.00",
+    zFactor: "1.0",
+  });
   const [result, setResult] = useState<GasVolumeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const updateField = (field: keyof FormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  const handleUnitToggle = useCallback((newSystem: UnitSystem) => {
+    setFrom(prev => {
+      const p_bar = displayToBar(parseFloat(prev.pressure) || 0, unitSystem);
+      const t_c = displayToC(parseFloat(prev.temperature) || 0, unitSystem);
+      return {
+        ...prev,
+        pressure: barToDisplay(p_bar, newSystem).toFixed(newSystem === "Field" ? 3 : 5),
+        temperature: cToDisplay(t_c, newSystem).toFixed(2),
+      };
+    });
+    setTo(prev => {
+      const p_bar = displayToBar(parseFloat(prev.pressure) || 0, unitSystem);
+      const t_c = displayToC(parseFloat(prev.temperature) || 0, unitSystem);
+      return {
+        ...prev,
+        pressure: barToDisplay(p_bar, newSystem).toFixed(newSystem === "Field" ? 3 : 5),
+        temperature: cToDisplay(t_c, newSystem).toFixed(2),
+      };
+    });
+    setUnitSystem(newSystem);
+  }, [unitSystem]);
+
+  const handleFromUnitChange = (unit: FlowUnitType) => {
+    const def = FLOW_UNITS[unit];
+    if (def.isActual) {
+      setFrom(prev => ({ ...prev, unit }));
+    } else {
+      const defaults = getDefaultPT(unit, unitSystem);
+      setFrom({ unit, pressure: defaults.p, temperature: defaults.t, zFactor: "1.0" });
+    }
   };
 
-  const handleUnitToggle = (newSystem: UnitSystem) => {
-    const converted = convertFormValues(form, fieldUnitMap, unitSystem, newSystem);
-    setForm(converted);
-    setUnitSystem(newSystem);
+  const handleToUnitChange = (unit: FlowUnitType) => {
+    const def = FLOW_UNITS[unit];
+    if (def.isActual) {
+      setTo(prev => ({ ...prev, unit }));
+    } else {
+      const defaults = getDefaultPT(unit, unitSystem);
+      setTo({ unit, pressure: defaults.p, temperature: defaults.t, zFactor: "1.0" });
+    }
   };
 
   const handleCalculate = () => {
     setError(null);
     try {
-      const input = {
-        flowRate: parseFloat(form.flowRate),
-        pressureStd: convertToSI("pressure", parseFloat(form.pressureStd), unitSystem),
-        temperatureStd: convertToSI("temperature", parseFloat(form.temperatureStd), unitSystem),
-        pressureActual: convertToSI("pressure", parseFloat(form.pressureActual), unitSystem),
-        temperatureActual: convertToSI("temperature", parseFloat(form.temperatureActual), unitSystem),
-        zFactorStd: parseFloat(form.zFactorStd),
-        zFactorActual: parseFloat(form.zFactorActual),
-      };
-      for (const [key, val] of Object.entries(input)) {
-        if (isNaN(val)) throw new Error(`Invalid value for ${key}`);
+      const v = parseFloat(volume);
+      const fromP_bar = displayToBar(parseFloat(from.pressure), unitSystem);
+      const fromT_c = displayToC(parseFloat(from.temperature), unitSystem);
+      const fromZ = parseFloat(from.zFactor);
+      const toP_bar = displayToBar(parseFloat(to.pressure), unitSystem);
+      const toT_c = displayToC(parseFloat(to.temperature), unitSystem);
+      const toZ = parseFloat(to.zFactor);
+
+      if (isNaN(v) || isNaN(fromP_bar) || isNaN(fromT_c) || isNaN(fromZ) ||
+          isNaN(toP_bar) || isNaN(toT_c) || isNaN(toZ)) {
+        throw new Error("Please fill in all fields with valid numbers");
       }
+
+      const input = {
+        volume: v,
+        fromUnit: from.unit,
+        fromP_kPa: fromP_bar * 100,
+        fromT_K: fromT_c + 273.15,
+        fromZ,
+        toUnit: to.unit,
+        toP_kPa: toP_bar * 100,
+        toT_K: toT_c + 273.15,
+        toZ,
+      };
+
       const res = calculateGasVolume(input);
       setResult(res);
     } catch (err: unknown) {
@@ -89,23 +169,144 @@ export default function GasVolumePage() {
   const loadTestCase = () => {
     const tc = GAS_VOLUME_TEST_CASE;
     setUnitSystem("SI");
-    setForm({
-      flowRate: String(tc.flowRate),
-      pressureStd: String(tc.pressureStd),
-      temperatureStd: String(tc.temperatureStd),
-      pressureActual: String(tc.pressureActual),
-      temperatureActual: String(tc.temperatureActual),
-      zFactorStd: String(tc.zFactorStd),
-      zFactorActual: String(tc.zFactorActual),
+    setVolume(String(tc.volume));
+    setFrom({
+      unit: tc.fromUnit,
+      pressure: String(tc.fromP_bar),
+      temperature: String(tc.fromT_C),
+      zFactor: String(tc.fromZ),
+    });
+    setTo({
+      unit: tc.toUnit,
+      pressure: String(tc.toP_bar),
+      temperature: String(tc.toT_C),
+      zFactor: String(tc.toZ),
     });
     setResult(null);
     setError(null);
   };
 
   const handleReset = () => {
-    setForm(defaultForm);
+    setVolume("");
+    setFrom({ unit: "MMSCFD", pressure: "1.01325", temperature: "15.56", zFactor: "1.0" });
+    setTo({ unit: "Sm3/h", pressure: "1.01325", temperature: "15.00", zFactor: "1.0" });
     setResult(null);
     setError(null);
+    setUnitSystem("SI");
+  };
+
+  const handleExport = () => {
+    if (!result) return;
+    const exportData = {
+      title: "Gas Volume Conversion",
+      timestamp: new Date().toISOString(),
+      input: { volume, fromUnit: from.unit, fromP: from.pressure, fromT: from.temperature, fromZ: from.zFactor, toUnit: to.unit, toP: to.pressure, toT: to.temperature, toZ: to.zFactor },
+      result: { outputVolume: result.outputVolume, outputUnit: result.outputUnit },
+      allUnits: result.allUnits,
+      steps: result.steps,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "gas_volume_conversion_results.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const renderSide = (
+    label: string,
+    side: SideForm,
+    setSide: (s: SideForm) => void,
+    onUnitChange: (u: FlowUnitType) => void,
+    testIdPrefix: string,
+    showVolume: boolean
+  ) => {
+    const isActual = FLOW_UNITS[side.unit].isActual;
+    return (
+    <div className="space-y-3">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+
+      {showVolume && (
+        <div>
+          <Label className="text-xs mb-1.5 block">Gas Volume (V1)</Label>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              value={volume}
+              onChange={(e) => setVolume(e.target.value)}
+              placeholder="e.g. 1"
+              className="flex-1"
+              data-testid="input-volume"
+            />
+            <Select value={side.unit} onValueChange={onUnitChange}>
+              <SelectTrigger className="w-[160px]" data-testid={`${testIdPrefix}-select-unit`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FLOW_UNIT_KEYS.map(u => (
+                  <SelectItem key={u} value={u} data-testid={`${testIdPrefix}-unit-${u}`}>{u}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">{FLOW_UNITS[side.unit].label}</p>
+        </div>
+      )}
+
+      {!showVolume && (
+        <div>
+          <Label className="text-xs mb-1.5 block">Output Unit</Label>
+          <Select value={side.unit} onValueChange={onUnitChange}>
+            <SelectTrigger data-testid={`${testIdPrefix}-select-unit`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FLOW_UNIT_KEYS.map(u => (
+                <SelectItem key={u} value={u} data-testid={`${testIdPrefix}-unit-${u}`}>{u}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">{FLOW_UNITS[side.unit].label}</p>
+        </div>
+      )}
+
+      {isActual && (
+        <p className="text-xs text-primary/80">Enter actual operating conditions below</p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <Label className="text-xs mb-1.5 block">Pressure ({pUnit(unitSystem)})</Label>
+          <Input
+            type="number"
+            value={side.pressure}
+            onChange={(e) => setSide({ ...side, pressure: e.target.value })}
+            placeholder={isActual ? "Actual P" : undefined}
+            data-testid={`${testIdPrefix}-input-pressure`}
+          />
+        </div>
+        <div>
+          <Label className="text-xs mb-1.5 block">Temperature ({tUnit(unitSystem)})</Label>
+          <Input
+            type="number"
+            value={side.temperature}
+            onChange={(e) => setSide({ ...side, temperature: e.target.value })}
+            placeholder={isActual ? "Actual T" : undefined}
+            data-testid={`${testIdPrefix}-input-temperature`}
+          />
+        </div>
+        <div>
+          <Label className="text-xs mb-1.5 block">Z-factor</Label>
+          <Input
+            type="number"
+            value={side.zFactor}
+            onChange={(e) => setSide({ ...side, zFactor: e.target.value })}
+            data-testid={`${testIdPrefix}-input-z`}
+          />
+        </div>
+      </div>
+    </div>
+    );
   };
 
   return (
@@ -120,7 +321,7 @@ export default function GasVolumePage() {
               Gas Volume Conversion
             </h1>
             <p className="text-sm text-muted-foreground">
-              Standard to actual volume with Z-factor correction
+              Convert between Nm\u00B3/h, Sm\u00B3/h, SCFM, MMSCFD, ACFM & actual volumes
             </p>
           </div>
         </div>
@@ -132,7 +333,7 @@ export default function GasVolumePage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold text-sm">Input Parameters</h3>
+                <h3 className="font-semibold text-sm">Convert Gas Volume</h3>
                 <div className="flex gap-1">
                   <Button size="sm" variant="outline" onClick={loadTestCase} data-testid="button-load-test">
                     <FlaskConical className="w-3.5 h-3.5 mr-1" />
@@ -145,98 +346,13 @@ export default function GasVolumePage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
-              <div>
-                <Label className="text-xs mb-1.5 block">
-                  Standard Flow Rate (Sm3/h)
-                </Label>
-                <Input
-                  type="number"
-                  value={form.flowRate}
-                  onChange={(e) => updateField("flowRate", e.target.value)}
-                  placeholder="e.g. 10000"
-                  data-testid="input-flow-rate"
-                />
+              {renderSide("From", from, setFrom, handleFromUnitChange, "from", true)}
+
+              <div className="flex items-center justify-center py-1">
+                <ArrowDown className="w-5 h-5 text-muted-foreground" />
               </div>
 
-              <div className="pt-2 border-t">
-                <p className="text-xs font-medium text-muted-foreground mb-3">
-                  Standard Conditions
-                </p>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <Label className="text-xs mb-1.5 block">
-                      Pressure ({getUnit("pressure", unitSystem)})
-                    </Label>
-                    <Input
-                      type="number"
-                      value={form.pressureStd}
-                      onChange={(e) => updateField("pressureStd", e.target.value)}
-                      data-testid="input-pressure-std"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">
-                      Temperature ({getUnit("temperature", unitSystem)})
-                    </Label>
-                    <Input
-                      type="number"
-                      value={form.temperatureStd}
-                      onChange={(e) => updateField("temperatureStd", e.target.value)}
-                      data-testid="input-temp-std"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Z-factor</Label>
-                    <Input
-                      type="number"
-                      value={form.zFactorStd}
-                      onChange={(e) => updateField("zFactorStd", e.target.value)}
-                      data-testid="input-z-std"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t">
-                <p className="text-xs font-medium text-muted-foreground mb-3">
-                  Actual Conditions
-                </p>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <Label className="text-xs mb-1.5 block">
-                      Pressure ({getUnit("pressure", unitSystem)})
-                    </Label>
-                    <Input
-                      type="number"
-                      value={form.pressureActual}
-                      onChange={(e) => updateField("pressureActual", e.target.value)}
-                      placeholder="e.g. 50"
-                      data-testid="input-pressure-act"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">
-                      Temperature ({getUnit("temperature", unitSystem)})
-                    </Label>
-                    <Input
-                      type="number"
-                      value={form.temperatureActual}
-                      onChange={(e) => updateField("temperatureActual", e.target.value)}
-                      placeholder="e.g. 80"
-                      data-testid="input-temp-act"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Z-factor</Label>
-                    <Input
-                      type="number"
-                      value={form.zFactorActual}
-                      onChange={(e) => updateField("zFactorActual", e.target.value)}
-                      data-testid="input-z-act"
-                    />
-                  </div>
-                </div>
-              </div>
+              {renderSide("To", to, setTo, handleToUnitChange, "to", false)}
 
               {error && (
                 <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">
@@ -255,29 +371,82 @@ export default function GasVolumePage() {
           {result && (
             <>
               <WarningPanel warnings={result.warnings} />
-              <ResultsPanel
-                title="Volume Conversion Results"
-                results={[
-                  {
-                    label: "Standard Flow Rate",
-                    value: result.standardFlowRate,
-                    unit: "Sm3/h",
-                    highlight: true,
-                  },
-                  {
-                    label: "Actual Flow Rate",
-                    value: result.actualFlowRate,
-                    unit: "Am3/h",
-                    highlight: true,
-                  },
-                  {
-                    label: "Conversion Factor (Std/Act)",
-                    value: result.conversionFactor,
-                    unit: "—",
-                  },
-                ]}
-                rawData={result}
-              />
+
+              <Card data-testid="results-panel">
+                <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-400" />
+                    <h3 className="font-semibold text-base">Conversion Result</h3>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={handleExport} data-testid="button-export-results">
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                    Export JSON
+                  </Button>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-4">
+                  <div className="bg-primary/10 p-4 rounded-md text-center" data-testid="result-primary">
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {result.inputVolume} {result.inputUnit} =
+                    </p>
+                    <p className="text-2xl font-bold font-mono tabular-nums" data-testid="text-result-value">
+                      {fmtResult(result.outputVolume)}
+                    </p>
+                    <p className="text-sm text-muted-foreground" data-testid="text-result-unit">{result.outputUnit}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
+                      Equivalent Values
+                    </p>
+                    <div className="grid gap-1">
+                      {result.allUnits.map((item, i) => (
+                        <div
+                          key={item.unit}
+                          className={`flex items-center justify-between py-1.5 px-3 rounded-md text-sm ${
+                            item.unit === result.outputUnit
+                              ? "bg-primary/10 font-medium"
+                              : i % 2 === 0 ? "bg-muted/50" : ""
+                          }`}
+                          data-testid={`result-equiv-${item.unit}`}
+                        >
+                          <span className="text-muted-foreground">{item.unit}</span>
+                          <span className="font-mono tabular-nums">{fmtResult(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="solution-panel">
+                <CardHeader className="pb-3">
+                  <h3 className="font-semibold text-sm">Solution Steps</h3>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid gap-1">
+                    {result.steps.map((step, i) => (
+                      <div
+                        key={i}
+                        className={`py-1.5 px-3 rounded-md text-sm ${
+                          step.label === "Gas Law" || step.label === "Result"
+                            ? "bg-primary/10 font-medium"
+                            : i % 2 === 0 ? "bg-muted/50" : ""
+                        }`}
+                        data-testid={`step-${i}`}
+                      >
+                        {step.label === "Gas Law" || step.label === "Result" ? (
+                          <span>{step.value}</span>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-muted-foreground shrink-0">{step.label}</span>
+                            <span className="font-mono tabular-nums text-right break-all">{step.value}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </>
           )}
           {!result && (
@@ -285,7 +454,7 @@ export default function GasVolumePage() {
               <CardContent className="py-12 text-center">
                 <ArrowLeftRight className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  Enter standard and actual conditions to convert
+                  Select units, enter conditions, and convert
                 </p>
               </CardContent>
             </Card>
@@ -297,13 +466,16 @@ export default function GasVolumePage() {
         <AssumptionsPanel
           assumptions={[
             "Real gas law: PV = ZnRT",
-            "Conversion: Qact = Qstd × (Pstd/Pact) × (Tact/Tstd) × (Zact/Zstd)",
+            "Conversion: V2 = V1 \u00D7 (P1/P2) \u00D7 (T2/T1) \u00D7 (Z2/Z1)",
+            "Normal conditions (Nm\u00B3): 0\u00B0C, 1 atm (101.325 kPa)",
+            "Standard conditions (Sm\u00B3): 15\u00B0C, 1 atm (101.325 kPa) per ISO 13443",
+            "US Standard (SCFM/MMSCFD): 60\u00B0F (15.56\u00B0C), 14.696 psia",
             "Z-factor must be obtained from equation of state or charts",
-            "Standard conditions default: 15°C, 1.01325 bar (ISO 13443)",
           ]}
           references={[
-            "ISO 13443: Natural Gas — Standard Reference Conditions",
+            "ISO 13443: Natural Gas \u2014 Standard Reference Conditions",
             "AGA Report No. 8: Compressibility Factors of Natural Gas",
+            "GPSA Engineering Data Book, 14th Edition",
             "Perry's Chemical Engineers' Handbook, 9th Edition",
           ]}
         />
