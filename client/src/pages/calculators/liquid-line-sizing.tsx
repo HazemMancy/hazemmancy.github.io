@@ -150,8 +150,8 @@ export default function LiquidLineSizingPage() {
         <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3 space-y-4">
+      <div className="grid gap-6 lg:grid-cols-5 items-start">
+        <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-4">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
