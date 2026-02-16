@@ -31,7 +31,7 @@ client/src/
     gasVolume.ts     - Standard/actual volume conversion
     pumpSizing.ts    - Centrifugal pump sizing (TDH, power, NPSH)
     restrictionOrifice.ts - Restriction orifice sizing (ISO 5167, liquid & gas)
-    controlValve.ts  - Control valve Cv sizing (IEC 60534, liquid & gas)
+    controlValve.ts  - Control valve Cv sizing (IEC 60534/ISA S75, 7-tab wizard engine: multi-point min/normal/max, liquid/gas/steam, valve selection, cavitation/flashing/noise risk)
     separatorSizing.ts - Separator/KO drum sizing (Souders-Brown)
     heatExchanger.ts - Heat exchanger area (LMTD/Kern)
     prdSizing.ts     - PRD/Flare relief device sizing (API 521/520/526, 9-tab wizard engine)
@@ -80,3 +80,10 @@ client/src/
   - Supports API 521 scenario screening (blocked outlet, fire, CW failure, tube rupture, thermal expansion, etc.)
   - Device type recommendation based on backpressure and service conditions
   - Replaced simpler PSV sizing calculator (route path preserved at /calculators/psv-sizing)
+- Control Valve Calculator: 7-tab wizard (Project → Service Data → Valve Type → Sizing → Selection → Risk → Results)
+  - Engine module: controlValve.ts with multi-point Cv sizing (min/normal/max), liquid/gas/steam modes
+  - Valve selection: opening %, rangeability check, valve authority assessment
+  - Risk assessment: cavitation index (σ vs FL²), flashing, choked gas, high noise screening
+  - Viscosity correction for high-viscosity liquids (Re-based FR factor)
+  - Test cases: Cooling Water (liquid) and Natural Gas (gas)
+  - Legacy calculateCVLiquid/calculateCVGas functions preserved for backward compatibility
