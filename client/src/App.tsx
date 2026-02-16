@@ -19,6 +19,7 @@ import SeparatorPage from "@/pages/calculators/separator";
 import HeatExchangerPage from "@/pages/calculators/heat-exchanger";
 import PSVSizingPage from "@/pages/calculators/psv-sizing";
 import ThermalReliefPage from "@/pages/calculators/thermal-relief";
+import CompressorPage from "@/pages/calculators/compressor";
 import CalculatorsIndexPage from "@/pages/calculators/index";
 import NotFound from "@/pages/not-found";
 
@@ -39,6 +40,7 @@ function Router() {
       <Route path="/calculators/heat-exchanger" component={HeatExchangerPage} />
       <Route path="/calculators/psv-sizing" component={PSVSizingPage} />
       <Route path="/calculators/thermal-relief" component={ThermalReliefPage} />
+      <Route path="/calculators/compressor" component={CompressorPage} />
       <Route component={NotFound} />
     </Switch>
   );

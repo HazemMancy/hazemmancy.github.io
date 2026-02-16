@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Wind, Droplets, Gauge, Blend, ArrowLeftRight, ArrowRight, Calculator,
-  Waves, CircleDot, Container, Thermometer, Shield, Flame,
+  Waves, CircleDot, Container, Thermometer, Shield, Flame, Cog,
 } from "lucide-react";
 
 interface CalculatorEntry {
@@ -126,6 +126,16 @@ const calculators: CalculatorEntry[] = [
     categoryColor: "text-amber-400",
     tags: ["LMTD", "F-Factor", "Fouling"],
     standards: ["TEMA", "Kern Method"],
+  },
+  {
+    title: "Compressor Sizing",
+    description: "Centrifugal and reciprocating compressor sizing with polytropic/isentropic models. Calculates head, power, staging, and discharge temperature with auto-staging based on temperature limits.",
+    href: "/calculators/compressor",
+    icon: Cog,
+    category: "Equipment",
+    categoryColor: "text-amber-400",
+    tags: ["Polytropic/Isentropic", "Multi-Stage", "Intercooling"],
+    standards: ["API 617", "API 618", "GPSA"],
   },
   {
     title: "PSV Sizing",

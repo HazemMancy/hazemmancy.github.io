@@ -28,6 +28,7 @@ const calculatorItems = [
   { label: "Control Valve Cv", href: "/calculators/control-valve", group: "Equipment" },
   { label: "Separator / KO Drum", href: "/calculators/separator", group: "Equipment" },
   { label: "Heat Exchanger", href: "/calculators/heat-exchanger", group: "Equipment" },
+  { label: "Compressor Sizing", href: "/calculators/compressor", group: "Equipment" },
   { label: "PSV Sizing", href: "/calculators/psv-sizing", group: "Relief" },
   { label: "Thermal Relief", href: "/calculators/thermal-relief", group: "Relief" },
 ];

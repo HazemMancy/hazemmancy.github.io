@@ -36,9 +36,10 @@ client/src/
     heatExchanger.ts - Heat exchanger area (LMTD/Kern)
     psvSizing.ts     - PSV sizing screening (API 520/526)
     thermalRelief.ts - Thermal expansion relief screening (API 521)
+    compressorSizing.ts - Compressor sizing (polytropic/isentropic, multi-stage, API 617/618)
   pages/
     home.tsx         - Single-page portfolio (Hero, About, Experience, Projects, Skills, Contact)
-    calculators/     - 12 calculator pages
+    calculators/     - 13 calculator pages
       gas-line-sizing.tsx
       liquid-line-sizing.tsx
       multiphase-line.tsx
@@ -51,6 +52,7 @@ client/src/
       heat-exchanger.tsx
       psv-sizing.tsx
       thermal-relief.tsx
+      compressor.tsx
 ```
 
 ## Running
@@ -66,6 +68,6 @@ client/src/
 - NPS pipe size selector with auto-fill of OD/WT/ID dimensions, manual override supported
 - Single-page scrolling portfolio with section anchors (#home, #about, etc.)
 - Calculator pages on separate routes (/calculators/*)
-- Navbar dropdown categorizes 12 calculators by discipline: Hydraulics, Fluid Properties, Equipment, Relief
+- Navbar dropdown categorizes 13 calculators by discipline: Hydraulics, Fluid Properties, Equipment, Relief
 - Relief calculators (PSV, Thermal) labeled as "SCREENING TOOL — NOT FOR FINAL DESIGN"
 - All engine modules include comprehensive equation references (API, ISO, IEC, TEMA standards)

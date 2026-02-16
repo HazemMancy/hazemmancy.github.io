@@ -1,0 +1,470 @@
+import { useState } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnitSelector } from "@/components/engineering/unit-selector";
+import { WarningPanel } from "@/components/engineering/warning-panel";
+import { ResultsPanel } from "@/components/engineering/results-panel";
+import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
+import {
+  calculateCompressorSizing,
+  COMPRESSOR_CENTRIFUGAL_TEST_CASE,
+  COMPRESSOR_RECIPROCATING_TEST_CASE,
+  COMMON_COMPRESSOR_GASES,
+  type CompressorResult,
+  type CompressorType,
+  type CompressionModel,
+} from "@/lib/engineering/compressorSizing";
+import type { UnitSystem } from "@/lib/engineering/unitConversion";
+import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
+import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { Cog, FlaskConical, RotateCcw } from "lucide-react";
+
+interface FormState {
+  gasFlowRate: string;
+  molecularWeight: string;
+  suctionPressure: string;
+  dischargePressure: string;
+  suctionTemperature: string;
+  specificHeatRatio: string;
+  compressibilityFactor: string;
+  polytropicEfficiency: string;
+  mechanicalEfficiency: string;
+  motorEfficiency: string;
+  maxDischargeTemperature: string;
+}
+
+const defaultForm: FormState = {
+  gasFlowRate: "",
+  molecularWeight: "",
+  suctionPressure: "",
+  dischargePressure: "",
+  suctionTemperature: "",
+  specificHeatRatio: "",
+  compressibilityFactor: "1.0",
+  polytropicEfficiency: "78",
+  mechanicalEfficiency: "98",
+  motorEfficiency: "96",
+  maxDischargeTemperature: "200",
+};
+
+const fieldUnitMap: FieldUnitMap = {
+  gasFlowRate: "flowGas",
+  molecularWeight: null,
+  suctionPressure: "pressure",
+  dischargePressure: "pressure",
+  suctionTemperature: "temperature",
+  specificHeatRatio: null,
+  compressibilityFactor: null,
+  polytropicEfficiency: null,
+  mechanicalEfficiency: null,
+  motorEfficiency: null,
+  maxDischargeTemperature: "temperature",
+};
+
+export default function CompressorPage() {
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
+  const [compressorType, setCompressorType] = useState<CompressorType>("centrifugal");
+  const [compressionModel, setCompressionModel] = useState<CompressionModel>("polytropic");
+  const [form, setForm] = useState<FormState>(defaultForm);
+  const [result, setResult] = useState<CompressorResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const update = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleUnitToggle = (ns: UnitSystem) => {
+    setForm(convertFormValues(form, fieldUnitMap, unitSystem, ns) as FormState);
+    setUnitSystem(ns);
+  };
+
+  const handleGasSelect = (gasName: string) => {
+    const gas = COMMON_COMPRESSOR_GASES[gasName];
+    if (gas) {
+      setForm(p => ({
+        ...p,
+        molecularWeight: String(gas.mw),
+        specificHeatRatio: String(gas.k),
+        compressibilityFactor: String(gas.z),
+      }));
+    }
+  };
+
+  const handleCalculate = () => {
+    setError(null);
+    try {
+      const input = {
+        gasFlowRate: convertToSI("flowGas", parseFloat(form.gasFlowRate), unitSystem),
+        molecularWeight: parseFloat(form.molecularWeight),
+        suctionPressure: convertToSI("pressure", parseFloat(form.suctionPressure), unitSystem),
+        dischargePressure: convertToSI("pressure", parseFloat(form.dischargePressure), unitSystem),
+        suctionTemperature: convertToSI("temperature", parseFloat(form.suctionTemperature), unitSystem),
+        specificHeatRatio: parseFloat(form.specificHeatRatio),
+        compressibilityFactor: parseFloat(form.compressibilityFactor),
+        polytropicEfficiency: parseFloat(form.polytropicEfficiency),
+        mechanicalEfficiency: parseFloat(form.mechanicalEfficiency),
+        motorEfficiency: parseFloat(form.motorEfficiency),
+        compressorType,
+        compressionModel,
+        maxDischargeTemperature: convertToSI("temperature", parseFloat(form.maxDischargeTemperature), unitSystem),
+      };
+
+      for (const [key, val] of Object.entries(input)) {
+        if (typeof val === "number" && isNaN(val)) throw new Error(`Invalid value for ${key}`);
+      }
+
+      const res = calculateCompressorSizing(input);
+      setResult(res);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Calculation error");
+      setResult(null);
+    }
+  };
+
+  const loadTestCase = () => {
+    setError(null);
+    setResult(null);
+    setUnitSystem("SI");
+    const tc = compressorType === "centrifugal"
+      ? COMPRESSOR_CENTRIFUGAL_TEST_CASE
+      : COMPRESSOR_RECIPROCATING_TEST_CASE;
+    setCompressionModel(tc.compressionModel);
+    setForm({
+      gasFlowRate: String(tc.gasFlowRate),
+      molecularWeight: String(tc.molecularWeight),
+      suctionPressure: String(tc.suctionPressure),
+      dischargePressure: String(tc.dischargePressure),
+      suctionTemperature: String(tc.suctionTemperature),
+      specificHeatRatio: String(tc.specificHeatRatio),
+      compressibilityFactor: String(tc.compressibilityFactor),
+      polytropicEfficiency: String(tc.polytropicEfficiency),
+      mechanicalEfficiency: String(tc.mechanicalEfficiency),
+      motorEfficiency: String(tc.motorEfficiency),
+      maxDischargeTemperature: String(tc.maxDischargeTemperature),
+    });
+  };
+
+  const handleReset = () => {
+    setForm(defaultForm);
+    setResult(null);
+    setError(null);
+  };
+
+  const buildResults = () => {
+    if (!result) return [];
+    const u = unitSystem;
+    return [
+      { label: "Compressor Type", value: result.compressorType === "centrifugal" ? "Centrifugal" : "Reciprocating", unit: "" },
+      { label: "Compression Model", value: result.compressionModel === "isentropic" ? "Isentropic" : "Polytropic", unit: "" },
+      { label: "Overall Compression Ratio", value: result.overallCompressionRatio.toFixed(2), unit: "" },
+      { label: "Number of Stages", value: String(result.numberOfStages), unit: "", highlight: result.numberOfStages > 1 },
+      { label: "Total Isentropic Head", value: result.totalIsentropicHead.toFixed(1), unit: "kJ/kg" },
+      { label: "Total Polytropic Head", value: result.totalPolytropicHead.toFixed(1), unit: "kJ/kg" },
+      { label: "Gas Power", value: convertFromSI("power", result.totalGasPower, u).toFixed(1), unit: getUnit("power", u) },
+      { label: "Shaft Power", value: convertFromSI("power", result.totalShaftPower, u).toFixed(1), unit: getUnit("power", u), highlight: true },
+      { label: "Motor Power", value: convertFromSI("power", result.totalMotorPower, u).toFixed(1), unit: getUnit("power", u), highlight: true },
+      { label: "Discharge Temperature", value: convertFromSI("temperature", result.finalDischargeTemperature, u).toFixed(1), unit: getUnit("temperature", u), highlight: result.finalDischargeTemperature > 150 },
+      { label: "Adiabatic Efficiency", value: result.adiabaticEfficiency.toFixed(1), unit: "%" },
+      { label: "Polytropic Efficiency", value: result.polytropicEfficiency.toFixed(1), unit: "%" },
+      { label: "Mass Flow Rate", value: result.massFlowRate.toFixed(1), unit: "kg/h" },
+      { label: "Std. Volumetric Flow", value: convertFromSI("flowGas", result.volumetricFlowRate, u).toFixed(2), unit: getUnit("flowGas", u) },
+      { label: "Actual Inlet Volume Flow", value: result.actualVolumetricFlowRate.toFixed(1), unit: "m\u00B3/h" },
+    ];
+  };
+
+  const buildStageRows = () => {
+    if (!result || result.stages.length <= 1) return null;
+    const u = unitSystem;
+    return result.stages.map(s => ({
+      stage: s.stageNumber,
+      ratio: s.compressionRatio.toFixed(2),
+      pSuction: convertFromSI("pressure", s.suctionPressure, u).toFixed(2),
+      pDischarge: convertFromSI("pressure", s.dischargePressure, u).toFixed(2),
+      tSuction: convertFromSI("temperature", s.suctionTemperature, u).toFixed(1),
+      tDischarge: convertFromSI("temperature", s.dischargeTemperature, u).toFixed(1),
+      power: convertFromSI("power", s.shaftPower, u).toFixed(1),
+    }));
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
+            <Cog className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold" data-testid="text-calc-title">
+              Compressor Sizing Calculator
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {compressorType === "centrifugal"
+                ? "Centrifugal compressor head, power & staging"
+                : "Reciprocating compressor power & staging"}
+            </p>
+          </div>
+        </div>
+        <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
+      </div>
+
+      <div className="mb-6">
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Compressor Type</Label>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant={compressorType === "centrifugal" ? "default" : "outline"}
+                  onClick={() => { setCompressorType("centrifugal"); setResult(null); setError(null); }}
+                  data-testid="button-type-centrifugal"
+                >
+                  Centrifugal
+                </Button>
+                <Button
+                  size="sm"
+                  variant={compressorType === "reciprocating" ? "default" : "outline"}
+                  onClick={() => { setCompressorType("reciprocating"); setResult(null); setError(null); }}
+                  data-testid="button-type-reciprocating"
+                >
+                  Reciprocating
+                </Button>
+              </div>
+              <div className="border-l pl-3 ml-1 flex items-center gap-2">
+                <Label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Model</Label>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={compressionModel === "polytropic" ? "default" : "outline"}
+                    onClick={() => { setCompressionModel("polytropic"); setResult(null); }}
+                    data-testid="button-model-polytropic"
+                  >
+                    Polytropic
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={compressionModel === "isentropic" ? "default" : "outline"}
+                    onClick={() => { setCompressionModel("isentropic"); setResult(null); }}
+                    data-testid="button-model-isentropic"
+                  >
+                    Isentropic
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-5">
+        <div className="lg:col-span-3 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold text-sm">Gas & Operating Conditions</h3>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="outline" onClick={loadTestCase} data-testid="button-load-test">
+                    <FlaskConical className="w-3.5 h-3.5 mr-1" />Test Case
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-0">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs mb-1.5 block">Gas Selection</Label>
+                  <Select onValueChange={handleGasSelect}>
+                    <SelectTrigger data-testid="select-gas">
+                      <SelectValue placeholder="Select a gas..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(COMMON_COMPRESSOR_GASES).map(g => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Gas Flow Rate ({getUnit("flowGas", unitSystem)})</Label>
+                  <Input type="number" value={form.gasFlowRate} onChange={e => update("gasFlowRate", e.target.value)}
+                    placeholder="e.g. 5000" data-testid="input-flow" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Molecular Weight (kg/kmol)</Label>
+                  <Input type="number" value={form.molecularWeight} onChange={e => update("molecularWeight", e.target.value)}
+                    placeholder="e.g. 18.5" data-testid="input-mw" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Specific Heat Ratio k (Cp/Cv)</Label>
+                  <Input type="number" value={form.specificHeatRatio} onChange={e => update("specificHeatRatio", e.target.value)}
+                    placeholder="e.g. 1.28" data-testid="input-k" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Compressibility Factor Z</Label>
+                  <Input type="number" value={form.compressibilityFactor} onChange={e => update("compressibilityFactor", e.target.value)}
+                    placeholder="e.g. 0.95" data-testid="input-z" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <h3 className="font-semibold text-sm">Pressure & Temperature</h3>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-0">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs mb-1.5 block">Suction Pressure ({getUnit("pressure", unitSystem)})</Label>
+                  <Input type="number" value={form.suctionPressure} onChange={e => update("suctionPressure", e.target.value)}
+                    placeholder="e.g. 30" data-testid="input-p1" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Discharge Pressure ({getUnit("pressure", unitSystem)})</Label>
+                  <Input type="number" value={form.dischargePressure} onChange={e => update("dischargePressure", e.target.value)}
+                    placeholder="e.g. 90" data-testid="input-p2" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Suction Temperature ({getUnit("temperature", unitSystem)})</Label>
+                  <Input type="number" value={form.suctionTemperature} onChange={e => update("suctionTemperature", e.target.value)}
+                    placeholder="e.g. 35" data-testid="input-t1" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Max Discharge Temperature ({getUnit("temperature", unitSystem)})</Label>
+                  <Input type="number" value={form.maxDischargeTemperature} onChange={e => update("maxDischargeTemperature", e.target.value)}
+                    placeholder="e.g. 200" data-testid="input-tmax" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <h3 className="font-semibold text-sm">Efficiencies</h3>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-0">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <Label className="text-xs mb-1.5 block">
+                    {compressionModel === "polytropic" ? "Polytropic" : "Isentropic"} Eff. (%)
+                  </Label>
+                  <Input type="number" value={form.polytropicEfficiency} onChange={e => update("polytropicEfficiency", e.target.value)}
+                    placeholder="e.g. 78" data-testid="input-eta-poly" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Mechanical Eff. (%)</Label>
+                  <Input type="number" value={form.mechanicalEfficiency} onChange={e => update("mechanicalEfficiency", e.target.value)}
+                    placeholder="e.g. 98" data-testid="input-eta-mech" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Motor/Driver Eff. (%)</Label>
+                  <Input type="number" value={form.motorEfficiency} onChange={e => update("motorEfficiency", e.target.value)}
+                    placeholder="e.g. 96" data-testid="input-eta-motor" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Button className="w-full" onClick={handleCalculate} data-testid="button-calculate">
+            Calculate Compressor Sizing
+          </Button>
+
+          {error && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-2 space-y-4">
+          {result && (
+            <>
+              <WarningPanel warnings={result.warnings} />
+              <ResultsPanel
+                title="Compressor Sizing Results"
+                results={buildResults()}
+                rawData={{
+                  calculator: "Compressor Sizing",
+                  unitSystem,
+                  compressorType: result.compressorType,
+                  compressionModel: result.compressionModel,
+                  input: form,
+                  result,
+                }}
+              />
+              {result.numberOfStages > 1 && buildStageRows() && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <h3 className="font-semibold text-sm">Stage-by-Stage Breakdown</h3>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b text-muted-foreground">
+                            <th className="py-2 pr-2 text-left">Stage</th>
+                            <th className="py-2 px-2 text-right">Ratio</th>
+                            <th className="py-2 px-2 text-right">P in ({getUnit("pressure", unitSystem)})</th>
+                            <th className="py-2 px-2 text-right">P out ({getUnit("pressure", unitSystem)})</th>
+                            <th className="py-2 px-2 text-right">T in ({getUnit("temperature", unitSystem)})</th>
+                            <th className="py-2 px-2 text-right">T out ({getUnit("temperature", unitSystem)})</th>
+                            <th className="py-2 pl-2 text-right">Power ({getUnit("power", unitSystem)})</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {buildStageRows()!.map(s => (
+                            <tr key={s.stage} className="border-b border-muted/30">
+                              <td className="py-2 pr-2 font-medium">{s.stage}</td>
+                              <td className="py-2 px-2 text-right">{s.ratio}</td>
+                              <td className="py-2 px-2 text-right">{s.pSuction}</td>
+                              <td className="py-2 px-2 text-right">{s.pDischarge}</td>
+                              <td className="py-2 px-2 text-right">{s.tSuction}</td>
+                              <td className="py-2 px-2 text-right">{s.tDischarge}</td>
+                              <td className="py-2 pl-2 text-right">{s.power}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      Intercooling assumed back to suction temperature between stages
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+
+          <AssumptionsPanel
+            assumptions={[
+              "Ideal gas law with compressibility factor (Z) correction",
+              "Single Z-factor used across all stages (average approximation)",
+              "Perfect intercooling assumed — gas cooled back to suction temperature between stages",
+              "Stage pressure ratios are equal (balanced staging)",
+              "No pressure drop in intercoolers or piping between stages",
+              compressionModel === "polytropic"
+                ? "Polytropic process path: PVⁿ = constant, n derived from k and η_poly"
+                : "Isentropic (adiabatic reversible) compression with efficiency correction",
+              "Mechanical losses accounted via mechanical efficiency factor",
+              "Motor/driver losses accounted via motor efficiency factor",
+              compressorType === "centrifugal"
+                ? "Max ratio per stage ~3.5 for centrifugal compressors"
+                : "Max ratio per stage ~4.0 for reciprocating compressors",
+            ]}
+            references={[
+              "GPSA Engineering Data Book, Section 13 — Compressors",
+              "API 617 — Axial and Centrifugal Compressors",
+              "API 618 — Reciprocating Compressors",
+              "Ludwig's Applied Process Design, Volume 3, Chapter 12",
+              "Perry's Chemical Engineers' Handbook, Section 10",
+            ]}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
