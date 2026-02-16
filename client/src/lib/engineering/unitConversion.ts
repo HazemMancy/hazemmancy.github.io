@@ -58,6 +58,13 @@ export const UNITS: Record<string, UnitDefinition> = {
     toSI: (bpd: number) => bpd * 0.158987 / 24,
     fromSI: (m3h: number) => m3h * 24 / 0.158987,
   },
+  flowActualGas: {
+    label: "Actual Gas Flow",
+    si: "m³/h",
+    field: "ACFM",
+    toSI: (acfm: number) => acfm * 60 * 0.0283168,
+    fromSI: (m3h: number) => m3h / (60 * 0.0283168),
+  },
   flowGas: {
     label: "Gas Flow",
     si: "Sm³/h",

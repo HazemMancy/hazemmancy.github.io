@@ -32,7 +32,7 @@ client/src/
     pumpSizing.ts    - Centrifugal pump sizing (TDH, power, NPSH)
     restrictionOrifice.ts - Restriction orifice sizing (ISO 5167, liquid & gas, 5-tab wizard engine: bisection solver, choked-flow detection, cavitation/flashing checks, β correction, calc traces)
     controlValve.ts  - Control valve Cv sizing (IEC 60534/ISA S75, 7-tab wizard engine: multi-point min/normal/max, liquid/gas/steam, valve selection, cavitation/flashing/noise risk)
-    separatorSizing.ts - Separator/KO drum sizing (Souders-Brown)
+    separatorSizing.ts - Separator/KO drum sizing (Souders-Brown, 7-tab wizard engine: multi-case operating points, horizontal iterative solver, holdup/surge/retention, KO drum & 3-phase preliminary, geometry assembly, engineering flags, calc traces)
     heatExchanger.ts - Heat exchanger area (LMTD/Kern)
     prdSizing.ts     - PRD/Flare relief device sizing (API 521/520/526, 9-tab wizard engine)
     psvSizing.ts     - (Legacy) PSV sizing screening — replaced by prdSizing.ts
@@ -49,7 +49,7 @@ client/src/
       pump-sizing.tsx
       restriction-orifice.tsx  - RO sizing calculator (5-tab wizard: Project → Service → Sizing → Results → Recommendations)
       control-valve.tsx
-      separator.tsx
+      separator.tsx        - Separator/KO drum calculator (7-tab wizard: Project → Cases → Design → Gas Sizing → Holdup → Geometry → Results)
       heat-exchanger.tsx
       psv-sizing.tsx   - Now: PRD/Flare Relief Calculator (9-tab wizard)
       thermal-relief.tsx
@@ -88,6 +88,18 @@ client/src/
   - Engineering flags: CHOKED_FLOW, CAVITATION_RISK, FLASHING_LIKELY, HIGH_DP_FRACTION, BETA_OUT_OF_RANGE, etc.
   - Rule-based recommendations engine + next-steps checklist
   - Legacy calculateROLiquid/calculateROGas interfaces preserved for backward compatibility
+- Separator / KO Drum Calculator: 7-tab wizard (Project → Cases → Design → Gas Sizing → Holdup → Geometry → Results)
+  - Engine module: separatorSizing.ts with multi-case operating points, Souders-Brown core, horizontal iterative solver
+  - Core: v_s,max = K × √((ρ_l − ρ_g) / ρ_g), A_req = Q_g / v_s,max, D_req = √(4 × A_req / π)
+  - Horizontal: iterative gas-area correction for liquid level fraction with segment area calculation
+  - Separator types: Vertical, Horizontal, KO Drum, 3-Phase (preliminary)
+  - Multi-case: Normal/Maximum/Fire/Upset/Startup/Blowdown — governing case by largest D_req
+  - Holdup: residence time, surge time, slug volume, KO drum drain, 3-phase oil/water retention
+  - Geometry: vessel assembly with configurable allowances (inlet, disengagement, mist, sump, nozzle)
+  - Engineering flags: FOAM_RISK, SLUGGING_RISK, SOLIDS_SAND, HYDRATE_WAX, HIGH_LIQUID_LOAD, etc.
+  - K-value guidance: typical ranges for vertical/horizontal/KO drum with mesh/vane/none
+  - Test cases: Flare KO Drum (2-case) and Horizontal Production Separator (2-case)
+  - Legacy calculateSeparatorSizing interface preserved for backward compatibility
 - Control Valve Calculator: 7-tab wizard (Project → Service Data → Valve Type → Sizing → Selection → Risk → Results)
   - Engine module: controlValve.ts with multi-point Cv sizing (min/normal/max), liquid/gas/steam modes
   - Valve selection: opening %, rangeability check, valve authority assessment
