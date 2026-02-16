@@ -19,15 +19,24 @@ interface FeedbackSectionProps {
 
 const FORMSUBMIT_URL = "https://formsubmit.co/ajax/mancy.hazem@gmail.com";
 
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
 export function FeedbackSection({ calculatorName }: FeedbackSectionProps) {
   const [feedbackType, setFeedbackType] = useState("bug");
   const [message, setMessage] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const nameValid = name.trim().length >= 2;
+  const emailValid = EMAIL_REGEX.test(email.trim());
+  const messageValid = message.trim().length > 0;
+  const formValid = nameValid && emailValid && messageValid;
 
   const handleSubmit = async () => {
-    if (!message.trim()) return;
+    setTouched({ name: true, email: true, message: true });
+    if (!formValid) return;
 
     const typeLabel =
       feedbackType === "bug"
@@ -51,8 +60,8 @@ export function FeedbackSection({ calculatorName }: FeedbackSectionProps) {
           _subject: `[${typeLabel}] ${calculatorName} Calculator`,
           calculator: calculatorName,
           feedbackType: typeLabel,
-          name: name.trim() || "Anonymous",
-          email: email.trim() || "Not provided",
+          name: name.trim(),
+          email: email.trim(),
           message: message.trim(),
           _template: "table",
         }),
@@ -66,6 +75,7 @@ export function FeedbackSection({ calculatorName }: FeedbackSectionProps) {
           setName("");
           setEmail("");
           setFeedbackType("bug");
+          setTouched({});
         }, 5000);
       } else {
         setStatus("error");
@@ -136,44 +146,64 @@ export function FeedbackSection({ calculatorName }: FeedbackSectionProps) {
                 </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Your Name (optional)
+                    Your Name <span className="text-red-400">*</span>
                   </Label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onBlur={() => setTouched((p) => ({ ...p, name: true }))}
                     placeholder="Your name"
                     data-testid="feedback-input-name"
                   />
+                  {touched.name && !nameValid && (
+                    <p className="text-xs text-red-400 mt-1" data-testid="feedback-error-name">
+                      Name is required (min 2 characters)
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div>
                 <Label className="text-xs mb-1.5 block">
-                  Your Email (optional)
+                  Your Email <span className="text-red-400">*</span>
                 </Label>
                 <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => setTouched((p) => ({ ...p, email: true }))}
                   placeholder="your@email.com"
                   data-testid="feedback-input-email"
                 />
+                {touched.email && !emailValid && (
+                  <p className="text-xs text-red-400 mt-1" data-testid="feedback-error-email">
+                    Please enter a valid email address
+                  </p>
+                )}
               </div>
 
               <div>
-                <Label className="text-xs mb-1.5 block">Message</Label>
+                <Label className="text-xs mb-1.5 block">
+                  Message <span className="text-red-400">*</span>
+                </Label>
                 <Textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
+                  onBlur={() => setTouched((p) => ({ ...p, message: true }))}
                   placeholder="Describe the issue or your suggestion..."
                   rows={4}
                   data-testid="feedback-input-message"
                 />
+                {touched.message && !messageValid && (
+                  <p className="text-xs text-red-400 mt-1" data-testid="feedback-error-message">
+                    Message is required
+                  </p>
+                )}
               </div>
 
               <Button
                 onClick={handleSubmit}
-                disabled={!message.trim() || status === "sending"}
+                disabled={status === "sending"}
                 className="w-full sm:w-auto"
                 data-testid="feedback-button-submit"
               >
