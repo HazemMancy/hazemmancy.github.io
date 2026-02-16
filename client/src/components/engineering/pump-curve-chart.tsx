@@ -62,7 +62,7 @@ export function PumpCurveChart({
   if (designFlowSI <= 0 || tdhSI <= 0) return null;
 
   const shutoffHeadSI = tdhSI * 1.2;
-  const frictionHeadSI = tdhSI - staticHeadSI;
+  const frictionHeadSI = Math.max(0, tdhSI - staticHeadSI);
   const maxFlowSI = designFlowSI * 1.5;
   const effPeak = pumpEfficiency;
   const points = 60;

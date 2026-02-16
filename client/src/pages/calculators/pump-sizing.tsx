@@ -86,9 +86,9 @@ const fieldUnitMap: FieldUnitMap = {
   dischargeFittingsK: null,
   pumpEfficiency: null,
   motorEfficiency: null,
-  vaporPressure: null,
-  atmosphericPressure: null,
-  suctionVesselPressure: null,
+  vaporPressure: "pressureKpa",
+  atmosphericPressure: "pressureAbs",
+  suctionVesselPressure: "pressure",
 };
 
 interface FittingEntry {
@@ -561,13 +561,13 @@ export default function PumpSizingPage() {
                   },
                   {
                     label: "Suction Velocity Head",
-                    value: result.suctionVelocityHead,
-                    unit: "m",
+                    value: convertFromSI("head", result.suctionVelocityHead, unitSystem),
+                    unit: getUnit("head", unitSystem),
                   },
                   {
                     label: "Discharge Velocity Head",
-                    value: result.dischargeVelocityHead,
-                    unit: "m",
+                    value: convertFromSI("head", result.dischargeVelocityHead, unitSystem),
+                    unit: getUnit("head", unitSystem),
                   },
                 ]}
                 rawData={result}

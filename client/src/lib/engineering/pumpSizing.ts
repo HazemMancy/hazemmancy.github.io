@@ -129,7 +129,7 @@ export function calculatePumpSizing(input: PumpSizingInput): PumpSizingResult {
   const atmosphericHead = (input.atmosphericPressure * 1e5) / (input.liquidDensity * GRAVITY);
   const vaporPressureHead = (input.vaporPressure * 1e3) / (input.liquidDensity * GRAVITY);
 
-  const npshaAvailable = atmosphericHead + suctionPressureHead + input.suctionStaticHead - suction.frictionHead - suctionVelocityHead - vaporPressureHead;
+  const npshaAvailable = atmosphericHead + suctionPressureHead + input.suctionStaticHead - suction.frictionHead - vaporPressureHead;
 
   if (suction.velocity > 2.0) {
     warnings.push("Suction velocity exceeds 2.0 m/s — may cause cavitation issues");
