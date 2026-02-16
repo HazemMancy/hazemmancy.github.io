@@ -14,9 +14,10 @@ import type { UnitSystem } from "@/lib/engineering/unitConversion";
 interface PipeSizeSelectorProps {
   unitSystem: UnitSystem;
   innerDiameter: string;
-  roughness: string;
+  roughness?: string;
   onDiameterChange: (value: string) => void;
-  onRoughnessChange: (value: string) => void;
+  onRoughnessChange?: (value: string) => void;
+  showRoughness?: boolean;
   testIdPrefix?: string;
 }
 
@@ -26,6 +27,7 @@ export function PipeSizeSelector({
   roughness,
   onDiameterChange,
   onRoughnessChange,
+  showRoughness = true,
   testIdPrefix = "",
 }: PipeSizeSelectorProps) {
   const [selectedNPS, setSelectedNPS] = useState<string>("");
@@ -66,7 +68,7 @@ export function PipeSizeSelector({
 
   const handleRoughnessSelect = (material: string) => {
     const r = PIPE_ROUGHNESS[material];
-    if (r !== undefined) {
+    if (r !== undefined && onRoughnessChange) {
       onRoughnessChange(String(r * 1000));
     }
   };
@@ -150,28 +152,32 @@ export function PipeSizeSelector({
             data-testid={`${prefix}input-diameter`}
           />
         </div>
-        <div>
-          <Label className="text-xs mb-1.5 block">Pipe Material</Label>
-          <Select onValueChange={handleRoughnessSelect}>
-            <SelectTrigger data-testid={`${prefix}select-material`}>
-              <SelectValue placeholder="Select material..." />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.keys(PIPE_ROUGHNESS).map((mat) => (
-                <SelectItem key={mat} value={mat}>{mat}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-          <Input
-            type="number"
-            value={roughness}
-            onChange={(e) => onRoughnessChange(e.target.value)}
-            data-testid={`${prefix}input-roughness`}
-          />
-        </div>
+        {showRoughness && onRoughnessChange && (
+          <>
+            <div>
+              <Label className="text-xs mb-1.5 block">Pipe Material</Label>
+              <Select onValueChange={handleRoughnessSelect}>
+                <SelectTrigger data-testid={`${prefix}select-material`}>
+                  <SelectValue placeholder="Select material..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(PIPE_ROUGHNESS).map((mat) => (
+                    <SelectItem key={mat} value={mat}>{mat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
+              <Input
+                type="number"
+                value={roughness}
+                onChange={(e) => onRoughnessChange(e.target.value)}
+                data-testid={`${prefix}input-roughness`}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

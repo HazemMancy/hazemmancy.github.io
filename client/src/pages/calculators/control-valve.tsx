@@ -18,6 +18,7 @@ import { COMMON_GASES, COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
+import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
 import { Gauge, FlaskConical, RotateCcw } from "lucide-react";
 
 type FluidMode = "liquid" | "gas";
@@ -191,8 +192,18 @@ export default function ControlValvePage() {
                       <Input type="number" value={lForm.vaporPressure} onChange={e => uL("vaporPressure", e.target.value)} data-testid="input-pv" /></div>
                     <div><Label className="text-xs mb-1.5 block">Critical Pressure ({getUnit("pressureAbs", unitSystem)})</Label>
                       <Input type="number" value={lForm.criticalPressure} onChange={e => uL("criticalPressure", e.target.value)} data-testid="input-pc" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Pipe ID ({getUnit("diameter", unitSystem)})</Label>
-                      <Input type="number" value={lForm.pipeSize} onChange={e => uL("pipeSize", e.target.value)} data-testid="input-pipe" /></div>
+                  </div>
+                  <div className="pt-2 border-t">
+                    <p className="text-xs font-medium text-muted-foreground mb-3">Pipe Selection</p>
+                    <PipeSizeSelector
+                      unitSystem={unitSystem}
+                      innerDiameter={lForm.pipeSize}
+                      onDiameterChange={(v) => uL("pipeSize", v)}
+                      showRoughness={false}
+                      testIdPrefix="liq"
+                    />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Valve Size ({getUnit("diameter", unitSystem)}) — blank=line-size</Label>
                       <Input type="number" value={lForm.valveSize} onChange={e => uL("valveSize", e.target.value)} placeholder="Line-size" data-testid="input-valve" /></div>
                     <div><Label className="text-xs mb-1.5 block">FL (Pressure Recovery Factor)</Label>
@@ -219,8 +230,18 @@ export default function ControlValvePage() {
                       <Input type="number" value={gForm.compressibilityFactor} onChange={e => uG("compressibilityFactor", e.target.value)} data-testid="input-gas-z" /></div>
                     <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
                       <Input type="number" value={gForm.specificHeatRatio} onChange={e => uG("specificHeatRatio", e.target.value)} data-testid="input-gas-k" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Pipe ID ({getUnit("diameter", unitSystem)})</Label>
-                      <Input type="number" value={gForm.pipeSize} onChange={e => uG("pipeSize", e.target.value)} data-testid="input-gas-pipe" /></div>
+                  </div>
+                  <div className="pt-2 border-t">
+                    <p className="text-xs font-medium text-muted-foreground mb-3">Pipe Selection</p>
+                    <PipeSizeSelector
+                      unitSystem={unitSystem}
+                      innerDiameter={gForm.pipeSize}
+                      onDiameterChange={(v) => uG("pipeSize", v)}
+                      showRoughness={false}
+                      testIdPrefix="gas"
+                    />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">xT (Pressure Drop Ratio Factor)</Label>
                       <Input type="number" value={gForm.xt} onChange={e => uG("xt", e.target.value)} data-testid="input-gas-xt" /></div>
                   </div>
