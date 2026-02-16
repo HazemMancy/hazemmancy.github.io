@@ -100,6 +100,18 @@ export function Navbar() {
                   : "opacity-0 invisible -translate-y-1"
               }`}
             >
+              <Link href="/calculators">
+                <Button
+                  variant={location === "/calculators" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="w-full justify-start text-primary font-medium"
+                  onClick={() => setCalcDropdown(false)}
+                  data-testid="link-calc-all"
+                >
+                  All Calculators
+                </Button>
+              </Link>
+              <div className="my-1 border-t border-muted/30" />
               {calculatorItems.map((item) => (
                 <Link key={item.href} href={item.href}>
                   <Button
@@ -141,9 +153,16 @@ export function Navbar() {
             </button>
           ))}
           <div className="pt-2 pb-1">
-            <p className="text-xs font-medium text-primary px-3 mb-1">
-              CALCULATORS
-            </p>
+            <Link href="/calculators">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-primary font-medium"
+                onClick={() => setMobileOpen(false)}
+              >
+                CALCULATORS
+              </Button>
+            </Link>
           </div>
           {calculatorItems.map((item) => (
             <Link key={item.href} href={item.href}>

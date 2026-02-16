@@ -13,12 +13,14 @@ import MultiphaseLinePage from "@/pages/calculators/multiphase-line";
 import GasMixingPage from "@/pages/calculators/gas-mixing";
 import GasVolumePage from "@/pages/calculators/gas-volume";
 import PumpSizingPage from "@/pages/calculators/pump-sizing";
+import CalculatorsIndexPage from "@/pages/calculators/index";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/calculators" component={CalculatorsIndexPage} />
       <Route path="/calculators/gas-line-sizing" component={GasLineSizingPage} />
       <Route path="/calculators/liquid-line-sizing" component={LiquidLineSizingPage} />
       <Route path="/calculators/multiphase-line" component={MultiphaseLinePage} />
