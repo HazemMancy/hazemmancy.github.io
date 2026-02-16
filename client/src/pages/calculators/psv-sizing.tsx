@@ -310,16 +310,6 @@ export default function PSVSizingPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 md:py-12">
-      <Card className="mb-4 md:mb-6 bg-amber-950/30 border-amber-800/50">
-        <CardContent className="flex items-center gap-3 p-3 md:p-4">
-          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-          <div>
-            <p className="text-xs md:text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY PRD / FLARE RELIEF SIZING TOOL — NOT FOR FINAL DESIGN</p>
-            <p className="text-[10px] md:text-xs text-amber-200/70">This tool provides preliminary pressure relief device sizing per API 520/521 and API 526 orifice selection. Final sizing must be confirmed by qualified engineers with vendor certified capacity data, detailed process simulation, and flare system hydraulic analysis.</p>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4 md:mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">

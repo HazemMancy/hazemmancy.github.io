@@ -26,7 +26,7 @@ import {
   CV_TEST_CASE, CV_GAS_TEST, STEAM_PROPS,
 } from "@/lib/engineering/controlValve";
 import {
-  Gauge, FlaskConical, RotateCcw, AlertTriangle,
+  Gauge, FlaskConical, RotateCcw,
   ChevronLeft, ChevronRight, ClipboardList, Droplets,
   Settings2, Calculator, Wrench, ShieldAlert, CheckCircle2,
 } from "lucide-react";
@@ -232,16 +232,6 @@ export default function ControlValvePage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 md:py-12">
-      <Card className="mb-4 md:mb-6 bg-amber-950/30 border-amber-800/50">
-        <CardContent className="flex items-center gap-3 p-3 md:p-4">
-          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-          <div>
-            <p className="text-xs md:text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY ENGINEERING TOOL</p>
-            <p className="text-[10px] md:text-xs text-amber-200/70">Final valve/trim selection must be confirmed with vendor data (FL, xT, Fd, noise, cavitation), project specs, and applicable requirements.</p>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4 md:mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">

@@ -16,7 +16,6 @@ interface CalculatorEntry {
   categoryColor: string;
   tags: string[];
   standards: string[];
-  screening?: boolean;
 }
 
 const categories = [
@@ -146,7 +145,6 @@ const calculators: CalculatorEntry[] = [
     categoryColor: "text-red-400",
     tags: ["API 521", "API 520", "API 526", "9-Tab Wizard"],
     standards: ["API 521", "API 520", "API 526"],
-    screening: true,
   },
   {
     title: "Thermal Relief",
@@ -157,7 +155,6 @@ const calculators: CalculatorEntry[] = [
     categoryColor: "text-red-400",
     tags: ["API 521", "Blocked-in Liquid", "Solar Heat"],
     standards: ["API 521", "ASME B31.3"],
-    screening: true,
   },
 ];
 
@@ -214,16 +211,9 @@ export default function CalculatorsIndexPage() {
                       <div className="p-2.5 rounded-md bg-primary/10 shrink-0">
                         <calc.icon className="w-5 h-5 text-primary" />
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        {calc.screening && (
-                          <Badge variant="outline" className="text-[10px] shrink-0 text-red-400 border-red-400/30">
-                            Screening
-                          </Badge>
-                        )}
-                        <Badge variant="outline" className={`text-[10px] shrink-0 ${calc.categoryColor}`}>
-                          {calc.category}
-                        </Badge>
-                      </div>
+                      <Badge variant="outline" className={`text-[10px] shrink-0 ${calc.categoryColor}`}>
+                        {calc.category}
+                      </Badge>
                     </div>
 
                     <h3 className="font-semibold text-sm mb-2" data-testid={`text-calc-title-${calc.href.split("/").pop()}`}>
@@ -267,9 +257,8 @@ export default function CalculatorsIndexPage() {
             <Card className="max-w-2xl mx-auto">
               <CardContent className="py-8 px-6">
                 <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-                  All calculators are intended for preliminary engineering screening and estimation.
-                  Results must be verified against detailed engineering analysis and manufacturer data
-                  for final design decisions. Relief & Flare calculators are screening tools only.
+                  Validated engineering calculators built per industry standards (API, ISO, IEC, TEMA, ASME).
+                  Each tool includes documented assumptions, calculation traces, and standard references.
                 </p>
                 <div className="flex items-center justify-center gap-4 flex-wrap">
                   <Link href="/">

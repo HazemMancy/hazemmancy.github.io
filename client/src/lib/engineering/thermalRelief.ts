@@ -1,11 +1,5 @@
 /**
- * Thermal Expansion Relief — Blocked-in Liquid Screening (9-Tab Wizard)
- *
- * ╔══════════════════════════════════════════════════════════════════╗
- * ║  SCREENING TOOL — NOT FOR FINAL DESIGN                        ║
- * ║  Results must be verified against detailed thermal analysis    ║
- * ║  and equipment-specific data.                                  ║
- * ╚══════════════════════════════════════════════════════════════════╝
+ * Thermal Expansion Relief — Blocked-in Liquid (9-Tab Wizard)
  *
  * When liquid is trapped between two closed valves and heated,
  * thermal expansion causes rapid pressure rise. A thermal relief

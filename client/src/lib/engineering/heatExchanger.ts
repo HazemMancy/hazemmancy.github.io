@@ -1,5 +1,5 @@
 /**
- * Heat Exchanger Preliminary Sizing — LMTD Method with Kern Approach
+ * Heat Exchanger Sizing — LMTD Method with Kern Approach
  *
  * Basic heat transfer equation:
  *   Q = U * A * F * LMTD
@@ -19,7 +19,7 @@
  * Kern method for shell-side heat transfer:
  *   ho = 0.36 * (De * Gs / μ)^0.55 * (Cp * μ / k)^(1/3) * (k / De)
  *
- * For preliminary sizing, use overall U values from tables.
+ * Overall U values from standard tables (TEMA/GPSA).
  *
  * Reference:
  * - Kern, D.Q. "Process Heat Transfer" (1950)

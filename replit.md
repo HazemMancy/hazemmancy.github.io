@@ -70,7 +70,7 @@ client/src/
 - Single-page scrolling portfolio with section anchors (#home, #about, etc.)
 - Calculator pages on separate routes (/calculators/*)
 - Navbar dropdown categorizes 13 calculators by discipline: Hydraulics, Fluid Properties, Equipment, Relief
-- Relief calculators (PRD, Thermal) labeled as "SCREENING TOOL — NOT FOR FINAL DESIGN"
+- All calculators built per industry standards with documented assumptions and calculation traces
 - All engine modules include comprehensive equation references (API, ISO, IEC, TEMA standards)
 - Feedback section on every calculator page (FormSubmit.co to mancy.hazem@gmail.com)
 - FeedbackSection component at `client/src/components/engineering/feedback-section.tsx`

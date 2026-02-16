@@ -1,7 +1,7 @@
 import { PI } from "./constants";
 
 /**
- * Separator / KO Drum Preliminary Sizing — Souders–Brown Method
+ * Separator / KO Drum Sizing — Souders–Brown Method
  *
  * Core equations (symbolic):
  *   v_s,max = K × sqrt( (ρ_l − ρ_g) / ρ_g )
@@ -21,11 +21,8 @@ import { PI } from "./constants";
  * - Arnold & Stewart: Surface Production Operations, Vol. 1
  * - Stewart & Arnold: Gas-Liquid and Liquid-Liquid Separators
  *
- * DISCLAIMER: This tool provides preliminary separator/KO drum sizing using the
- * Souders–Brown method and simplified holdup assumptions. Final vessel sizing and
- * internals selection must be validated by qualified engineers using detailed process
- * data, transient assessments (as applicable), mechanical design constraints, and
- * vendor recommendations.
+ * Separator/KO drum sizing per Souders–Brown method with holdup and geometry assembly.
+ * Covers vertical, horizontal, KO drum, and 3-phase configurations.
  */
 
 // ─── DATA MODEL ─────────────────────────────────────────────────────────────────

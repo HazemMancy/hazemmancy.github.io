@@ -24,11 +24,19 @@ function swameeJainFriction(Re: number, roughness: number, diameter: number): nu
 export function calculateLiquidLineSizing(input: LiquidLineSizingInput): LiquidSizingResult {
   const warnings: string[] = [];
 
+  if (input.innerDiameter <= 0) throw new Error("Inner diameter must be positive");
+  if (input.pipeLength <= 0) throw new Error("Pipe length must be positive");
+  if (input.flowRate <= 0) throw new Error("Flow rate must be positive");
+  if (input.density <= 0) throw new Error("Liquid density must be positive");
+  if (input.viscosity <= 0) throw new Error("Liquid viscosity must be positive");
+  if (input.roughness < 0) throw new Error("Pipe roughness must be non-negative");
+
   const D_m = input.innerDiameter / 1000;
   const A = PI * Math.pow(D_m, 2) / 4;
 
   const volumeFlow_m3s = input.flowRate / 3600;
   const velocity = volumeFlow_m3s / A;
+  if (!isFinite(velocity)) throw new Error("Computed velocity is invalid — check inputs");
 
   const mu_Pas = input.viscosity * 1e-3;
   const Re = (input.density * velocity * D_m) / mu_Pas;
@@ -43,7 +51,11 @@ export function calculateLiquidLineSizing(input: LiquidLineSizingInput): LiquidS
   const staticHead_bar = staticHead_Pa / 1e5;
 
   const totalDP_bar = frictionLoss_bar + staticHead_bar;
-  const dP_per100m = (frictionLoss_bar / input.pipeLength) * 100;
+  const dP_per100m = input.pipeLength > 0 ? (frictionLoss_bar / input.pipeLength) * 100 : 0;
+
+  if (input.elevationChange < 0) {
+    warnings.push(`Negative elevation change (${input.elevationChange.toFixed(1)} m) — static head assists flow (downhill)`);
+  }
 
   if (velocity > VELOCITY_LIMITS.liquid.max) {
     warnings.push(`Velocity ${velocity.toFixed(2)} m/s exceeds maximum limit of ${VELOCITY_LIMITS.liquid.max} m/s — erosion risk`);

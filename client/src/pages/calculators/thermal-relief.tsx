@@ -26,7 +26,7 @@ import {
   THERMAL_RELIEF_TEST_CASE,
 } from "@/lib/engineering/thermalRelief";
 import {
-  Flame, FlaskConical, RotateCcw, AlertTriangle,
+  Flame, FlaskConical, RotateCcw,
   ChevronLeft, ChevronRight, ClipboardList, Settings2,
   Sun, Droplets, Thermometer, Calculator, Wrench,
   PipetteIcon, CheckCircle2,
@@ -268,16 +268,6 @@ export default function ThermalReliefPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 md:py-12">
-      <Card className="mb-4 md:mb-6 bg-amber-950/30 border-amber-800/50">
-        <CardContent className="flex items-center gap-3 p-3 md:p-4">
-          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-          <div>
-            <p className="text-xs md:text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY THERMAL RELIEF SIZING TOOL — NOT FOR FINAL DESIGN</p>
-            <p className="text-[10px] md:text-xs text-amber-200/70">This tool provides preliminary thermal expansion relief valve sizing per API 521 with API 526 orifice selection. Final sizing must be verified by qualified engineers with detailed thermal-hydraulic analysis, fluid property data, and vendor certified valve capacity per ASME B31.3.</p>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4 md:mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">

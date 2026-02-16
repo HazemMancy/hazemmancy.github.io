@@ -25,15 +25,29 @@ function swameeJainFriction(Re: number, roughness: number, diameter: number): nu
 export function calculateGasLineSizing(input: GasLineSizingInput): GasSizingResult {
   const warnings: string[] = [];
 
+  if (input.innerDiameter <= 0) throw new Error("Inner diameter must be positive");
+  if (input.pipeLength <= 0) throw new Error("Pipe length must be positive");
+  if (input.pressure <= 0) throw new Error("Pressure must be positive (absolute)");
+  if (input.flowRate <= 0) throw new Error("Flow rate must be positive");
+  if (input.molecularWeight <= 0) throw new Error("Molecular weight must be positive");
+  if (input.compressibilityFactor <= 0) throw new Error("Compressibility factor Z must be positive");
+  if (input.specificHeatRatio <= 1) throw new Error("Specific heat ratio k must be greater than 1");
+  if (input.viscosity <= 0) throw new Error("Gas viscosity must be positive");
+  if (input.roughness < 0) throw new Error("Pipe roughness must be non-negative");
+
   const T_K = input.temperature + 273.15;
+  if (T_K <= 0) throw new Error("Absolute temperature must be positive (check temperature input)");
+
   const P_Pa = input.pressure * 1e5;
   const D_m = input.innerDiameter / 1000;
   const A = PI * Math.pow(D_m, 2) / 4;
 
   const rho = (P_Pa * input.molecularWeight) / (input.compressibilityFactor * GAS_CONSTANT * T_K);
+  if (!isFinite(rho) || rho <= 0) throw new Error("Computed gas density is invalid — check pressure, temperature, and MW inputs");
 
   const massFlow_kgs = input.flowRate / 3600;
   const velocity = massFlow_kgs / (rho * A);
+  if (!isFinite(velocity)) throw new Error("Computed velocity is invalid — check inputs");
 
   const mu_Pas = input.viscosity * 1e-3;
   const Re = (rho * velocity * D_m) / mu_Pas;
@@ -43,7 +57,11 @@ export function calculateGasLineSizing(input: GasLineSizingInput): GasSizingResu
 
   const dP_Pa = f * (input.pipeLength / D_m) * 0.5 * rho * Math.pow(velocity, 2);
   const dP_bar = dP_Pa / 1e5;
-  const dP_per100m = (dP_bar / input.pipeLength) * 100;
+  const dP_per100m = input.pipeLength > 0 ? (dP_bar / input.pipeLength) * 100 : 0;
+
+  if (dP_bar > input.pressure * 0.4) {
+    warnings.push(`Pressure drop (${dP_bar.toFixed(3)} bar) exceeds 40% of inlet pressure — Darcy-Weisbach constant-density assumption may overestimate ΔP. Consider segmented calculation or process simulator for long pipelines.`);
+  }
 
   const sonicVelocity = Math.sqrt(
     (input.specificHeatRatio * input.compressibilityFactor * GAS_CONSTANT * T_K) / input.molecularWeight

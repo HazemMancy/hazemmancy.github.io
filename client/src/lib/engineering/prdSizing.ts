@@ -1,12 +1,6 @@
 /**
  * PRD (Pressure Relief Device) Calculator — API 521/520/526
  *
- * ╔══════════════════════════════════════════════════════════════════╗
- * ║  PRELIMINARY ENGINEERING TOOL — NOT FOR FINAL DESIGN           ║
- * ║  Final sizing must be confirmed by qualified engineers and     ║
- * ║  validated with vendor certified capacity data.                ║
- * ╚══════════════════════════════════════════════════════════════════╝
- *
  * Code Basis:
  * - API 521: Overpressure scenario identification and relief load determination
  * - API 520 Part I: PRV sizing equations (gas/vapor, steam, liquid)

@@ -128,6 +128,21 @@ export function calculatePiping(input: PipingInput): PipingResult {
   if (input.liquidDensity <= 0) {
     throw new Error("Liquid density must be positive");
   }
+  if (input.viscosity <= 0) {
+    throw new Error("Liquid viscosity must be positive");
+  }
+  if (input.suctionPipeLength < 0 || input.dischargePipeLength < 0) {
+    throw new Error("Pipe lengths must be non-negative");
+  }
+  if (input.suctionFittingsK < 0 || input.dischargeFittingsK < 0) {
+    throw new Error("Fittings K values must be non-negative");
+  }
+  if (input.atmosphericPressure <= 0) {
+    throw new Error("Atmospheric pressure must be positive");
+  }
+  if (input.vaporPressure < 0) {
+    throw new Error("Vapor pressure must be non-negative");
+  }
 
   const suction = calculateFrictionHead(
     flowRate_m3s, suctionDia_m, input.suctionPipeLength, suctionRoughness_m,

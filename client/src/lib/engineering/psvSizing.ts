@@ -1,13 +1,7 @@
 import { GAS_CONSTANT, PI } from "./constants";
 
 /**
- * PSV (Pressure Safety Valve) Sizing — API 520 Part I Screening
- *
- * ╔══════════════════════════════════════════════════════════════════╗
- * ║  SCREENING TOOL — NOT FOR FINAL DESIGN                        ║
- * ║  Results must be verified by a qualified relief systems        ║
- * ║  engineer using detailed process simulation and vendor data.   ║
- * ╚══════════════════════════════════════════════════════════════════╝
+ * PSV (Pressure Safety Valve) Sizing — API 520 Part I
  *
  * Gas/Vapor Relief (API 520 Section 5.6):
  *   A = W / (C * Kd * P1 * Kb * Kc * sqrt(T * Z / M))

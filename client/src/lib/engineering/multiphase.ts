@@ -16,6 +16,17 @@ export interface MultiphaseResult {
 export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
   const warnings: string[] = [];
 
+  if (input.innerDiameter <= 0) throw new Error("Inner diameter must be positive");
+  if (input.gasDensity <= 0) throw new Error("Gas density must be positive");
+  if (input.liquidDensity <= 0) throw new Error("Liquid density must be positive");
+  if (input.gasFlowRate < 0) throw new Error("Gas flow rate must be non-negative");
+  if (input.liquidFlowRate < 0) throw new Error("Liquid flow rate must be non-negative");
+  if (input.gasFlowRate <= 0 && input.liquidFlowRate <= 0) throw new Error("At least one phase must have positive flow");
+  if (input.cFactor <= 0) throw new Error("C-factor must be positive");
+  if (input.liquidDensity <= input.gasDensity) {
+    warnings.push("Liquid density ≤ gas density — verify fluid properties (possible near-critical conditions)");
+  }
+
   const D_m = input.innerDiameter / 1000;
   const A = PI * Math.pow(D_m, 2) / 4;
 
@@ -26,7 +37,8 @@ export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
   const Vsl = Ql_m3s / A;
   const Vm = Vsg + Vsl;
 
-  const lambdaL = Vsl / (Vsg + Vsl + 1e-10);
+  const totalSuperVel = Vsg + Vsl;
+  const lambdaL = totalSuperVel > 0 ? Vsl / totalSuperVel : 0;
   const mixtureDensity = input.liquidDensity * lambdaL + input.gasDensity * (1 - lambdaL);
 
   const erosionalVelocity = input.cFactor / Math.sqrt(mixtureDensity);
@@ -49,8 +61,6 @@ export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
   } else if (lambdaL < 0.01 && input.liquidFlowRate > 0) {
     warnings.push("Very low liquid content — mist flow likely");
   }
-
-  warnings.push("Note: This is a screening-level tool using the homogeneous model. For detailed analysis, use a dedicated multiphase simulator (e.g., OLGA, Pipesim).");
 
   return {
     superficialGasVelocity: Vsg,

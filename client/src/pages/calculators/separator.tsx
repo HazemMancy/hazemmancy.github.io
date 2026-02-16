@@ -168,13 +168,6 @@ export default function SeparatorPage() {
         </div>
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-3 mb-6">
-        <p className="text-xs text-amber-400 leading-relaxed">
-          <AlertTriangle className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
-          <strong>PRELIMINARY SIZING TOOL</strong> \u2014 This tool provides preliminary separator/KO drum sizing using the Souders\u2013Brown method and simplified holdup assumptions. Final vessel sizing and internals selection must be validated by qualified engineers.
-        </p>
-      </div>
-
       <div className="flex flex-wrap gap-1 mb-4">
         <Button size="sm" variant="outline" onClick={() => loadTestCase(0)} data-testid="button-test-ko">
           <FlaskConical className="w-3.5 h-3.5 mr-1" /> KO Drum

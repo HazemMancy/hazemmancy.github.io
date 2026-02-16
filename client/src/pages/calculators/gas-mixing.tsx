@@ -173,15 +173,6 @@ export default function GasMixingPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 md:py-12">
-      <Card className="mb-4 md:mb-6 bg-amber-950/30 border-amber-800/50">
-        <CardContent className="flex items-center gap-3 p-3 md:p-4">
-          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-          <p className="text-[10px] md:text-xs text-amber-200/70" data-testid="text-disclaimer">
-            This tool performs mixture calculations using mole-fraction weighting. It is intended for preliminary engineering use. Users must verify component molecular weights and compositions against authoritative data sources.
-          </p>
-        </CardContent>
-      </Card>
-
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4 md:mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
