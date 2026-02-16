@@ -1014,13 +1014,10 @@ export default function PumpSizingPage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        {pumpType === "centrifugal" ? (
-          <AssumptionsPanel
-            assumptions={[
+          <div className="mt-4">
+            {pumpType === "centrifugal" ? (
+              <AssumptionsPanel
+              assumptions={[
               "Steady-state, incompressible liquid flow",
               "Centrifugal pump application",
               "Darcy-Weisbach equation with Swamee-Jain friction factor",
@@ -1028,18 +1025,18 @@ export default function PumpSizingPage() {
               "NPSHa calculated per HI/API standards",
               "Atmospheric pressure at sea level unless specified",
               "Suction vessel pressure is gauge pressure (0 = atmospheric)",
-            ]}
-            references={[
+              ]}
+              references={[
               "Hydraulic Institute Standards (HI 1.3) \u2014 Centrifugal Pump Design",
               "API 610 \u2014 Centrifugal Pumps for Petroleum, Petrochemical and Natural Gas Industries",
               "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
               "Cameron Hydraulic Data, 20th Edition",
               "Perry's Chemical Engineers' Handbook, 9th Edition",
-            ]}
-          />
-        ) : (
-          <AssumptionsPanel
-            assumptions={[
+              ]}
+              />
+            ) : (
+              <AssumptionsPanel
+              assumptions={[
               "Steady-state, incompressible liquid flow",
               "Positive displacement pump (reciprocating, gear, screw, or diaphragm)",
               "Required flow is the actual delivered flow; theoretical flow = required flow / volumetric efficiency",
@@ -1052,20 +1049,22 @@ export default function PumpSizingPage() {
               "Performance curves show flow/slip/power variation with differential pressure per API 674/676",
               "Darcy-Weisbach equation for piping friction losses",
               "Atmospheric pressure at sea level unless specified",
-            ]}
-            references={[
+              ]}
+              references={[
               "API 674 \u2014 Positive Displacement Pumps \u2014 Reciprocating",
               "API 676 \u2014 Positive Displacement Pumps \u2014 Rotary",
               "API 675 \u2014 Positive Displacement Pumps \u2014 Controlled Volume (Metering)",
               "Hydraulic Institute Standards (HI 3.1-3.5) \u2014 Rotary Pump Standards",
               "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
               "Karassik et al. \u2014 Pump Handbook, 4th Edition",
-            ]}
-          />
-        )}
-      </div>
+              ]}
+              />
+            )}
+          </div>
 
-      <FeedbackSection calculatorName="Pump Sizing" />
+          <FeedbackSection calculatorName="Pump Sizing" />
+        </div>
+      </div>
     </div>
   );
 }

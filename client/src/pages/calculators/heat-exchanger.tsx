@@ -208,12 +208,9 @@ export default function HeatExchangerPage() {
               <p className="text-sm text-muted-foreground">Enter parameters and click Calculate</p>
             </CardContent></Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "LMTD method for preliminary area estimation",
             "Overall U is user-supplied (use typical values table for guidance)",
             "F factor calculated analytically for 1-2 and 2-4 pass configurations",
@@ -221,18 +218,20 @@ export default function HeatExchangerPage() {
             "No detailed tube-side or shell-side calculations (Kern method)",
             "Single-phase sensible heat transfer assumed",
             "Design margin is applied to fouled (required) area",
-          ]}
-          references={[
+            ]}
+            references={[
             "Kern, D.Q. Process Heat Transfer (1950)",
             "TEMA Standards, 10th Edition",
             "Perry's Chemical Engineers' Handbook, Section 11",
             "Ludwig, E.E. Applied Process Design, Vol. 3",
             "Coulson & Richardson's Chemical Engineering, Vol. 6",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Heat Exchanger" />
+          <FeedbackSection calculatorName="Heat Exchanger" />
+        </div>
+      </div>
     </div>
   );
 }

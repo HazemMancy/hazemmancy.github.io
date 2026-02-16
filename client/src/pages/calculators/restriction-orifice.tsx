@@ -327,29 +327,28 @@ export default function RestrictionOrificePage() {
               <p className="text-sm text-muted-foreground">Enter parameters and click Calculate</p>
             </CardContent></Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Sharp-edged orifice plate (ISO 5167 geometry)",
             "Incompressible flow assumed for liquid sizing",
             "Gas expansion factor Y per ISA approximation for sub-critical flow",
             "Choked flow check uses isentropic critical pressure ratio",
             "Discharge coefficient Cd is user-supplied (typical 0.60–0.65 for sharp-edged)",
             "No allowance for manufacturing tolerances on orifice bore",
-          ]}
-          references={[
+            ]}
+            references={[
             "ISO 5167: Measurement of fluid flow by means of pressure differential devices",
             "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
             "API 520 Part I: Sizing of pressure-relieving devices (for critical flow equations)",
             "Miller, R.W. Flow Measurement Engineering Handbook, 3rd Edition",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Restriction Orifice" />
+          <FeedbackSection calculatorName="Restriction Orifice" />
+        </div>
+      </div>
     </div>
   );
 }

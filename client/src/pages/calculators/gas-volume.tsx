@@ -468,29 +468,28 @@ export default function GasVolumePage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Real gas law: PV = ZnRT",
             "Conversion: V2 = V1 \u00D7 (P1/P2) \u00D7 (T2/T1) \u00D7 (Z2/Z1)",
             "Normal conditions (Nm\u00B3): 0\u00B0C, 1 atm (101.325 kPa)",
             "Standard conditions (Sm\u00B3): 15\u00B0C, 1 atm (101.325 kPa) per ISO 13443",
             "US Standard (SCFM/MMSCFD): 60\u00B0F (15.56\u00B0C), 14.696 psia",
             "Z-factor must be obtained from equation of state or charts",
-          ]}
-          references={[
+            ]}
+            references={[
             "ISO 13443: Natural Gas \u2014 Standard Reference Conditions",
             "AGA Report No. 8: Compressibility Factors of Natural Gas",
             "GPSA Engineering Data Book, 14th Edition",
             "Perry's Chemical Engineers' Handbook, 9th Edition",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Gas Volume Conversion" />
+          <FeedbackSection calculatorName="Gas Volume Conversion" />
+        </div>
+      </div>
     </div>
   );
 }

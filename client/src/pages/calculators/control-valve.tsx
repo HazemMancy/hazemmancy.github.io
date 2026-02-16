@@ -286,12 +286,9 @@ export default function ControlValvePage() {
               <p className="text-sm text-muted-foreground">Enter parameters and click Calculate Cv</p>
             </CardContent></Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Cv sizing per IEC 60534-2-1 / ISA S75.01",
             "Piping geometry factor Fp based on reducers (sum K = 1.5(1-β²))",
             "Liquid choked flow: ΔP_choked = FL²(P1 - FF·Pv)",
@@ -299,17 +296,19 @@ export default function ControlValvePage() {
             "Gas expansion factor Y = 1 - x/(3·Fk·xT·Fp²)",
             "Fk = k/1.4 (specific heat ratio factor)",
             "xT must be obtained from valve manufacturer data",
-          ]}
-          references={[
+            ]}
+            references={[
             "IEC 60534-2-1: Industrial-process control valves — Sizing equations",
             "ISA S75.01: Flow Equations for Sizing Control Valves",
             "Fisher Control Valve Handbook, 5th Edition",
             "Masoneilan Engineering Handbook for Control Valves",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Control Valve Sizing" />
+          <FeedbackSection calculatorName="Control Valve Sizing" />
+        </div>
+      </div>
     </div>
   );
 }

@@ -213,12 +213,9 @@ export default function SeparatorPage() {
               <p className="text-sm text-muted-foreground">Enter parameters and click Calculate</p>
             </CardContent></Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Souders-Brown equation for maximum gas velocity through vessel",
             "Gas-liquid separation only (no three-phase / water-oil separation)",
             "K-factor is user-supplied based on vessel type and internals",
@@ -226,17 +223,19 @@ export default function SeparatorPage() {
             "Horizontal vessel: liquid fills bottom half, gas flows over top half",
             "Vessel diameter rounded up to nearest 100 mm",
             "No consideration of mechanical design (wall thickness, weight, nozzles)",
-          ]}
-          references={[
+            ]}
+            references={[
             "API 12J: Specification for Oil and Gas Separators",
             "GPSA Engineering Data Book, Section 7: Separation Equipment",
             "Arnold & Stewart: Surface Production Operations, Vol. 1",
             "Stewart & Arnold: Gas-Liquid and Liquid-Liquid Separators",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Separator / KO Drum" />
+          <FeedbackSection calculatorName="Separator / KO Drum" />
+        </div>
+      </div>
     </div>
   );
 }

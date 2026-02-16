@@ -220,29 +220,28 @@ export default function ThermalReliefPage() {
               <p className="text-sm text-muted-foreground">Enter parameters and click Calculate</p>
             </CardContent></Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Liquid is incompressible and fully trapped between two closed valves",
             "Thermal expansion coefficient assumed constant over temperature range",
             "Solar heat flux per API 521: 947 W/m² (bare) / 315 W/m² (insulated)",
             "TRV sizing uses simplified liquid relief equation (Kd=0.65)",
             "Pressure rise rate estimated using water isothermal compressibility",
             "No allowance for pipe/vessel flexibility or thermal expansion of metal",
-          ]}
-          references={[
+            ]}
+            references={[
             "API 521: Pressure-Relieving and Depressuring Systems, Section 5.18",
             "API 520 Part I: Sizing of pressure-relieving devices",
             "ASME B31.3: Process Piping (blocked-in liquid overpressure)",
             "Perry's Chemical Engineers' Handbook, Chapter 2 (thermal properties)",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Thermal Relief" />
+          <FeedbackSection calculatorName="Thermal Relief" />
+        </div>
+      </div>
     </div>
   );
 }

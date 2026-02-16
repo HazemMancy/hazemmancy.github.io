@@ -277,12 +277,9 @@ export default function PSVSizingPage() {
               <p className="text-sm text-muted-foreground">Enter parameters and click Calculate PSV Size</p>
             </CardContent></Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Gas/vapor sizing per API 520 Part I, Section 5.6",
             "Liquid sizing per API 520 Part I, Section 5.8",
             "C coefficient from specific heat ratio: C = 0.03948·sqrt(k·(2/(k+1))^((k+1)/(k-1)))",
@@ -291,17 +288,19 @@ export default function PSVSizingPage() {
             "Kc = 1.0 assumes no rupture disk upstream (0.9 with rupture disk)",
             "Viscosity correction Kv for liquid is approximated from Reynolds number",
             "Orifice selection per API 526 standard designations (D through T)",
-          ]}
-          references={[
+            ]}
+            references={[
             "API 520 Part I, 10th Edition: Sizing, Selection, and Installation of Pressure-Relieving Devices",
             "API 526, 7th Edition: Flanged Steel Pressure-Relief Valves",
             "API 521: Pressure-Relieving and Depressuring Systems",
             "ASME BPVC Section VIII, Division 1: Pressure Vessels",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="PSV Sizing" />
+          <FeedbackSection calculatorName="PSV Sizing" />
+        </div>
+      </div>
     </div>
   );
 }

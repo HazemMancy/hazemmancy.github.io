@@ -336,28 +336,27 @@ export default function LiquidLineSizingPage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Steady-state, single-phase incompressible liquid flow",
             "Darcy-Weisbach equation for friction pressure drop",
             "Swamee-Jain friction factor approximation",
             "Static head calculated from elevation change and liquid density",
             "Pipe roughness assumed uniform along pipe length",
             "No fittings or valves included (straight pipe only)",
-          ]}
-          references={[
+            ]}
+            references={[
             "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
             "Perry's Chemical Engineers' Handbook, 9th Edition",
             "Swamee, P.K. and Jain, A.K. (1976) — Explicit equations for pipe-flow problems",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Liquid Line Sizing" />
+          <FeedbackSection calculatorName="Liquid Line Sizing" />
+        </div>
+      </div>
     </div>
   );
 }

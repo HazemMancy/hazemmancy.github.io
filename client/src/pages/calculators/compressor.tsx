@@ -464,10 +464,9 @@ export default function CompressorPage() {
               "Perry's Chemical Engineers' Handbook, Section 10",
             ]}
           />
+          <FeedbackSection calculatorName="Compressor Sizing" />
         </div>
       </div>
-
-      <FeedbackSection calculatorName="Compressor Sizing" />
     </div>
   );
 }

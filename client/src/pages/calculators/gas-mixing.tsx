@@ -292,26 +292,25 @@ export default function GasMixingPage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Ideal gas mixing assumed (Amagat's law)",
             "Mixture MW = Σ (yi × MWi) — mole fraction weighted average",
             "Mass fractions calculated from mole fractions and component MWs",
             "Auto-normalization applied if mole fractions do not sum to 1.0",
-          ]}
-          references={[
+            ]}
+            references={[
             "Perry's Chemical Engineers' Handbook, 9th Edition",
             "GPSA Engineering Data Book, 14th Edition",
             "Smith, Van Ness, Abbott — Introduction to Chemical Engineering Thermodynamics",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Gas Mixing" />
+          <FeedbackSection calculatorName="Gas Mixing" />
+        </div>
+      </div>
     </div>
   );
 }

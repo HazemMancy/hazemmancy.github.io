@@ -356,27 +356,26 @@ export default function MultiphaseLinePage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Homogeneous (no-slip) multiphase flow model — screening level only",
             "Liquid holdup estimated from superficial velocity ratio (no-slip assumption)",
             "Erosional velocity per API RP 14E: Ve = C / √ρm",
             "Not suitable for detailed flow assurance — use OLGA/Pipesim for rigorous analysis",
             "No terrain profile or slug tracking included",
-          ]}
-          references={[
+            ]}
+            references={[
             "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
             "Beggs, H.D. and Brill, J.P. — A Study of Two-Phase Flow in Inclined Pipes (1973)",
             "GPSA Engineering Data Book, 14th Edition",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Multiphase Line Screening" />
+          <FeedbackSection calculatorName="Multiphase Line Screening" />
+        </div>
+      </div>
     </div>
   );
 }

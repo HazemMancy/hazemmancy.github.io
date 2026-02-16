@@ -428,29 +428,28 @@ export default function GasLineSizingPage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <AssumptionsPanel
-          assumptions={[
+          <div className="mt-4">
+            <AssumptionsPanel
+            assumptions={[
             "Steady-state, single-phase compressible gas flow",
             "Isothermal flow assumption (no temperature change along pipe)",
             "Darcy-Weisbach equation for pressure drop calculation",
             "Swamee-Jain approximation for Colebrook friction factor",
             "Ideal gas law with compressibility factor (Z) correction",
             "Pipe roughness assumed uniform along pipe length",
-          ]}
-          references={[
+            ]}
+            references={[
             "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
             "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
             "Swamee, P.K. and Jain, A.K. (1976) \u2014 Explicit equations for pipe-flow problems",
             "Perry's Chemical Engineers' Handbook, 9th Edition",
-          ]}
-        />
-      </div>
+            ]}
+            />
+          </div>
 
-      <FeedbackSection calculatorName="Gas Line Sizing" />
+          <FeedbackSection calculatorName="Gas Line Sizing" />
+        </div>
+      </div>
     </div>
   );
 }
