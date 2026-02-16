@@ -314,8 +314,8 @@ export default function PSVSizingPage() {
         <CardContent className="flex items-center gap-3 p-3 md:p-4">
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
           <div>
-            <p className="text-xs md:text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY ENGINEERING TOOL — NOT FOR FINAL DESIGN</p>
-            <p className="text-[10px] md:text-xs text-amber-200/70">Final sizing must be confirmed by qualified engineers with vendor certified capacity data and detailed process simulation.</p>
+            <p className="text-xs md:text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY PRD / FLARE RELIEF SIZING TOOL — NOT FOR FINAL DESIGN</p>
+            <p className="text-[10px] md:text-xs text-amber-200/70">This tool provides preliminary pressure relief device sizing per API 520/521 and API 526 orifice selection. Final sizing must be confirmed by qualified engineers with vendor certified capacity data, detailed process simulation, and flare system hydraulic analysis.</p>
           </div>
         </CardContent>
       </Card>

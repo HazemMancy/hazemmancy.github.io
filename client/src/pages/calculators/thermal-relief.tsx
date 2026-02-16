@@ -272,8 +272,8 @@ export default function ThermalReliefPage() {
         <CardContent className="flex items-center gap-3 p-3 md:p-4">
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
           <div>
-            <p className="text-xs md:text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY ENGINEERING TOOL</p>
-            <p className="text-[10px] md:text-xs text-amber-200/70">Results must be verified against detailed thermal analysis per API 521 and ASME B31.3.</p>
+            <p className="text-xs md:text-sm font-semibold text-amber-200" data-testid="text-screening-label">PRELIMINARY THERMAL RELIEF SIZING TOOL — NOT FOR FINAL DESIGN</p>
+            <p className="text-[10px] md:text-xs text-amber-200/70">This tool provides preliminary thermal expansion relief valve sizing per API 521 with API 526 orifice selection. Final sizing must be verified by qualified engineers with detailed thermal-hydraulic analysis, fluid property data, and vendor certified valve capacity per ASME B31.3.</p>
           </div>
         </CardContent>
       </Card>
