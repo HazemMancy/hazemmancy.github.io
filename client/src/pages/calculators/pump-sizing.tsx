@@ -31,6 +31,7 @@ import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitTogg
 import { Droplets, FlaskConical, RotateCcw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PumpCurveChart } from "@/components/engineering/pump-curve-chart";
+import { PDCurveChart } from "@/components/engineering/pd-curve-chart";
 
 interface FormState {
   flowRate: string;
@@ -926,8 +927,20 @@ export default function PumpSizingPage() {
                     rawData={pdResult}
                   />
                   <ResultsPanel
-                    title="Velocities & NPSH"
+                    title="NPSH / NPIP & Velocities"
                     results={[
+                      {
+                        label: "NPSHa (Available)",
+                        value: convertFromSI("head", pdResult.npshaAvailable, unitSystem),
+                        unit: getUnit("head", unitSystem),
+                        highlight: pdResult.npshaAvailable < 3.0,
+                      },
+                      {
+                        label: "NPIPa (Available)",
+                        value: pdResult.npipAvailable,
+                        unit: "kPa",
+                        highlight: pdResult.npipAvailable < 30,
+                      },
                       {
                         label: "Suction Velocity",
                         value: convertFromSI("velocity", pdResult.suctionVelocity, unitSystem),
@@ -947,12 +960,6 @@ export default function PumpSizingPage() {
                         label: "Discharge Reynolds",
                         value: pdResult.dischargeReynolds,
                         unit: "\u2014",
-                      },
-                      {
-                        label: "NPSHa (Available)",
-                        value: convertFromSI("head", pdResult.npshaAvailable, unitSystem),
-                        unit: getUnit("head", unitSystem),
-                        highlight: pdResult.npshaAvailable < 3.0,
                       },
                     ]}
                     rawData={pdResult}
@@ -977,6 +984,20 @@ export default function PumpSizingPage() {
                       },
                     ]}
                     rawData={pdResult}
+                  />
+                  <PDCurveChart
+                    designFlowSI={pdResult.actualFlow}
+                    differentialPressureBar={pdResult.differentialPressure}
+                    shaftPowerSI={pdResult.shaftPower}
+                    volumetricEfficiency={pdResult.volumetricEfficiency}
+                    mechanicalEfficiency={pdResult.mechanicalEfficiency}
+                    liquidDensity={pdResult.liquidDensity}
+                    flowUnit={getUnit("flowLiquid", unitSystem)}
+                    pressureUnit={getUnit("pressure", unitSystem)}
+                    powerUnit={getUnit("power", unitSystem)}
+                    convertFlow={(si) => convertFromSI("flowLiquid", si, unitSystem)}
+                    convertPressure={(si) => convertFromSI("pressure", si, unitSystem)}
+                    convertPower={(si) => convertFromSI("power", si, unitSystem)}
                   />
                 </>
               )}
@@ -1021,11 +1042,13 @@ export default function PumpSizingPage() {
               "Steady-state, incompressible liquid flow",
               "Positive displacement pump (reciprocating, gear, screw, or diaphragm)",
               "Required flow is the actual delivered flow; theoretical flow = required flow / volumetric efficiency",
-              "Slip = Theoretical flow \u2212 Actual delivered flow (internal leakage)",
+              "Slip = Theoretical flow \u2212 Actual delivered flow (internal leakage increases with \u0394P)",
               "Shaft power = Hydraulic power / Mechanical efficiency",
               "Motor power = Shaft power / Motor efficiency (user-specified)",
               "Discharge pressure input is the total differential pressure across the pump",
+              "NPSHa calculated per HI/API standards; NPIPa = NPSHa \u00d7 \u03c1 \u00d7 g (per API 676 for rotary PD pumps)",
               "Relief valve is mandatory for overpressure protection",
+              "Performance curves show flow/slip/power variation with differential pressure per API 674/676",
               "Darcy-Weisbach equation for piping friction losses",
               "Atmospheric pressure at sea level unless specified",
             ]}

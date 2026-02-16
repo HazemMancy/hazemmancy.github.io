@@ -69,6 +69,10 @@ export interface PDPumpSizingResult extends PipingResult {
   hydraulicPower: number;
   shaftPower: number;
   motorPower: number;
+  npipAvailable: number;
+  volumetricEfficiency: number;
+  mechanicalEfficiency: number;
+  liquidDensity: number;
   reliefValvePressure: number;
   dischargePressure: number;
   warnings: string[];
@@ -259,12 +263,14 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
   const shaftPower = hydraulicPower / mechEff;
   const motorPower = shaftPower / motorEff;
 
+  const npipAvailable = (piping.npshaAvailable * input.liquidDensity * GRAVITY) / 1000;
+
   addVelocityWarnings(warnings, piping.suctionVelocity, piping.dischargeVelocity);
 
   if (piping.npshaAvailable < 0) {
-    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m \u2014 NEGATIVE! Pump cannot operate under these conditions`);
+    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m (NPIP = ${npipAvailable.toFixed(1)} kPa) \u2014 NEGATIVE! Pump cannot operate`);
   } else if (piping.npshaAvailable < 3.0) {
-    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m \u2014 risk of cavitation (NPSHa margin typically > 1.0 m for PD pumps)`);
+    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m (NPIP = ${npipAvailable.toFixed(1)} kPa) \u2014 risk of cavitation`);
   }
 
   if (input.reliefValvePressure > 0) {
@@ -300,6 +306,10 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
     hydraulicPower,
     shaftPower,
     motorPower,
+    npipAvailable,
+    volumetricEfficiency: input.volumetricEfficiency,
+    mechanicalEfficiency: input.mechanicalEfficiency,
+    liquidDensity: input.liquidDensity,
     reliefValvePressure: input.reliefValvePressure,
     dischargePressure: input.dischargePressure,
     warnings,
