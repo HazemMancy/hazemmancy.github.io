@@ -33,7 +33,7 @@ client/src/
     restrictionOrifice.ts - Restriction orifice sizing (ISO 5167, liquid & gas, 5-tab wizard engine: bisection solver, choked-flow detection, cavitation/flashing checks, β correction, calc traces)
     controlValve.ts  - Control valve Cv sizing (IEC 60534/ISA S75, 7-tab wizard engine: multi-point min/normal/max, liquid/gas/steam, valve selection, cavitation/flashing/noise risk)
     separatorSizing.ts - Separator/KO drum sizing (Souders-Brown, 7-tab wizard engine: multi-case operating points, horizontal iterative solver, holdup/surge/retention, KO drum & 3-phase preliminary, geometry assembly, engineering flags, calc traces)
-    heatExchanger.ts - Heat exchanger area (LMTD/Kern)
+    heatExchanger.ts - Heat exchanger sizing (LMTD/Kern, 7-tab wizard engine: multi-case, energy balance modes, F-correction, U/fouling modes, engineering flags, calc traces)
     prdSizing.ts     - PRD/Flare relief device sizing (API 521/520/526, 9-tab wizard engine)
     psvSizing.ts     - (Legacy) PSV sizing screening — replaced by prdSizing.ts
     thermalRelief.ts - Thermal expansion relief screening (API 521, API 526 orifice selection)
@@ -50,7 +50,7 @@ client/src/
       restriction-orifice.tsx  - RO sizing calculator (5-tab wizard: Project → Service → Sizing → Results → Recommendations)
       control-valve.tsx
       separator.tsx        - Separator/KO drum calculator (7-tab wizard: Project → Cases → Design → Gas Sizing → Holdup → Geometry → Results)
-      heat-exchanger.tsx
+      heat-exchanger.tsx   - Heat exchanger sizing calculator (7-tab wizard: Project → Streams → Config → LMTD → U & Area → Geometry → Results)
       psv-sizing.tsx   - Now: PRD/Flare Relief Calculator (9-tab wizard)
       thermal-relief.tsx
       compressor.tsx
