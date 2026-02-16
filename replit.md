@@ -30,7 +30,7 @@ client/src/
     gasMixing.ts     - Gas mixture MW calculation
     gasVolume.ts     - Standard/actual volume conversion
     pumpSizing.ts    - Centrifugal pump sizing (TDH, power, NPSH)
-    restrictionOrifice.ts - Restriction orifice sizing (ISO 5167, liquid & gas)
+    restrictionOrifice.ts - Restriction orifice sizing (ISO 5167, liquid & gas, 5-tab wizard engine: bisection solver, choked-flow detection, cavitation/flashing checks, β correction, calc traces)
     controlValve.ts  - Control valve Cv sizing (IEC 60534/ISA S75, 7-tab wizard engine: multi-point min/normal/max, liquid/gas/steam, valve selection, cavitation/flashing/noise risk)
     separatorSizing.ts - Separator/KO drum sizing (Souders-Brown)
     heatExchanger.ts - Heat exchanger area (LMTD/Kern)
@@ -47,7 +47,7 @@ client/src/
       gas-mixing.tsx
       gas-volume.tsx
       pump-sizing.tsx
-      restriction-orifice.tsx
+      restriction-orifice.tsx  - RO sizing calculator (5-tab wizard: Project → Service → Sizing → Results → Recommendations)
       control-valve.tsx
       separator.tsx
       heat-exchanger.tsx
@@ -80,6 +80,14 @@ client/src/
   - Supports API 521 scenario screening (blocked outlet, fire, CW failure, tube rupture, thermal expansion, etc.)
   - Device type recommendation based on backpressure and service conditions
   - Replaced simpler PSV sizing calculator (route path preserved at /calculators/psv-sizing)
+- Restriction Orifice Calculator: 5-tab wizard (Project → Service → Sizing → Results → Recommendations)
+  - Engine module: restrictionOrifice.ts with bisection solver, β⁴ correction, calc traces
+  - Liquid: W = Cd·A·√(2·ρ·ΔP/(1-β⁴)), cavitation/flashing checks using Pv, Reynolds number
+  - Gas: choked detection x_crit = (2/(k+1))^(k/(k-1)), subcritical with Y expansion factor, choked with f(k) critical flow function
+  - Sizing modes: "Size for flow" (solver finds d) and "Predict ΔP" (given d, compute flow)
+  - Engineering flags: CHOKED_FLOW, CAVITATION_RISK, FLASHING_LIKELY, HIGH_DP_FRACTION, BETA_OUT_OF_RANGE, etc.
+  - Rule-based recommendations engine + next-steps checklist
+  - Legacy calculateROLiquid/calculateROGas interfaces preserved for backward compatibility
 - Control Valve Calculator: 7-tab wizard (Project → Service Data → Valve Type → Sizing → Selection → Risk → Results)
   - Engine module: controlValve.ts with multi-point Cv sizing (min/normal/max), liquid/gas/steam modes
   - Valve selection: opening %, rangeability check, valve authority assessment
