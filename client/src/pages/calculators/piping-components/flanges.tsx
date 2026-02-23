@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Disc3, Info } from "lucide-react";
-import { DatasetStatus } from "@/components/piping/dataset-status";
 import { DatasetImportWizard } from "@/components/piping/dataset-import-wizard";
 import { DimensionTable } from "@/components/piping/dimension-table";
 import { FlangeSectionSVG } from "@/components/piping/svg-drawings";
 import { loadDataset, deleteDataset } from "@/lib/engineering/piping/datasetManager";
+import { FLANGE_DATA } from "@/lib/engineering/piping/data";
 import type { FlangeRow, DatasetMeta } from "@/lib/engineering/piping/schemas";
 
 const COLUMNS = [
@@ -27,7 +27,8 @@ const COLUMNS = [
 
 export default function FlangesPage() {
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
-  const [rows, setRows] = useState<FlangeRow[]>([]);
+  const [rows, setRows] = useState<FlangeRow[]>(FLANGE_DATA);
+  const [isCustom, setIsCustom] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [filterNPS, setFilterNPS] = useState<string>("all");
@@ -36,9 +37,15 @@ export default function FlangesPage() {
 
   const loadData = async () => {
     const ds = await loadDataset<FlangeRow>("flanges");
-    if (ds) { setMeta(ds.meta); setRows(ds.rows); } else { setMeta(null); setRows([]); }
+    if (ds) { setMeta(ds.meta); setRows(ds.rows); setIsCustom(true); }
+    else { setMeta(null); setRows(FLANGE_DATA); setIsCustom(false); }
   };
   useEffect(() => { loadData(); }, []);
+
+  const handleDelete = async () => {
+    await deleteDataset("flanges");
+    setMeta(null); setRows(FLANGE_DATA); setSelectedIdx(null); setIsCustom(false);
+  };
 
   const npsValues = useMemo(() => Array.from(new Set(rows.map(r => r.nps))).sort((a, b) => a - b), [rows]);
   const classValues = useMemo(() => Array.from(new Set(rows.map(r => r.class_rating))).sort((a, b) => a - b), [rows]);
@@ -70,68 +77,73 @@ export default function FlangesPage() {
             </div>
           </div>
 
-          <div className="mb-4"><DatasetStatus meta={meta} onImport={() => setShowImport(true)} onDelete={async () => { await deleteDataset("flanges"); setMeta(null); setRows([]); setSelectedIdx(null); }} /></div>
+          <div className="mb-4 flex items-center gap-3 flex-wrap">
+            <Badge variant={isCustom ? "default" : "secondary"} className="text-[10px]">
+              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : "Built-in ASME Data"}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">{rows.length} records</span>
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => setShowImport(true)} data-testid="button-import-custom">
+                Import Custom Data
+              </Button>
+              {isCustom && (
+                <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={handleDelete} data-testid="button-revert-builtin">
+                  Revert to Built-in
+                </Button>
+              )}
+            </div>
+          </div>
+
           {showImport && <div className="mb-4"><DatasetImportWizard category="flanges" onImported={() => { setShowImport(false); loadData(); }} onClose={() => setShowImport(false)} /></div>}
 
-          {rows.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 space-y-4">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div><Label className="text-xs">NPS</Label>
-                        <Select value={filterNPS} onValueChange={setFilterNPS}><SelectTrigger className="w-24 h-8 text-xs" data-testid="select-filter-nps"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value="all">All</SelectItem>{npsValues.map(n => <SelectItem key={n} value={String(n)}>{n}"</SelectItem>)}</SelectContent></Select>
-                      </div>
-                      <div><Label className="text-xs">Class</Label>
-                        <Select value={filterClass} onValueChange={setFilterClass}><SelectTrigger className="w-24 h-8 text-xs" data-testid="select-filter-class"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value="all">All</SelectItem>{classValues.map(c => <SelectItem key={c} value={String(c)}>#{c}</SelectItem>)}</SelectContent></Select>
-                      </div>
-                      <div><Label className="text-xs">Type</Label>
-                        <Select value={filterType} onValueChange={setFilterType}><SelectTrigger className="w-20 h-8 text-xs" data-testid="select-filter-type"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value="all">All</SelectItem>{typeValues.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>
-                      </div>
-                      <Badge variant="secondary" className="text-[10px] ml-auto">{filtered.length} records</Badge>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div><Label className="text-xs">NPS</Label>
+                      <Select value={filterNPS} onValueChange={setFilterNPS}><SelectTrigger className="w-24 h-8 text-xs" data-testid="select-filter-nps"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All</SelectItem>{npsValues.map(n => <SelectItem key={n} value={String(n)}>{n}"</SelectItem>)}</SelectContent></Select>
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-0 max-h-[500px] overflow-y-auto">
-                    <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
-                  </CardContent>
-                </Card>
-              </div>
-              <div className="space-y-4">
-                <Card><CardHeader className="pb-2"><h3 className="text-sm font-semibold">Cross-Section Drawing</h3></CardHeader>
-                  <CardContent className="flex items-center justify-center">
-                    {selected ? <FlangeSectionSVG row={selected} /> : <div className="text-center py-8"><Info className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" /><p className="text-xs text-muted-foreground">Select a row to view drawing</p></div>}
-                  </CardContent>
-                </Card>
-                {selected && (
-                  <Card><CardHeader className="pb-2"><h3 className="text-sm font-semibold">Details</h3></CardHeader>
-                    <CardContent className="space-y-2 text-xs">
-                      <div className="flex justify-between"><span className="text-muted-foreground">Flange OD</span><span>{selected.od_mm} mm</span></div>
-                      {selected.bolt_circle_mm && <div className="flex justify-between"><span className="text-muted-foreground">Bolt Circle</span><span>{selected.bolt_circle_mm} mm</span></div>}
-                      {selected.num_bolts && <div className="flex justify-between"><span className="text-muted-foreground">Bolt Pattern</span><span>{selected.num_bolts}× Ø{selected.bolt_dia_mm ?? "?"}</span></div>}
-                      {selected.thickness_mm && <div className="flex justify-between"><span className="text-muted-foreground">Thickness</span><span>{selected.thickness_mm} mm</span></div>}
-                      {selected.hub_length_mm && <div className="flex justify-between"><span className="text-muted-foreground">Hub Length</span><span>{selected.hub_length_mm} mm</span></div>}
-                      {selected.rf_height_mm !== undefined && <div className="flex justify-between"><span className="text-muted-foreground">RF Height</span><span>{selected.rf_height_mm} mm</span></div>}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                    <div><Label className="text-xs">Class</Label>
+                      <Select value={filterClass} onValueChange={setFilterClass}><SelectTrigger className="w-24 h-8 text-xs" data-testid="select-filter-class"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All</SelectItem>{classValues.map(c => <SelectItem key={c} value={String(c)}>#{c}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <div><Label className="text-xs">Type</Label>
+                      <Select value={filterType} onValueChange={setFilterType}><SelectTrigger className="w-20 h-8 text-xs" data-testid="select-filter-type"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All</SelectItem>{typeValues.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] ml-auto">{filtered.length} records</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 max-h-[500px] overflow-y-auto">
+                  <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
+                </CardContent>
+              </Card>
             </div>
-          )}
-
-          {rows.length === 0 && !showImport && (
-            <Card className="mt-6"><CardContent className="py-12 text-center">
-              <Disc3 className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-              <h3 className="text-sm font-medium mb-2">No Flange Data Loaded</h3>
-              <p className="text-xs text-muted-foreground mb-4">Import your licensed flange dimension data to start looking up dimensions.</p>
-              <Button variant="outline" size="sm" onClick={() => setShowImport(true)} data-testid="button-import-flanges">Import Flange Dataset</Button>
-            </CardContent></Card>
-          )}
+            <div className="space-y-4">
+              <Card><CardHeader className="pb-2"><h3 className="text-sm font-semibold">Cross-Section Drawing</h3></CardHeader>
+                <CardContent className="flex items-center justify-center">
+                  {selected ? <FlangeSectionSVG row={selected} /> : <div className="text-center py-8"><Info className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" /><p className="text-xs text-muted-foreground">Select a row to view drawing</p></div>}
+                </CardContent>
+              </Card>
+              {selected && (
+                <Card><CardHeader className="pb-2"><h3 className="text-sm font-semibold">Details</h3></CardHeader>
+                  <CardContent className="space-y-2 text-xs">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Flange OD</span><span>{selected.od_mm} mm</span></div>
+                    {selected.bolt_circle_mm && <div className="flex justify-between"><span className="text-muted-foreground">Bolt Circle</span><span>{selected.bolt_circle_mm} mm</span></div>}
+                    {selected.num_bolts && <div className="flex justify-between"><span className="text-muted-foreground">Bolt Pattern</span><span>{selected.num_bolts}× Ø{selected.bolt_dia_mm ?? "?"}</span></div>}
+                    {selected.thickness_mm && <div className="flex justify-between"><span className="text-muted-foreground">Thickness</span><span>{selected.thickness_mm} mm</span></div>}
+                    {selected.hub_length_mm && <div className="flex justify-between"><span className="text-muted-foreground">Hub Length</span><span>{selected.hub_length_mm} mm</span></div>}
+                    {selected.rf_height_mm !== undefined && <div className="flex justify-between"><span className="text-muted-foreground">RF Height</span><span>{selected.rf_height_mm} mm</span></div>}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
 
           <div className="mt-6 p-3 rounded-md border border-muted/30 bg-muted/5">
-            <p className="text-[10px] text-muted-foreground leading-relaxed"><strong>Disclaimer:</strong> Dimensional tables are derived from user-supplied licensed datasets. Reference: ASME B16.5, ASME B16.47.</p>
+            <p className="text-[10px] text-muted-foreground leading-relaxed"><strong>Disclaimer:</strong> Built-in dimensions are based on standard reference values. For project-critical applications, verify against your organization's licensed copies of the referenced standards. Reference: ASME B16.5, ASME B16.47.</p>
           </div>
         </div>
       </section>

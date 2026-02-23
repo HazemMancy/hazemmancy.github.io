@@ -44,9 +44,8 @@ export default function PipingComponentsIndex() {
               </h1>
             </div>
             <p className="text-muted-foreground max-w-2xl mx-auto text-xs md:text-base leading-relaxed px-2">
-              Dimension lookup and engineering screening tools for piping components.
-              Import your licensed ASME / manufacturer catalog data for dimension lookup,
-              or use the built-in screening calculators for flexibility and support spacing.
+              Built-in piping component data bank with ASME standard dimensions,
+              plus engineering screening calculators for flexibility and support spacing.
             </p>
           </div>
 
@@ -63,8 +62,8 @@ export default function PipingComponentsIndex() {
                         <div className="p-2.5 rounded-md bg-primary/10 shrink-0">
                           <info.icon className="w-5 h-5 text-primary" />
                         </div>
-                        <Badge variant={meta ? "default" : "outline"} className={`text-[10px] shrink-0 ${meta ? "bg-green-500/20 text-green-400 border-green-500/30" : "text-muted-foreground"}`}>
-                          {meta ? `${meta.row_count} rows` : "No data"}
+                        <Badge variant={meta ? "default" : "secondary"} className={`text-[10px] shrink-0 ${meta ? "bg-green-500/20 text-green-400 border-green-500/30" : ""}`}>
+                          {meta ? `Custom: ${meta.row_count} rows` : "Built-in"}
                         </Badge>
                       </div>
                       <h3 className="font-semibold text-sm mb-2">{CATEGORY_LABELS[cat]}</h3>
@@ -125,8 +124,9 @@ export default function PipingComponentsIndex() {
             <Card className="max-w-2xl mx-auto">
               <CardContent className="py-6 px-6">
                 <p className="text-[10px] text-muted-foreground leading-relaxed mb-3">
-                  Dimensional tables are derived from user-supplied licensed datasets and/or manufacturer catalogs.
-                  This tool does not reproduce copyrighted standards content.
+                  Built-in dimensions are based on standard reference values per ASME, API, and MSS standards.
+                  For project-critical applications, verify against your organization's licensed copies of the referenced standards.
+                  Custom datasets can be imported to override built-in data.
                 </p>
                 <Link href="/calculators">
                   <Button variant="outline" size="sm" data-testid="button-back-calculators">

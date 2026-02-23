@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, GitBranch, Info } from "lucide-react";
-import { DatasetStatus } from "@/components/piping/dataset-status";
 import { DatasetImportWizard } from "@/components/piping/dataset-import-wizard";
 import { DimensionTable } from "@/components/piping/dimension-table";
 import { FittingSVG } from "@/components/piping/svg-drawings";
 import { loadDataset, deleteDataset } from "@/lib/engineering/piping/datasetManager";
+import { FITTING_DATA } from "@/lib/engineering/piping/data";
 import type { FittingRow, DatasetMeta } from "@/lib/engineering/piping/schemas";
 
 const FITTING_TYPE_LABELS: Record<string, string> = {
@@ -32,7 +32,8 @@ const COLUMNS = [
 
 export default function FittingsPage() {
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
-  const [rows, setRows] = useState<FittingRow[]>([]);
+  const [rows, setRows] = useState<FittingRow[]>(FITTING_DATA);
+  const [isCustom, setIsCustom] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [filterNPS, setFilterNPS] = useState<string>("all");
@@ -40,9 +41,15 @@ export default function FittingsPage() {
 
   const loadData = async () => {
     const ds = await loadDataset<FittingRow>("fittings");
-    if (ds) { setMeta(ds.meta); setRows(ds.rows); } else { setMeta(null); setRows([]); }
+    if (ds) { setMeta(ds.meta); setRows(ds.rows); setIsCustom(true); }
+    else { setMeta(null); setRows(FITTING_DATA); setIsCustom(false); }
   };
   useEffect(() => { loadData(); }, []);
+
+  const handleDelete = async () => {
+    await deleteDataset("fittings");
+    setMeta(null); setRows(FITTING_DATA); setSelectedIdx(null); setIsCustom(false);
+  };
 
   const npsValues = useMemo(() => Array.from(new Set(rows.map(r => r.nps))).sort((a, b) => a - b), [rows]);
   const typeValues = useMemo(() => Array.from(new Set(rows.map(r => r.type))), [rows]);
@@ -72,52 +79,57 @@ export default function FittingsPage() {
             </div>
           </div>
 
-          <div className="mb-4"><DatasetStatus meta={meta} onImport={() => setShowImport(true)} onDelete={async () => { await deleteDataset("fittings"); setMeta(null); setRows([]); setSelectedIdx(null); }} /></div>
+          <div className="mb-4 flex items-center gap-3 flex-wrap">
+            <Badge variant={isCustom ? "default" : "secondary"} className="text-[10px]">
+              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : "Built-in ASME Data"}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">{rows.length} records</span>
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => setShowImport(true)} data-testid="button-import-custom">
+                Import Custom Data
+              </Button>
+              {isCustom && (
+                <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={handleDelete} data-testid="button-revert-builtin">
+                  Revert to Built-in
+                </Button>
+              )}
+            </div>
+          </div>
+
           {showImport && <div className="mb-4"><DatasetImportWizard category="fittings" onImported={() => { setShowImport(false); loadData(); }} onClose={() => setShowImport(false)} /></div>}
 
-          {rows.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 space-y-4">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div><Label className="text-xs">NPS</Label>
-                        <Select value={filterNPS} onValueChange={setFilterNPS}><SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value="all">All</SelectItem>{npsValues.map(n => <SelectItem key={n} value={String(n)}>{n}"</SelectItem>)}</SelectContent></Select>
-                      </div>
-                      <div><Label className="text-xs">Type</Label>
-                        <Select value={filterType} onValueChange={setFilterType}><SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value="all">All</SelectItem>{typeValues.map(t => <SelectItem key={t} value={t}>{FITTING_TYPE_LABELS[t] ?? t}</SelectItem>)}</SelectContent></Select>
-                      </div>
-                      <Badge variant="secondary" className="text-[10px] ml-auto">{filtered.length} records</Badge>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div><Label className="text-xs">NPS</Label>
+                      <Select value={filterNPS} onValueChange={setFilterNPS}><SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All</SelectItem>{npsValues.map(n => <SelectItem key={n} value={String(n)}>{n}"</SelectItem>)}</SelectContent></Select>
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-0 max-h-[500px] overflow-y-auto">
-                    <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
-                  </CardContent>
-                </Card>
-              </div>
-              <div className="space-y-4">
-                <Card><CardHeader className="pb-2"><h3 className="text-sm font-semibold">Fitting Drawing</h3></CardHeader>
-                  <CardContent className="flex items-center justify-center">
-                    {selected ? <FittingSVG row={selected} /> : <div className="text-center py-8"><Info className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" /><p className="text-xs text-muted-foreground">Select a row to view drawing</p></div>}
-                  </CardContent>
-                </Card>
-              </div>
+                    <div><Label className="text-xs">Type</Label>
+                      <Select value={filterType} onValueChange={setFilterType}><SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">All</SelectItem>{typeValues.map(t => <SelectItem key={t} value={t}>{FITTING_TYPE_LABELS[t] ?? t}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] ml-auto">{filtered.length} records</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 max-h-[500px] overflow-y-auto">
+                  <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
+                </CardContent>
+              </Card>
             </div>
-          )}
-
-          {rows.length === 0 && !showImport && (
-            <Card className="mt-6"><CardContent className="py-12 text-center">
-              <GitBranch className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-              <h3 className="text-sm font-medium mb-2">No Fitting Data Loaded</h3>
-              <p className="text-xs text-muted-foreground mb-4">Import your licensed fitting dimension data to start looking up dimensions.</p>
-              <Button variant="outline" size="sm" onClick={() => setShowImport(true)} data-testid="button-import-fittings">Import Fitting Dataset</Button>
-            </CardContent></Card>
-          )}
+            <div className="space-y-4">
+              <Card><CardHeader className="pb-2"><h3 className="text-sm font-semibold">Fitting Drawing</h3></CardHeader>
+                <CardContent className="flex items-center justify-center">
+                  {selected ? <FittingSVG row={selected} /> : <div className="text-center py-8"><Info className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" /><p className="text-xs text-muted-foreground">Select a row to view drawing</p></div>}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
           <div className="mt-6 p-3 rounded-md border border-muted/30 bg-muted/5">
-            <p className="text-[10px] text-muted-foreground leading-relaxed"><strong>Disclaimer:</strong> Dimensional tables are derived from user-supplied licensed datasets. Reference: ASME B16.9, ASME B16.11.</p>
+            <p className="text-[10px] text-muted-foreground leading-relaxed"><strong>Disclaimer:</strong> Built-in dimensions are based on standard reference values. For project-critical applications, verify against your organization's licensed copies of the referenced standards. Reference: ASME B16.9, ASME B16.11.</p>
           </div>
         </div>
       </section>
