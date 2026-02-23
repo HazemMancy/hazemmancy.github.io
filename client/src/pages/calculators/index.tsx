@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Wind, Droplets, Gauge, Blend, ArrowLeftRight, ArrowRight, Calculator,
-  Waves, CircleDot, Container, Thermometer, Shield, Flame, Cog,
+  Waves, CircleDot, Container, Thermometer, Shield, Flame, Cog, Cylinder,
 } from "lucide-react";
 
 interface CalculatorEntry {
@@ -251,6 +251,30 @@ export default function CalculatorsIndexPage() {
                 </Card>
               </Link>
             ))}
+          </div>
+
+          <div className="mt-10 md:mt-16">
+            <Link href="/calculators/piping-components">
+              <Card className="hover-elevate cursor-pointer transition-all group max-w-2xl mx-auto" data-testid="card-piping-components">
+                <CardContent className="p-5 md:p-8 flex items-center gap-4">
+                  <div className="p-3 rounded-md bg-primary/10 shrink-0">
+                    <Cylinder className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-base mb-1">Piping Components</h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Dimension lookup for pipe, flanges, fittings, gaskets, valves, line blanks, olets — plus pipe flexibility and safe span screening calculators.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <Badge variant="secondary" className="text-[10px]">9 Categories</Badge>
+                      <Badge variant="secondary" className="text-[10px]">SVG Drawings</Badge>
+                      <Badge variant="secondary" className="text-[10px]">Dataset Import</Badge>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </CardContent>
+              </Card>
+            </Link>
           </div>
 
           <div className="text-center mt-12 md:mt-16">

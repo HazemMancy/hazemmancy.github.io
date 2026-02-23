@@ -21,6 +21,16 @@ import PSVSizingPage from "@/pages/calculators/psv-sizing";
 import ThermalReliefPage from "@/pages/calculators/thermal-relief";
 import CompressorPage from "@/pages/calculators/compressor";
 import CalculatorsIndexPage from "@/pages/calculators/index";
+import PipingComponentsIndex from "@/pages/calculators/piping-components/index";
+import PipePage from "@/pages/calculators/piping-components/pipe";
+import FlangesPage from "@/pages/calculators/piping-components/flanges";
+import FittingsPage from "@/pages/calculators/piping-components/fittings";
+import GasketsPage from "@/pages/calculators/piping-components/gaskets";
+import ValvesPage from "@/pages/calculators/piping-components/valves";
+import LineBlanksPage from "@/pages/calculators/piping-components/line-blanks";
+import OletsPage from "@/pages/calculators/piping-components/olets";
+import PipeFlexibilityPage from "@/pages/calculators/piping-components/pipe-flexibility";
+import SafeSpansPage from "@/pages/calculators/piping-components/safe-spans";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -41,6 +51,16 @@ function Router() {
       <Route path="/calculators/psv-sizing" component={PSVSizingPage} />
       <Route path="/calculators/thermal-relief" component={ThermalReliefPage} />
       <Route path="/calculators/compressor" component={CompressorPage} />
+      <Route path="/calculators/piping-components" component={PipingComponentsIndex} />
+      <Route path="/calculators/piping-components/pipe" component={PipePage} />
+      <Route path="/calculators/piping-components/flanges" component={FlangesPage} />
+      <Route path="/calculators/piping-components/fittings" component={FittingsPage} />
+      <Route path="/calculators/piping-components/gaskets" component={GasketsPage} />
+      <Route path="/calculators/piping-components/valves" component={ValvesPage} />
+      <Route path="/calculators/piping-components/line-blanks" component={LineBlanksPage} />
+      <Route path="/calculators/piping-components/olets" component={OletsPage} />
+      <Route path="/calculators/piping-components/pipe-flexibility" component={PipeFlexibilityPage} />
+      <Route path="/calculators/piping-components/safe-spans" component={SafeSpansPage} />
       <Route component={NotFound} />
     </Switch>
   );

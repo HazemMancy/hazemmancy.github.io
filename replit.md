@@ -38,9 +38,19 @@ client/src/
     psvSizing.ts     - (Legacy) PSV sizing screening — replaced by prdSizing.ts
     thermalRelief.ts - Thermal expansion relief screening (API 521, API 526 orifice selection)
     compressorSizing.ts - Compressor sizing (polytropic/isentropic, multi-stage, API 617/618)
+    piping/              - Piping components module
+      schemas.ts         - Zod schemas for all 7 lookup categories (pipe, flanges, fittings, gaskets, valves, line-blanks, olets)
+      datasetManager.ts  - IndexedDB persistence, CSV/JSON import, validation pipeline
+      flexibility.ts     - Pipe flexibility screening (guided cantilever, ASME B31.3)
+      safeSpans.ts       - Safe span screening (stress + deflection criteria)
+  components/piping/     - Piping module shared UI components
+    svg-drawings.tsx     - SVG technical drawings (pipe section, flange, elbow, tee, reducer, gasket, valve, line blank, olet)
+    dataset-import-wizard.tsx - CSV/JSON import wizard (upload → validate → preview → save)
+    dataset-status.tsx   - Dataset loaded/not-loaded status bar
+    dimension-table.tsx  - Filterable dimension lookup table
   pages/
     home.tsx         - Single-page portfolio (Hero, About, Experience, Projects, Skills, Contact)
-    calculators/     - 13 calculator pages
+    calculators/     - 13 calculator pages + piping components module
       gas-line-sizing.tsx
       liquid-line-sizing.tsx
       multiphase-line.tsx
@@ -54,6 +64,17 @@ client/src/
       psv-sizing.tsx   - Now: PRD/Flare Relief Calculator (9-tab wizard)
       thermal-relief.tsx
       compressor.tsx
+      piping-components/   - Piping Components module (9 categories)
+        index.tsx          - Hub page with category cards
+        pipe.tsx           - Pipe dimensions lookup (ASME B36.10M/B36.19M)
+        flanges.tsx        - Flange dimensions lookup (ASME B16.5/B16.47)
+        fittings.tsx       - Fitting dimensions lookup (ASME B16.9/B16.11)
+        gaskets.tsx        - Gasket dimensions lookup (ASME B16.20/B16.21)
+        valves.tsx         - Valve dimensions lookup (ASME B16.10/API 600)
+        line-blanks.tsx    - Line blank dimensions lookup (ASME B16.48)
+        olets.tsx          - Olet dimensions lookup (MSS SP-97)
+        pipe-flexibility.tsx - Pipe flexibility screening calculator
+        safe-spans.tsx     - Safe span screening calculator
 ```
 
 ## Running
