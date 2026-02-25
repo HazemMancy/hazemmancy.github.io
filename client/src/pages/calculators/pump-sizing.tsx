@@ -957,6 +957,7 @@ export default function PumpSizingPage() {
                       },
                     ]}
                     rawData={centrifugalResult}
+                    exportData={buildCentrifugalExportData()}
                   />
                   <ResultsPanel
                     title="Velocities & NPSH"
@@ -999,6 +1000,7 @@ export default function PumpSizingPage() {
                       },
                     ]}
                     rawData={centrifugalResult}
+                    exportData={buildCentrifugalExportData()}
                   />
                   <PumpCurveChart
                     designFlowSI={convertToSI("flowLiquid", parseFloat(form.flowRate) || 0, unitSystem)}
@@ -1084,6 +1086,7 @@ export default function PumpSizingPage() {
                       },
                     ]}
                     rawData={pdResult}
+                    exportData={buildPDExportData()}
                   />
                   <ResultsPanel
                     title="NPSH / NPIP & Velocities"
@@ -1122,6 +1125,7 @@ export default function PumpSizingPage() {
                       },
                     ]}
                     rawData={pdResult}
+                    exportData={buildPDExportData()}
                   />
                   <ResultsPanel
                     title="Safety & Protection"
@@ -1143,6 +1147,7 @@ export default function PumpSizingPage() {
                       },
                     ]}
                     rawData={pdResult}
+                    exportData={buildPDExportData()}
                   />
                   <PDCurveChart
                     designFlowSI={pdResult.actualFlow}

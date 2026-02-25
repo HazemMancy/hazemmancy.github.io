@@ -30,14 +30,21 @@ interface PDCurveChartProps {
 }
 
 const COLORS = {
-  theoreticalFlow: "#3b82f6",
-  actualFlow: "#22c55e",
-  actualFlowFill: "rgba(34, 197, 94, 0.08)",
-  slipLine: "#ef4444",
-  slipArea: "rgba(239, 68, 68, 0.10)",
-  power: "#f59e0b",
-  volEfficiency: "#a855f7",
-  operatingPoint: "#d4a04a",
+  theoreticalFlow: "#2563eb",
+  actualFlow: "#16a34a",
+  actualFlowGradientStart: "rgba(22, 163, 74, 0.14)",
+  actualFlowGradientEnd: "rgba(22, 163, 74, 0.01)",
+  slipLine: "#dc2626",
+  slipGradientStart: "rgba(220, 38, 38, 0.12)",
+  slipGradientEnd: "rgba(220, 38, 38, 0.02)",
+  power: "#d97706",
+  volEfficiency: "#8b5cf6",
+  operatingPoint: "#2563eb",
+  operatingPointRing: "#ffffff",
+  grid: "hsl(var(--muted) / 0.18)",
+  gridMajor: "hsl(var(--muted) / 0.30)",
+  axisText: "hsl(var(--muted-foreground) / 0.7)",
+  axisLabel: "hsl(var(--muted-foreground) / 0.85)",
 };
 
 const LEGEND_NAMES: Record<string, string> = {
@@ -47,6 +54,116 @@ const LEGEND_NAMES: Record<string, string> = {
   power: "Shaft Power",
   volEff: "Vol. Efficiency (%)",
 };
+
+function CustomTooltip({ active, payload, label, flowUnit, pressureUnit, powerUnit }: any) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const theoEntry = payload.find((p: any) => p.dataKey === "theoreticalFlow");
+  const actualEntry = payload.find((p: any) => p.dataKey === "actualFlow");
+  const slipEntry = payload.find((p: any) => p.dataKey === "slipFlow");
+  const powerEntry = payload.find((p: any) => p.dataKey === "power");
+  const volEffEntry = payload.find((p: any) => p.dataKey === "volEff");
+
+  return (
+    <div
+      style={{
+        backgroundColor: "hsl(var(--card))",
+        border: "1px solid hsl(var(--border))",
+        borderRadius: "8px",
+        padding: "10px 14px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        minWidth: "200px",
+      }}
+    >
+      <div
+        style={{
+          color: "hsl(var(--foreground))",
+          fontWeight: 600,
+          fontSize: "11px",
+          marginBottom: "8px",
+          paddingBottom: "6px",
+          borderBottom: "1px solid hsl(var(--border))",
+        }}
+      >
+        {"\u0394"}P: {label} {pressureUnit}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        {theoEntry && theoEntry.value != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.theoreticalFlow, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Theoretical Flow:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {theoEntry.value.toFixed(1)} {flowUnit}
+            </span>
+          </div>
+        )}
+        {actualEntry && actualEntry.value != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.actualFlow, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Actual Flow:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {actualEntry.value.toFixed(1)} {flowUnit}
+            </span>
+          </div>
+        )}
+        {slipEntry && slipEntry.value != null && slipEntry.value > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.slipLine, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Slip:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {slipEntry.value.toFixed(1)} {flowUnit}
+            </span>
+          </div>
+        )}
+        {volEffEntry && volEffEntry.value != null && volEffEntry.value > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.volEfficiency, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Vol. Efficiency:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {volEffEntry.value.toFixed(1)}%
+            </span>
+          </div>
+        )}
+        {powerEntry && powerEntry.value != null && powerEntry.value > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.power, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Shaft Power:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {powerEntry.value.toFixed(2)} {powerUnit}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomLegend({ payload }: any) {
+  if (!payload) return null;
+  const filtered = payload.filter((entry: any) => LEGEND_NAMES[entry.dataKey]);
+  return (
+    <div style={{ display: "flex", justifyContent: "center", gap: "20px", paddingTop: "10px", flexWrap: "wrap" }}>
+      {filtered.map((entry: any) => (
+        <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div
+            style={{
+              width: entry.dataKey === "volEff" || entry.dataKey === "slipFlow" ? 16 : 12,
+              height: 2,
+              backgroundColor: entry.color,
+              borderRadius: 1,
+              ...(entry.dataKey === "volEff" || entry.dataKey === "slipFlow"
+                ? { backgroundImage: `repeating-linear-gradient(90deg, ${entry.color} 0px, ${entry.color} 4px, transparent 4px, transparent 6px)`, backgroundColor: "transparent" }
+                : {}),
+            }}
+          />
+          <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>
+            {LEGEND_NAMES[entry.dataKey] || entry.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function PDCurveChart({
   designFlowSI,
@@ -111,6 +228,7 @@ export function PDCurveChart({
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
           <h4 className="text-sm font-semibold">PD Pump Performance Curves (per API 674/676)</h4>
+          <span className="text-[10px] text-muted-foreground ml-1">(Illustrative)</span>
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
@@ -120,37 +238,39 @@ export function PDCurveChart({
               {`Flow (${flowUnit}) / Eff (%)`}
             </span>
           </div>
-          <div className="flex-1 h-[380px]">
+          <div className="flex-1 h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
-              margin={{ top: 10, right: 50, left: 10, bottom: 24 }}
+              margin={{ top: 16, right: 50, left: 10, bottom: 28 }}
             >
               <defs>
                 <linearGradient id="pdActualFlowGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={COLORS.actualFlow} stopOpacity={0.12} />
-                  <stop offset="100%" stopColor={COLORS.actualFlow} stopOpacity={0.01} />
+                  <stop offset="0%" stopColor={COLORS.actualFlowGradientStart} />
+                  <stop offset="100%" stopColor={COLORS.actualFlowGradientEnd} />
                 </linearGradient>
                 <linearGradient id="pdSlipGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={COLORS.slipLine} stopOpacity={0.15} />
-                  <stop offset="100%" stopColor={COLORS.slipLine} stopOpacity={0.03} />
+                  <stop offset="0%" stopColor={COLORS.slipGradientStart} />
+                  <stop offset="100%" stopColor={COLORS.slipGradientEnd} />
                 </linearGradient>
               </defs>
+
               <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="hsl(var(--muted) / 0.2)"
+                strokeDasharray="1 4"
+                stroke={COLORS.grid}
                 vertical={false}
               />
+
               <XAxis
                 dataKey="pressure"
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
-                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                tick={{ fill: COLORS.axisText, fontSize: 10 }}
+                tickLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: COLORS.gridMajor }}
                 label={{
                   value: `Differential Pressure (${pressureUnit})`,
                   position: "insideBottom",
-                  offset: -14,
-                  fill: "hsl(var(--muted-foreground))",
+                  offset: -16,
+                  fill: COLORS.axisLabel,
                   fontSize: 11,
                   fontWeight: 500,
                 }}
@@ -158,47 +278,32 @@ export function PDCurveChart({
               <YAxis
                 yAxisId="flow"
                 domain={[0, flowMax]}
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
-                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                tick={{ fill: COLORS.axisText, fontSize: 10 }}
+                tickLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: COLORS.gridMajor }}
                 width={50}
               />
               <YAxis
                 yAxisId="power"
                 orientation="right"
                 domain={[0, powerMax]}
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
-                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                tick={{ fill: COLORS.axisText, fontSize: 10 }}
+                tickLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: COLORS.gridMajor }}
                 width={50}
               />
+
               <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontSize: "11px",
-                  padding: "10px 14px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                }}
-                labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600, marginBottom: 6 }}
-                itemStyle={{ padding: "2px 0" }}
-                formatter={(value: number, name: string) => {
-                  if (name === "theoreticalFlow") return [`${value.toFixed(1)} ${flowUnit}`, "Theoretical Flow"];
-                  if (name === "actualFlow") return [`${value.toFixed(1)} ${flowUnit}`, "Actual Flow"];
-                  if (name === "slipFlow") return [`${value.toFixed(1)} ${flowUnit}`, "Slip"];
-                  if (name === "power") return [`${value.toFixed(2)} ${powerUnit}`, "Shaft Power"];
-                  if (name === "volEff") return [`${value.toFixed(1)} %`, "Vol. Efficiency"];
-                  return [value, name];
-                }}
-                labelFormatter={(label) => `\u0394P: ${label} ${pressureUnit}`}
+                content={
+                  <CustomTooltip
+                    flowUnit={flowUnit}
+                    pressureUnit={pressureUnit}
+                    powerUnit={powerUnit}
+                  />
+                }
+                cursor={{ stroke: "hsl(var(--muted-foreground) / 0.15)", strokeWidth: 1 }}
               />
-              <Legend
-                wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }}
-                iconType="plainline"
-                iconSize={14}
-                formatter={(value: string) => LEGEND_NAMES[value] || value}
-              />
+              <Legend content={<CustomLegend />} />
 
               <Area
                 yAxisId="flow"
@@ -229,7 +334,7 @@ export function PDCurveChart({
                 strokeWidth={2.5}
                 dot={false}
                 name="theoreticalFlow"
-                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff", fill: COLORS.theoreticalFlow }}
               />
               <Line
                 yAxisId="flow"
@@ -239,7 +344,7 @@ export function PDCurveChart({
                 strokeWidth={2}
                 dot={false}
                 name="actualFlow"
-                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff", fill: COLORS.actualFlow }}
               />
               <Line
                 yAxisId="flow"
@@ -247,10 +352,10 @@ export function PDCurveChart({
                 dataKey="volEff"
                 stroke={COLORS.volEfficiency}
                 strokeWidth={1.8}
-                strokeDasharray="5 3"
+                strokeDasharray="6 3"
                 dot={false}
                 name="volEff"
-                activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.volEfficiency }}
               />
               <Line
                 yAxisId="power"
@@ -260,20 +365,22 @@ export function PDCurveChart({
                 strokeWidth={2}
                 dot={false}
                 name="power"
-                activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.power }}
               />
 
               <ReferenceLine
                 yAxisId="flow"
                 x={parseFloat(displayDP.toFixed(2))}
-                stroke="hsl(var(--muted-foreground) / 0.25)"
+                stroke="hsl(var(--muted-foreground) / 0.2)"
                 strokeDasharray="3 3"
+                strokeWidth={1}
               />
               <ReferenceLine
                 yAxisId="flow"
                 y={parseFloat(displayActualFlow.toFixed(2))}
-                stroke="hsl(var(--muted-foreground) / 0.15)"
+                stroke="hsl(var(--muted-foreground) / 0.12)"
                 strokeDasharray="3 3"
+                strokeWidth={1}
               />
               <ReferenceDot
                 yAxisId="flow"
@@ -281,7 +388,7 @@ export function PDCurveChart({
                 y={parseFloat(displayActualFlow.toFixed(2))}
                 r={8}
                 fill={COLORS.operatingPoint}
-                stroke="#fff"
+                stroke={COLORS.operatingPointRing}
                 strokeWidth={2.5}
               />
               <ReferenceDot
@@ -289,7 +396,7 @@ export function PDCurveChart({
                 x={parseFloat(displayDP.toFixed(2))}
                 y={parseFloat(displayActualFlow.toFixed(2))}
                 r={3}
-                fill="#fff"
+                fill="#ffffff"
                 stroke="none"
               />
             </ComposedChart>
@@ -302,14 +409,22 @@ export function PDCurveChart({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground border-t border-muted/30 pt-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS.operatingPoint, border: "2.5px solid white", boxShadow: "0 0 0 1px hsl(var(--border))" }} />
-            <span>Design Point: {displayActualFlow.toFixed(1)} {flowUnit} @ {displayDP.toFixed(1)} {pressureUnit}</span>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs border-t border-muted/30 pt-3 px-1">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS.operatingPoint, border: "2.5px solid white", boxShadow: `0 0 0 1px ${COLORS.operatingPoint}` }} />
+            <span className="text-foreground font-medium">
+              Design Point: {displayActualFlow.toFixed(1)} {flowUnit} @ {displayDP.toFixed(1)} {pressureUnit}
+            </span>
           </div>
-          <div>Theoretical Flow: {displayTheoreticalFlow.toFixed(1)} {flowUnit}</div>
-          <div>Shaft Power: {displayPower.toFixed(2)} {powerUnit}</div>
-          <div>Vol. Efficiency: {volumetricEfficiency.toFixed(0)}%</div>
+          <div className="text-muted-foreground">
+            Theoretical Flow: <span className="text-foreground font-medium">{displayTheoreticalFlow.toFixed(1)} {flowUnit}</span>
+          </div>
+          <div className="text-muted-foreground">
+            Shaft Power: <span className="text-foreground font-medium">{displayPower.toFixed(2)} {powerUnit}</span>
+          </div>
+          <div className="text-muted-foreground">
+            Vol. Efficiency: <span className="text-foreground font-medium">{volumetricEfficiency.toFixed(0)}%</span>
+          </div>
         </div>
 
         <div className="flex items-start gap-2 border-t border-muted/30 pt-2">

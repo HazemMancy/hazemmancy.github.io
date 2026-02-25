@@ -7,16 +7,16 @@ import { PIPING_CATEGORIES, CATEGORY_LABELS, type PipingCategory, type DatasetMe
 import { useState, useEffect } from "react";
 import { listDatasets } from "@/lib/engineering/piping/datasetManager";
 
-const CATEGORY_INFO: Record<PipingCategory, { icon: typeof Cylinder; desc: string; standards: string[]; tags: string[] }> = {
-  pipe: { icon: Cylinder, desc: "Pipe dimensions lookup: OD, ID, wall thickness, weight per length by NPS and schedule.", standards: ["ASME B36.10M", "ASME B36.19M"], tags: ["NPS/DN", "Schedule", "Wall Thickness"] },
-  flanges: { icon: Disc3, desc: "Flange dimensions: WN, SO, BL types. OD, bolt circle, bolt holes, thickness, hub dimensions.", standards: ["ASME B16.5", "ASME B16.47"], tags: ["WN/SO/BL", "Pressure Class", "Bolt Pattern"] },
-  fittings: { icon: GitBranch, desc: "Fitting dimensions: elbows, tees, reducers. Center-to-end, wall thickness by type and schedule.", standards: ["ASME B16.9", "ASME B16.11"], tags: ["Elbow/Tee/Reducer", "BW/SW/THD"] },
-  gaskets: { icon: CircleDot, desc: "Gasket dimensions: spiral wound, ring type, full-face. ID, OD, thickness by NPS and class.", standards: ["ASME B16.20", "ASME B16.21"], tags: ["SWG/RTJ/FF", "ID/OD"] },
-  valves: { icon: Settings2, desc: "Valve envelope dimensions: gate, globe, ball, check. Face-to-face, height, weight by NPS and class.", standards: ["ASME B16.10", "API 600"], tags: ["Gate/Globe/Ball", "Face-to-Face"] },
-  "line-blanks": { icon: Shield, desc: "Line blank dimensions: spectacle blind, spade, spacer. OD, thickness, handle dimensions.", standards: ["ASME B16.48"], tags: ["Spectacle/Spade", "Thickness"] },
-  olets: { icon: Minus, desc: "Branch connection dimensions: weldolet, sockolet, threadolet. Run/branch size, height, bore.", standards: ["MSS SP-97"], tags: ["Weldolet/Sockolet", "Run/Branch"] },
-  "pipe-flexibility": { icon: TrendingUp, desc: "Thermal expansion screening: guided cantilever stress check, expansion loop sizing.", standards: ["ASME B31.3"], tags: ["Thermal Growth", "Loop Sizing"] },
-  "safe-spans": { icon: Ruler, desc: "Pipe support spacing screening: stress and deflection based span limits with distributed loads.", standards: ["ASME B31.3"], tags: ["Span Limit", "Deflection"] },
+const CATEGORY_INFO: Record<PipingCategory, { icon: typeof Cylinder; desc: string; standards: string[] }> = {
+  pipe: { icon: Cylinder, desc: "Pipe dimensions lookup: OD, ID, wall thickness, weight per length by NPS and schedule.", standards: ["ASME B36.10M", "ASME B36.19M"] },
+  flanges: { icon: Disc3, desc: "Flange dimensions: WN, SO, BL types. OD, bolt circle, bolt holes, thickness, hub dimensions.", standards: ["ASME B16.5", "ASME B16.47"] },
+  fittings: { icon: GitBranch, desc: "Fitting dimensions: elbows, tees, reducers. Center-to-end, wall thickness by type and schedule.", standards: ["ASME B16.9", "ASME B16.11"] },
+  gaskets: { icon: CircleDot, desc: "Gasket dimensions: spiral wound, ring type, full-face. ID, OD, thickness by NPS and class.", standards: ["ASME B16.20", "ASME B16.21"] },
+  valves: { icon: Settings2, desc: "Valve envelope dimensions: gate, globe, ball, check. Face-to-face, height, weight by NPS and class.", standards: ["ASME B16.10", "API 600"] },
+  "line-blanks": { icon: Shield, desc: "Line blank dimensions: spectacle blind, spade, spacer. OD, thickness, handle dimensions.", standards: ["ASME B16.48"] },
+  olets: { icon: Minus, desc: "Branch connection dimensions: weldolet, sockolet, threadolet. Run/branch size, height, bore.", standards: ["MSS SP-97"] },
+  "pipe-flexibility": { icon: TrendingUp, desc: "Thermal expansion screening: guided cantilever stress check, expansion loop sizing.", standards: ["ASME B31.3"] },
+  "safe-spans": { icon: Ruler, desc: "Pipe support spacing screening: stress and deflection based span limits with distributed loads.", standards: ["ASME B31.3"] },
 };
 
 export default function PipingComponentsIndex() {
@@ -70,10 +70,10 @@ export default function PipingComponentsIndex() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{info.desc}</p>
-                      <div className="flex items-center justify-between gap-2 border-t border-muted/30 pt-3 mt-auto flex-wrap">
-                        <div className="flex flex-wrap gap-1">
+                      <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-auto flex-wrap">
+                        <div className="flex flex-wrap gap-1.5">
                           {info.standards.map(s => (
-                            <span key={s} className="text-[10px] text-muted-foreground/70">{s}</span>
+                            <Badge key={s} variant="outline" className="text-[10px] no-default-hover-elevate no-default-active-elevate">{s}</Badge>
                           ))}
                         </div>
                         <ArrowRight className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -98,11 +98,11 @@ export default function PipingComponentsIndex() {
                           <info.icon className="w-4 h-4 text-primary" />
                         </div>
                         <h3 className="font-semibold text-sm flex-1">{CATEGORY_LABELS[cat as PipingCategory]}</h3>
-                        <Badge variant="outline" className="text-[10px] shrink-0">Calculator</Badge>
+                        <Badge variant="outline" className="text-[10px] shrink-0 no-default-hover-elevate no-default-active-elevate">Calculator</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{info.desc}</p>
-                      <div className="flex items-center justify-between gap-2 border-t border-muted/30 pt-3 mt-auto flex-wrap">
-                        <span className="text-[10px] text-muted-foreground/70">{info.standards[0]}</span>
+                      <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-auto flex-wrap">
+                        <Badge variant="outline" className="text-[10px] no-default-hover-elevate no-default-active-elevate">{info.standards[0]}</Badge>
                         <ArrowRight className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </CardContent>

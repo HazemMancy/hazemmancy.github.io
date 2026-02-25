@@ -297,6 +297,9 @@ export async function exportToPDF(data: ExportDatasheet): Promise<void> {
       const chartX = lMargin + (availW - chartW) / 2;
       const chartY = 18 + (availH - chartH) / 2 + 2;
       doc.addImage(chartCapture.dataUrl, "PNG", chartX, chartY, chartW, chartH);
+
+      doc.addPage("a4", "portrait");
+      y = margin;
     }
   }
 

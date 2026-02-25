@@ -707,7 +707,7 @@ export default function ControlValvePage() {
                     { label: "Max Opening", value: selectionResult.maxOpening, unit: "%", highlight: selectionResult.maxOpening > 90 },
                     { label: "Valve Authority", value: `${(selectionResult.authorityFactor * 100).toFixed(0)}%`, unit: "", highlight: selectionResult.authorityFactor < 0.25 },
                     { label: "Rangeability", value: selectionResult.rangeabilityOK ? "OK" : "INSUFFICIENT", unit: "" },
-                  ]} rawData={selectionResult} />
+                  ]} rawData={selectionResult} exportData={buildExportData()} />
 
                   {selectionResult.openings.length > 0 && (
                     <Card><CardContent className="p-4">

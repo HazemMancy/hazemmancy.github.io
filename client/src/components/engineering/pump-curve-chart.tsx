@@ -32,13 +32,20 @@ interface PumpCurveChartProps {
 const G = 9.81;
 
 const COLORS = {
-  pumpCurve: "#3b82f6",
-  pumpCurveFill: "rgba(59, 130, 246, 0.08)",
-  systemCurve: "#f59e0b",
-  efficiency: "#22c55e",
-  efficiencyFill: "rgba(34, 197, 94, 0.06)",
-  power: "#ef4444",
-  operatingPoint: "#d4a04a",
+  pumpCurve: "#2563eb",
+  pumpCurveGradientStart: "rgba(37, 99, 235, 0.18)",
+  pumpCurveGradientEnd: "rgba(37, 99, 235, 0.02)",
+  systemCurve: "#d97706",
+  efficiency: "#16a34a",
+  efficiencyGradientStart: "rgba(22, 163, 74, 0.12)",
+  efficiencyGradientEnd: "rgba(22, 163, 74, 0.01)",
+  power: "#dc2626",
+  operatingPoint: "#2563eb",
+  operatingPointRing: "#ffffff",
+  grid: "hsl(var(--muted) / 0.18)",
+  gridMajor: "hsl(var(--muted) / 0.30)",
+  axisText: "hsl(var(--muted-foreground) / 0.7)",
+  axisLabel: "hsl(var(--muted-foreground) / 0.85)",
 };
 
 const LEGEND_NAMES: Record<string, string> = {
@@ -47,6 +54,106 @@ const LEGEND_NAMES: Record<string, string> = {
   efficiency: "Efficiency (%)",
   power: "Brake Power",
 };
+
+function CustomTooltip({ active, payload, label, flowUnit, headUnit, powerUnit }: any) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const pumpHeadEntry = payload.find((p: any) => p.dataKey === "pumpHead");
+  const systemHeadEntry = payload.find((p: any) => p.dataKey === "systemHead");
+  const effEntry = payload.find((p: any) => p.dataKey === "efficiency");
+  const powerEntry = payload.find((p: any) => p.dataKey === "power");
+
+  return (
+    <div
+      style={{
+        backgroundColor: "hsl(var(--card))",
+        border: "1px solid hsl(var(--border))",
+        borderRadius: "8px",
+        padding: "10px 14px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        minWidth: "180px",
+      }}
+    >
+      <div
+        style={{
+          color: "hsl(var(--foreground))",
+          fontWeight: 600,
+          fontSize: "11px",
+          marginBottom: "8px",
+          paddingBottom: "6px",
+          borderBottom: "1px solid hsl(var(--border))",
+        }}
+      >
+        Flow: {label} {flowUnit}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        {pumpHeadEntry && pumpHeadEntry.value != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.pumpCurve, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Pump Head:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {pumpHeadEntry.value.toFixed(1)} {headUnit}
+            </span>
+          </div>
+        )}
+        {systemHeadEntry && systemHeadEntry.value != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.systemCurve, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>System Head:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {systemHeadEntry.value.toFixed(1)} {headUnit}
+            </span>
+          </div>
+        )}
+        {effEntry && effEntry.value != null && effEntry.value > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.efficiency, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Efficiency:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {effEntry.value.toFixed(1)}%
+            </span>
+          </div>
+        )}
+        {powerEntry && powerEntry.value != null && powerEntry.value > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: COLORS.power, flexShrink: 0 }} />
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Brake Power:</span>
+            <span style={{ color: "hsl(var(--foreground))", fontWeight: 500, marginLeft: "auto" }}>
+              {powerEntry.value.toFixed(2)} {powerUnit}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomLegend({ payload }: any) {
+  if (!payload) return null;
+  const filtered = payload.filter((entry: any) => LEGEND_NAMES[entry.dataKey]);
+  return (
+    <div style={{ display: "flex", justifyContent: "center", gap: "20px", paddingTop: "10px", flexWrap: "wrap" }}>
+      {filtered.map((entry: any) => (
+        <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div
+            style={{
+              width: entry.dataKey === "efficiency" || entry.dataKey === "systemHead" ? 16 : 12,
+              height: 2,
+              backgroundColor: entry.color,
+              borderRadius: 1,
+              ...(entry.dataKey === "efficiency" || entry.dataKey === "systemHead"
+                ? { backgroundImage: `repeating-linear-gradient(90deg, ${entry.color} 0px, ${entry.color} 4px, transparent 4px, transparent 6px)`, backgroundColor: "transparent" }
+                : {}),
+            }}
+          />
+          <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>
+            {LEGEND_NAMES[entry.dataKey] || entry.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function PumpCurveChart({
   designFlowSI,
@@ -113,6 +220,7 @@ export function PumpCurveChart({
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
           <h4 className="text-sm font-semibold">Pump Performance Curves</h4>
+          <span className="text-[10px] text-muted-foreground ml-1">(Illustrative)</span>
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
@@ -122,37 +230,39 @@ export function PumpCurveChart({
               {`Head (${headUnit}) / Eff (%)`}
             </span>
           </div>
-          <div className="flex-1 h-[380px]">
+          <div className="flex-1 h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
-              margin={{ top: 10, right: 50, left: 10, bottom: 24 }}
+              margin={{ top: 16, right: 50, left: 10, bottom: 28 }}
             >
               <defs>
                 <linearGradient id="pumpHeadGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={COLORS.pumpCurve} stopOpacity={0.15} />
-                  <stop offset="100%" stopColor={COLORS.pumpCurve} stopOpacity={0.02} />
+                  <stop offset="0%" stopColor={COLORS.pumpCurveGradientStart} />
+                  <stop offset="100%" stopColor={COLORS.pumpCurveGradientEnd} />
                 </linearGradient>
                 <linearGradient id="efficiencyGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={COLORS.efficiency} stopOpacity={0.12} />
-                  <stop offset="100%" stopColor={COLORS.efficiency} stopOpacity={0.01} />
+                  <stop offset="0%" stopColor={COLORS.efficiencyGradientStart} />
+                  <stop offset="100%" stopColor={COLORS.efficiencyGradientEnd} />
                 </linearGradient>
               </defs>
+
               <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="hsl(var(--muted) / 0.2)"
+                strokeDasharray="1 4"
+                stroke={COLORS.grid}
                 vertical={false}
               />
+
               <XAxis
                 dataKey="flow"
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
-                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                tick={{ fill: COLORS.axisText, fontSize: 10 }}
+                tickLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: COLORS.gridMajor }}
                 label={{
                   value: `Flow (${flowUnit})`,
                   position: "insideBottom",
-                  offset: -14,
-                  fill: "hsl(var(--muted-foreground))",
+                  offset: -16,
+                  fill: COLORS.axisLabel,
                   fontSize: 11,
                   fontWeight: 500,
                 }}
@@ -160,46 +270,32 @@ export function PumpCurveChart({
               <YAxis
                 yAxisId="head"
                 domain={[0, headMax]}
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
-                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                tick={{ fill: COLORS.axisText, fontSize: 10 }}
+                tickLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: COLORS.gridMajor }}
                 width={50}
               />
               <YAxis
                 yAxisId="power"
                 orientation="right"
                 domain={[0, powerMax]}
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
-                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                tick={{ fill: COLORS.axisText, fontSize: 10 }}
+                tickLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: COLORS.gridMajor }}
                 width={50}
               />
+
               <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontSize: "11px",
-                  padding: "10px 14px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                }}
-                labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600, marginBottom: 6 }}
-                itemStyle={{ padding: "2px 0" }}
-                formatter={(value: number, name: string) => {
-                  if (name === "pumpHead") return [`${value.toFixed(1)} ${headUnit}`, "Pump Head"];
-                  if (name === "systemHead") return [`${value.toFixed(1)} ${headUnit}`, "System Head"];
-                  if (name === "efficiency") return [`${value.toFixed(1)} %`, "Efficiency"];
-                  if (name === "power") return [`${value.toFixed(2)} ${powerUnit}`, "Brake Power"];
-                  return [value, name];
-                }}
-                labelFormatter={(label) => `Flow: ${label} ${flowUnit}`}
+                content={
+                  <CustomTooltip
+                    flowUnit={flowUnit}
+                    headUnit={headUnit}
+                    powerUnit={powerUnit}
+                  />
+                }
+                cursor={{ stroke: "hsl(var(--muted-foreground) / 0.15)", strokeWidth: 1 }}
               />
-              <Legend
-                wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }}
-                iconType="plainline"
-                iconSize={14}
-                formatter={(value: string) => LEGEND_NAMES[value] || value}
-              />
+              <Legend content={<CustomLegend />} />
 
               <Area
                 yAxisId="head"
@@ -228,7 +324,7 @@ export function PumpCurveChart({
                 strokeWidth={2.5}
                 dot={false}
                 name="pumpHead"
-                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff", fill: COLORS.pumpCurve }}
               />
               <Line
                 yAxisId="head"
@@ -239,7 +335,7 @@ export function PumpCurveChart({
                 strokeDasharray="8 4"
                 dot={false}
                 name="systemHead"
-                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff", fill: COLORS.systemCurve }}
               />
               <Line
                 yAxisId="head"
@@ -247,33 +343,35 @@ export function PumpCurveChart({
                 dataKey="efficiency"
                 stroke={COLORS.efficiency}
                 strokeWidth={1.8}
-                strokeDasharray="5 3"
+                strokeDasharray="6 3"
                 dot={false}
                 name="efficiency"
-                activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.efficiency }}
               />
               <Line
                 yAxisId="power"
                 type="monotone"
                 dataKey="power"
                 stroke={COLORS.power}
-                strokeWidth={1.8}
+                strokeWidth={2}
                 dot={false}
                 name="power"
-                activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.power }}
               />
 
               <ReferenceLine
                 yAxisId="head"
                 x={parseFloat(displayFlow.toFixed(2))}
-                stroke="hsl(var(--muted-foreground) / 0.25)"
+                stroke="hsl(var(--muted-foreground) / 0.2)"
                 strokeDasharray="3 3"
+                strokeWidth={1}
               />
               <ReferenceLine
                 yAxisId="head"
                 y={parseFloat(displayTDH.toFixed(2))}
-                stroke="hsl(var(--muted-foreground) / 0.15)"
+                stroke="hsl(var(--muted-foreground) / 0.12)"
                 strokeDasharray="3 3"
+                strokeWidth={1}
               />
               <ReferenceDot
                 yAxisId="head"
@@ -281,7 +379,7 @@ export function PumpCurveChart({
                 y={parseFloat(displayTDH.toFixed(2))}
                 r={8}
                 fill={COLORS.operatingPoint}
-                stroke="#fff"
+                stroke={COLORS.operatingPointRing}
                 strokeWidth={2.5}
               />
               <ReferenceDot
@@ -289,7 +387,7 @@ export function PumpCurveChart({
                 x={parseFloat(displayFlow.toFixed(2))}
                 y={parseFloat(displayTDH.toFixed(2))}
                 r={3}
-                fill="#fff"
+                fill="#ffffff"
                 stroke="none"
               />
             </ComposedChart>
@@ -302,14 +400,22 @@ export function PumpCurveChart({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground border-t border-muted/30 pt-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS.operatingPoint, border: "2.5px solid white", boxShadow: "0 0 0 1px hsl(var(--border))" }} />
-            <span>Operating Point: {displayFlow.toFixed(1)} {flowUnit} @ {displayTDH.toFixed(1)} {headUnit}</span>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs border-t border-muted/30 pt-3 px-1">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS.operatingPoint, border: "2.5px solid white", boxShadow: `0 0 0 1px ${COLORS.operatingPoint}` }} />
+            <span className="text-foreground font-medium">
+              Operating Point: {displayFlow.toFixed(1)} {flowUnit} @ {displayTDH.toFixed(1)} {headUnit}
+            </span>
           </div>
-          <div>BEP Efficiency: {pumpEfficiency.toFixed(0)}%</div>
-          <div>Brake Power: {displayBrakePower.toFixed(2)} {powerUnit}</div>
-          <div>Static Head: {displayStaticHead.toFixed(1)} {headUnit}</div>
+          <div className="text-muted-foreground">
+            BEP Efficiency: <span className="text-foreground font-medium">{pumpEfficiency.toFixed(0)}%</span>
+          </div>
+          <div className="text-muted-foreground">
+            Brake Power: <span className="text-foreground font-medium">{displayBrakePower.toFixed(2)} {powerUnit}</span>
+          </div>
+          <div className="text-muted-foreground">
+            Static Head: <span className="text-foreground font-medium">{displayStaticHead.toFixed(1)} {headUnit}</span>
+          </div>
         </div>
 
         <div className="flex items-start gap-2 border-t border-muted/30 pt-2">
