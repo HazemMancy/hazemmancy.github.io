@@ -16,13 +16,20 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
     );
   }
   return (
-    <div className="overflow-x-auto border rounded-md">
-      <table className="w-full text-xs" data-testid="table-dimensions">
+    <div className="relative overflow-x-auto border rounded-md">
+      <table className="w-full text-xs border-collapse" data-testid="table-dimensions">
         <thead>
           <tr className="border-b bg-muted/30">
-            {columns.map(col => (
-              <th key={col.key} className="px-2 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">
-                {col.label}{col.unit ? <span className="ml-1 text-[10px] opacity-60">({col.unit})</span> : null}
+            {columns.map((col, colIdx) => (
+              <th
+                key={col.key}
+                className={`px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap min-w-[80px] ${
+                  colIdx === 0 ? "sticky left-0 z-10 bg-muted/50 backdrop-blur-sm" : ""
+                }`}
+              >
+                <span className="block truncate max-w-[160px]">
+                  {col.label}{col.unit ? <span className="ml-1 text-[10px] opacity-60">({col.unit})</span> : null}
+                </span>
               </th>
             ))}
           </tr>
@@ -39,11 +46,20 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
               }`}
               data-testid={`row-dim-${idx}`}
             >
-              {columns.map(col => {
+              {columns.map((col, colIdx) => {
                 const val = (row as Record<string, unknown>)[col.key];
                 return (
-                  <td key={col.key} className="px-2 py-1.5 whitespace-nowrap">
-                    {val !== undefined && val !== null ? String(val) : <span className="text-muted-foreground/50">—</span>}
+                  <td
+                    key={col.key}
+                    className={`px-3 py-2 whitespace-nowrap ${
+                      colIdx === 0
+                        ? `sticky left-0 z-[5] font-medium ${
+                            selectedIndex === idx ? "bg-primary/10" : "bg-background"
+                          }`
+                        : ""
+                    }`}
+                  >
+                    {val !== undefined && val !== null ? String(val) : <span className="text-muted-foreground/50">&mdash;</span>}
                   </td>
                 );
               })}

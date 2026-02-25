@@ -32,9 +32,10 @@ interface PDCurveChartProps {
 const COLORS = {
   theoreticalFlow: "#3b82f6",
   actualFlow: "#22c55e",
-  slipArea: "rgba(239, 68, 68, 0.15)",
+  actualFlowFill: "rgba(34, 197, 94, 0.08)",
   slipLine: "#ef4444",
-  power: "#d4a04a",
+  slipArea: "rgba(239, 68, 68, 0.10)",
+  power: "#f59e0b",
   volEfficiency: "#a855f7",
   operatingPoint: "#d4a04a",
 };
@@ -113,28 +114,47 @@ export function PDCurveChart({
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
-        <div className="h-[360px] w-full">
+        <div className="h-[380px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
               margin={{ top: 10, right: 60, left: 10, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted) / 0.25)" />
+              <defs>
+                <linearGradient id="pdActualFlowGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS.actualFlow} stopOpacity={0.12} />
+                  <stop offset="100%" stopColor={COLORS.actualFlow} stopOpacity={0.01} />
+                </linearGradient>
+                <linearGradient id="pdSlipGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS.slipLine} stopOpacity={0.15} />
+                  <stop offset="100%" stopColor={COLORS.slipLine} stopOpacity={0.03} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="hsl(var(--muted) / 0.2)"
+                vertical={false}
+              />
               <XAxis
                 dataKey="pressure"
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 label={{
                   value: `Differential Pressure (${pressureUnit})`,
                   position: "insideBottom",
                   offset: -10,
                   fill: "hsl(var(--muted-foreground))",
                   fontSize: 11,
+                  fontWeight: 500,
                 }}
               />
               <YAxis
                 yAxisId="flow"
                 domain={[0, flowMax]}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 label={{
                   value: `Flow (${flowUnit}) / Eff (%)`,
                   angle: -90,
@@ -142,6 +162,7 @@ export function PDCurveChart({
                   offset: 5,
                   fill: "hsl(var(--muted-foreground))",
                   fontSize: 10,
+                  fontWeight: 500,
                 }}
               />
               <YAxis
@@ -149,6 +170,8 @@ export function PDCurveChart({
                 orientation="right"
                 domain={[0, powerMax]}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 label={{
                   value: `Shaft Power (${powerUnit})`,
                   angle: 90,
@@ -156,18 +179,20 @@ export function PDCurveChart({
                   offset: 10,
                   fill: "hsl(var(--muted-foreground))",
                   fontSize: 10,
+                  fontWeight: 500,
                 }}
               />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   border: "1px solid hsl(var(--border))",
-                  borderRadius: "6px",
+                  borderRadius: "8px",
                   fontSize: "11px",
-                  padding: "8px 12px",
+                  padding: "10px 14px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                 }}
-                labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600, marginBottom: 4 }}
-                itemStyle={{ padding: "1px 0" }}
+                labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600, marginBottom: 6 }}
+                itemStyle={{ padding: "2px 0" }}
                 formatter={(value: number, name: string) => {
                   if (name === "theoreticalFlow") return [`${value.toFixed(1)} ${flowUnit}`, "Theoretical Flow"];
                   if (name === "actualFlow") return [`${value.toFixed(1)} ${flowUnit}`, "Actual Flow"];
@@ -179,20 +204,33 @@ export function PDCurveChart({
                 labelFormatter={(label) => `\u0394P: ${label} ${pressureUnit}`}
               />
               <Legend
-                wrapperStyle={{ fontSize: "10px", paddingTop: "8px" }}
+                wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }}
+                iconType="plainline"
+                iconSize={14}
                 formatter={(value: string) => LEGEND_NAMES[value] || value}
               />
 
               <Area
                 yAxisId="flow"
                 type="monotone"
+                dataKey="actualFlow"
+                fill="url(#pdActualFlowGrad)"
+                stroke="none"
+                legendType="none"
+                tooltipType="none"
+              />
+              <Area
+                yAxisId="flow"
+                type="monotone"
                 dataKey="slipFlow"
-                fill={COLORS.slipArea}
+                fill="url(#pdSlipGrad)"
                 stroke={COLORS.slipLine}
                 strokeWidth={1}
                 strokeDasharray="4 2"
                 name="slipFlow"
+                activeDot={false}
               />
+
               <Line
                 yAxisId="flow"
                 type="monotone"
@@ -201,6 +239,7 @@ export function PDCurveChart({
                 strokeWidth={2.5}
                 dot={false}
                 name="theoreticalFlow"
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
               />
               <Line
                 yAxisId="flow"
@@ -210,16 +249,18 @@ export function PDCurveChart({
                 strokeWidth={2}
                 dot={false}
                 name="actualFlow"
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
               />
               <Line
                 yAxisId="flow"
                 type="monotone"
                 dataKey="volEff"
                 stroke={COLORS.volEfficiency}
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
+                strokeWidth={1.8}
+                strokeDasharray="5 3"
                 dot={false}
                 name="volEff"
+                activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff" }}
               />
               <Line
                 yAxisId="power"
@@ -229,22 +270,37 @@ export function PDCurveChart({
                 strokeWidth={2}
                 dot={false}
                 name="power"
+                activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff" }}
               />
 
+              <ReferenceLine
+                yAxisId="flow"
+                x={parseFloat(displayDP.toFixed(2))}
+                stroke="hsl(var(--muted-foreground) / 0.25)"
+                strokeDasharray="3 3"
+              />
+              <ReferenceLine
+                yAxisId="flow"
+                y={parseFloat(displayActualFlow.toFixed(2))}
+                stroke="hsl(var(--muted-foreground) / 0.15)"
+                strokeDasharray="3 3"
+              />
               <ReferenceDot
                 yAxisId="flow"
                 x={parseFloat(displayDP.toFixed(2))}
                 y={parseFloat(displayActualFlow.toFixed(2))}
-                r={7}
+                r={8}
                 fill={COLORS.operatingPoint}
                 stroke="#fff"
-                strokeWidth={2}
+                strokeWidth={2.5}
               />
-              <ReferenceLine
+              <ReferenceDot
                 yAxisId="flow"
                 x={parseFloat(displayDP.toFixed(2))}
-                stroke="hsl(var(--muted-foreground) / 0.3)"
-                strokeDasharray="3 3"
+                y={parseFloat(displayActualFlow.toFixed(2))}
+                r={3}
+                fill="#fff"
+                stroke="none"
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -252,7 +308,7 @@ export function PDCurveChart({
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground border-t border-muted/30 pt-3">
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS.operatingPoint, border: "2px solid white" }} />
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS.operatingPoint, border: "2.5px solid white", boxShadow: "0 0 0 1px hsl(var(--border))" }} />
             <span>Design Point: {displayActualFlow.toFixed(1)} {flowUnit} @ {displayDP.toFixed(1)} {pressureUnit}</span>
           </div>
           <div>Theoretical Flow: {displayTheoreticalFlow.toFixed(1)} {flowUnit}</div>

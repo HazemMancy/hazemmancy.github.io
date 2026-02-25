@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Ruler, Calculator, AlertTriangle, CheckCircle2, RotateCcw, Info } from "lucide-react";
+import { ArrowLeft, Ruler, Calculator, AlertTriangle, CheckCircle2, RotateCcw, Info, Download, FileText, FileSpreadsheet } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { calculateSafeSpan, type SafeSpanInput, type SafeSpanResult } from "@/lib/engineering/piping/safeSpans";
+import { exportToExcel, exportToPDF, exportToJSON, type ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 
 export default function SafeSpansPage() {
@@ -45,6 +47,53 @@ export default function SafeSpansPage() {
     setFluidDensity(1000); setInsulThk(50); setInsulDensity(120);
     setAllowDefl(12.5); setElasticMod(200); setAllowStress(138);
     setConcLoad(0); setSupportType("simple"); setResult(null);
+  };
+
+  const buildExportData = (): ExportDatasheet | null => {
+    if (!result) return null;
+    return {
+      calculatorName: "Safe Span Screening",
+      projectInfo: [
+        { label: "Support Type", value: supportType === "simple" ? "Simply Supported" : supportType === "continuous" ? "Continuous" : "Fixed Ends" },
+      ],
+      inputs: [
+        { label: "Pipe OD", value: pipeOD, unit: "mm" },
+        { label: "Pipe WT", value: pipeWT, unit: "mm" },
+        { label: "Pipe Density", value: pipeDensity, unit: "kg/m³" },
+        { label: "Fluid Density", value: fluidDensity, unit: "kg/m³" },
+        { label: "Insulation Thickness", value: insulThk, unit: "mm" },
+        { label: "Insulation Density", value: insulDensity, unit: "kg/m³" },
+        { label: "Allowable Deflection", value: allowDefl, unit: "mm" },
+        { label: "Elastic Modulus", value: elasticMod, unit: "GPa" },
+        { label: "Allowable Stress", value: allowStress, unit: "MPa" },
+        { label: "Concentrated Load", value: concLoad, unit: "N" },
+      ],
+      results: [
+        { label: "Governing Safe Span", value: result.governing_span_m, unit: "m", highlight: true },
+        { label: "Governing Criterion", value: result.governing_criterion, unit: "" },
+        { label: "Span by Stress", value: result.span_by_stress_m, unit: "m" },
+        { label: "Span by Deflection", value: result.span_by_deflection_m, unit: "m" },
+        { label: "Pipe Weight", value: result.pipe_weight_kg_m, unit: "kg/m" },
+        { label: "Fluid Weight", value: result.fluid_weight_kg_m, unit: "kg/m" },
+        { label: "Insulation Weight", value: result.insulation_weight_kg_m, unit: "kg/m" },
+        { label: "Total Weight", value: result.total_weight_kg_m, unit: "kg/m" },
+        { label: "Total Load", value: result.total_load_n_m, unit: "N/m" },
+        { label: "Pipe ID", value: result.pipe_id_mm, unit: "mm" },
+      ],
+      calcSteps: result.trace.map(t => ({ label: t.step, value: t.value })),
+      methodology: ["Beam bending theory per ASME B31.3", "Stress criterion: σ_bending ≤ S_a", "Deflection criterion: δ_max ≤ allowable deflection"],
+      assumptions: ["Uniform distributed load (pipe + fluid + insulation)", "Does not include wind, seismic, or dynamic loads", "Consult project piping specification for final support spacing"],
+      references: ["ASME B31.3 Process Piping"],
+      warnings: result.warnings,
+    };
+  };
+
+  const handleExport = (format: "pdf" | "excel" | "json") => {
+    const data = buildExportData();
+    if (!data) return;
+    if (format === "pdf") exportToPDF(data);
+    else if (format === "excel") exportToExcel(data);
+    else exportToJSON(data);
   };
 
   return (
@@ -117,11 +166,25 @@ export default function SafeSpansPage() {
               <div className="space-y-4">
                 <Card className="border-primary/30">
                   <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-primary" />
-                      <h3 className="text-sm font-semibold">Governing Safe Span: {result.governing_span_m.toFixed(2)} m</h3>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-primary" />
+                          <h3 className="text-sm font-semibold">Governing Safe Span: {result.governing_span_m.toFixed(2)} m</h3>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">Governed by: {result.governing_criterion}</p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" data-testid="button-export-results"><Download className="w-3.5 h-3.5 mr-1.5" />Export</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-pdf"><FileText className="w-4 h-4 mr-2 text-red-400" />Export as PDF</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport("excel")} data-testid="button-export-excel"><FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />Export as Excel</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport("json")} data-testid="button-export-json"><Download className="w-4 h-4 mr-2 text-blue-400" />Export as JSON</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">Governed by: {result.governing_criterion}</p>
                   </CardHeader>
                   <CardContent className="space-y-2 text-xs">
                     <div className="grid grid-cols-2 gap-2">

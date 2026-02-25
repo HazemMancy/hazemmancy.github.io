@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, TrendingUp, Calculator, AlertTriangle, CheckCircle2, RotateCcw, Info } from "lucide-react";
+import { ArrowLeft, TrendingUp, Calculator, AlertTriangle, CheckCircle2, RotateCcw, Info, Download, FileText, FileSpreadsheet } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { calculateFlexibility, MATERIAL_PROPERTIES, type FlexibilityInput, type FlexibilityResult } from "@/lib/engineering/piping/flexibility";
+import { exportToExcel, exportToPDF, exportToJSON, type ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 
 export default function PipeFlexibilityPage() {
@@ -45,6 +47,49 @@ export default function PipeFlexibilityPage() {
     setPipeOD(219.1); setPipeWT(8.18);
     setStraightRun(30); setAllowableStress(138);
     setFixedBothEnds(true); setResult(null);
+  };
+
+  const buildExportData = (): ExportDatasheet | null => {
+    if (!result) return null;
+    return {
+      calculatorName: "Pipe Flexibility Screening",
+      projectInfo: [
+        { label: "Material", value: mat.name },
+        { label: "End Restraint", value: fixedBothEnds ? "Fixed Both Ends" : "Guided / Free" },
+      ],
+      inputs: [
+        { label: "Pipe OD", value: pipeOD, unit: "mm" },
+        { label: "Pipe WT", value: pipeWT, unit: "mm" },
+        { label: "Straight Run", value: straightRun, unit: "m" },
+        { label: "Ambient Temperature", value: tempAmbient, unit: "°C" },
+        { label: "Operating Temperature", value: tempOperating, unit: "°C" },
+        { label: "Elastic Modulus", value: mat.E_gpa, unit: "GPa" },
+        { label: "Thermal Coefficient", value: mat.alpha, unit: "mm/m/°C" },
+        { label: "Allowable Stress", value: allowableStress, unit: "MPa" },
+      ],
+      results: [
+        { label: "Verdict", value: result.pass ? "PASS" : "FAIL", unit: "", highlight: true },
+        { label: "ΔT", value: result.delta_t, unit: "°C" },
+        { label: "Thermal Expansion", value: result.thermal_expansion_mm, unit: "mm" },
+        { label: "Guided Cantilever Stress", value: result.guided_cantilever_stress_mpa, unit: "MPa" },
+        { label: "Moment of Inertia", value: result.moment_of_inertia_mm4, unit: "mm⁴" },
+        { label: "Section Modulus", value: result.section_modulus_mm3, unit: "mm³" },
+        ...(result.loop_required && result.min_loop_leg_m > 0 ? [{ label: "Min Expansion Loop Leg", value: result.min_loop_leg_m, unit: "m", highlight: true }] : []),
+      ],
+      calcSteps: result.trace.map(t => ({ label: t.step, value: t.value })),
+      methodology: ["Guided cantilever method per ASME B31.3", "Thermal expansion = α × ΔT × L", "Stress check: σ_guided vs allowable stress S_A"],
+      assumptions: ["Material properties at ambient temperature (conservative)", "Screening tool only — not a substitute for formal stress analysis (e.g., Caesar II)"],
+      references: ["ASME B31.3 Process Piping"],
+      warnings: result.warnings,
+    };
+  };
+
+  const handleExport = (format: "pdf" | "excel" | "json") => {
+    const data = buildExportData();
+    if (!data) return;
+    if (format === "pdf") exportToPDF(data);
+    else if (format === "excel") exportToExcel(data);
+    else exportToJSON(data);
   };
 
   return (
@@ -126,9 +171,21 @@ export default function PipeFlexibilityPage() {
               <div className="space-y-4">
                 <Card className={result.pass ? "border-green-500/30" : "border-red-500/30"}>
                   <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2">
-                      {result.pass ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <AlertTriangle className="w-4 h-4 text-red-400" />}
-                      <h3 className="text-sm font-semibold">{result.pass ? "PASS — No Expansion Loop Required" : "FAIL — Expansion Loop Required"}</h3>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {result.pass ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <AlertTriangle className="w-4 h-4 text-red-400" />}
+                        <h3 className="text-sm font-semibold">{result.pass ? "PASS — No Expansion Loop Required" : "FAIL — Expansion Loop Required"}</h3>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" data-testid="button-export-results"><Download className="w-3.5 h-3.5 mr-1.5" />Export</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-pdf"><FileText className="w-4 h-4 mr-2 text-red-400" />Export as PDF</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport("excel")} data-testid="button-export-excel"><FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />Export as Excel</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport("json")} data-testid="button-export-json"><Download className="w-4 h-4 mr-2 text-blue-400" />Export as JSON</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2 text-xs">

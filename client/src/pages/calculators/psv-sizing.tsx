@@ -746,7 +746,62 @@ export default function PSVSizingPage() {
                     { label: "Relieving Pressure (abs)", value: convertFromSI("pressureAbs", sizingResult.relievingPressure, unitSystem), unit: `${pU}a` },
                     ...(sizingResult.cCoefficient ? [{ label: "C Coefficient", value: sizingResult.cCoefficient, unit: "—" }] : []),
                     ...(sizingResult.kvFactor !== undefined ? [{ label: "Viscosity Factor Kv", value: sizingResult.kvFactor, unit: "—" }] : []),
-                  ]} rawData={sizingResult} />
+                  ]} rawData={sizingResult} exportData={{
+                    calculatorName: "PRD Sizing Results",
+                    projectInfo: [
+                      { label: "Project", value: project.name || "—" },
+                      { label: "Client", value: project.client || "—" },
+                      { label: "Location", value: project.location || "—" },
+                      { label: "Case ID", value: project.caseId || "—" },
+                      { label: "Engineer", value: project.engineer || "—" },
+                      { label: "Date", value: project.date },
+                    ],
+                    inputs: [
+                      { label: "Equipment Tag", value: equipment.tag || "—" },
+                      { label: "Service", value: equipment.service || "—" },
+                      { label: "MAWP", value: equipment.mawp, unit: `${pU}g` },
+                      { label: "Design Temperature", value: equipment.designTemp, unit: tU },
+                      { label: "Set Pressure", value: equipment.setPressure, unit: `${pU}g` },
+                      { label: "Overpressure Basis", value: equipment.overpressureBasis },
+                      { label: "Overpressure", value: equipment.overpressurePercent, unit: "%" },
+                      { label: "Atmospheric Pressure", value: project.atmosphericPressure, unit: "bar abs" },
+                      { label: "Fluid Type", value: sizing.fluidType },
+                      { label: "Molecular Weight", value: sizing.molecularWeight, unit: "g/mol" },
+                      { label: "Specific Heat Ratio (k)", value: sizing.specificHeatRatio },
+                      { label: "Compressibility Factor (Z)", value: sizing.compressibilityFactor },
+                      { label: "Relieving Temperature", value: sizing.relievingTemperature, unit: tU },
+                      { label: "Kd", value: sizing.kd },
+                      { label: "Kb", value: sizing.kb },
+                      { label: "Kc", value: sizing.kc },
+                      { label: "Device Type", value: device.type },
+                      ...(governingIndex >= 0 && scenarios[governingIndex] ? [
+                        { label: "Governing Scenario", value: scenarios[governingIndex].type },
+                        { label: "Governing Relief Rate", value: scenarios[governingIndex].relievingRate, unit: "kg/h" },
+                      ] : []),
+                    ],
+                    results: [
+                      { label: "Required Orifice Area", value: sizingResult.requiredArea, unit: "mm²", highlight: true },
+                      { label: "Flow Regime", value: sizingResult.flowRegime || "—", unit: "" },
+                      { label: "Relieving Pressure (gauge)", value: convertFromSI("pressure", sizingResult.relievingPressure - project.atmosphericPressure, unitSystem), unit: `${pU}g`, highlight: true },
+                      { label: "Relieving Pressure (abs)", value: convertFromSI("pressureAbs", sizingResult.relievingPressure, unitSystem), unit: `${pU}a` },
+                      ...(sizingResult.cCoefficient ? [{ label: "C Coefficient", value: sizingResult.cCoefficient, unit: "—" }] : []),
+                      ...(sizingResult.kvFactor !== undefined ? [{ label: "Viscosity Factor Kv", value: sizingResult.kvFactor, unit: "—" }] : []),
+                    ],
+                    methodology: [
+                      "Gas/vapor sizing per API 520 Part I, Section 5.6 (critical and subcritical flow)",
+                      "Steam sizing per API 520 Part I with Ksh superheat correction and Kn Napier correction",
+                      "Liquid sizing per API 520 Part I, Section 5.8 with viscosity correction Kv",
+                    ],
+                    assumptions: [
+                      "Kd = 0.975 for gas/steam (ASME certified), 0.65 for liquid (default values)",
+                      "Scenario screening per API 521 — user must verify relief rates with process simulation",
+                    ],
+                    references: [
+                      "API 520 Part I, 10th Edition: Sizing, Selection, and Installation of Pressure-Relieving Devices",
+                      "API 521, 7th Edition: Pressure-Relieving and Depressuring Systems",
+                    ],
+                    warnings: sizingResult.warnings,
+                  } as ExportDatasheet} />
                 </>
               ) : (
                 <Card><CardContent className="py-12 text-center">

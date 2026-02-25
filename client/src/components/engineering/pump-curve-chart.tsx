@@ -3,6 +3,7 @@ import { TrendingUp, Info } from "lucide-react";
 import {
   ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -32,8 +33,10 @@ const G = 9.81;
 
 const COLORS = {
   pumpCurve: "#3b82f6",
-  systemCurve: "#d4a04a",
+  pumpCurveFill: "rgba(59, 130, 246, 0.08)",
+  systemCurve: "#f59e0b",
   efficiency: "#22c55e",
+  efficiencyFill: "rgba(34, 197, 94, 0.06)",
   power: "#ef4444",
   operatingPoint: "#d4a04a",
 };
@@ -113,28 +116,47 @@ export function PumpCurveChart({
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
-        <div className="h-[360px] w-full">
+        <div className="h-[380px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
               margin={{ top: 10, right: 60, left: 10, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted) / 0.25)" />
+              <defs>
+                <linearGradient id="pumpHeadGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS.pumpCurve} stopOpacity={0.15} />
+                  <stop offset="100%" stopColor={COLORS.pumpCurve} stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="efficiencyGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS.efficiency} stopOpacity={0.12} />
+                  <stop offset="100%" stopColor={COLORS.efficiency} stopOpacity={0.01} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="hsl(var(--muted) / 0.2)"
+                vertical={false}
+              />
               <XAxis
                 dataKey="flow"
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 label={{
                   value: `Flow (${flowUnit})`,
                   position: "insideBottom",
                   offset: -10,
                   fill: "hsl(var(--muted-foreground))",
                   fontSize: 11,
+                  fontWeight: 500,
                 }}
               />
               <YAxis
                 yAxisId="head"
                 domain={[0, headMax]}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 label={{
                   value: `Head (${headUnit}) / Eff (%)`,
                   angle: -90,
@@ -142,6 +164,7 @@ export function PumpCurveChart({
                   offset: 5,
                   fill: "hsl(var(--muted-foreground))",
                   fontSize: 10,
+                  fontWeight: 500,
                 }}
               />
               <YAxis
@@ -149,6 +172,8 @@ export function PumpCurveChart({
                 orientation="right"
                 domain={[0, powerMax]}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 label={{
                   value: `Power (${powerUnit})`,
                   angle: 90,
@@ -156,18 +181,20 @@ export function PumpCurveChart({
                   offset: 10,
                   fill: "hsl(var(--muted-foreground))",
                   fontSize: 10,
+                  fontWeight: 500,
                 }}
               />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   border: "1px solid hsl(var(--border))",
-                  borderRadius: "6px",
+                  borderRadius: "8px",
                   fontSize: "11px",
-                  padding: "8px 12px",
+                  padding: "10px 14px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                 }}
-                labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600, marginBottom: 4 }}
-                itemStyle={{ padding: "1px 0" }}
+                labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600, marginBottom: 6 }}
+                itemStyle={{ padding: "2px 0" }}
                 formatter={(value: number, name: string) => {
                   if (name === "pumpHead") return [`${value.toFixed(1)} ${headUnit}`, "Pump Head"];
                   if (name === "systemHead") return [`${value.toFixed(1)} ${headUnit}`, "System Head"];
@@ -178,8 +205,29 @@ export function PumpCurveChart({
                 labelFormatter={(label) => `Flow: ${label} ${flowUnit}`}
               />
               <Legend
-                wrapperStyle={{ fontSize: "10px", paddingTop: "8px" }}
+                wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }}
+                iconType="plainline"
+                iconSize={14}
                 formatter={(value: string) => LEGEND_NAMES[value] || value}
+              />
+
+              <Area
+                yAxisId="head"
+                type="monotone"
+                dataKey="pumpHead"
+                fill="url(#pumpHeadGrad)"
+                stroke="none"
+                legendType="none"
+                tooltipType="none"
+              />
+              <Area
+                yAxisId="head"
+                type="monotone"
+                dataKey="efficiency"
+                fill="url(#efficiencyGrad)"
+                stroke="none"
+                legendType="none"
+                tooltipType="none"
               />
 
               <Line
@@ -190,6 +238,7 @@ export function PumpCurveChart({
                 strokeWidth={2.5}
                 dot={false}
                 name="pumpHead"
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
               />
               <Line
                 yAxisId="head"
@@ -197,44 +246,61 @@ export function PumpCurveChart({
                 dataKey="systemHead"
                 stroke={COLORS.systemCurve}
                 strokeWidth={2}
-                strokeDasharray="6 3"
+                strokeDasharray="8 4"
                 dot={false}
                 name="systemHead"
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
               />
               <Line
                 yAxisId="head"
                 type="monotone"
                 dataKey="efficiency"
                 stroke={COLORS.efficiency}
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
+                strokeWidth={1.8}
+                strokeDasharray="5 3"
                 dot={false}
                 name="efficiency"
+                activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff" }}
               />
               <Line
                 yAxisId="power"
                 type="monotone"
                 dataKey="power"
                 stroke={COLORS.power}
-                strokeWidth={1.5}
+                strokeWidth={1.8}
                 dot={false}
                 name="power"
+                activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff" }}
               />
 
+              <ReferenceLine
+                yAxisId="head"
+                x={parseFloat(displayFlow.toFixed(2))}
+                stroke="hsl(var(--muted-foreground) / 0.25)"
+                strokeDasharray="3 3"
+              />
+              <ReferenceLine
+                yAxisId="head"
+                y={parseFloat(displayTDH.toFixed(2))}
+                stroke="hsl(var(--muted-foreground) / 0.15)"
+                strokeDasharray="3 3"
+              />
               <ReferenceDot
                 yAxisId="head"
                 x={parseFloat(displayFlow.toFixed(2))}
                 y={parseFloat(displayTDH.toFixed(2))}
-                r={7}
+                r={8}
                 fill={COLORS.operatingPoint}
                 stroke="#fff"
-                strokeWidth={2}
+                strokeWidth={2.5}
               />
-              <ReferenceLine
+              <ReferenceDot
                 yAxisId="head"
                 x={parseFloat(displayFlow.toFixed(2))}
-                stroke="hsl(var(--muted-foreground) / 0.3)"
-                strokeDasharray="3 3"
+                y={parseFloat(displayTDH.toFixed(2))}
+                r={3}
+                fill="#fff"
+                stroke="none"
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -242,7 +308,7 @@ export function PumpCurveChart({
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground border-t border-muted/30 pt-3">
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS.operatingPoint, border: "2px solid white" }} />
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS.operatingPoint, border: "2.5px solid white", boxShadow: "0 0 0 1px hsl(var(--border))" }} />
             <span>Operating Point: {displayFlow.toFixed(1)} {flowUnit} @ {displayTDH.toFixed(1)} {headUnit}</span>
           </div>
           <div>BEP Efficiency: {pumpEfficiency.toFixed(0)}%</div>
@@ -255,7 +321,7 @@ export function PumpCurveChart({
           <p className="text-[11px] text-muted-foreground leading-relaxed" data-testid="pump-curve-note">
             Pump H-Q and efficiency curves are estimated based on typical centrifugal pump characteristics
             with the design point as BEP. Actual performance must be verified against manufacturer data.
-            Power is calculated as P = ρgHQ/η at each flow point along the pump curve.
+            Power is calculated as P = &#x3C1;gHQ/&#x3B7; at each flow point along the pump curve.
           </p>
         </div>
       </CardContent>
