@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { ChatGPTPopupButton } from "@/components/chatgpt-popup";
 import Home from "@/pages/home";
 import GasLineSizingPage from "@/pages/calculators/gas-line-sizing";
 import LiquidLineSizingPage from "@/pages/calculators/liquid-line-sizing";
@@ -66,6 +67,13 @@ function Router() {
   );
 }
 
+function ChatGPTOverlay() {
+  const [location] = useLocation();
+  const isCalculatorPage = location.startsWith("/calculators");
+  if (!isCalculatorPage) return null;
+  return <ChatGPTPopupButton />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -78,6 +86,7 @@ function App() {
             </main>
             <Footer />
           </div>
+          <ChatGPTOverlay />
           <Toaster />
         </ThemeProvider>
       </TooltipProvider>

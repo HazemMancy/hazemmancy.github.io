@@ -17,6 +17,7 @@ client/src/
   components/
     engineering/     - Reusable calculator UI components
     layout/          - Navbar, Footer
+    chatgpt-popup.tsx - Floating ChatGPT popup button (calculator pages only)
     theme-provider   - Dark mode (always dark)
     theme-toggle
   lib/engineering/   - Engineering calculation modules
