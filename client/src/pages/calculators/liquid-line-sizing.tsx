@@ -21,6 +21,7 @@ import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { Droplets, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -323,6 +324,48 @@ export default function LiquidLineSizingPage() {
                   },
                 ]}
                 rawData={result}
+                exportData={{
+                  calculatorName: "Liquid Line Sizing",
+                  inputs: [
+                    { label: "Volume Flow Rate", value: form.flowRate, unit: getUnit("flowVolume", unitSystem) },
+                    { label: "Liquid Density", value: form.density, unit: getUnit("density", unitSystem) },
+                    { label: "Viscosity", value: form.viscosity, unit: getUnit("viscosity", unitSystem) },
+                    { label: "Inner Diameter", value: form.innerDiameter, unit: getUnit("diameter", unitSystem) },
+                    { label: "Pipe Length", value: form.pipeLength, unit: getUnit("length", unitSystem) },
+                    { label: "Roughness", value: form.roughness, unit: "mm" },
+                    { label: "Elevation Change", value: form.elevationChange, unit: getUnit("length", unitSystem) },
+                    ...(selectedService ? [{ label: "Service Type", value: selectedService }] : []),
+                  ],
+                  results: [
+                    { label: "Velocity", value: convertFromSI("velocity", result.velocity, unitSystem), unit: getUnit("velocity", unitSystem), highlight: true },
+                    { label: "Friction Loss", value: convertFromSI("pressure", result.frictionLoss, unitSystem), unit: getUnit("pressure", unitSystem) },
+                    { label: "Static Head", value: convertFromSI("pressure", result.staticHead, unitSystem), unit: getUnit("pressure", unitSystem) },
+                    { label: "Total Pressure Drop", value: convertFromSI("pressure", result.totalPressureDrop, unitSystem), unit: getUnit("pressure", unitSystem), highlight: true },
+                    { label: "ΔP per 100m (friction)", value: result.pressureDropPer100m, unit: "bar/100m" },
+                    { label: "Reynolds Number", value: result.reynoldsNumber, unit: "—" },
+                    { label: "Friction Factor (f)", value: result.frictionFactor, unit: "—" },
+                  ],
+                  methodology: [
+                    "Darcy-Weisbach equation for incompressible liquid friction pressure drop",
+                    "Swamee-Jain approximation for Colebrook-White friction factor",
+                    "Static head calculated as ρ·g·Δz",
+                    "Total pressure drop = friction loss + static head",
+                  ],
+                  assumptions: [
+                    "Steady-state, single-phase incompressible liquid flow",
+                    "Darcy-Weisbach equation for friction pressure drop",
+                    "Swamee-Jain friction factor approximation",
+                    "Static head calculated from elevation change and liquid density",
+                    "Pipe roughness assumed uniform along pipe length",
+                    "No fittings or valves included (straight pipe only)",
+                  ],
+                  references: [
+                    "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
+                    "Perry's Chemical Engineers' Handbook, 9th Edition",
+                    "Swamee, P.K. and Jain, A.K. (1976) — Explicit equations for pipe-flow problems",
+                  ],
+                  warnings: result.warnings.length > 0 ? result.warnings : undefined,
+                } as ExportDatasheet}
               />
             </>
           )}

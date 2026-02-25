@@ -22,6 +22,7 @@ import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConve
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { CompressorCurveChart } from "@/components/engineering/compressor-curve-chart";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { Cog, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -173,6 +174,84 @@ export default function CompressorPage() {
       { label: "Std. Volumetric Flow", value: convertFromSI("flowGas", result.volumetricFlowRate, u).toFixed(2), unit: getUnit("flowGas", u) },
       { label: "Actual Inlet Volume Flow", value: result.actualVolumetricFlowRate.toFixed(1), unit: "m\u00B3/h" },
     ];
+  };
+
+  const buildExportData = (): ExportDatasheet | undefined => {
+    if (!result) return undefined;
+    const u = unitSystem;
+    const stageSection = result.stages.length > 1
+      ? result.stages.map(s => ({
+          title: `Stage ${s.stageNumber}`,
+          items: [
+            { label: "Compression Ratio", value: s.compressionRatio, unit: "" },
+            { label: "Suction Pressure", value: convertFromSI("pressure", s.suctionPressure, u), unit: getUnit("pressure", u) },
+            { label: "Discharge Pressure", value: convertFromSI("pressure", s.dischargePressure, u), unit: getUnit("pressure", u) },
+            { label: "Suction Temperature", value: convertFromSI("temperature", s.suctionTemperature, u), unit: getUnit("temperature", u) },
+            { label: "Discharge Temperature", value: convertFromSI("temperature", s.dischargeTemperature, u), unit: getUnit("temperature", u) },
+            { label: "Shaft Power", value: convertFromSI("power", s.shaftPower, u), unit: getUnit("power", u) },
+          ],
+        }))
+      : undefined;
+
+    return {
+      calculatorName: "Compressor Sizing Calculator",
+      inputs: [
+        { label: "Gas Flow Rate", value: form.gasFlowRate, unit: getUnit("flowGas", u) },
+        { label: "Molecular Weight", value: form.molecularWeight, unit: "kg/kmol" },
+        { label: "Suction Pressure", value: form.suctionPressure, unit: getUnit("pressure", u) },
+        { label: "Discharge Pressure", value: form.dischargePressure, unit: getUnit("pressure", u) },
+        { label: "Suction Temperature", value: form.suctionTemperature, unit: getUnit("temperature", u) },
+        { label: "Specific Heat Ratio (k)", value: form.specificHeatRatio },
+        { label: "Compressibility Factor (Z)", value: form.compressibilityFactor },
+        { label: "Compressor Type", value: compressorType === "centrifugal" ? "Centrifugal" : "Reciprocating" },
+        { label: "Compression Model", value: compressionModel === "polytropic" ? "Polytropic" : "Isentropic" },
+        { label: `${compressionModel === "polytropic" ? "Polytropic" : "Isentropic"} Efficiency`, value: form.polytropicEfficiency, unit: "%" },
+        { label: "Mechanical Efficiency", value: form.mechanicalEfficiency, unit: "%" },
+        { label: "Motor/Driver Efficiency", value: form.motorEfficiency, unit: "%" },
+        { label: "Max Discharge Temperature", value: form.maxDischargeTemperature, unit: getUnit("temperature", u) },
+      ],
+      results: buildResults().map(r => ({
+        label: r.label,
+        value: typeof r.value === "string" ? r.value : r.value,
+        unit: r.unit,
+        highlight: r.highlight,
+      })),
+      methodology: [
+        "Compression ratio per stage limited to ~3.5 (centrifugal) or ~4.0 (reciprocating)",
+        "Multi-stage compression with equal stage ratios and intercooling back to suction temperature",
+        compressionModel === "polytropic"
+          ? "Polytropic head: Hp = (Z * R * T1 / MW) * (n/(n-1)) * [(P2/P1)^((n-1)/n) - 1]"
+          : "Isentropic head: Hs = (Z * R * T1 / MW) * (k/(k-1)) * [(P2/P1)^((k-1)/k) - 1]",
+        "Gas power = Head * mass flow rate",
+        "Shaft power = Gas power / (polytropic or isentropic efficiency * mechanical efficiency)",
+        "Motor power = Shaft power / motor efficiency",
+        "Discharge temperature: T2 = T1 * (P2/P1)^((n-1)/n) for polytropic",
+      ],
+      assumptions: [
+        "Ideal gas law with compressibility factor (Z) correction",
+        "Single Z-factor used across all stages (average approximation)",
+        "Perfect intercooling assumed — gas cooled back to suction temperature between stages",
+        "Stage pressure ratios are equal (balanced staging)",
+        "No pressure drop in intercoolers or piping between stages",
+        compressionModel === "polytropic"
+          ? "Polytropic process path: PV\u207F = constant, n derived from k and \u03B7_poly"
+          : "Isentropic (adiabatic reversible) compression with efficiency correction",
+        "Mechanical losses accounted via mechanical efficiency factor",
+        "Motor/driver losses accounted via motor efficiency factor",
+        compressorType === "centrifugal"
+          ? "Max ratio per stage ~3.5 for centrifugal compressors"
+          : "Max ratio per stage ~4.0 for reciprocating compressors",
+      ],
+      references: [
+        "GPSA Engineering Data Book, Section 13 — Compressors",
+        "API 617 — Axial and Centrifugal Compressors",
+        "API 618 — Reciprocating Compressors",
+        "Ludwig's Applied Process Design, Volume 3, Chapter 12",
+        "Perry's Chemical Engineers' Handbook, Section 10",
+      ],
+      warnings: result.warnings,
+      additionalSections: stageSection,
+    };
   };
 
   const buildStageRows = () => {
@@ -397,6 +476,7 @@ export default function CompressorPage() {
                   input: form,
                   result,
                 }}
+                exportData={buildExportData()}
               />
               {result.numberOfStages > 1 && buildStageRows() && (
                 <Card>

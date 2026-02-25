@@ -15,6 +15,8 @@ import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
 import { COMMON_GASES, COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   type CVProject, type CVServiceData, type CVValveData, type CVInstallation,
   type OperatingPoint, type FluidType, type ValveStyle, type TrimCharacteristic,
@@ -29,7 +31,11 @@ import {
   Gauge, FlaskConical, RotateCcw,
   ChevronLeft, ChevronRight, ClipboardList, Droplets,
   Settings2, Calculator, Wrench, ShieldAlert, CheckCircle2,
+  Download, FileText, FileSpreadsheet,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const TABS = [
   { id: "project", label: "Project", icon: ClipboardList, step: 1 },
@@ -229,6 +235,124 @@ export default function ControlValvePage() {
   const goPrev = () => { if (tabIdx > 0) setActiveTab(TABS[tabIdx - 1].id); };
 
   const isGasLike = serviceData.fluidType === "gas" || serviceData.fluidType === "steam";
+
+  const buildExportData = (): ExportDatasheet | undefined => {
+    if (!finalResult) return undefined;
+    const fr = finalResult;
+    const sd = fr.serviceData;
+    const vd = fr.valveData;
+    const sr = fr.sizingResult;
+
+    const inputs = [
+      { label: "Fluid Type", value: sd.fluidType },
+      { label: "Fluid Name", value: sd.fluidName },
+      ...(sd.fluidType === "liquid" ? [
+        { label: "Density", value: sd.liquidProps.density, unit: "kg/m³" },
+        { label: "Viscosity", value: sd.liquidProps.viscosity, unit: "cP" },
+        { label: "Vapor Pressure", value: sd.liquidProps.vaporPressure, unit: "kPa" },
+        { label: "Critical Pressure", value: sd.liquidProps.criticalPressure, unit: "bar abs" },
+      ] : [
+        { label: "Molecular Weight", value: sd.gasProps.molecularWeight, unit: "kg/kmol" },
+        { label: "Cp/Cv (k)", value: sd.gasProps.specificHeatRatio, unit: "" },
+        { label: "Z-factor", value: sd.gasProps.compressibilityFactor, unit: "" },
+        { label: "Critical Pressure", value: sd.gasProps.criticalPressure, unit: "bar abs" },
+      ]),
+      { label: "Valve Style", value: vd.style },
+      { label: "Trim Characteristic", value: vd.characteristic },
+      { label: "FL", value: vd.fl, unit: "" },
+      { label: "xT", value: vd.xt, unit: "" },
+      { label: "Fd", value: vd.fd, unit: "" },
+      { label: "Pipe Size", value: vd.pipeSize, unit: "mm" },
+      ...(vd.ratedCv > 0 ? [{ label: "Rated Cv", value: vd.ratedCv, unit: "" }] : []),
+      ...sd.operatingPoints.filter(op => op.enabled).map(op => ({
+        label: `${op.label} Flow`, value: op.flowRate, unit: op.flowUnit === "volumetric" ? "m³/h" : "kg/h",
+      })),
+      ...sd.operatingPoints.filter(op => op.enabled).map(op => ({
+        label: `${op.label} P1/P2`, value: `${op.upstreamPressure} / ${op.downstreamPressure}`, unit: "bar abs",
+      })),
+    ];
+
+    const results = [
+      { label: "Governing Point", value: sr.governingPoint, unit: "", highlight: true },
+      { label: "Governing Cv", value: sr.governingCv, unit: "", highlight: true },
+      ...sr.pointResults.map(pr => ({ label: `${pr.label} — Required Cv`, value: pr.cvRequired, unit: "" })),
+      ...sr.pointResults.map(pr => ({ label: `${pr.label} — ΔP`, value: pr.deltaPActual, unit: "bar" })),
+      ...sr.pointResults.map(pr => ({ label: `${pr.label} — Regime`, value: pr.isChoked ? "Choked" : "OK", unit: "" })),
+      ...sr.pointResults.filter(pr => pr.openingPercent > 0).map(pr => ({ label: `${pr.label} — Opening`, value: pr.openingPercent, unit: "%" })),
+    ];
+
+    const additionalSections = [];
+    if (fr.selectionResult && vd.ratedCv > 0) {
+      const sel = fr.selectionResult;
+      additionalSections.push({
+        title: "Valve Selection Check",
+        items: [
+          { label: "Rated Cv", value: sel.ratedCv },
+          { label: "Cv Ratio (Governing/Rated)", value: `${(sel.cvRatio * 100).toFixed(0)}%` },
+          { label: "Min Opening", value: sel.minOpening, unit: "%" },
+          { label: "Max Opening", value: sel.maxOpening, unit: "%" },
+          { label: "Valve Authority", value: `${(sel.authorityFactor * 100).toFixed(0)}%` },
+          { label: "Rangeability", value: sel.rangeabilityOK ? "OK" : "INSUFFICIENT" },
+        ],
+      });
+    }
+
+    if (fr.riskAssessment) {
+      const ra = fr.riskAssessment;
+      additionalSections.push({
+        title: "Risk Assessment",
+        items: [
+          { label: "Cavitation Risk", value: ra.cavitationRisk },
+          { label: "Flashing Risk", value: ra.flashingRisk ? "Yes" : "No" },
+          { label: "Choked Gas", value: ra.chokedGas ? "Yes" : "No" },
+          { label: "High Noise Risk", value: ra.highNoiseRisk ? "Yes" : "No" },
+          { label: "Two-Phase Risk", value: ra.twoPhaseRisk ? "Yes" : "No" },
+        ],
+      });
+    }
+
+    return {
+      calculatorName: "Control Valve Sizing (IEC 60534)",
+      projectInfo: [
+        { label: "Project", value: fr.project.name },
+        { label: "Client", value: fr.project.client },
+        { label: "Location", value: fr.project.location },
+        { label: "Case / Tag", value: fr.project.caseId },
+        { label: "Engineer", value: fr.project.engineer },
+        { label: "Date", value: fr.project.date },
+        { label: "Data Quality", value: fr.project.dataQuality },
+      ],
+      inputs,
+      results,
+      additionalSections,
+      methodology: [
+        "Cv sizing per IEC 60534-2-1 / ISA S75.01",
+        sd.fluidType === "liquid"
+          ? "Liquid: Cv = Q·√(ρ/ΔP) / (N1·Fp), choked check via FL²(P1-FF·Pv)"
+          : "Gas: Cv = W / (N8·Fp·P1·Y·√(x·Fk·M/(T·Z))), choked check via Fk·xT",
+        "Piping geometry factor Fp based on reducers (sum K = 1.5(1-β²))",
+      ],
+      assumptions: [
+        "FL, xT, Fd values are typical defaults unless vendor-confirmed",
+        "Valve opening estimated from inherent characteristic (not installed)",
+        "Valve authority = min ΔP / (max ΔP + min ΔP)",
+        sd.fluidType === "steam" ? "Steam uses approximate MW/k/Z — verify with steam tables" : "",
+      ].filter(Boolean),
+      references: [
+        "IEC 60534-2-1: Industrial-process control valves — Sizing equations",
+        "ISA S75.01: Flow Equations for Sizing Control Valves",
+        "ISA S75.02: Control Valve Capacity Test Procedure",
+        "Fisher Control Valve Handbook, 5th Edition",
+        "Masoneilan Engineering Handbook for Control Valves",
+      ],
+      warnings: [
+        ...sr.warnings,
+        ...(fr.selectionResult?.warnings || []),
+        ...(fr.riskAssessment?.warnings || []),
+        ...fr.flags,
+      ].filter(Boolean),
+    };
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 md:py-12">
@@ -670,7 +794,33 @@ export default function ControlValvePage() {
         {/* TAB 7: RESULTS */}
         <TabsContent value="results">
           <Card>
-            <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Results & Recommendations</h3></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+              <h3 className="font-semibold text-sm">Results & Recommendations</h3>
+              {finalResult && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline" data-testid="button-export-results">
+                      <Download className="w-3.5 h-3.5 mr-1.5" />
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
+                      <FileText className="w-4 h-4 mr-2 text-red-400" />
+                      Export as PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
+                      <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                      Export as Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }} data-testid="button-export-json">
+                      <Download className="w-4 h-4 mr-2 text-blue-400" />
+                      Export as JSON
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </CardHeader>
             <CardContent className="space-y-4 pt-0">
               <Button className="w-full" onClick={handleBuildResults} data-testid="button-build-results">
                 Generate Final Results

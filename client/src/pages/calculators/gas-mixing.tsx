@@ -20,8 +20,16 @@ import {
 import {
   Blend, Plus, Trash2, FlaskConical, RotateCcw, Copy,
   ChevronLeft, ChevronRight, ClipboardList, Beaker, BarChart3, GitMerge,
-  AlertTriangle, CheckCircle2,
+  AlertTriangle, CheckCircle2, Download, FileSpreadsheet, FileText,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 
 const TABS = [
   { id: "project", label: "Project", icon: ClipboardList, step: 1 },
@@ -151,6 +159,69 @@ export default function GasMixingPage() {
     }
   };
 
+
+  const buildExportData = (): ExportDatasheet | null => {
+    if (!result) return null;
+    const assumptions = [
+      "Ideal gas mixing assumed (Amagat's law)",
+      "Mixture MW = \u03A3(y_i \u00D7 MW_i) \u2014 mole-fraction weighted average",
+      "Mass fractions: w_i = (y_i \u00D7 MW_i) / MW_mix",
+      `R_mix = R_u / MW_mix = ${R_UNIVERSAL.toFixed(5)} / MW_mix [kJ/(kg\u00B7K)]`,
+      result.wasNormalized ? "Auto-normalization applied (mole fractions did not sum to 1.0)" : "Mole fractions summed to 1.0 \u2014 no normalization needed",
+    ];
+    const references = [
+      "Perry's Chemical Engineers' Handbook, 9th Edition",
+      "GPSA Engineering Data Book, 14th Edition",
+      "Smith, Van Ness, Abbott \u2014 Introduction to Chemical Engineering Thermodynamics",
+    ];
+    return {
+      calculatorName: "Gas Mixing Calculator",
+      projectInfo: [
+        { label: "Case Name", value: project.name || "-" },
+        { label: "Case ID", value: project.caseId || "-" },
+        { label: "Engineer", value: project.engineer || "-" },
+        { label: "Date", value: project.date || "-" },
+      ],
+      inputs: components.map((c, i) => ({
+        label: `${c.name || `Component ${i + 1}`} (y_i / MW)`,
+        value: `${c.moleFraction.toFixed(6)} / ${c.molecularWeight.toFixed(3)}`,
+        unit: project.mwUnits,
+      })),
+      results: [
+        { label: "Mixture MW", value: result.mixtureMW, unit: project.mwUnits, highlight: true },
+        { label: "R_mix", value: result.rMix, unit: result.rMixUnit },
+        { label: "\u03A3y (raw)", value: result.totalMoleFraction, unit: "-" },
+        { label: "Mass fraction total", value: result.massFractionTotal, unit: "-" },
+        ...result.components.map(c => ({
+          label: `${c.name} mass fraction (w_i)`,
+          value: c.massFraction,
+          unit: "-",
+        })),
+      ],
+      calcSteps: result.calcSteps.map(s => ({
+        label: `${s.component}: y_i \u00D7 MW_i`,
+        equation: `${s.yi.toFixed(6)} \u00D7 ${s.mwi.toFixed(3)}`,
+        value: s.product,
+        unit: project.mwUnits,
+      })),
+      methodology: [
+        "MW_mix = \u03A3(y_i \u00D7 MW_i)",
+        "w_i = (y_i \u00D7 MW_i) / MW_mix",
+        "R_mix = R_universal / MW_mix",
+      ],
+      assumptions,
+      references,
+      warnings: [...result.flags, ...result.warnings],
+    };
+  };
+
+  const handleExport = (format: "pdf" | "excel" | "json") => {
+    const data = buildExportData();
+    if (!data) return;
+    if (format === "pdf") exportToPDF(data);
+    else if (format === "excel") exportToExcel(data);
+    else exportToJSON(data);
+  };
 
   const tabIdx = TABS.findIndex(t => t.id === activeTab);
   const goNext = () => { if (tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id); };
@@ -353,6 +424,28 @@ export default function GasMixingPage() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                       <h4 className="font-semibold text-sm">Mixture Molecular Weight</h4>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" data-testid="button-export-results">
+                            <Download className="w-3.5 h-3.5 mr-1.5" />
+                            Export
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-pdf">
+                            <FileText className="w-4 h-4 mr-2 text-red-400" />
+                            Export as PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport("excel")} data-testid="button-export-excel">
+                            <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                            Export as Excel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport("json")} data-testid="button-export-json">
+                            <Download className="w-4 h-4 mr-2 text-blue-400" />
+                            Export as JSON
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     <p className="text-3xl font-mono font-bold text-primary" data-testid="text-mw-mix">
                       {result.mixtureMW.toFixed(4)} <span className="text-base text-muted-foreground font-normal">{project.mwUnits}</span>

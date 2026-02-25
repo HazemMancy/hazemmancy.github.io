@@ -27,6 +27,7 @@ import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { Wind, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -415,6 +416,53 @@ export default function GasLineSizingPage() {
                   },
                 ]}
                 rawData={result}
+                exportData={{
+                  calculatorName: "Gas Line Sizing",
+                  inputs: [
+                    { label: "Mass Flow Rate", value: form.flowRate, unit: getUnit("flowMass", unitSystem) },
+                    { label: "Operating Pressure", value: form.pressure, unit: getUnit("pressure", unitSystem) },
+                    { label: "Operating Temperature", value: form.temperature, unit: getUnit("temperature", unitSystem) },
+                    { label: "Molecular Weight", value: form.molecularWeight, unit: "kg/kmol" },
+                    { label: "Inner Diameter", value: form.innerDiameter, unit: getUnit("diameter", unitSystem) },
+                    { label: "Pipe Length", value: form.pipeLength, unit: getUnit("length", unitSystem) },
+                    { label: "Roughness", value: form.roughness, unit: "mm" },
+                    { label: "Z-Factor", value: form.compressibilityFactor },
+                    { label: "Cp/Cv (k)", value: form.specificHeatRatio },
+                    { label: "Viscosity", value: form.viscosity, unit: getUnit("viscosity", unitSystem) },
+                    ...(selectedService ? [{ label: "Service Type", value: selectedService }] : []),
+                  ],
+                  results: [
+                    { label: "Velocity", value: convertFromSI("velocity", result.velocity, unitSystem), unit: getUnit("velocity", unitSystem), highlight: true },
+                    { label: "Pressure Drop", value: convertFromSI("pressure", result.pressureDrop, unitSystem), unit: getUnit("pressure", unitSystem), highlight: true },
+                    { label: "ΔP per 100m", value: result.pressureDropPer100m, unit: "bar/100m" },
+                    { label: "Reynolds Number", value: result.reynoldsNumber, unit: "—" },
+                    { label: "Friction Factor (f)", value: result.frictionFactor, unit: "—" },
+                    { label: "Mach Number", value: result.machNumber, unit: "—" },
+                    { label: "ρv²", value: result.rhoV2, unit: "kg/(m·s²)" },
+                    { label: "Gas Density", value: result.gasDensity, unit: getUnit("density", unitSystem) },
+                  ],
+                  methodology: [
+                    "Darcy-Weisbach equation for compressible gas pressure drop",
+                    "Swamee-Jain approximation for Colebrook-White friction factor",
+                    "Ideal gas law with compressibility factor (Z) for density calculation",
+                    "Mach number calculated from speed of sound in ideal gas",
+                  ],
+                  assumptions: [
+                    "Steady-state, single-phase compressible gas flow",
+                    "Isothermal flow assumption (no temperature change along pipe)",
+                    "Darcy-Weisbach equation for pressure drop calculation",
+                    "Swamee-Jain approximation for Colebrook friction factor",
+                    "Ideal gas law with compressibility factor (Z) correction",
+                    "Pipe roughness assumed uniform along pipe length",
+                  ],
+                  references: [
+                    "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
+                    "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
+                    "Swamee, P.K. and Jain, A.K. (1976) — Explicit equations for pipe-flow problems",
+                    "Perry's Chemical Engineers' Handbook, 9th Edition",
+                  ],
+                  warnings: result.warnings.length > 0 ? result.warnings : undefined,
+                } as ExportDatasheet}
               />
             </>
           )}

@@ -22,7 +22,15 @@ import {
 } from "@/lib/engineering/gasVolume";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
-import { ArrowLeftRight, FlaskConical, RotateCcw, ArrowDown, CheckCircle2 } from "lucide-react";
+import { ArrowLeftRight, FlaskConical, RotateCcw, ArrowDown, CheckCircle2, Download, FileSpreadsheet, FileText } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 
 const FLOW_UNIT_KEYS = Object.keys(FLOW_UNITS) as FlowUnitType[];
 
@@ -197,6 +205,62 @@ export default function GasVolumePage() {
   };
 
 
+  const buildExportData = (): ExportDatasheet | null => {
+    if (!result) return null;
+    return {
+      calculatorName: "Gas Volume Conversion",
+      inputs: [
+        { label: "Input Volume", value: result.inputVolume, unit: result.inputUnit },
+        { label: "From Pressure", value: from.pressure, unit: pUnit(unitSystem) },
+        { label: "From Temperature", value: from.temperature, unit: tUnit(unitSystem) },
+        { label: "From Z-factor", value: from.zFactor, unit: "-" },
+        { label: "To Pressure", value: to.pressure, unit: pUnit(unitSystem) },
+        { label: "To Temperature", value: to.temperature, unit: tUnit(unitSystem) },
+        { label: "To Z-factor", value: to.zFactor, unit: "-" },
+      ],
+      results: [
+        { label: "Output Volume", value: result.outputVolume, unit: result.outputUnit, highlight: true },
+        ...result.allUnits.map(item => ({
+          label: `Equivalent (${item.unit})`,
+          value: item.value,
+          unit: item.unit,
+        })),
+      ],
+      calcSteps: result.steps.map(s => ({
+        label: s.label,
+        value: s.value,
+        unit: "",
+      })),
+      methodology: [
+        "Real gas law: PV = ZnRT",
+        "V2 = V1 \u00D7 (P1/P2) \u00D7 (T2/T1) \u00D7 (Z2/Z1)",
+      ],
+      assumptions: [
+        "Real gas law: PV = ZnRT",
+        "Conversion: V2 = V1 \u00D7 (P1/P2) \u00D7 (T2/T1) \u00D7 (Z2/Z1)",
+        "Normal conditions (Nm\u00B3): 0\u00B0C, 1 atm (101.325 kPa)",
+        "Standard conditions (Sm\u00B3): 15\u00B0C, 1 atm (101.325 kPa) per ISO 13443",
+        "US Standard (SCFM/MMSCFD): 60\u00B0F (15.56\u00B0C), 14.696 psia",
+        "Z-factor must be obtained from equation of state or charts",
+      ],
+      references: [
+        "ISO 13443: Natural Gas \u2014 Standard Reference Conditions",
+        "AGA Report No. 8: Compressibility Factors of Natural Gas",
+        "GPSA Engineering Data Book, 14th Edition",
+        "Perry's Chemical Engineers' Handbook, 9th Edition",
+      ],
+      warnings: result.warnings,
+    };
+  };
+
+  const handleExport = (format: "pdf" | "excel" | "json") => {
+    const data = buildExportData();
+    if (!data) return;
+    if (format === "pdf") exportToPDF(data);
+    else if (format === "excel") exportToExcel(data);
+    else exportToJSON(data);
+  };
+
   const renderSide = (
     label: string,
     side: SideForm,
@@ -369,6 +433,28 @@ export default function GasVolumePage() {
                     <CheckCircle2 className="w-5 h-5 text-green-400" />
                     <h3 className="font-semibold text-base">Conversion Result</h3>
                   </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline" data-testid="button-export-results">
+                        <Download className="w-3.5 h-3.5 mr-1.5" />
+                        Export
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-pdf">
+                        <FileText className="w-4 h-4 mr-2 text-red-400" />
+                        Export as PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport("excel")} data-testid="button-export-excel">
+                        <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                        Export as Excel
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport("json")} data-testid="button-export-json">
+                        <Download className="w-4 h-4 mr-2 text-blue-400" />
+                        Export as JSON
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-4">
                   <div className="bg-primary/10 p-4 rounded-md text-center" data-testid="result-primary">

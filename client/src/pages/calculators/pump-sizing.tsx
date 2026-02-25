@@ -29,6 +29,7 @@ import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { Droplets, FlaskConical, RotateCcw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PumpCurveChart } from "@/components/engineering/pump-curve-chart";
@@ -354,6 +355,155 @@ export default function PumpSizingPage() {
       )}
     </div>
   );
+
+  const buildCentrifugalExportData = (): ExportDatasheet | undefined => {
+    if (!centrifugalResult) return undefined;
+    const u = unitSystem;
+    const r = centrifugalResult;
+    return {
+      calculatorName: "Pump Sizing Calculator — Centrifugal",
+      inputs: [
+        { label: "Flow Rate", value: form.flowRate, unit: getUnit("flowLiquid", u) },
+        { label: "Liquid Density", value: form.liquidDensity, unit: "kg/m\u00B3" },
+        { label: "Viscosity", value: form.viscosity, unit: "cP" },
+        { label: "Suction Static Head", value: form.suctionStaticHead, unit: getUnit("head", u) },
+        { label: "Discharge Static Head", value: form.dischargeStaticHead, unit: getUnit("head", u) },
+        { label: "Suction Pipe Length", value: form.suctionPipeLength, unit: getUnit("length", u) },
+        { label: "Discharge Pipe Length", value: form.dischargePipeLength, unit: getUnit("length", u) },
+        { label: "Suction Pipe Diameter", value: form.suctionPipeDiameter, unit: getUnit("diameter", u) },
+        { label: "Discharge Pipe Diameter", value: form.dischargePipeDiameter, unit: getUnit("diameter", u) },
+        { label: "Suction Roughness", value: form.suctionRoughness, unit: "mm" },
+        { label: "Discharge Roughness", value: form.dischargeRoughness, unit: "mm" },
+        { label: "Suction Fittings K", value: form.suctionFittingsK },
+        { label: "Discharge Fittings K", value: form.dischargeFittingsK },
+        { label: "Pump Efficiency", value: form.pumpEfficiency, unit: "%" },
+        { label: "Motor Efficiency", value: form.motorEfficiency, unit: "%" },
+        { label: "Vapor Pressure", value: form.vaporPressure, unit: getUnit("pressureKpa", u) },
+        { label: "Atmospheric Pressure", value: form.atmosphericPressure, unit: getUnit("pressureAbs", u) },
+        { label: "Suction Vessel Pressure", value: form.suctionVesselPressure, unit: getUnit("pressure", u) },
+      ],
+      results: [
+        { label: "Total Dynamic Head (TDH)", value: convertFromSI("head", r.totalDynamicHead, u), unit: getUnit("head", u), highlight: true },
+        { label: "Static Head", value: convertFromSI("head", r.staticHead, u), unit: getUnit("head", u) },
+        { label: "Suction Friction Loss", value: convertFromSI("head", r.suctionFrictionLoss, u), unit: getUnit("head", u) },
+        { label: "Discharge Friction Loss", value: convertFromSI("head", r.dischargeFrictionLoss, u), unit: getUnit("head", u) },
+        { label: "Total Friction Loss", value: convertFromSI("head", r.totalFrictionLoss, u), unit: getUnit("head", u) },
+        { label: "Hydraulic Power", value: convertFromSI("power", r.hydraulicPower, u), unit: getUnit("power", u) },
+        { label: "Brake Power (BHP)", value: convertFromSI("power", r.brakePower, u), unit: getUnit("power", u), highlight: true },
+        { label: "Motor Power Required", value: convertFromSI("power", r.motorPower, u), unit: getUnit("power", u), highlight: true },
+        { label: "Suction Velocity", value: convertFromSI("velocity", r.suctionVelocity, u), unit: getUnit("velocity", u) },
+        { label: "Discharge Velocity", value: convertFromSI("velocity", r.dischargeVelocity, u), unit: getUnit("velocity", u) },
+        { label: "Suction Reynolds", value: r.suctionReynolds, unit: "\u2014" },
+        { label: "Discharge Reynolds", value: r.dischargeReynolds, unit: "\u2014" },
+        { label: "NPSHa (Available)", value: convertFromSI("head", r.npshaAvailable, u), unit: getUnit("head", u), highlight: r.npshaAvailable < 3.0 },
+        { label: "Suction f (Darcy)", value: r.suctionFrictionFactor, unit: "\u2014" },
+        { label: "Discharge f (Darcy)", value: r.dischargeFrictionFactor, unit: "\u2014" },
+      ],
+      methodology: [
+        "Darcy-Weisbach equation with Swamee-Jain friction factor approximation",
+        "TDH = Static Head + Friction Loss (suction + discharge) + Velocity Head difference",
+        "Hydraulic Power = \u03C1 * g * Q * TDH",
+        "Brake Power = Hydraulic Power / Pump Efficiency",
+        "Motor Power = Brake Power / Motor Efficiency",
+        "NPSHa = P_atm + P_vessel + h_suction - hf_suction - P_vapor (all in head of liquid)",
+      ],
+      assumptions: [
+        "Steady-state, incompressible liquid flow",
+        "Centrifugal pump application",
+        "Darcy-Weisbach equation with Swamee-Jain friction factor",
+        "Minor losses calculated using resistance coefficient (K) method",
+        "NPSHa calculated per HI/API standards",
+        "Atmospheric pressure at sea level unless specified",
+        "Suction vessel pressure is gauge pressure (0 = atmospheric)",
+      ],
+      references: [
+        "Hydraulic Institute Standards (HI 1.3) \u2014 Centrifugal Pump Design",
+        "API 610 \u2014 Centrifugal Pumps for Petroleum, Petrochemical and Natural Gas Industries",
+        "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
+        "Cameron Hydraulic Data, 20th Edition",
+        "Perry's Chemical Engineers' Handbook, 9th Edition",
+      ],
+      warnings: r.warnings,
+    };
+  };
+
+  const buildPDExportData = (): ExportDatasheet | undefined => {
+    if (!pdResult) return undefined;
+    const u = unitSystem;
+    const r = pdResult;
+    return {
+      calculatorName: "Pump Sizing Calculator — Positive Displacement",
+      inputs: [
+        { label: "Flow Rate", value: form.flowRate, unit: getUnit("flowLiquid", u) },
+        { label: "Liquid Density", value: form.liquidDensity, unit: "kg/m\u00B3" },
+        { label: "Viscosity", value: form.viscosity, unit: "cP" },
+        { label: "Suction Static Head", value: form.suctionStaticHead, unit: getUnit("head", u) },
+        { label: "Discharge Static Head", value: form.dischargeStaticHead, unit: getUnit("head", u) },
+        { label: "Suction Pipe Length", value: form.suctionPipeLength, unit: getUnit("length", u) },
+        { label: "Discharge Pipe Length", value: form.dischargePipeLength, unit: getUnit("length", u) },
+        { label: "Suction Pipe Diameter", value: form.suctionPipeDiameter, unit: getUnit("diameter", u) },
+        { label: "Discharge Pipe Diameter", value: form.dischargePipeDiameter, unit: getUnit("diameter", u) },
+        { label: "Suction Roughness", value: form.suctionRoughness, unit: "mm" },
+        { label: "Discharge Roughness", value: form.dischargeRoughness, unit: "mm" },
+        { label: "Suction Fittings K", value: form.suctionFittingsK },
+        { label: "Discharge Fittings K", value: form.dischargeFittingsK },
+        { label: "Volumetric Efficiency", value: form.volumetricEfficiency, unit: "%" },
+        { label: "Mechanical Efficiency", value: form.mechanicalEfficiency, unit: "%" },
+        { label: "Motor Efficiency", value: form.motorEfficiency, unit: "%" },
+        { label: "Discharge Pressure", value: form.dischargePressure, unit: getUnit("pressure", u) },
+        { label: "Relief Valve Set Pressure", value: form.reliefValvePressure, unit: getUnit("pressure", u) },
+        { label: "Vapor Pressure", value: form.vaporPressure, unit: getUnit("pressureKpa", u) },
+        { label: "Atmospheric Pressure", value: form.atmosphericPressure, unit: getUnit("pressureAbs", u) },
+        { label: "Suction Vessel Pressure", value: form.suctionVesselPressure, unit: getUnit("pressure", u) },
+      ],
+      results: [
+        { label: "Differential Pressure", value: convertFromSI("pressure", r.differentialPressure, u), unit: getUnit("pressure", u), highlight: true },
+        { label: "Total Dynamic Head", value: convertFromSI("head", r.totalDynamicHead, u), unit: getUnit("head", u) },
+        { label: "Static Head", value: convertFromSI("head", r.staticHead, u), unit: getUnit("head", u) },
+        { label: "Total Friction Loss", value: convertFromSI("head", r.totalFrictionLoss, u), unit: getUnit("head", u) },
+        { label: "Actual Flow (Delivered)", value: convertFromSI("flowLiquid", r.actualFlow, u), unit: getUnit("flowLiquid", u) },
+        { label: "Theoretical Flow (Displaced)", value: convertFromSI("flowLiquid", r.theoreticalFlow, u), unit: getUnit("flowLiquid", u) },
+        { label: "Slip (Internal Leakage)", value: convertFromSI("flowLiquid", r.slip, u), unit: getUnit("flowLiquid", u) },
+        { label: "Hydraulic Power", value: convertFromSI("power", r.hydraulicPower, u), unit: getUnit("power", u) },
+        { label: "Shaft Power", value: convertFromSI("power", r.shaftPower, u), unit: getUnit("power", u), highlight: true },
+        { label: "Motor Power Required", value: convertFromSI("power", r.motorPower, u), unit: getUnit("power", u), highlight: true },
+        { label: "NPSHa (Available)", value: convertFromSI("head", r.npshaAvailable, u), unit: getUnit("head", u), highlight: r.npshaAvailable < 3.0 },
+        { label: "NPIPa (Available)", value: r.npipAvailable, unit: "kPa", highlight: r.npipAvailable < 30 },
+        { label: "Suction Velocity", value: convertFromSI("velocity", r.suctionVelocity, u), unit: getUnit("velocity", u) },
+        { label: "Discharge Velocity", value: convertFromSI("velocity", r.dischargeVelocity, u), unit: getUnit("velocity", u) },
+        { label: "Relief Valve Set Pressure", value: r.reliefValvePressure > 0 ? convertFromSI("pressure", r.reliefValvePressure, u) : 0, unit: r.reliefValvePressure > 0 ? getUnit("pressure", u) : "Not set" },
+      ],
+      methodology: [
+        "Darcy-Weisbach equation with Swamee-Jain friction factor approximation",
+        "Theoretical flow = Required flow / Volumetric Efficiency",
+        "Slip = Theoretical flow - Actual delivered flow",
+        "Hydraulic Power = \u0394P * Q (actual flow)",
+        "Shaft Power = Hydraulic Power / Mechanical Efficiency",
+        "Motor Power = Shaft Power / Motor Efficiency",
+        "NPIPa = NPSHa * \u03C1 * g (per API 676 for rotary PD pumps)",
+      ],
+      assumptions: [
+        "Steady-state, incompressible liquid flow",
+        "Positive displacement pump (reciprocating, gear, screw, or diaphragm)",
+        "Required flow is the actual delivered flow; theoretical flow = required flow / volumetric efficiency",
+        "Slip = Theoretical flow \u2212 Actual delivered flow (internal leakage increases with \u0394P)",
+        "Shaft power = Hydraulic power / Mechanical efficiency",
+        "Motor power = Shaft power / Motor efficiency (user-specified)",
+        "Relief valve is mandatory for overpressure protection",
+        "Darcy-Weisbach equation for piping friction losses",
+        "Atmospheric pressure at sea level unless specified",
+      ],
+      references: [
+        "API 674 \u2014 Positive Displacement Pumps \u2014 Reciprocating",
+        "API 676 \u2014 Positive Displacement Pumps \u2014 Rotary",
+        "API 675 \u2014 Positive Displacement Pumps \u2014 Controlled Volume (Metering)",
+        "Hydraulic Institute Standards (HI 3.1-3.5) \u2014 Rotary Pump Standards",
+        "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
+        "Karassik et al. \u2014 Pump Handbook, 4th Edition",
+      ],
+      warnings: r.warnings,
+    };
+  };
 
   const activeResult = pumpType === "centrifugal" ? centrifugalResult : pdResult;
   const hasResult = activeResult !== null;
@@ -777,6 +927,7 @@ export default function PumpSizingPage() {
                       },
                     ]}
                     rawData={centrifugalResult}
+                    exportData={buildCentrifugalExportData()}
                   />
                   <ResultsPanel
                     title="Power Requirements"
@@ -903,6 +1054,7 @@ export default function PumpSizingPage() {
                       },
                     ]}
                     rawData={pdResult}
+                    exportData={buildPDExportData()}
                   />
                   <ResultsPanel
                     title="Power Requirements"

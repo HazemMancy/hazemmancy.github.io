@@ -25,11 +25,17 @@ import {
   calculateBackpressure, recommendDeviceType, buildFinalResult,
   estimateFireCaseReliefRate, PRD_TEST_CASE,
 } from "@/lib/engineering/prdSizing";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Shield, FlaskConical, RotateCcw, AlertTriangle,
   ChevronLeft, ChevronRight, ClipboardList, Settings2,
   Flame, Target, Wrench, Calculator, CircleDot,
   PipetteIcon, CheckCircle2, Plus, Trash2, Info,
+  Download, FileSpreadsheet, FileText,
 } from "lucide-react";
 
 const TABS = [
@@ -993,7 +999,115 @@ export default function PSVSizingPage() {
                       ...(finalResult.backpressureCheck ? [
                         { label: "Total Backpressure", value: `${finalResult.backpressureCheck.totalPercent.toFixed(2)}%`, unit: finalResult.backpressureCheck.pass ? "PASS" : "FAIL", highlight: !finalResult.backpressureCheck.pass },
                       ] : []),
-                    ]} rawData={finalResult} />
+                    ]} rawData={finalResult} exportData={{
+                      calculatorName: "PRD / Flare Relief Calculator",
+                      projectInfo: [
+                        { label: "Project", value: project.name || "—" },
+                        { label: "Client", value: project.client || "—" },
+                        { label: "Location", value: project.location || "—" },
+                        { label: "Case ID", value: project.caseId || "—" },
+                        { label: "Engineer", value: project.engineer || "—" },
+                        { label: "Date", value: project.date },
+                      ],
+                      inputs: [
+                        { label: "Equipment Tag", value: equipment.tag || "—" },
+                        { label: "Service", value: equipment.service || "—" },
+                        { label: "MAWP", value: equipment.mawp, unit: `${pU}g` },
+                        { label: "Design Temperature", value: equipment.designTemp, unit: tU },
+                        { label: "Set Pressure", value: equipment.setPressure, unit: `${pU}g` },
+                        { label: "Overpressure Basis", value: equipment.overpressureBasis },
+                        { label: "Overpressure", value: equipment.overpressurePercent, unit: "%" },
+                        { label: "Atmospheric Pressure", value: project.atmosphericPressure, unit: "bar abs" },
+                        { label: "Fluid Type", value: sizing.fluidType },
+                        { label: "Molecular Weight", value: sizing.molecularWeight, unit: "g/mol" },
+                        { label: "Specific Heat Ratio (k)", value: sizing.specificHeatRatio },
+                        { label: "Compressibility Factor (Z)", value: sizing.compressibilityFactor },
+                        { label: "Relieving Temperature", value: sizing.relievingTemperature, unit: tU },
+                        { label: "Kd", value: sizing.kd },
+                        { label: "Kb", value: sizing.kb },
+                        { label: "Kc", value: sizing.kc },
+                        { label: "Device Type", value: device.type },
+                        ...(governingIndex >= 0 && scenarios[governingIndex] ? [
+                          { label: "Governing Scenario", value: scenarios[governingIndex].type },
+                          { label: "Governing Relief Rate", value: scenarios[governingIndex].relievingRate, unit: "kg/h" },
+                        ] : []),
+                      ],
+                      results: [
+                        { label: "Governing Scenario", value: finalResult.governingScenario, unit: "" },
+                        { label: "Relieving Rate", value: finalResult.relievingRate, unit: "kg/h", highlight: true },
+                        { label: "Relieving Pressure (gauge)", value: convertFromSI("pressure", finalResult.relievingPressureGauge, unitSystem), unit: `${pU}g` },
+                        { label: "Relieving Pressure (abs)", value: convertFromSI("pressureAbs", finalResult.relievingPressureAbs, unitSystem), unit: `${pU}a` },
+                        { label: "Required Area", value: finalResult.requiredArea, unit: "mm²", highlight: true },
+                        { label: "Selected Orifice", value: `${finalResult.selectedOrifice.designation} (${finalResult.selectedOrifice.area} mm²)`, unit: "" },
+                        { label: "Orifice Margin", value: `${finalResult.selectedOrifice.margin >= 0 ? "+" : ""}${finalResult.selectedOrifice.margin.toFixed(1)}%`, unit: "" },
+                        { label: "Device Type", value: finalResult.recommendedDevice.replace(/_/g, " "), unit: "" },
+                        ...(finalResult.inletCheck ? [
+                          { label: "Inlet Pressure Drop", value: `${finalResult.inletCheck.pressureDropPercent.toFixed(2)}%`, unit: finalResult.inletCheck.pass ? "PASS" : "FAIL" },
+                        ] : []),
+                        ...(finalResult.backpressureCheck ? [
+                          { label: "Total Backpressure", value: `${finalResult.backpressureCheck.totalPercent.toFixed(2)}%`, unit: finalResult.backpressureCheck.pass ? "PASS" : "FAIL" },
+                        ] : []),
+                      ],
+                      additionalSections: [
+                        ...(scenarios.length > 0 ? [{
+                          title: "Overpressure Scenarios",
+                          items: scenarios.map((s, i) => ({
+                            label: `${s.type}${governingIndex === i ? " (Governing)" : ""}`,
+                            value: s.relievingRate,
+                            unit: "kg/h",
+                          })),
+                        }] : []),
+                        ...(finalResult.inletCheck ? [{
+                          title: "Inlet Piping Check",
+                          items: [
+                            { label: "Pressure Drop", value: finalResult.inletCheck.pressureDrop, unit: "bar" },
+                            { label: "% of Set Pressure", value: finalResult.inletCheck.pressureDropPercent, unit: "%" },
+                            { label: "Velocity", value: finalResult.inletCheck.velocity, unit: "m/s" },
+                            { label: "Reynolds Number", value: finalResult.inletCheck.reynoldsNumber, unit: "" },
+                            { label: "Status", value: finalResult.inletCheck.pass ? "PASS" : "FAIL" },
+                          ],
+                        }] : []),
+                        ...(finalResult.backpressureCheck ? [{
+                          title: "Backpressure Assessment",
+                          items: [
+                            { label: "Superimposed", value: finalResult.backpressureCheck.superimposed, unit: "bar" },
+                            { label: "Built-up", value: finalResult.backpressureCheck.builtUp, unit: "bar" },
+                            { label: "Total Backpressure", value: finalResult.backpressureCheck.total, unit: "bar" },
+                            { label: "% of Set Pressure", value: finalResult.backpressureCheck.totalPercent, unit: "%" },
+                            { label: "Status", value: finalResult.backpressureCheck.pass ? "PASS" : "FAIL" },
+                          ],
+                        }] : []),
+                      ],
+                      methodology: [
+                        "Gas/vapor sizing per API 520 Part I, Section 5.6 (critical and subcritical flow)",
+                        "Steam sizing per API 520 Part I with Ksh superheat correction and Kn Napier correction",
+                        "Liquid sizing per API 520 Part I, Section 5.8 with viscosity correction Kv",
+                        "Orifice selection per API 526 standard designations (D through T)",
+                        "Inlet piping pressure drop check per API 520 Part II (3% rule)",
+                        "Backpressure assessment per API 521 guidelines",
+                      ],
+                      assumptions: [
+                        "Gas/vapor sizing per API 520 Part I, Section 5.6 (critical and subcritical flow)",
+                        "Steam sizing per API 520 Part I with Ksh superheat correction and Kn Napier correction",
+                        "Liquid sizing per API 520 Part I, Section 5.8 with viscosity correction Kv",
+                        "Kd = 0.975 for gas/steam (ASME certified), 0.65 for liquid (default values)",
+                        "Inlet piping loss limit: 3% of set pressure per API 520 Part II",
+                        "Orifice selection per API 526 standard designations (D through T) with flange sizes",
+                        "Fire case heat input per API 521 (simplified wetted area method)",
+                        "Scenario screening per API 521 — user must verify relief rates with process simulation",
+                      ],
+                      references: [
+                        "API 520 Part I, 10th Edition: Sizing, Selection, and Installation of Pressure-Relieving Devices",
+                        "API 520 Part II, 6th Edition: Installation",
+                        "API 521, 7th Edition: Pressure-Relieving and Depressuring Systems",
+                        "API 526, 7th Edition: Flanged Steel Pressure-Relief Valves",
+                        "ASME BPVC Section VIII, Division 1: Pressure Vessels",
+                      ],
+                      warnings: [
+                        ...finalResult.flags,
+                        ...finalResult.warnings,
+                      ],
+                    } as ExportDatasheet} />
 
                     {finalResult.actionItems.length > 0 && (
                       <Card>

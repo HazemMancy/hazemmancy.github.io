@@ -22,9 +22,18 @@ import {
   calculateSeparatorFull, TEST_CASES_FULL,
 } from "@/lib/engineering/separatorSizing";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
+import {
   Container, ClipboardList, Droplets, Settings2, BarChart3, Gauge,
   Ruler, ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
+  FileText, FileSpreadsheet,
 } from "lucide-react";
 
 const TABS = [
@@ -144,6 +153,106 @@ export default function SeparatorPage() {
     const idx = TABS.findIndex(t => t.id === activeTab);
     const next = idx + dir;
     if (next >= 0 && next < TABS.length) setActiveTab(TABS[next].id);
+  };
+
+  const buildExportData = (): ExportDatasheet | null => {
+    if (!result) return null;
+    const gov = result.caseResults.find(c => c.caseId === result.governingCaseId);
+    const govCase = cases.find(c => c.id === result.governingCaseId) ?? cases[0];
+
+    const inputs: ExportDatasheet["inputs"] = [
+      { label: "Separator Type", value: config.separatorType.replace(/_/g, " ") },
+      { label: "Inlet Device", value: config.inletDevice },
+      { label: "Mist Eliminator", value: config.mistEliminator },
+      { label: "K Value", value: config.kValue, unit: "m/s" },
+      { label: "Liquid Residence Time", value: holdup.residenceTime, unit: "min" },
+      { label: "Surge Time", value: holdup.surgeTime, unit: "min" },
+    ];
+
+    cases.forEach((c, i) => {
+      inputs.push(
+        { label: `Case ${i + 1} Name`, value: c.name },
+        { label: `Case ${i + 1} Type`, value: c.caseType },
+        { label: `Case ${i + 1} Gas Flow`, value: c.gasFlowRate, unit: c.gasFlowBasis === "actual" ? "m\u00B3/h act" : "Sm\u00B3/h" },
+        { label: `Case ${i + 1} Gas Density`, value: c.gasDensity, unit: "kg/m\u00B3" },
+        { label: `Case ${i + 1} Gas MW`, value: c.gasMW, unit: "kg/kmol" },
+        { label: `Case ${i + 1} Gas Pressure`, value: c.gasPressure, unit: "kPa abs" },
+        { label: `Case ${i + 1} Gas Temperature`, value: c.gasTemperature, unit: "\u00B0C" },
+        { label: `Case ${i + 1} Gas Z`, value: c.gasZ },
+        { label: `Case ${i + 1} Liquid Flow`, value: c.liquidFlowRate, unit: c.liquidFlowBasis === "volume" ? "m\u00B3/h" : "kg/h" },
+        { label: `Case ${i + 1} Liquid Density`, value: c.liquidDensity, unit: "kg/m\u00B3" },
+      );
+    });
+
+    const results: ExportDatasheet["results"] = [
+      { label: "Vessel Diameter", value: result.geometry.D_mm, unit: "mm", highlight: true },
+      { label: config.separatorType === "vertical" || config.separatorType === "ko_drum" ? "Vessel Height (T-T)" : "Vessel Length (T-T)", value: result.geometry.L_mm, unit: "mm", highlight: true },
+      { label: "L/D Ratio", value: result.geometry.LD_ratio, unit: "-" },
+      { label: "Vessel Volume", value: result.geometry.vesselVolume_m3, unit: "m\u00B3" },
+      { label: "Liquid Volume Required", value: result.geometry.liquidVolume_m3, unit: "m\u00B3" },
+      { label: "Gas Area Fraction", value: result.geometry.gasAreaFraction * 100, unit: "%" },
+      { label: "Actual Gas Velocity", value: result.geometry.actualGasVelocity, unit: "m/s" },
+      { label: "Mist Face Velocity", value: result.geometry.mistFaceVelocity, unit: "m/s" },
+      { label: "Liquid Level", value: result.geometry.liquidLevelPercent, unit: "%" },
+    ];
+
+    if (gov) {
+      results.push(
+        { label: "Governing Case v_s,max", value: gov.v_s_max, unit: "m/s" },
+        { label: "Governing Case A_req", value: gov.A_req, unit: "m\u00B2" },
+        { label: "Governing Case D_req", value: gov.D_req_mm, unit: "mm" },
+      );
+    }
+
+    const calcSteps: ExportDatasheet["calcSteps"] = [];
+    if (gov) {
+      gov.steps.forEach(s => calcSteps.push({ label: s.label, equation: s.equation, value: s.value, unit: s.unit }));
+    }
+    result.holdupSteps.forEach(s => calcSteps.push({ label: s.label, equation: s.equation, value: s.value, unit: s.unit }));
+    result.geometry.steps.forEach(s => calcSteps.push({ label: s.label, equation: s.equation, value: s.value, unit: s.unit }));
+
+    const additionalSections: ExportDatasheet["additionalSections"] = [];
+    if (result.caseResults.length > 1) {
+      additionalSections.push({
+        title: "Case Comparison",
+        items: result.caseResults.map(cr => ({
+          label: `${cr.caseName} — D_req`,
+          value: cr.D_req_mm,
+          unit: "mm",
+        })),
+      });
+    }
+
+    return {
+      calculatorName: "Separator / KO Drum Sizing",
+      projectInfo: [
+        { label: "Case Name", value: project.caseName || "-" },
+        { label: "Engineer", value: project.engineer || "-" },
+        { label: "Date", value: project.date || "-" },
+      ],
+      inputs,
+      results,
+      calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
+      additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
+      methodology: [
+        "Souders\u2013Brown correlation for maximum allowable gas velocity: v_max = K * sqrt((rho_L - rho_G) / rho_G)",
+        "Gas capacity area from continuity: A = Q_actual / v_max",
+        "Liquid holdup from residence time and surge time requirements",
+        "Vessel geometry assembled from gas capacity + liquid holdup + allowance zones",
+        "L/D ratio checked against typical design limits",
+      ],
+      assumptions: result.assumptions,
+      references: [
+        "API 12J: Specification for Oil and Gas Separators",
+        "GPSA Engineering Data Book, Section 7: Separation Equipment",
+        "Arnold & Stewart: Surface Production Operations, Vol. 1",
+        "Stewart & Arnold: Gas\u2013Liquid and Liquid\u2013Liquid Separators",
+      ],
+      warnings: [
+        ...result.warnings,
+        ...result.flags.map(f => FLAG_LABELS[f] || f.replace(/_/g, " ")),
+      ].filter(Boolean),
+    };
   };
 
   const tabIdx = TABS.findIndex(t => t.id === activeTab);
@@ -615,7 +724,31 @@ export default function SeparatorPage() {
               {/* Summary Card */}
               <Card>
                 <CardHeader className="pb-3">
-                  <h3 className="font-semibold text-sm flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Results Summary</h3>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h3 className="font-semibold text-sm flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Results Summary</h3>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" data-testid="button-export-results">
+                          <Download className="w-3.5 h-3.5 mr-1.5" />
+                          Export
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
+                          <FileText className="w-4 h-4 mr-2 text-red-400" />
+                          Export as PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
+                          <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                          Export as Excel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }} data-testid="button-export-json">
+                          <Download className="w-4 h-4 mr-2 text-blue-400" />
+                          Export as JSON
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-0">
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

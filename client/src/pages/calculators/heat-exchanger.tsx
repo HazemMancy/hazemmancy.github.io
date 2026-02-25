@@ -22,10 +22,18 @@ import {
   calculateHeatExchangerFull,
 } from "@/lib/engineering/heatExchanger";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { exportToExcel, exportToPDF as exportToPDFUtil, exportToJSON } from "@/lib/engineering/exportUtils";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
+import {
   Thermometer, ClipboardList, Droplets, Settings2, BarChart3,
   ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  Calculator, Gauge, Box,
+  Calculator, Gauge, Box, FileText, FileSpreadsheet,
 } from "lucide-react";
 
 const TABS = [
@@ -143,6 +151,131 @@ export default function HeatExchangerPage() {
     printWindow.document.close();
     printWindow.onload = () => {
       printWindow.print();
+    };
+  };
+
+  const buildExportData = (): ExportDatasheet | null => {
+    if (!result || !result.governingCase) return null;
+    const gc = result.governingCase;
+
+    const inputs: ExportDatasheet["inputs"] = [
+      { label: "Flow Arrangement", value: config.arrangement.replace(/_/g, " ") },
+      { label: "Shell Passes", value: config.shellPasses },
+      { label: "Tube Passes", value: config.tubePasses },
+      { label: "Min Approach Temp", value: config.approachTempMin, unit: "\u00B0C" },
+      { label: "F-Factor Value", value: config.fValue },
+      { label: "U Mode", value: uInput.mode.replace(/_/g, " ") },
+    ];
+
+    if (uInput.mode === "clean_plus_fouling") {
+      inputs.push(
+        { label: "U_clean", value: uInput.uClean, unit: "W/(m\u00B2\u00B7K)" },
+        { label: "Rf_hot", value: uInput.rfHot, unit: "m\u00B2\u00B7K/W" },
+        { label: "Rf_cold", value: uInput.rfCold, unit: "m\u00B2\u00B7K/W" },
+      );
+    } else if (uInput.mode === "fouled_direct") {
+      inputs.push({ label: "U_fouled", value: uInput.uFouled, unit: "W/(m\u00B2\u00B7K)" });
+    } else if (uInput.mode === "estimated") {
+      inputs.push({ label: "Service Category", value: uInput.serviceCategory || "-" });
+    }
+    inputs.push({ label: "Design Margin", value: uInput.designMargin, unit: "%" });
+
+    cases.forEach((c, i) => {
+      inputs.push(
+        { label: `Case ${i + 1} Name`, value: c.name },
+        { label: `Case ${i + 1} Type`, value: c.caseType },
+        { label: `Case ${i + 1} Hot T_in`, value: c.hotSide.tIn, unit: "\u00B0C" },
+        { label: `Case ${i + 1} Hot T_out`, value: c.hotSide.tOut, unit: "\u00B0C" },
+        { label: `Case ${i + 1} Hot Flow`, value: c.hotSide.mDot, unit: "kg/h" },
+        { label: `Case ${i + 1} Hot Cp`, value: c.hotSide.cp, unit: "kJ/(kg\u00B7K)" },
+        { label: `Case ${i + 1} Cold T_in`, value: c.coldSide.tIn, unit: "\u00B0C" },
+        { label: `Case ${i + 1} Cold T_out`, value: c.coldSide.tOut, unit: "\u00B0C" },
+        { label: `Case ${i + 1} Cold Flow`, value: c.coldSide.mDot, unit: "kg/h" },
+        { label: `Case ${i + 1} Cold Cp`, value: c.coldSide.cp, unit: "kJ/(kg\u00B7K)" },
+      );
+    });
+
+    const results: ExportDatasheet["results"] = [
+      { label: "Heat Duty", value: gc.dutyKW, unit: "kW", highlight: true },
+      { label: "Hot Side Duty", value: gc.hotDutyKW, unit: "kW" },
+      { label: "Cold Side Duty", value: gc.coldDutyKW, unit: "kW" },
+      { label: "\u0394T1", value: gc.dT1, unit: "\u00B0C" },
+      { label: "\u0394T2", value: gc.dT2, unit: "\u00B0C" },
+      { label: "LMTD", value: gc.lmtd, unit: "\u00B0C" },
+      { label: "R (capacity ratio)", value: gc.R, unit: "-" },
+      { label: "P (effectiveness)", value: gc.P, unit: "-" },
+      { label: "F (correction factor)", value: gc.F, unit: "-" },
+      { label: "Corrected LMTD", value: gc.correctedLMTD, unit: "\u00B0C", highlight: true },
+      { label: "U_clean", value: gc.uClean, unit: "W/(m\u00B2\u00B7K)" },
+      { label: "U_fouled", value: gc.uFouled, unit: "W/(m\u00B2\u00B7K)" },
+      { label: "Total Rf", value: gc.totalFoulingResistance, unit: "m\u00B2\u00B7K/W" },
+      { label: "UA_req", value: gc.uaReq, unit: "W/K" },
+      { label: "A_req", value: gc.aReq, unit: "m\u00B2" },
+      { label: "A_design", value: gc.aDesign, unit: "m\u00B2", highlight: true },
+      { label: "Approach Temp", value: gc.approachTemp, unit: "\u00B0C" },
+    ];
+
+    const calcSteps: ExportDatasheet["calcSteps"] = gc.trace.steps.map(s => ({
+      label: s.name,
+      equation: s.equation,
+      value: s.result,
+      unit: "",
+    }));
+
+    const additionalSections: ExportDatasheet["additionalSections"] = [];
+    if (result.cases.length > 1) {
+      additionalSections.push({
+        title: "Case Comparison — A_design",
+        items: result.cases.map(cr => ({
+          label: cr.caseName,
+          value: cr.aDesign,
+          unit: "m\u00B2",
+        })),
+      });
+    }
+
+    if (result.geometry) {
+      additionalSections.push({
+        title: "Geometry Check",
+        items: [
+          { label: "A selected", value: result.geometry.aSelected, unit: "m\u00B2" },
+          { label: "Q achieved", value: result.geometry.qAchieved, unit: "kW" },
+          { label: "Excess area", value: result.geometry.excessArea, unit: "%" },
+        ],
+      });
+    }
+
+    return {
+      calculatorName: "Heat Exchanger Sizing (LMTD)",
+      projectInfo: [
+        { label: "Case Name", value: project.name || "-" },
+        { label: "Case ID", value: project.caseId || "-" },
+        { label: "Engineer", value: project.engineer || "-" },
+        { label: "Date", value: project.date || "-" },
+      ],
+      inputs,
+      results,
+      calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
+      additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
+      methodology: [
+        "LMTD method: Q = U \u00D7 A \u00D7 F \u00D7 LMTD",
+        "F-correction factor for multi-pass configurations (Bowman et al.)",
+        "U_fouled = 1 / (1/U_clean + Rf_hot + Rf_cold)",
+        "Design area includes user-specified margin percentage",
+        "Energy balance check: Q_hot vs Q_cold within specified tolerance",
+      ],
+      assumptions: gc.trace.assumptions,
+      references: [
+        "Kern, D.Q. Process Heat Transfer (1950)",
+        "TEMA Standards, 10th Edition",
+        "Perry's Chemical Engineers' Handbook, Section 11",
+        "Bowman, Mueller & Nagle, Trans. ASME 62 (1940)",
+        "Ludwig, E.E. Applied Process Design, Vol. 3",
+      ],
+      warnings: [
+        ...gc.trace.warnings,
+        ...gc.trace.flags.map(f => FLAG_LABELS[f] || f.replace(/_/g, " ")),
+      ].filter(Boolean),
     };
   };
 
@@ -634,9 +767,32 @@ export default function HeatExchangerPage() {
                           <CheckCircle2 className="w-5 h-5 text-green-400" />
                           <h3 className="font-semibold">Results Summary — {result.governingCase.caseName} (Governing)</h3>
                         </div>
-                        <Button size="sm" variant="outline" onClick={handleExportPDF} data-testid="button-export-pdf">
-                          <Download className="w-3.5 h-3.5 mr-1" /> Calc Note (PDF)
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" data-testid="button-export-results">
+                              <Download className="w-3.5 h-3.5 mr-1.5" />
+                              Export
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={handleExportPDF} data-testid="button-export-calc-note">
+                              <FileText className="w-4 h-4 mr-2 text-red-400" />
+                              Calc Note (Print/PDF)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDFUtil(d); }} data-testid="button-export-pdf">
+                              <FileText className="w-4 h-4 mr-2 text-red-400" />
+                              Export as PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
+                              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                              Export as Excel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }} data-testid="button-export-json">
+                              <Download className="w-4 h-4 mr-2 text-blue-400" />
+                              Export as JSON
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">

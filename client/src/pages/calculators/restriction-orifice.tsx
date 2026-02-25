@@ -22,11 +22,16 @@ import {
   RO_LIQUID_SERVICE_TEST, RO_GAS_SERVICE_TEST,
   FLAG_LABELS, FLAG_SEVERITY,
 } from "@/lib/engineering/restrictionOrifice";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   CircleDot, FlaskConical, RotateCcw, ChevronLeft, ChevronRight,
   ClipboardList, Droplets, Settings2, BarChart3, ShieldCheck,
-  AlertTriangle, CheckCircle2, Zap,
+  AlertTriangle, CheckCircle2, Zap, Download, FileText, FileSpreadsheet,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const TABS = [
   { id: "project", label: "Project", icon: ClipboardList, step: 1 },
@@ -135,6 +140,124 @@ export default function RestrictionOrificePage() {
   const goPrev = () => { if (tabIdx > 0) setActiveTab(TABS[tabIdx - 1].id); };
 
   const pU = (param: string) => getUnit(param, unitSystem);
+
+  const buildExportData = (): ExportDatasheet | undefined => {
+    if (!result) return undefined;
+    const inputs = [
+      { label: "Phase", value: service.phase === "liquid" ? "Liquid" : "Gas / Vapor" },
+      { label: "Sizing Mode", value: service.sizingMode === "sizeForFlow" ? "Size for Flow" : "Predict ΔP" },
+      ...(service.phase === "liquid" ? [
+        { label: "Flow Basis", value: service.flowBasis === "volume" ? "Volumetric" : "Mass" },
+        ...(service.flowBasis === "volume"
+          ? [{ label: "Vol Flow Rate", value: service.volFlowRate, unit: pU("flowLiquid") }]
+          : [{ label: "Mass Flow Rate", value: service.massFlowRate, unit: pU("flowMass") }]),
+        { label: "Density", value: service.liquidProps.density, unit: "kg/m³" },
+        { label: "Viscosity", value: service.liquidProps.viscosity, unit: "cP" },
+        ...(service.liquidProps.vaporPressure > 0 ? [{ label: "Vapor Pressure", value: service.liquidProps.vaporPressure, unit: pU("pressureAbs") }] : []),
+      ] : [
+        { label: "Mass Flow Rate", value: service.massFlowRate, unit: pU("flowMass") },
+        { label: "Temperature", value: service.temperature, unit: pU("temperature") },
+        { label: "Molecular Weight", value: service.gasProps.molecularWeight, unit: "kg/kmol" },
+        { label: "Cp/Cv (k)", value: service.gasProps.specificHeatRatio, unit: "" },
+        { label: "Z-factor", value: service.gasProps.compressibilityFactor, unit: "" },
+      ]),
+      { label: "P1 Upstream", value: service.upstreamPressure, unit: pU("pressureAbs") },
+      { label: "P2 Downstream", value: service.downstreamPressure, unit: pU("pressureAbs") },
+      { label: "Pipe ID", value: service.pipeDiameter, unit: pU("diameter") },
+      { label: "Cd Value", value: service.orifice.cdValue, unit: "" },
+      { label: "Cd Mode", value: service.orifice.cdMode === "user" ? "User-Defined" : "Estimated" },
+      { label: "Edge Type", value: service.orifice.edgeType === "sharp" ? "Sharp-edged" : "Rounded" },
+      { label: "Basis Mode", value: service.orifice.basisMode === "inPipe" ? "In-pipe with β correction" : "Free discharge" },
+    ];
+
+    const results = [
+      { label: "Orifice Diameter", value: convertFromSI("diameter", result.requiredDiameter, unitSystem), unit: pU("diameter"), highlight: true },
+      { label: "Orifice Area", value: result.orificeArea, unit: "mm²" },
+      { label: "β Ratio", value: result.betaRatio, unit: "" },
+      { label: "ΔP", value: convertFromSI("pressure", result.pressureDrop, unitSystem), unit: pU("pressure") },
+      { label: "Orifice Velocity", value: convertFromSI("velocity", result.orificeVelocity, unitSystem), unit: pU("velocity") },
+      { label: "Pipe Velocity", value: convertFromSI("velocity", result.pipeVelocity, unitSystem), unit: pU("velocity") },
+      { label: "Flow Coefficient K", value: result.flowCoefficient, unit: "" },
+      { label: "Mass Flow", value: convertFromSI("flowMass", result.massFlow, unitSystem), unit: pU("flowMass") },
+      ...(result.phase === "gas" ? [
+        { label: "P2/P1", value: result.pressureRatio, unit: "" },
+        { label: "Critical Pressure Ratio (x_crit)", value: result.criticalPressureRatio, unit: "" },
+        { label: "Flow Regime", value: result.isChoked ? "CHOKED" : "Subcritical", unit: "" },
+        { label: "Upstream Density", value: result.upstreamDensity, unit: "kg/m³" },
+        { label: "R_specific", value: result.rSpecific, unit: "J/(kg·K)" },
+        ...(result.isChoked
+          ? [{ label: "f(k) Critical Flow Function", value: result.criticalFlowFunction, unit: "" }]
+          : [{ label: "Y Expansion Factor", value: result.expansionFactor, unit: "" }]),
+      ] : []),
+      ...(result.phase === "liquid" && result.reynoldsNumber > 0 ? [{ label: "Reynolds Number", value: result.reynoldsNumber, unit: "" }] : []),
+      ...(result.phase === "liquid" && result.sigma > 0 ? [{ label: "Cavitation Index σ", value: result.sigma, unit: "" }] : []),
+    ];
+
+    const calcSteps = result.calcSteps.map(s => ({
+      label: s.label,
+      equation: s.equation,
+      value: s.value,
+      unit: s.unit,
+    }));
+
+    const additionalSections = [];
+    if (result.solverInfo) {
+      additionalSections.push({
+        title: "Solver Convergence",
+        items: [
+          { label: "Method", value: result.solverInfo.method },
+          { label: "Iterations", value: result.solverInfo.iterations },
+          { label: "Final Error", value: result.solverInfo.finalError },
+          { label: "Tolerance", value: result.solverInfo.tolerance },
+          { label: "Converged", value: result.solverInfo.converged ? "YES" : "NO" },
+          { label: "Bracket Low", value: result.solverInfo.bracketLow, unit: "mm" },
+          { label: "Bracket High", value: result.solverInfo.bracketHigh, unit: "mm" },
+        ],
+      });
+    }
+
+    return {
+      calculatorName: "Restriction Orifice Sizing",
+      projectInfo: [
+        { label: "Case Name", value: project.name },
+        { label: "Case ID", value: project.caseId },
+        { label: "Engineer", value: project.engineer },
+        { label: "Date", value: project.date },
+        { label: "Unit System", value: unitSystem },
+      ],
+      inputs,
+      results,
+      calcSteps,
+      additionalSections,
+      methodology: [
+        result.phase === "liquid"
+          ? "Incompressible flow through sharp-edged restriction orifice"
+          : "Compressible flow through sharp-edged restriction orifice",
+        result.phase === "liquid"
+          ? "W = Cd·A·√(2·ρ·ΔP / (1-β⁴)) — orifice mass flow equation with β correction"
+          : result.isChoked
+            ? "W = Cd·A·P1·f(k)·√(MW/(Z·Ru·T)) / √(1-β⁴) — critical (choked) flow"
+            : "W = Cd·A·Y·√(2·ρ₁·ΔP) / √(1-β⁴) — subcritical compressible flow",
+        "Solver: bisection root-finding for orifice diameter",
+      ],
+      assumptions: [
+        `Discharge coefficient Cd = ${service.orifice.cdValue} (${service.orifice.cdMode === "user" ? "user-defined" : "estimated"})`,
+        `Basis: ${service.orifice.basisMode === "inPipe" ? "In-pipe with β⁴ correction" : "Free discharge (no β correction)"}`,
+        result.phase === "gas" ? "Expansion factor Y per ISA approximation: Y = 1 - (0.41+0.35β⁴)·(1-r)/k" : "No compressibility correction for liquid",
+      ],
+      references: [
+        "ISO 5167: Measurement of fluid flow by means of pressure differential devices",
+        "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
+        "API 520 Part I: Sizing of pressure-relieving devices (critical flow reference)",
+        "Miller, R.W. Flow Measurement Engineering Handbook, 3rd Edition",
+      ],
+      warnings: [
+        ...result.warnings,
+        ...result.flags.map(f => FLAG_LABELS[f]),
+        ...result.recommendations,
+      ].filter(Boolean),
+    };
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 md:py-12">
@@ -425,6 +548,28 @@ export default function RestrictionOrificePage() {
                         {result.sizingMode === "sizeForFlow" ? "Size for Flow" : "ΔP Prediction"}
                       </h4>
                       <div className="flex items-center gap-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" data-testid="button-export-results">
+                              <Download className="w-3.5 h-3.5 mr-1.5" />
+                              Export
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
+                              <FileText className="w-4 h-4 mr-2 text-red-400" />
+                              Export as PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
+                              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                              Export as Excel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }} data-testid="button-export-json">
+                              <Download className="w-4 h-4 mr-2 text-blue-400" />
+                              Export as JSON
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         {result.phase === "gas" && (
                           <Badge variant={result.isChoked ? "destructive" : "secondary"} className="text-[10px]" data-testid="badge-regime">
                             {result.isChoked ? "CHOKED" : "SUBCRITICAL"}

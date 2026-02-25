@@ -22,6 +22,7 @@ import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConve
 import { MIXED_PHASE_SERVICE_LIMITS, type MixedPhaseServiceLimit } from "@/lib/engineering/constants";
 import { checkMixedPhaseLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { Gauge, FlaskConical, RotateCcw } from "lucide-react";
 
 interface FormState {
@@ -343,6 +344,49 @@ export default function MultiphaseLinePage() {
                   },
                 ]}
                 rawData={result}
+                exportData={{
+                  calculatorName: "Multiphase Line Screening",
+                  inputs: [
+                    { label: "Gas Volume Flow", value: form.gasFlowRate, unit: getUnit("flowVolume", unitSystem) },
+                    { label: "Liquid Volume Flow", value: form.liquidFlowRate, unit: getUnit("flowVolume", unitSystem) },
+                    { label: "Gas Density", value: form.gasDensity, unit: getUnit("density", unitSystem) },
+                    { label: "Liquid Density", value: form.liquidDensity, unit: getUnit("density", unitSystem) },
+                    { label: "Inner Diameter", value: form.innerDiameter, unit: getUnit("diameter", unitSystem) },
+                    { label: "Pipe Length", value: form.pipeLength, unit: getUnit("length", unitSystem) },
+                    { label: "C-Factor (API 14E)", value: form.cFactor },
+                    { label: "Roughness", value: form.roughness, unit: "mm" },
+                    ...(selectedService ? [{ label: "Service Type", value: selectedService }] : []),
+                  ],
+                  results: [
+                    { label: "Superficial Gas Velocity (Vsg)", value: convertFromSI("velocity", result.superficialGasVelocity, unitSystem), unit: getUnit("velocity", unitSystem) },
+                    { label: "Superficial Liquid Velocity (Vsl)", value: convertFromSI("velocity", result.superficialLiquidVelocity, unitSystem), unit: getUnit("velocity", unitSystem) },
+                    { label: "Mixture Velocity (Vm)", value: convertFromSI("velocity", result.mixtureVelocity, unitSystem), unit: getUnit("velocity", unitSystem), highlight: true },
+                    { label: "Erosional Velocity (Ve)", value: convertFromSI("velocity", result.erosionalVelocity, unitSystem), unit: getUnit("velocity", unitSystem), highlight: true },
+                    { label: "Vm / Ve Ratio", value: result.velocityRatio, unit: "—" },
+                    { label: "Mixture Density", value: result.mixtureDensity, unit: getUnit("density", unitSystem) },
+                    { label: "Liquid Holdup (λL)", value: result.liquidHoldup, unit: "—" },
+                    { label: "ρv²", value: result.rhoV2, unit: "kg/(m·s²)" },
+                  ],
+                  methodology: [
+                    "Homogeneous (no-slip) multiphase flow model for screening",
+                    "Erosional velocity per API RP 14E: Ve = C / sqrt(ρm)",
+                    "Mixture density from volumetric-weighted average of phase densities",
+                    "Liquid holdup estimated from superficial velocity ratio (no-slip assumption)",
+                  ],
+                  assumptions: [
+                    "Homogeneous (no-slip) multiphase flow model — screening level only",
+                    "Liquid holdup estimated from superficial velocity ratio (no-slip assumption)",
+                    "Erosional velocity per API RP 14E: Ve = C / √ρm",
+                    "Not suitable for detailed flow assurance — use OLGA/Pipesim for rigorous analysis",
+                    "No terrain profile or slug tracking included",
+                  ],
+                  references: [
+                    "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
+                    "Beggs, H.D. and Brill, J.P. — A Study of Two-Phase Flow in Inclined Pipes (1973)",
+                    "GPSA Engineering Data Book, 14th Edition",
+                  ],
+                  warnings: result.warnings.length > 0 ? result.warnings : undefined,
+                } as ExportDatasheet}
               />
             </>
           )}

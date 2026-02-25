@@ -1,6 +1,14 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, CheckCircle2 } from "lucide-react";
+import { Download, CheckCircle2, FileSpreadsheet, FileText } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 
 interface ResultItem {
   label: string;
@@ -13,29 +21,40 @@ interface ResultsPanelProps {
   title: string;
   results: ResultItem[];
   rawData?: object;
+  exportData?: ExportDatasheet;
 }
 
-export function ResultsPanel({ title, results, rawData }: ResultsPanelProps) {
-  const handleExport = () => {
-    const exportData = {
-      title,
-      timestamp: new Date().toISOString(),
-      results: results.map((r) => ({
-        parameter: r.label,
-        value: r.value,
-        unit: r.unit,
-      })),
-      rawData,
-    };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${title.replace(/\s+/g, "_").toLowerCase()}_results.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+export function ResultsPanel({ title, results, rawData, exportData }: ResultsPanelProps) {
+  const handleExportJSON = () => {
+    if (exportData) {
+      exportToJSON(exportData);
+    } else {
+      const fallback = {
+        title,
+        timestamp: new Date().toISOString(),
+        results: results.map((r) => ({ parameter: r.label, value: r.value, unit: r.unit })),
+        rawData,
+      };
+      const blob = new Blob([JSON.stringify(fallback, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title.replace(/\s+/g, "_").toLowerCase()}_results.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (exportData) {
+      exportToExcel(exportData);
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (exportData) {
+      exportToPDF(exportData);
+    }
   };
 
   return (
@@ -45,15 +64,35 @@ export function ResultsPanel({ title, results, rawData }: ResultsPanelProps) {
           <CheckCircle2 className="w-5 h-5 text-green-400" />
           <h3 className="font-semibold text-base">{title}</h3>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleExport}
-          data-testid="button-export-results"
-        >
-          <Download className="w-3.5 h-3.5 mr-1.5" />
-          Export JSON
-        </Button>
+        {exportData ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" data-testid="button-export-results">
+                <Download className="w-3.5 h-3.5 mr-1.5" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportPDF} data-testid="button-export-pdf">
+                <FileText className="w-4 h-4 mr-2 text-red-400" />
+                Export as PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportExcel} data-testid="button-export-excel">
+                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                Export as Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportJSON} data-testid="button-export-json">
+                <Download className="w-4 h-4 mr-2 text-blue-400" />
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button size="sm" variant="outline" onClick={handleExportJSON} data-testid="button-export-results">
+            <Download className="w-3.5 h-3.5 mr-1.5" />
+            Export JSON
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="pt-0">
         <div className="grid gap-2">

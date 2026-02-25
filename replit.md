@@ -9,6 +9,7 @@ Professional engineering portfolio website with validated process engineering ca
 - **Routing**: wouter (client-side)
 - **State**: React local state (no database needed - static portfolio + client-side calculators)
 - **Engineering Library**: Separate calculation modules in `client/src/lib/engineering/`
+- **Export**: jsPDF + jspdf-autotable (PDF), xlsx (Excel), JSON — shared utility in `exportUtils.ts`
 - **Theme**: Dark navy (#0c1222) + golden amber (#d4a04a), single-page scrolling portfolio
 
 ## Project Structure
