@@ -21,7 +21,7 @@ client/src/
     theme-provider   - Dark mode (always dark)
     theme-toggle
   lib/engineering/   - Engineering calculation modules
-    constants.ts     - Physical constants, PIPE_SPECS (66 NPS entries), common liquids, fitting K values
+    constants.ts     - Physical constants, PIPE_SPECS (216 entries, full ASME B36.10M/B36.19M schedules), common liquids, fitting K values
     unitConversion.ts - SI/Field unit conversion (pressure, head, power, flow, etc.)
     unitToggle.ts    - convertFormValues helper for in-place unit conversion on toggle
     validation.ts    - Zod schemas for calc inputs
