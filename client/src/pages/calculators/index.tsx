@@ -203,7 +203,7 @@ export default function CalculatorsIndexPage() {
             <Link href="/calculators/piping-components">
               <Card
                 className="h-full hover-elevate cursor-pointer transition-all group border-primary/20"
-                data-testid="card-piping-components"
+                data-testid="card-calc-piping-components"
               >
                 <CardContent className="p-4 md:p-6 flex flex-col h-full">
                   <div className="flex items-start justify-between gap-3 mb-3">
@@ -214,21 +214,16 @@ export default function CalculatorsIndexPage() {
                       Data Module
                     </Badge>
                   </div>
-
                   <h3 className="font-semibold text-sm mb-2" data-testid="text-calc-title-piping-components">
                     Piping Components
                   </h3>
-
                   <p className="text-xs text-muted-foreground leading-relaxed mb-4 flex-1">
-                    Built-in ASME dimensional data bank for pipe, flanges, fittings, gaskets, valves, line blanks, olets — plus pipe flexibility and safe span screening calculators.
+                    Built-in ASME dimensional data bank for pipe, flanges, fittings, gaskets, valves, line blanks & olets — plus pipe flexibility and safe span screening.
                   </p>
-
                   <div className="flex flex-wrap gap-1.5 mb-4">
                     <Badge variant="secondary" className="text-[10px] font-normal">9 Categories</Badge>
-                    <Badge variant="secondary" className="text-[10px] font-normal">ASME Data Bank</Badge>
-                    <Badge variant="secondary" className="text-[10px] font-normal">SVG Drawings</Badge>
+                    <Badge variant="secondary" className="text-[10px] font-normal">ASME Data</Badge>
                   </div>
-
                   <div className="flex items-center justify-between border-t border-muted/30 pt-3 mt-auto">
                     <div className="flex flex-wrap gap-1">
                       <span className="text-[10px] text-muted-foreground/70">ASME B16/B36</span>
@@ -238,7 +233,6 @@ export default function CalculatorsIndexPage() {
                 </CardContent>
               </Card>
             </Link>
-
             {calculators.map((calc) => (
               <Link key={calc.href} href={calc.href}>
                 <Card

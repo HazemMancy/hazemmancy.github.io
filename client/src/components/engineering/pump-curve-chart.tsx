@@ -116,11 +116,17 @@ export function PumpCurveChart({
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
-        <div className="h-[380px] w-full">
+        <div className="flex items-stretch">
+          <div className="flex items-center justify-center w-5 shrink-0">
+            <span className="text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap" style={{writingMode: 'vertical-lr' as const, transform: 'rotate(180deg)'}}>
+              {`Head (${headUnit}) / Eff (%)`}
+            </span>
+          </div>
+          <div className="flex-1 h-[380px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
-              margin={{ top: 10, right: 70, left: 24, bottom: 24 }}
+              margin={{ top: 10, right: 50, left: 10, bottom: 24 }}
             >
               <defs>
                 <linearGradient id="pumpHeadGrad" x1="0" y1="0" x2="0" y2="1">
@@ -157,17 +163,7 @@ export function PumpCurveChart({
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
                 tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
-                width={55}
-                label={{
-                  value: `Head (${headUnit}) / Eff (%)`,
-                  angle: -90,
-                  position: "insideLeft",
-                  offset: -8,
-                  fill: "hsl(var(--muted-foreground))",
-                  fontSize: 9,
-                  fontWeight: 500,
-                  style: { textAnchor: "middle" },
-                }}
+                width={50}
               />
               <YAxis
                 yAxisId="power"
@@ -176,17 +172,7 @@ export function PumpCurveChart({
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
                 tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
-                width={55}
-                label={{
-                  value: `Power (${powerUnit})`,
-                  angle: 90,
-                  position: "insideRight",
-                  offset: -4,
-                  fill: "hsl(var(--muted-foreground))",
-                  fontSize: 9,
-                  fontWeight: 500,
-                  style: { textAnchor: "middle" },
-                }}
+                width={50}
               />
               <Tooltip
                 contentStyle={{
@@ -308,6 +294,12 @@ export function PumpCurveChart({
               />
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
+          <div className="flex items-center justify-center w-5 shrink-0">
+            <span className="text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap" style={{writingMode: 'vertical-lr' as const}}>
+              {`Power (${powerUnit})`}
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground border-t border-muted/30 pt-3">
