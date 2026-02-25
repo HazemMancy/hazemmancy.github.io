@@ -54,7 +54,7 @@ export default function PipeFlexibilityPage() {
     return {
       calculatorName: "Pipe Flexibility Screening",
       projectInfo: [
-        { label: "Material", value: mat.name },
+        { label: "Material", value: mat.desc },
         { label: "End Restraint", value: fixedBothEnds ? "Fixed Both Ends" : "Guided / Free" },
       ],
       inputs: [
