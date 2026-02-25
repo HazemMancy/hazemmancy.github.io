@@ -156,7 +156,7 @@ export function exportToExcel(data: ExportDatasheet): void {
   XLSX.writeFile(wb, `${slugify(data.calculatorName)}_${timestamp()}.xlsx`);
 }
 
-async function captureChartImage(elementId: string): Promise<string | null> {
+async function captureChartImage(elementId: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
   try {
     const el = document.getElementById(elementId);
     if (!el) return null;
@@ -166,7 +166,7 @@ async function captureChartImage(elementId: string): Promise<string | null> {
       logging: false,
       useCORS: true,
     });
-    return canvas.toDataURL("image/png");
+    return { dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height };
   } catch {
     return null;
   }
@@ -267,18 +267,36 @@ export async function exportToPDF(data: ExportDatasheet): Promise<void> {
   y = (doc as any).lastAutoTable.finalY + 6;
 
   if (data.chartElementId) {
-    const chartImg = await captureChartImage(data.chartElementId);
-    if (chartImg) {
-      const chartW = pageW - 2 * margin;
-      const chartH = chartW * 0.55;
-      addPageIfNeeded(chartH + 12);
-      doc.setFontSize(11);
+    const chartCapture = await captureChartImage(data.chartElementId);
+    if (chartCapture) {
+      doc.addPage("a4", "landscape");
+      const lPageW = doc.internal.pageSize.getWidth();
+      const lPageH = doc.internal.pageSize.getHeight();
+      const lMargin = 15;
+
+      doc.setFillColor(12, 18, 34);
+      doc.rect(0, 0, lPageW, 18, "F");
+      doc.setTextColor(212, 160, 74);
+      doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(12, 18, 34);
-      doc.text("Performance Curve", margin, y);
-      y += 4;
-      doc.addImage(chartImg, "PNG", margin, y, chartW, chartH);
-      y += chartH + 6;
+      doc.text("Performance Curve", lMargin, 12);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(180, 180, 180);
+      doc.text(data.calculatorName, lPageW - lMargin, 12, { align: "right" });
+
+      const availW = lPageW - 2 * lMargin;
+      const availH = lPageH - 18 - lMargin - 10;
+      const imgAspect = chartCapture.width / chartCapture.height;
+      let chartW = availW;
+      let chartH = chartW / imgAspect;
+      if (chartH > availH) {
+        chartH = availH;
+        chartW = chartH * imgAspect;
+      }
+      const chartX = lMargin + (availW - chartW) / 2;
+      const chartY = 18 + (availH - chartH) / 2 + 2;
+      doc.addImage(chartCapture.dataUrl, "PNG", chartX, chartY, chartW, chartH);
     }
   }
 
