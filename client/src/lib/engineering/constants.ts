@@ -487,15 +487,15 @@ function parseNPSToInches(nps: string): number {
   return parseFloat(cleaned);
 }
 
-export const COMMON_LIQUIDS: Record<string, { density: number; viscosity: number; name: string }> = {
-  "Water (20°C)": { density: 998, viscosity: 0.001, name: "Water" },
-  "Seawater (20°C)": { density: 1025, viscosity: 0.00108, name: "Seawater" },
-  "Crude Oil (light)": { density: 850, viscosity: 0.005, name: "Crude Oil (light)" },
-  "Crude Oil (medium)": { density: 900, viscosity: 0.02, name: "Crude Oil (medium)" },
-  "Crude Oil (heavy)": { density: 950, viscosity: 0.1, name: "Crude Oil (heavy)" },
-  "Diesel": { density: 832, viscosity: 0.003, name: "Diesel" },
-  "Gasoline": { density: 720, viscosity: 0.0006, name: "Gasoline" },
-  "Kerosene": { density: 810, viscosity: 0.0024, name: "Kerosene" },
+export const COMMON_LIQUIDS: Record<string, { density: number; viscosity: number; name: string; vaporPressure?: number }> = {
+  "Water (20°C)": { density: 998, viscosity: 0.001, name: "Water", vaporPressure: 2.339 },
+  "Seawater (20°C)": { density: 1025, viscosity: 0.00108, name: "Seawater", vaporPressure: 2.339 },
+  "Crude Oil (light)": { density: 850, viscosity: 0.005, name: "Crude Oil (light)", vaporPressure: 50 },
+  "Crude Oil (medium)": { density: 900, viscosity: 0.02, name: "Crude Oil (medium)", vaporPressure: 30 },
+  "Crude Oil (heavy)": { density: 950, viscosity: 0.1, name: "Crude Oil (heavy)", vaporPressure: 10 },
+  "Diesel": { density: 832, viscosity: 0.003, name: "Diesel", vaporPressure: 0.4 },
+  "Gasoline": { density: 720, viscosity: 0.0006, name: "Gasoline", vaporPressure: 55 },
+  "Kerosene": { density: 810, viscosity: 0.0024, name: "Kerosene", vaporPressure: 1.5 },
   "Naphtha": { density: 750, viscosity: 0.0005, name: "Naphtha" },
   "MEG (Mono Ethylene Glycol)": { density: 1113, viscosity: 0.0161, name: "MEG" },
   "DEG (Di Ethylene Glycol)": { density: 1118, viscosity: 0.032, name: "DEG" },

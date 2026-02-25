@@ -25,6 +25,10 @@ import {
   type PumpType,
 } from "@/lib/engineering/pumpSizing";
 import { COMMON_LIQUIDS, FITTING_K_VALUES } from "@/lib/engineering/constants";
+
+const FITTING_K_MAP: Record<string, number> = Object.fromEntries(
+  FITTING_K_VALUES.map(f => [f.type, f.k])
+);
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
@@ -144,7 +148,7 @@ export default function PumpSizingPage() {
 
   const computeKTotal = (fittings: FittingEntry[]): number => {
     return fittings.reduce((sum, f) => {
-      const kVal = FITTING_K_VALUES[f.name] ?? 0;
+      const kVal = FITTING_K_MAP[f.name] ?? 0;
       return sum + kVal * f.count;
     }, 0);
   };
@@ -313,7 +317,7 @@ export default function PumpSizingPage() {
         ...prev,
         liquidDensity: String(liquid.density),
         viscosity: String(liquid.viscosity),
-        vaporPressure: String(liquid.vaporPressure),
+        vaporPressure: String(liquid.vaporPressure ?? ""),
       }));
     }
   };
@@ -331,8 +335,8 @@ export default function PumpSizingPage() {
             <SelectValue placeholder="Add fitting..." />
           </SelectTrigger>
           <SelectContent>
-            {Object.keys(FITTING_K_VALUES).map((f) => (
-              <SelectItem key={f} value={f}>{f} (K={FITTING_K_VALUES[f]})</SelectItem>
+            {FITTING_K_VALUES.map((f) => (
+              <SelectItem key={f.type} value={f.type}>{f.type} (K={f.k})</SelectItem>
             ))}
           </SelectContent>
         </Select>

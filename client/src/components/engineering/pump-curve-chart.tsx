@@ -120,7 +120,7 @@ export function PumpCurveChart({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
-              margin={{ top: 10, right: 60, left: 10, bottom: 20 }}
+              margin={{ top: 10, right: 70, left: 24, bottom: 24 }}
             >
               <defs>
                 <linearGradient id="pumpHeadGrad" x1="0" y1="0" x2="0" y2="1">
@@ -145,7 +145,7 @@ export function PumpCurveChart({
                 label={{
                   value: `Flow (${flowUnit})`,
                   position: "insideBottom",
-                  offset: -10,
+                  offset: -14,
                   fill: "hsl(var(--muted-foreground))",
                   fontSize: 11,
                   fontWeight: 500,
@@ -157,14 +157,16 @@ export function PumpCurveChart({
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
                 tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                width={55}
                 label={{
                   value: `Head (${headUnit}) / Eff (%)`,
                   angle: -90,
                   position: "insideLeft",
-                  offset: 5,
+                  offset: -8,
                   fill: "hsl(var(--muted-foreground))",
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: 500,
+                  style: { textAnchor: "middle" },
                 }}
               />
               <YAxis
@@ -174,14 +176,16 @@ export function PumpCurveChart({
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
                 tickLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
                 axisLine={{ stroke: "hsl(var(--muted) / 0.4)" }}
+                width={55}
                 label={{
                   value: `Power (${powerUnit})`,
                   angle: 90,
                   position: "insideRight",
-                  offset: 10,
+                  offset: -4,
                   fill: "hsl(var(--muted-foreground))",
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: 500,
+                  style: { textAnchor: "middle" },
                 }}
               />
               <Tooltip

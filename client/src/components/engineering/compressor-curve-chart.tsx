@@ -210,7 +210,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
-              margin={{ top: 16, right: 64, left: 16, bottom: 28 }}
+              margin={{ top: 16, right: 70, left: 24, bottom: 28 }}
             >
               <defs>
                 <linearGradient id="headGradient" x1="0" y1="0" x2="0" y2="1">
@@ -253,15 +253,16 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
                 tick={{ fill: COLORS.axisText, fontSize: 10 }}
                 tickLine={{ stroke: COLORS.grid }}
                 axisLine={{ stroke: COLORS.gridMajor }}
+                width={55}
                 label={{
-                  value: `Head (${headUnitLabel}) / Eff. (%)`,
+                  value: `Head (${headUnitLabel}) / Eff (%)`,
                   angle: -90,
                   position: "insideLeft",
-                  offset: 0,
+                  offset: -8,
                   fill: COLORS.axisLabel,
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: 500,
-                  dy: 50,
+                  style: { textAnchor: "middle" },
                 }}
               />
               <YAxis
@@ -271,15 +272,16 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
                 tick={{ fill: COLORS.axisText, fontSize: 10 }}
                 tickLine={{ stroke: COLORS.grid }}
                 axisLine={{ stroke: COLORS.gridMajor }}
+                width={55}
                 label={{
                   value: `Power (${powerUnitLabel})`,
                   angle: 90,
                   position: "insideRight",
-                  offset: 5,
+                  offset: -4,
                   fill: COLORS.axisLabel,
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: 500,
-                  dy: -30,
+                  style: { textAnchor: "middle" },
                 }}
               />
 

@@ -136,7 +136,7 @@ export default function ControlValvePage() {
     if (l) {
       setServiceData(sd => ({
         ...sd, fluidName: name,
-        liquidProps: { ...sd.liquidProps, density: l.density, vaporPressure: l.vaporPressure || sd.liquidProps.vaporPressure },
+        liquidProps: { ...sd.liquidProps, density: l.density, vaporPressure: l.vaporPressure ?? sd.liquidProps.vaporPressure },
       }));
     }
   };
