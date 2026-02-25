@@ -71,7 +71,7 @@ function ChatGPTOverlay() {
   const [location] = useLocation();
   const isCalculatorPage = location.startsWith("/calculators");
   if (!isCalculatorPage) return null;
-  return <ChatGPTPopupButton />;
+  return <ChatGPTPopupButton currentPath={location} />;
 }
 
 function App() {

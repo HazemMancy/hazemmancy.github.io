@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from "react";
-import { X, ExternalLink } from "lucide-react";
+import { useState, useCallback } from "react";
+import { X, ExternalLink, Flame, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -7,7 +7,28 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const CHATGPT_URL = "https://chatgpt.com";
+interface GPTConfig {
+  url: string;
+  name: string;
+  description: string;
+  isCustom: boolean;
+}
+
+const CUSTOM_GPTS: Record<string, GPTConfig> = {
+  "/calculators/psv-sizing": {
+    url: "https://chatgpt.com/g/g-695b78c57120819188a543ca23154846-relief-and-flare-systems-api-520-521-526",
+    name: "Relief & Flare Systems",
+    description: "Custom GPT specialized in API 520, 521, and 526 standards for pressure relief device and flare system engineering.",
+    isCustom: true,
+  },
+};
+
+const DEFAULT_GPT: GPTConfig = {
+  url: "https://chatgpt.com",
+  name: "ChatGPT",
+  description: "Open ChatGPT to ask questions about your calculations, engineering standards, or process design.",
+  isCustom: false,
+};
 
 function ChatGPTLogo({ className }: { className?: string }) {
   return (
@@ -17,20 +38,23 @@ function ChatGPTLogo({ className }: { className?: string }) {
   );
 }
 
-export function ChatGPTPopupButton() {
+function getGPTConfig(pathname: string): GPTConfig {
+  return CUSTOM_GPTS[pathname] || DEFAULT_GPT;
+}
+
+export function ChatGPTPopupButton({ currentPath }: { currentPath: string }) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [iframeBlocked, setIframeBlocked] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const gpt = getGPTConfig(currentPath);
 
   const togglePanel = useCallback(() => {
     setIsPanelOpen((prev) => !prev);
   }, []);
 
-  const handleIframeError = useCallback(() => {
-    setIframeBlocked(true);
-  }, []);
+  const openChatGPT = useCallback(() => {
+    window.open(gpt.url, "_blank", "noopener,noreferrer");
+  }, [gpt.url]);
 
-  const openInNewWindow = useCallback(() => {
+  const openInCompanionWindow = useCallback(() => {
     const screenW = window.screen.availWidth;
     const screenH = window.screen.availHeight;
     const popupW = Math.min(480, Math.floor(screenW * 0.35));
@@ -39,11 +63,11 @@ export function ChatGPTPopupButton() {
     const top = Math.floor((screenH - popupH) / 2);
 
     window.open(
-      CHATGPT_URL,
+      gpt.url,
       "chatgpt_assistant",
       `width=${popupW},height=${popupH},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,menubar=no,toolbar=no,location=yes`
     );
-  }, []);
+  }, [gpt.url]);
 
   return (
     <>
@@ -58,85 +82,78 @@ export function ChatGPTPopupButton() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#171717]">
             <div className="flex items-center gap-2">
               <ChatGPTLogo className="w-5 h-5 text-[#10a37f]" />
-              <span className="text-sm font-medium text-white">ChatGPT</span>
+              <span className="text-sm font-medium text-white">{gpt.name}</span>
+              {gpt.isCustom && (
+                <span className="text-[10px] bg-[#10a37f]/20 text-[#10a37f] px-1.5 py-0.5 rounded font-medium">
+                  Custom GPT
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-gray-400 hover:text-white hover:bg-white/10"
-                    onClick={openInNewWindow}
-                    data-testid="button-chatgpt-external"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p className="text-xs">Open in separate window</p>
-                </TooltipContent>
-              </Tooltip>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-gray-400 hover:text-white hover:bg-white/10"
-                onClick={togglePanel}
-                data-testid="button-close-chatgpt-panel"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-gray-400 hover:text-white hover:bg-white/10"
+              onClick={togglePanel}
+              data-testid="button-close-chatgpt-panel"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
 
-          <div className="flex-1 relative overflow-hidden">
-            {iframeBlocked ? (
-              <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-4">
-                <ChatGPTLogo className="w-12 h-12 text-[#10a37f] opacity-60" />
-                <div>
-                  <p className="text-sm text-white/90 font-medium mb-2">
-                    ChatGPT cannot be embedded directly
-                  </p>
-                  <p className="text-xs text-white/50 leading-relaxed mb-4">
-                    OpenAI's security policy prevents embedding ChatGPT inside other websites.
-                    Use the button below to open it in a companion window alongside your calculator.
-                  </p>
-                </div>
-                <Button
-                  onClick={openInNewWindow}
-                  className="bg-[#10a37f] hover:bg-[#0d8c6d] text-white gap-2"
-                  data-testid="button-chatgpt-fallback"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Open ChatGPT Window
-                </Button>
+          <div className="flex-1 flex flex-col items-center justify-center px-6 text-center gap-5">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-2xl bg-[#10a37f]/10 flex items-center justify-center">
+                <ChatGPTLogo className="w-10 h-10 text-[#10a37f]" />
               </div>
-            ) : (
-              <iframe
-                ref={iframeRef}
-                src={isPanelOpen ? CHATGPT_URL : "about:blank"}
-                className="w-full h-full border-0"
-                title="ChatGPT"
-                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
-                onError={handleIframeError}
-                onLoad={() => {
-                  setTimeout(() => {
-                    try {
-                      const iframe = iframeRef.current;
-                      if (iframe) {
-                        const doc = iframe.contentDocument || iframe.contentWindow?.document;
-                        if (!doc || doc.body?.innerHTML === "" || doc.title === "") {
-                          setIframeBlocked(true);
-                        }
-                      }
-                    } catch {
-                      setIframeBlocked(true);
-                    }
-                  }, 2000);
-                }}
-                data-testid="chatgpt-iframe"
-              />
+              {gpt.isCustom && (
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center border-2 border-[#212121]">
+                  <Flame className="w-3.5 h-3.5 text-orange-400" />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-2">{gpt.name}</h3>
+              <p className="text-sm text-white/60 leading-relaxed max-w-[300px]">
+                {gpt.description}
+              </p>
+            </div>
+
+            {gpt.isCustom && (
+              <div className="w-full max-w-[300px] bg-white/5 rounded-lg p-3 border border-white/10">
+                <div className="flex items-center gap-2 mb-2">
+                  <Flame className="w-3.5 h-3.5 text-orange-400" />
+                  <span className="text-xs font-medium text-white/80">Specialized for this calculator</span>
+                </div>
+                <p className="text-[11px] text-white/40 leading-relaxed">
+                  This custom GPT is trained on API 520, 521, and 526 standards — ideal for PRD sizing, relief scenarios, and flare system design questions.
+                </p>
+              </div>
             )}
+
+            <div className="flex flex-col gap-2.5 w-full max-w-[280px] mt-2">
+              <Button
+                onClick={openChatGPT}
+                className="bg-[#10a37f] hover:bg-[#0d8c6d] text-white gap-2 h-11"
+                data-testid="button-chatgpt-open-tab"
+              >
+                <ChatGPTLogo className="w-4.5 h-4.5" />
+                Open in New Tab
+              </Button>
+              <Button
+                onClick={openInCompanionWindow}
+                variant="outline"
+                className="border-white/20 text-white/80 hover:text-white hover:bg-white/10 gap-2 h-10"
+                data-testid="button-chatgpt-companion"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open Side-by-Side Window
+              </Button>
+            </div>
+
+            <p className="text-[11px] text-white/30 leading-relaxed mt-4 max-w-[280px]">
+              Sign in with your ChatGPT account. Your conversations are private and managed by OpenAI.
+            </p>
           </div>
         </div>
       </div>
@@ -155,7 +172,7 @@ export function ChatGPTPopupButton() {
             <Button
               onClick={togglePanel}
               size="lg"
-              className={`rounded-full shadow-xl w-14 h-14 p-0 transition-all duration-200 ${
+              className={`rounded-full shadow-xl w-14 h-14 p-0 transition-all duration-200 group ${
                 isPanelOpen
                   ? "bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400/40"
                   : "bg-[#10a37f] hover:bg-[#0d8c6d]"
@@ -163,11 +180,20 @@ export function ChatGPTPopupButton() {
               data-testid="button-open-chatgpt"
             >
               <ChatGPTLogo className="w-7 h-7 text-white" />
+              {gpt.isCustom && !isPanelOpen && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 border-2 border-background flex items-center justify-center">
+                  <Flame className="w-2.5 h-2.5 text-white" />
+                </span>
+              )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="max-w-[200px]">
+          <TooltipContent side="right" className="max-w-[220px]">
             <p className="text-xs">
-              {isPanelOpen ? "Close ChatGPT panel" : "Open ChatGPT — chat alongside your calculations"}
+              {isPanelOpen
+                ? "Close ChatGPT panel"
+                : gpt.isCustom
+                  ? `Open ${gpt.name} — custom GPT for this calculator`
+                  : "Open ChatGPT — chat alongside your calculations"}
             </p>
           </TooltipContent>
         </Tooltip>
