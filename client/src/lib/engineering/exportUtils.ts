@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import html2canvas from "html2canvas";
 
 export interface ExportResultItem {
   label: string;
@@ -38,6 +39,7 @@ export interface ExportDatasheet {
   warnings?: string[];
   calcSteps?: ExportCalcStep[];
   additionalSections?: ExportSection[];
+  chartElementId?: string;
 }
 
 function fmtVal(v: string | number): string {
@@ -154,7 +156,23 @@ export function exportToExcel(data: ExportDatasheet): void {
   XLSX.writeFile(wb, `${slugify(data.calculatorName)}_${timestamp()}.xlsx`);
 }
 
-export function exportToPDF(data: ExportDatasheet): void {
+async function captureChartImage(elementId: string): Promise<string | null> {
+  try {
+    const el = document.getElementById(elementId);
+    if (!el) return null;
+    const canvas = await html2canvas(el, {
+      backgroundColor: "#0c1222",
+      scale: 2,
+      logging: false,
+      useCORS: true,
+    });
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+export async function exportToPDF(data: ExportDatasheet): Promise<void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 15;
@@ -247,6 +265,22 @@ export function exportToPDF(data: ExportDatasheet): void {
     },
   });
   y = (doc as any).lastAutoTable.finalY + 6;
+
+  if (data.chartElementId) {
+    const chartImg = await captureChartImage(data.chartElementId);
+    if (chartImg) {
+      const chartW = pageW - 2 * margin;
+      const chartH = chartW * 0.55;
+      addPageIfNeeded(chartH + 12);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(12, 18, 34);
+      doc.text("Performance Curve", margin, y);
+      y += 4;
+      doc.addImage(chartImg, "PNG", margin, y, chartW, chartH);
+      y += chartH + 6;
+    }
+  }
 
   if (data.calcSteps && data.calcSteps.length > 0) {
     addPageIfNeeded(20);

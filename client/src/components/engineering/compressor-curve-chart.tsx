@@ -197,7 +197,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
   const powerMax = Math.ceil(displayPower * 2 / 50) * 50 || 500;
 
   return (
-    <Card data-testid="compressor-curve-chart">
+    <Card data-testid="compressor-curve-chart" id="chart-compressor-curve">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
@@ -207,8 +207,8 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
         <div className="flex items-stretch">
-          <div className="flex items-center justify-center w-5 shrink-0">
-            <span className="text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap" style={{writingMode: 'vertical-lr' as const, transform: 'rotate(180deg)'}}>
+          <div className="relative w-6 shrink-0">
+            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap">
               {`Head (${headUnitLabel}) / Eff (%)`}
             </span>
           </div>
@@ -387,8 +387,8 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
             </ComposedChart>
           </ResponsiveContainer>
           </div>
-          <div className="flex items-center justify-center w-5 shrink-0">
-            <span className="text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap" style={{writingMode: 'vertical-lr' as const}}>
+          <div className="relative w-6 shrink-0">
+            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap">
               {`Power (${powerUnitLabel})`}
             </span>
           </div>

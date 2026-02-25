@@ -195,6 +195,7 @@ export default function CompressorPage() {
 
     return {
       calculatorName: "Compressor Sizing Calculator",
+      chartElementId: "chart-compressor-curve",
       inputs: [
         { label: "Gas Flow Rate", value: form.gasFlowRate, unit: getUnit("flowGas", u) },
         { label: "Molecular Weight", value: form.molecularWeight, unit: "kg/kmol" },

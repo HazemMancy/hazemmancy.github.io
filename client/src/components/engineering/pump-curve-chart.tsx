@@ -108,7 +108,7 @@ export function PumpCurveChart({
   const powerMax = Math.ceil(displayBrakePower * 1.8 / 5) * 5 || 10;
 
   return (
-    <Card data-testid="pump-curve-chart">
+    <Card data-testid="pump-curve-chart" id="chart-pump-curve">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
@@ -117,8 +117,8 @@ export function PumpCurveChart({
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
         <div className="flex items-stretch">
-          <div className="flex items-center justify-center w-5 shrink-0">
-            <span className="text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap" style={{writingMode: 'vertical-lr' as const, transform: 'rotate(180deg)'}}>
+          <div className="relative w-6 shrink-0">
+            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap">
               {`Head (${headUnit}) / Eff (%)`}
             </span>
           </div>
@@ -295,8 +295,8 @@ export function PumpCurveChart({
             </ComposedChart>
           </ResponsiveContainer>
           </div>
-          <div className="flex items-center justify-center w-5 shrink-0">
-            <span className="text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap" style={{writingMode: 'vertical-lr' as const}}>
+          <div className="relative w-6 shrink-0">
+            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap">
               {`Power (${powerUnit})`}
             </span>
           </div>

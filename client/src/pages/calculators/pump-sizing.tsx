@@ -366,6 +366,7 @@ export default function PumpSizingPage() {
     const r = centrifugalResult;
     return {
       calculatorName: "Pump Sizing Calculator — Centrifugal",
+      chartElementId: "chart-pump-curve",
       inputs: [
         { label: "Flow Rate", value: form.flowRate, unit: getUnit("flowLiquid", u) },
         { label: "Liquid Density", value: form.liquidDensity, unit: "kg/m\u00B3" },
@@ -437,6 +438,7 @@ export default function PumpSizingPage() {
     const r = pdResult;
     return {
       calculatorName: "Pump Sizing Calculator — Positive Displacement",
+      chartElementId: "chart-pd-curve",
       inputs: [
         { label: "Flow Rate", value: form.flowRate, unit: getUnit("flowLiquid", u) },
         { label: "Liquid Density", value: form.liquidDensity, unit: "kg/m\u00B3" },
