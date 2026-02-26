@@ -273,6 +273,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
                 stroke={COLORS.grid}
                 vertical={true}
                 horizontal={true}
+                horizontalFill={["transparent", "hsl(var(--muted) / 0.03)"]}
               />
 
               <XAxis

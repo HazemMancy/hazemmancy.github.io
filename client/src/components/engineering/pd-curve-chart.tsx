@@ -37,10 +37,10 @@ const COLORS = {
   actualFlowGradientMid: "rgba(34, 197, 94, 0.05)",
   actualFlowGradientEnd: "rgba(34, 197, 94, 0.01)",
   slipLine: "#ef4444",
-  slipFill: "rgba(239, 68, 68, 0.08)",
-  slipGradientStart: "rgba(239, 68, 68, 0.18)",
-  slipGradientMid: "rgba(239, 68, 68, 0.08)",
-  slipGradientEnd: "rgba(239, 68, 68, 0.02)",
+  slipFill: "rgba(239, 68, 68, 0.12)",
+  slipGradientStart: "rgba(239, 68, 68, 0.25)",
+  slipGradientMid: "rgba(239, 68, 68, 0.12)",
+  slipGradientEnd: "rgba(239, 68, 68, 0.04)",
   power: "#f59e0b",
   volEfficiency: "#8b5cf6",
   operatingPoint: "#3b82f6",
@@ -273,6 +273,7 @@ export function PDCurveChart({
                 stroke={COLORS.grid}
                 vertical={true}
                 horizontal={true}
+                horizontalFill={["transparent", "hsl(var(--muted) / 0.03)"]}
               />
 
               <XAxis
@@ -333,9 +334,10 @@ export function PDCurveChart({
                 type="monotone"
                 dataKey="slipFlow"
                 fill="url(#pdSlipGrad)"
+                fillOpacity={1}
                 stroke={COLORS.slipLine}
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
+                strokeWidth={1.8}
+                strokeDasharray="5 3"
                 name="slipFlow"
                 activeDot={false}
               />
@@ -380,6 +382,25 @@ export function PDCurveChart({
                 dot={false}
                 name="power"
                 activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.power }}
+              />
+
+              <ReferenceArea
+                yAxisId="flow"
+                x1={parseFloat(convertPressure(differentialPressureBar * 0.85).toFixed(2))}
+                x2={parseFloat(convertPressure(differentialPressureBar * 1.15).toFixed(2))}
+                fill="#22c55e"
+                fillOpacity={0.05}
+                stroke="#22c55e"
+                strokeOpacity={0.12}
+                strokeDasharray="4 4"
+                label={{
+                  value: "Design",
+                  position: "insideTop",
+                  fill: "#22c55e",
+                  fontSize: 7,
+                  fontWeight: 500,
+                  opacity: 0.5,
+                }}
               />
 
               <ReferenceLine

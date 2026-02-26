@@ -272,6 +272,7 @@ export function PumpCurveChart({
                 stroke={COLORS.grid}
                 vertical={true}
                 horizontal={true}
+                horizontalFill={["transparent", "hsl(var(--muted) / 0.03)"]}
               />
 
               <XAxis
