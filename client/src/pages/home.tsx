@@ -250,7 +250,7 @@ export default function Home() {
             <MapPin className="w-3.5 h-3.5 text-primary" />
             <span>Cairo, Egypt</span>
             <span className="text-border">|</span>
-            <span>UNEPP Co.</span>
+            <span>Process Engineer</span>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -339,7 +339,7 @@ export default function Home() {
                 </div>
                 <h3 className="font-semibold mb-2" data-testid="text-role-title">Current Role</h3>
                 <p className="text-sm text-muted-foreground mb-1">
-                  Process Engineer at UNEPP Co.
+                  Process Engineer
                 </p>
                 <p className="text-sm text-primary">March 2023 - Present</p>
               </CardContent>
@@ -352,7 +352,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10">
             <p className="section-label mb-3">CAREER</p>
-            <h2 className="text-3xl md:text-4xl font-bold">Experience at UNEPP</h2>
+            <h2 className="text-3xl md:text-4xl font-bold">Professional Experience</h2>
           </div>
 
           <Card>
@@ -363,7 +363,7 @@ export default function Home() {
                     United Engineers for Petroleum Projects
                   </h3>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    UNEPP Co. | Cairo, Egypt
+                    Cairo, Egypt
                   </p>
                 </div>
                 <Badge variant="outline" className="text-xs" data-testid="badge-period">
@@ -378,7 +378,7 @@ export default function Home() {
                   <h4 className="font-semibold text-sm">Job Purpose</h4>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  As a Process Engineer at UNEPP Co., my primary responsibility is to contribute to the design, analysis, and optimization of processes within the petroleum industry. By leveraging my expertise in process engineering, hydraulic calculations, and equipment sizing, I ensure the efficient and safe operation of various systems. I actively participate in developing process models, creating detailed process drawings, and preparing technical documents and specifications.
+                  As a Process Engineer, my primary responsibility is to contribute to the design, analysis, and optimization of processes within the petroleum industry. By leveraging my expertise in process engineering, hydraulic calculations, and equipment sizing, I ensure the efficient and safe operation of various systems. I actively participate in developing process models, creating detailed process drawings, and preparing technical documents and specifications.
                 </p>
               </div>
 
@@ -622,7 +622,7 @@ export default function Home() {
                 <span className="font-medium text-sm">Cairo, Egypt</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Currently working at <span className="text-primary font-medium">UNEPP Co.</span> — United Engineers for Petroleum Projects
+                Process Engineer — Oil & Gas FEED/EPC Projects
               </p>
             </CardContent>
           </Card>
