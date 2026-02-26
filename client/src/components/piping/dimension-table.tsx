@@ -17,19 +17,19 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
   }
   return (
     <div className="relative overflow-x-auto border rounded-md max-h-[520px] overflow-y-auto">
-      <table className="w-full text-xs border-collapse table-fixed" data-testid="table-dimensions">
+      <table className="w-full text-xs border-collapse" data-testid="table-dimensions">
         <thead className="sticky top-0 z-20">
           <tr className="border-b bg-muted/80 backdrop-blur-sm">
             {columns.map((col, colIdx) => (
               <th
                 key={col.key}
-                className={`px-3 py-2.5 text-left font-semibold text-muted-foreground ${
+                className={`px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap ${
                   colIdx === 0
-                    ? "sticky left-0 z-30 bg-muted/95 backdrop-blur-sm min-w-[110px] max-w-[140px]"
-                    : "min-w-[80px] max-w-[130px]"
+                    ? "sticky left-0 z-30 bg-muted/95 backdrop-blur-sm min-w-[110px] border-r border-border/40"
+                    : "min-w-[80px]"
                 }`}
               >
-                <span className="block truncate" title={col.label + (col.unit ? ` (${col.unit})` : "")}>
+                <span className="block" title={col.label + (col.unit ? ` (${col.unit})` : "")}>
                   {col.label}{col.unit ? <span className="ml-1 text-[10px] opacity-60">({col.unit})</span> : null}
                 </span>
               </th>
@@ -44,7 +44,9 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
               className={`border-b cursor-pointer transition-colors ${
                 selectedIndex === idx
                   ? "bg-primary/10 border-primary/30"
-                  : "hover:bg-muted/20"
+                  : idx % 2 === 0
+                  ? "hover:bg-muted/20"
+                  : "bg-muted/5 hover:bg-muted/20"
               }`}
               data-testid={`row-dim-${idx}`}
             >
@@ -54,12 +56,12 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
                 return (
                   <td
                     key={col.key}
-                    className={`px-3 py-2 tabular-nums ${
+                    className={`px-3 py-2 tabular-nums whitespace-nowrap ${
                       colIdx === 0
-                        ? `sticky left-0 z-[5] font-medium truncate max-w-[140px] ${
-                            selectedIndex === idx ? "bg-primary/10" : "bg-background"
+                        ? `sticky left-0 z-[5] font-medium border-r border-border/40 ${
+                            selectedIndex === idx ? "bg-primary/10" : idx % 2 === 0 ? "bg-background" : "bg-muted/5"
                           }`
-                        : "truncate max-w-[130px]"
+                        : ""
                     }`}
                     title={displayVal ?? undefined}
                   >

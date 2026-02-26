@@ -9,6 +9,7 @@ import {
   Tooltip,
   ReferenceDot,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
   Legend,
   Area,
@@ -167,7 +168,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
   const surgeFlowSI = designFlowSI * 0.7;
   const maxFlowSI = designFlowSI * 1.6;
   const shutoffHeadKJkg = designHeadKJkg * 1.15;
-  const points = 80;
+  const points = 100;
 
   const legendNames: Record<string, string> = {
     head: isPolytropic ? "Polytropic Head" : "Isentropic Head",
@@ -259,7 +260,8 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
               <CartesianGrid
                 strokeDasharray="2 6"
                 stroke={COLORS.grid}
-                vertical={false}
+                vertical={true}
+                horizontalPoints={[]}
               />
 
               <XAxis
@@ -360,6 +362,25 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
                 activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.power }}
               />
 
+              <ReferenceArea
+                yAxisId="head"
+                x1={parseFloat((designFlowSI * 0.9).toFixed(1))}
+                x2={parseFloat((designFlowSI * 1.1).toFixed(1))}
+                fill="#22c55e"
+                fillOpacity={0.06}
+                stroke="#22c55e"
+                strokeOpacity={0.15}
+                strokeDasharray="4 4"
+                label={{
+                  value: "BEP",
+                  position: "insideTop",
+                  fill: "#22c55e",
+                  fontSize: 8,
+                  fontWeight: 600,
+                  opacity: 0.6,
+                }}
+              />
+
               <ReferenceLine
                 yAxisId="head"
                 x={parseFloat(surgeFlowSI.toFixed(1))}
@@ -394,7 +415,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
                 yAxisId="head"
                 x={displayFlow}
                 y={displayHead}
-                r={10}
+                r={12}
                 fill={COLORS.operatingPointGlow}
                 stroke="none"
               />
@@ -406,6 +427,14 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
                 fill={COLORS.operatingPoint}
                 stroke="#ffffff"
                 strokeWidth={2.5}
+                label={{
+                  value: "OP",
+                  position: "top",
+                  offset: 12,
+                  fill: COLORS.operatingPoint,
+                  fontSize: 9,
+                  fontWeight: 700,
+                }}
               />
               <ReferenceDot
                 yAxisId="head"

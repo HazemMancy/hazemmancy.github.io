@@ -10,6 +10,7 @@ import {
   Tooltip,
   ReferenceDot,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
   Legend,
 } from "recharts";
@@ -181,7 +182,7 @@ export function PumpCurveChart({
   const frictionHeadSI = Math.max(0, tdhSI - staticHeadSI);
   const maxFlowSI = designFlowSI * 1.5;
   const effPeak = pumpEfficiency;
-  const points = 60;
+  const points = 80;
 
   const data = [];
   for (let i = 0; i <= points; i++) {
@@ -263,7 +264,8 @@ export function PumpCurveChart({
               <CartesianGrid
                 strokeDasharray="2 6"
                 stroke={COLORS.grid}
-                vertical={false}
+                vertical={true}
+                horizontalPoints={[]}
               />
 
               <XAxis
@@ -372,6 +374,25 @@ export function PumpCurveChart({
                 activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.power }}
               />
 
+              <ReferenceArea
+                yAxisId="head"
+                x1={parseFloat((displayFlow * 0.85).toFixed(2))}
+                x2={parseFloat((displayFlow * 1.15).toFixed(2))}
+                fill="#22c55e"
+                fillOpacity={0.06}
+                stroke="#22c55e"
+                strokeOpacity={0.15}
+                strokeDasharray="4 4"
+                label={{
+                  value: "BEP",
+                  position: "insideTop",
+                  fill: "#22c55e",
+                  fontSize: 8,
+                  fontWeight: 600,
+                  opacity: 0.6,
+                }}
+              />
+
               <ReferenceLine
                 yAxisId="head"
                 x={parseFloat(displayFlow.toFixed(2))}
@@ -391,7 +412,7 @@ export function PumpCurveChart({
                 yAxisId="head"
                 x={parseFloat(displayFlow.toFixed(2))}
                 y={parseFloat(displayTDH.toFixed(2))}
-                r={10}
+                r={12}
                 fill={COLORS.operatingPointGlow}
                 stroke="none"
               />
@@ -403,6 +424,14 @@ export function PumpCurveChart({
                 fill={COLORS.operatingPoint}
                 stroke="#ffffff"
                 strokeWidth={2.5}
+                label={{
+                  value: "OP",
+                  position: "top",
+                  offset: 12,
+                  fill: COLORS.operatingPoint,
+                  fontSize: 9,
+                  fontWeight: 700,
+                }}
               />
               <ReferenceDot
                 yAxisId="head"

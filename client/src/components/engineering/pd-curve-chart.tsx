@@ -187,7 +187,7 @@ export function PDCurveChart({
   const volEff = volumetricEfficiency / 100;
   const mechEff = mechanicalEfficiency / 100;
   const maxPressureBar = differentialPressureBar * 1.5;
-  const points = 50;
+  const points = 60;
 
   const data = [];
   for (let i = 0; i <= points; i++) {
@@ -263,7 +263,8 @@ export function PDCurveChart({
               <CartesianGrid
                 strokeDasharray="2 6"
                 stroke={COLORS.grid}
-                vertical={false}
+                vertical={true}
+                horizontalPoints={[]}
               />
 
               <XAxis
@@ -392,7 +393,7 @@ export function PDCurveChart({
                 yAxisId="flow"
                 x={parseFloat(displayDP.toFixed(2))}
                 y={parseFloat(displayActualFlow.toFixed(2))}
-                r={10}
+                r={12}
                 fill={COLORS.operatingPointGlow}
                 stroke="none"
               />
@@ -404,6 +405,14 @@ export function PDCurveChart({
                 fill={COLORS.operatingPoint}
                 stroke="#ffffff"
                 strokeWidth={2.5}
+                label={{
+                  value: "OP",
+                  position: "top",
+                  offset: 12,
+                  fill: COLORS.operatingPoint,
+                  fontSize: 9,
+                  fontWeight: 700,
+                }}
               />
               <ReferenceDot
                 yAxisId="flow"
