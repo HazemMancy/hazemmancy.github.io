@@ -19,7 +19,7 @@ import {
   type ThermalHeatResult, type ThermalExpansionResult, type ThermalReliefRateResult,
   type ThermalSizingResult, type TRVSelection, type ThermalPipingResult, type ThermalFinalResult,
   type HeatSource,
-  COMMON_FLUIDS, API_526_ORIFICES,
+  COMMON_FLUIDS, API_526_ORIFICES, FLAG_LABELS,
   calculateHeatInput, calculateExpansion, calculateReliefRate,
   calculateRelievingPressure, calculateTRVSizing, selectTRV,
   calculateThermalPiping, buildThermalFinalResult,
@@ -35,6 +35,7 @@ import {
   ChevronLeft, ChevronRight, ClipboardList, Settings2,
   Sun, Droplets, Thermometer, Calculator, Wrench,
   PipetteIcon, CheckCircle2, Download, FileSpreadsheet, FileText,
+  AlertTriangle, Info, XCircle, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 const TABS = [
@@ -67,15 +68,22 @@ const defaultHeatSource: ThermalHeatSource = {
 
 const defaultFluid: ThermalFluid = {
   name: "", density: 998.2, specificHeat: 4.18, thermalExpansion: 2.07,
+  viscosity: 1.0, bulkModulus: 2200,
 };
 
 const defaultTemps: ThermalTemperatures = { initial: 0, final: 0 };
 
-const defaultDeviceSizing: ThermalDeviceSizing = { kd: 0.65, backPressure: 0 };
+const defaultDeviceSizing: ThermalDeviceSizing = { kd: 0.65, kw: 1.0, backPressure: 0 };
 
 const defaultPiping: ThermalPipingInput = {
   pipeDiameter: 25, pipeLength: 1, roughness: 0.046, fittingsK: 1.5,
 };
+
+function FlagIcon({ severity }: { severity: "info" | "warning" | "error" }) {
+  if (severity === "error") return <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />;
+  if (severity === "warning") return <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 shrink-0" />;
+  return <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />;
+}
 
 export default function ThermalReliefPage() {
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
@@ -98,6 +106,7 @@ export default function ThermalReliefPage() {
   const [outletPipingResult, setOutletPipingResult] = useState<ThermalPipingResult | null>(null);
   const [finalResult, setFinalResult] = useState<ThermalFinalResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showTrace, setShowTrace] = useState(false);
 
   const pU = getUnit("pressure", unitSystem);
   const tU = getUnit("temperature", unitSystem);
@@ -201,7 +210,7 @@ export default function ThermalReliefPage() {
       setError(null);
       const sp = convertToSI("pressure", equipment.setPressure, unitSystem);
       const bp = convertToSI("pressure", deviceSizing.backPressure, unitSystem);
-      const sr = calculateTRVSizing(reliefRateResult, sp, equipment.overpressurePercent, bp, project.atmosphericPressure, fluid, deviceSizing.kd);
+      const sr = calculateTRVSizing(reliefRateResult, sp, equipment.overpressurePercent, bp, project.atmosphericPressure, fluid, deviceSizing.kd, deviceSizing.kw);
       setSizingResult(sr);
       const trv = selectTRV(sr.requiredOrificeArea_mm2);
       setTrvSelection(trv);
@@ -220,13 +229,13 @@ export default function ThermalReliefPage() {
         pipeLength: convertToSI("length", inletPiping.pipeLength, unitSystem),
         roughness: inletPiping.roughness, fittingsK: inletPiping.fittingsK,
       };
-      setInletPipingResult(calculateThermalPiping(inP, reliefRateResult.reliefRate_m3h, fluid.density, 1.0, sp));
+      setInletPipingResult(calculateThermalPiping(inP, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, sp));
       const outP: ThermalPipingInput = {
         pipeDiameter: convertToSI("diameter", outletPiping.pipeDiameter, unitSystem),
         pipeLength: convertToSI("length", outletPiping.pipeLength, unitSystem),
         roughness: outletPiping.roughness, fittingsK: outletPiping.fittingsK,
       };
-      setOutletPipingResult(calculateThermalPiping(outP, reliefRateResult.reliefRate_m3h, fluid.density, 1.0, sp));
+      setOutletPipingResult(calculateThermalPiping(outP, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, sp));
     } catch {
       setInletPipingResult(null); setOutletPipingResult(null);
     }
@@ -266,6 +275,68 @@ export default function ThermalReliefPage() {
       setError(err instanceof Error ? err.message : "Error generating results");
     }
   };
+
+  const buildExportDatasheet = (): ExportDatasheet => ({
+    calculatorName: "Thermal Expansion Relief Calculator",
+    projectInfo: [
+      { label: "Project", value: project.name || "—" },
+      { label: "Client", value: project.client || "—" },
+      { label: "Location", value: project.location || "—" },
+      { label: "Case ID", value: project.caseId || "—" },
+      { label: "Engineer", value: project.engineer || "—" },
+      { label: "Date", value: project.date },
+    ],
+    inputs: [
+      { label: "Equipment Tag", value: equipment.tag || "—" },
+      { label: "Service", value: equipment.service || "—" },
+      { label: "Trapped Volume", value: equipment.trappedVolume, unit: "m³" },
+      { label: "MAWP", value: equipment.mawp, unit: `${pU}g` },
+      { label: "Set Pressure", value: equipment.setPressure, unit: `${pU}g` },
+      { label: "Overpressure", value: equipment.overpressurePercent, unit: "%" },
+      { label: "Heat Source Type", value: heatSource.type.replace(/_/g, " "), unit: "" },
+      { label: "Exposed Area", value: heatSource.exposedArea, unit: "m²" },
+      { label: "Heating Duration", value: heatSource.heatingDuration, unit: "hours" },
+      { label: "Fluid", value: fluid.name || "Custom" },
+      { label: "Density", value: fluid.density, unit: "kg/m³" },
+      { label: "Specific Heat", value: fluid.specificHeat, unit: "kJ/(kg·K)" },
+      { label: "Thermal Expansion Coeff.", value: fluid.thermalExpansion, unit: "×10⁻⁴ /°C" },
+      { label: "Viscosity", value: fluid.viscosity, unit: "cP" },
+      { label: "Bulk Modulus", value: fluid.bulkModulus, unit: "MPa" },
+      { label: "Initial Temperature", value: temperatures.initial, unit: tU },
+      { label: "Final Temperature", value: temperatures.final, unit: tU },
+      { label: "Kd", value: deviceSizing.kd, unit: "" },
+      { label: "Kw", value: deviceSizing.kw, unit: "" },
+      { label: "Back Pressure", value: deviceSizing.backPressure, unit: `${pU}g` },
+    ],
+    results: finalResult ? [
+      { label: "Heat Input", value: finalResult.heatResult.heatInput_kW, unit: "kW" },
+      { label: "Temperature Rise", value: finalResult.expansionResult.temperatureRise, unit: "°C" },
+      { label: "Expansion Volume", value: finalResult.expansionResult.expansionVolume_L, unit: "L", highlight: true },
+      { label: "Relief Rate", value: finalResult.reliefRateResult.reliefRate_Lmin, unit: "L/min", highlight: true },
+      { label: "Relief Rate", value: finalResult.reliefRateResult.reliefRate_m3h, unit: "m³/h" },
+      { label: "Method", value: finalResult.reliefRateResult.method, unit: "" },
+      { label: "Required Orifice Area", value: finalResult.sizingResult.requiredOrificeArea_mm2, unit: "mm²", highlight: true },
+      { label: "Kp (overpressure correction)", value: finalResult.sizingResult.kp, unit: "" },
+      { label: "Relieving Pressure", value: finalResult.sizingResult.relievingPressure_bar, unit: "bar(a)" },
+      { label: "Differential Pressure", value: finalResult.sizingResult.differentialPressure_bar, unit: "bar" },
+      { label: "Specific Gravity", value: finalResult.sizingResult.specificGravity, unit: "" },
+      { label: "API 526 Orifice", value: finalResult.trvSelection.designation, unit: "" },
+      { label: "Effective Area", value: finalResult.trvSelection.area_mm2, unit: "mm²" },
+      { label: "Margin", value: `+${finalResult.trvSelection.margin.toFixed(1)}%`, unit: "" },
+      { label: "Flanges", value: `${finalResult.trvSelection.inletFlange} x ${finalResult.trvSelection.outletFlange}`, unit: "" },
+      { label: "Pressure Rise Rate", value: finalResult.pressureRiseRate, unit: "bar/°C" },
+    ] : [],
+    assumptions: finalResult?.calcTrace.assumptions || [
+      "Liquid is incompressible and fully trapped between two closed valves",
+      "Thermal expansion coefficient assumed constant over temperature range",
+    ],
+    references: [
+      "API 521: Pressure-Relieving and Depressuring Systems, Section 5.18",
+      "API 520 Part I: Sizing of pressure-relieving devices",
+      "API 526: Flanged Steel Pressure-Relief Valves (standard orifice designations D–T)",
+      "ASME B31.3: Process Piping (blocked-in liquid overpressure)",
+    ],
+  });
 
   const tabIdx = TABS.findIndex(t => t.id === activeTab);
   const goNext = () => { if (tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id); };
@@ -440,9 +511,14 @@ export default function ThermalReliefPage() {
                   <Input type="number" value={fluid.density || ""} onChange={e => setFluid(f => ({ ...f, density: parseFloat(e.target.value) || 0 }))} data-testid="input-density" /></div>
                 <div><Label className="text-xs mb-1.5 block">Specific Heat (kJ/(kg·K))</Label>
                   <Input type="number" value={fluid.specificHeat || ""} onChange={e => setFluid(f => ({ ...f, specificHeat: parseFloat(e.target.value) || 0 }))} data-testid="input-cp" /></div>
-                <div><Label className="text-xs mb-1.5 block">Thermal Expansion Coeff. (x10⁻⁴ /°C)</Label>
+                <div><Label className="text-xs mb-1.5 block">Thermal Expansion Coeff. (×10⁻⁴ /°C)</Label>
                   <Input type="number" value={fluid.thermalExpansion || ""} onChange={e => setFluid(f => ({ ...f, thermalExpansion: parseFloat(e.target.value) || 0 }))} data-testid="input-alpha" /></div>
+                <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
+                  <Input type="number" value={fluid.viscosity || ""} onChange={e => setFluid(f => ({ ...f, viscosity: parseFloat(e.target.value) || 0 }))} data-testid="input-viscosity" /></div>
+                <div><Label className="text-xs mb-1.5 block">Bulk Modulus (MPa)</Label>
+                  <Input type="number" value={fluid.bulkModulus || ""} onChange={e => setFluid(f => ({ ...f, bulkModulus: parseFloat(e.target.value) || 0 }))} data-testid="input-bulk-modulus" /></div>
               </div>
+              <p className="text-[10px] text-muted-foreground">Bulk modulus is used to estimate pressure rise rate (dP/dT) in the blocked-in section. Set to 0 if unknown.</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -492,7 +568,7 @@ export default function ThermalReliefPage() {
                 </CardContent></Card>
                 <Card className="bg-muted/30"><CardContent className="p-3">
                   <p className="text-muted-foreground mb-1">Heat Source</p>
-                  <p className="font-mono font-bold">{heatSource.type.replace("_", " ")}</p>
+                  <p className="font-mono font-bold">{heatSource.type.replace(/_/g, " ")}</p>
                 </CardContent></Card>
                 <Card className="bg-muted/30"><CardContent className="p-3">
                   <p className="text-muted-foreground mb-1">Temperature Rise</p>
@@ -508,9 +584,11 @@ export default function ThermalReliefPage() {
                   { label: "Temperature Rise", value: expansionResult.temperatureRise, unit: "°C" },
                   { label: "Expansion Volume", value: expansionResult.expansionVolume_L, unit: "L", highlight: true },
                   { label: "Heat Input", value: heatResult.heatInput_kW, unit: "kW" },
-                  { label: "Relief Rate", value: reliefRateResult.reliefRate_Lmin, unit: "L/min", highlight: true },
-                  { label: "Relief Rate", value: reliefRateResult.reliefRate_m3h, unit: "m³/h" },
-                  { label: "Calculation Method", value: reliefRateResult.method, unit: "" },
+                  ...(reliefRateResult.heatMethodRate_m3h > 0 ? [{ label: "Heat Method Rate", value: reliefRateResult.heatMethodRate_m3h * 1000 / 60, unit: "L/min" }] : []),
+                  ...(reliefRateResult.timeMethodRate_m3h > 0 ? [{ label: "Volume/Time Rate", value: reliefRateResult.timeMethodRate_m3h * 1000 / 60, unit: "L/min" }] : []),
+                  { label: "Governing Relief Rate", value: reliefRateResult.reliefRate_Lmin, unit: "L/min", highlight: true },
+                  { label: "Governing Relief Rate", value: reliefRateResult.reliefRate_m3h, unit: "m³/h" },
+                  { label: "Governing Method", value: reliefRateResult.method, unit: "" },
                 ]} rawData={{ ...expansionResult, ...reliefRateResult }} exportData={{
                   calculatorName: "Thermal Expansion Relief — Relief Rate",
                   projectInfo: [
@@ -521,12 +599,12 @@ export default function ThermalReliefPage() {
                   inputs: [
                     { label: "Equipment Tag", value: equipment.tag || "—" },
                     { label: "Trapped Volume", value: equipment.trappedVolume, unit: "m³" },
-                    { label: "Heat Source Type", value: heatSource.type.replace("_", " ") },
+                    { label: "Heat Source Type", value: heatSource.type.replace(/_/g, " ") },
                     { label: "Heating Duration", value: heatSource.heatingDuration, unit: "hours" },
                     { label: "Fluid", value: fluid.name || "Custom" },
                     { label: "Density", value: fluid.density, unit: "kg/m³" },
                     { label: "Specific Heat", value: fluid.specificHeat, unit: "kJ/(kg·K)" },
-                    { label: "Thermal Expansion Coeff.", value: fluid.thermalExpansion, unit: "x10⁻⁴ /°C" },
+                    { label: "Thermal Expansion Coeff.", value: fluid.thermalExpansion, unit: "×10⁻⁴ /°C" },
                     { label: "Initial Temperature", value: temperatures.initial, unit: tU },
                     { label: "Final Temperature", value: temperatures.final, unit: tU },
                   ],
@@ -557,12 +635,16 @@ export default function ThermalReliefPage() {
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm">Device Selection & Sizing</h3>
-              <p className="text-xs text-muted-foreground">TRV sizing per API 520 liquid equation</p>
+              <p className="text-xs text-muted-foreground">TRV sizing per API 520 liquid equation with Kw and Kp correction</p>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><Label className="text-xs mb-1.5 block">Discharge Coefficient (Kd)</Label>
-                  <Input type="number" value={deviceSizing.kd} onChange={e => setDeviceSizing(d => ({ ...d, kd: parseFloat(e.target.value) || 0.65 }))} data-testid="input-kd" /></div>
+                  <Input type="number" value={deviceSizing.kd} onChange={e => setDeviceSizing(d => ({ ...d, kd: parseFloat(e.target.value) || 0.65 }))} data-testid="input-kd" />
+                  <p className="text-[10px] text-muted-foreground mt-1">Typical: 0.65 for liquid TRV</p></div>
+                <div><Label className="text-xs mb-1.5 block">Backpressure Correction (Kw)</Label>
+                  <Input type="number" value={deviceSizing.kw} onChange={e => setDeviceSizing(d => ({ ...d, kw: parseFloat(e.target.value) || 1.0 }))} data-testid="input-kw" />
+                  <p className="text-[10px] text-muted-foreground mt-1">1.0 for conventional; &lt;1.0 for balanced bellows</p></div>
                 <div><Label className="text-xs mb-1.5 block">Back Pressure ({pU}g)</Label>
                   <Input type="number" value={deviceSizing.backPressure || ""} onChange={e => setDeviceSizing(d => ({ ...d, backPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-back-p" /></div>
               </div>
@@ -578,6 +660,9 @@ export default function ThermalReliefPage() {
                     { label: "Relieving Pressure", value: sizingResult.relievingPressure_bar, unit: "bar(a)" },
                     { label: "Differential Pressure", value: sizingResult.differentialPressure_bar, unit: "bar" },
                     { label: "Specific Gravity", value: sizingResult.specificGravity, unit: "" },
+                    { label: "Kd", value: sizingResult.kd, unit: "" },
+                    { label: "Kw", value: sizingResult.kw, unit: "" },
+                    { label: "Kp (overpressure correction)", value: sizingResult.kp, unit: "" },
                   ]} rawData={sizingResult} exportData={{
                     calculatorName: "Thermal Expansion Relief — TRV Sizing",
                     projectInfo: [
@@ -590,6 +675,7 @@ export default function ThermalReliefPage() {
                       { label: "Overpressure", value: equipment.overpressurePercent, unit: "%" },
                       { label: "Back Pressure", value: deviceSizing.backPressure, unit: `${pU}g` },
                       { label: "Discharge Coefficient (Kd)", value: deviceSizing.kd },
+                      { label: "Backpressure Correction (Kw)", value: deviceSizing.kw },
                       { label: "Fluid", value: fluid.name || "Custom" },
                       { label: "Density", value: fluid.density, unit: "kg/m³" },
                     ],
@@ -598,6 +684,7 @@ export default function ThermalReliefPage() {
                       { label: "Relieving Pressure", value: sizingResult.relievingPressure_bar, unit: "bar(a)" },
                       { label: "Differential Pressure", value: sizingResult.differentialPressure_bar, unit: "bar" },
                       { label: "Specific Gravity", value: sizingResult.specificGravity, unit: "" },
+                      { label: "Kp (overpressure correction)", value: sizingResult.kp, unit: "" },
                       ...(trvSelection ? [
                         { label: "Selected Orifice", value: trvSelection.designation, unit: "" },
                         { label: "Effective Area", value: trvSelection.area_mm2, unit: "mm²" },
@@ -607,6 +694,8 @@ export default function ThermalReliefPage() {
                     ],
                     assumptions: [
                       "TRV sizing uses liquid relief equation with Kd = " + deviceSizing.kd,
+                      "Backpressure correction Kw = " + deviceSizing.kw,
+                      "Overpressure correction Kp per API 520 Figure 31",
                       "Orifice selection per API 526 standard designations",
                     ],
                     references: [
@@ -719,6 +808,7 @@ export default function ThermalReliefPage() {
                       <span>Pressure Drop:</span><span className="font-mono">{inletPipingResult.pressureDrop_bar.toFixed(4)} bar ({inletPipingResult.percentOfSet.toFixed(1)}% of set)</span>
                       <span>Velocity:</span><span className="font-mono">{inletPipingResult.velocity.toFixed(2)} m/s</span>
                       <span>Re:</span><span className="font-mono">{inletPipingResult.reynoldsNumber.toFixed(0)}</span>
+                      <span>Friction Factor:</span><span className="font-mono">{inletPipingResult.frictionFactor.toFixed(5)}</span>
                     </div>
                     <WarningPanel warnings={inletPipingResult.warnings} />
                   </CardContent>
@@ -738,6 +828,7 @@ export default function ThermalReliefPage() {
                       <span>Pressure Drop:</span><span className="font-mono">{outletPipingResult.pressureDrop_bar.toFixed(4)} bar ({outletPipingResult.percentOfSet.toFixed(1)}% of set)</span>
                       <span>Velocity:</span><span className="font-mono">{outletPipingResult.velocity.toFixed(2)} m/s</span>
                       <span>Re:</span><span className="font-mono">{outletPipingResult.reynoldsNumber.toFixed(0)}</span>
+                      <span>Friction Factor:</span><span className="font-mono">{outletPipingResult.frictionFactor.toFixed(5)}</span>
                     </div>
                     <WarningPanel warnings={outletPipingResult.warnings} />
                   </CardContent>
@@ -768,235 +859,52 @@ export default function ThermalReliefPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem data-testid="button-export-final-pdf" onClick={() => {
-                          const ds: ExportDatasheet = {
-                            calculatorName: "Thermal Expansion Relief Calculator",
-                            projectInfo: [
-                              { label: "Project", value: project.name || "—" },
-                              { label: "Client", value: project.client || "—" },
-                              { label: "Location", value: project.location || "—" },
-                              { label: "Case ID", value: project.caseId || "—" },
-                              { label: "Engineer", value: project.engineer || "—" },
-                              { label: "Date", value: project.date },
-                            ],
-                            inputs: [
-                              { label: "Equipment Tag", value: equipment.tag || "—" },
-                              { label: "Service", value: equipment.service || "—" },
-                              { label: "Trapped Volume", value: equipment.trappedVolume, unit: "m³" },
-                              { label: "MAWP", value: equipment.mawp, unit: `${pU}g` },
-                              { label: "Set Pressure", value: equipment.setPressure, unit: `${pU}g` },
-                              { label: "Overpressure", value: equipment.overpressurePercent, unit: "%" },
-                              { label: "Heat Source", value: heatSource.type.replace("_", " ") },
-                              { label: "Heating Duration", value: heatSource.heatingDuration, unit: "hours" },
-                              { label: "Fluid", value: fluid.name || "Custom" },
-                              { label: "Density", value: fluid.density, unit: "kg/m³" },
-                              { label: "Specific Heat", value: fluid.specificHeat, unit: "kJ/(kg·K)" },
-                              { label: "Thermal Expansion Coeff.", value: fluid.thermalExpansion, unit: "x10⁻⁴ /°C" },
-                              { label: "Initial Temperature", value: temperatures.initial, unit: tU },
-                              { label: "Final Temperature", value: temperatures.final, unit: tU },
-                              { label: "Discharge Coefficient (Kd)", value: deviceSizing.kd },
-                              { label: "Back Pressure", value: deviceSizing.backPressure, unit: `${pU}g` },
-                            ],
-                            results: [
-                              { label: "Temperature Rise", value: finalResult.expansionResult.temperatureRise, unit: "°C" },
-                              { label: "Expansion Volume", value: finalResult.expansionResult.expansionVolume_L, unit: "L", highlight: true },
-                              { label: "Relief Rate", value: finalResult.reliefRateResult.reliefRate_Lmin, unit: "L/min", highlight: true },
-                              { label: "Relief Rate", value: finalResult.reliefRateResult.reliefRate_m3h, unit: "m³/h" },
-                              { label: "Required Orifice Area", value: finalResult.sizingResult.requiredOrificeArea_mm2, unit: "mm²", highlight: true },
-                              { label: "API 526 Orifice", value: finalResult.trvSelection.designation, unit: "" },
-                              { label: "Effective Area", value: finalResult.trvSelection.area_mm2, unit: "mm²" },
-                              { label: "Flanges (Inlet x Outlet)", value: `${finalResult.trvSelection.inletFlange} x ${finalResult.trvSelection.outletFlange}`, unit: "" },
-                              { label: "Margin", value: `+${finalResult.trvSelection.margin.toFixed(1)}%`, unit: "" },
-                              { label: "Pressure Rise Rate", value: finalResult.pressureRiseRate, unit: "bar/°C" },
-                            ],
-                            methodology: [
-                              "Thermal expansion relief rate per API 521 Section 5.18",
-                              "TRV sizing per API 520 Part I liquid relief equation",
-                              "Orifice selection per API 526 standard designations (D through T)",
-                            ],
-                            assumptions: [
-                              "Liquid is incompressible and fully trapped between two closed valves",
-                              "Thermal expansion coefficient assumed constant over temperature range",
-                              "Solar heat flux per API 521: 947 W/m² (bare) / 315 W/m² (insulated)",
-                              "TRV sizing uses liquid relief equation with Kd = " + deviceSizing.kd,
-                              "Pressure rise rate estimated using water isothermal compressibility",
-                              "No allowance for pipe/vessel flexibility or thermal expansion of metal",
-                            ],
-                            references: [
-                              "API 521: Pressure-Relieving and Depressuring Systems, Section 5.18",
-                              "API 520 Part I: Sizing of pressure-relieving devices",
-                              "API 526: Flanged Steel Pressure-Relief Valves (standard orifice designations D–T)",
-                              "ASME B31.3: Process Piping (blocked-in liquid overpressure)",
-                              "Perry's Chemical Engineers' Handbook, Chapter 2 (thermal properties)",
-                            ],
-                            warnings: finalResult.warnings,
-                          };
-                          exportToPDF(ds);
-                        }}>
-                          <FileText className="w-4 h-4 mr-2 text-red-400" />
-                          Export as PDF
+                        <DropdownMenuItem data-testid="button-export-final-pdf" onClick={() => exportToPDF(buildExportDatasheet())}>
+                          <FileText className="w-3.5 h-3.5 mr-2" /> Export PDF
                         </DropdownMenuItem>
-                        <DropdownMenuItem data-testid="button-export-final-excel" onClick={() => {
-                          const ds: ExportDatasheet = {
-                            calculatorName: "Thermal Expansion Relief Calculator",
-                            projectInfo: [
-                              { label: "Project", value: project.name || "—" },
-                              { label: "Client", value: project.client || "—" },
-                              { label: "Location", value: project.location || "—" },
-                              { label: "Case ID", value: project.caseId || "—" },
-                              { label: "Engineer", value: project.engineer || "—" },
-                              { label: "Date", value: project.date },
-                            ],
-                            inputs: [
-                              { label: "Equipment Tag", value: equipment.tag || "—" },
-                              { label: "Service", value: equipment.service || "—" },
-                              { label: "Trapped Volume", value: equipment.trappedVolume, unit: "m³" },
-                              { label: "MAWP", value: equipment.mawp, unit: `${pU}g` },
-                              { label: "Set Pressure", value: equipment.setPressure, unit: `${pU}g` },
-                              { label: "Overpressure", value: equipment.overpressurePercent, unit: "%" },
-                              { label: "Heat Source", value: heatSource.type.replace("_", " ") },
-                              { label: "Heating Duration", value: heatSource.heatingDuration, unit: "hours" },
-                              { label: "Fluid", value: fluid.name || "Custom" },
-                              { label: "Density", value: fluid.density, unit: "kg/m³" },
-                              { label: "Specific Heat", value: fluid.specificHeat, unit: "kJ/(kg·K)" },
-                              { label: "Thermal Expansion Coeff.", value: fluid.thermalExpansion, unit: "x10⁻⁴ /°C" },
-                              { label: "Initial Temperature", value: temperatures.initial, unit: tU },
-                              { label: "Final Temperature", value: temperatures.final, unit: tU },
-                              { label: "Discharge Coefficient (Kd)", value: deviceSizing.kd },
-                              { label: "Back Pressure", value: deviceSizing.backPressure, unit: `${pU}g` },
-                            ],
-                            results: [
-                              { label: "Temperature Rise", value: finalResult.expansionResult.temperatureRise, unit: "°C" },
-                              { label: "Expansion Volume", value: finalResult.expansionResult.expansionVolume_L, unit: "L", highlight: true },
-                              { label: "Relief Rate", value: finalResult.reliefRateResult.reliefRate_Lmin, unit: "L/min", highlight: true },
-                              { label: "Relief Rate", value: finalResult.reliefRateResult.reliefRate_m3h, unit: "m³/h" },
-                              { label: "Required Orifice Area", value: finalResult.sizingResult.requiredOrificeArea_mm2, unit: "mm²", highlight: true },
-                              { label: "API 526 Orifice", value: finalResult.trvSelection.designation, unit: "" },
-                              { label: "Effective Area", value: finalResult.trvSelection.area_mm2, unit: "mm²" },
-                              { label: "Flanges (Inlet x Outlet)", value: `${finalResult.trvSelection.inletFlange} x ${finalResult.trvSelection.outletFlange}`, unit: "" },
-                              { label: "Margin", value: `+${finalResult.trvSelection.margin.toFixed(1)}%`, unit: "" },
-                              { label: "Pressure Rise Rate", value: finalResult.pressureRiseRate, unit: "bar/°C" },
-                            ],
-                            methodology: [
-                              "Thermal expansion relief rate per API 521 Section 5.18",
-                              "TRV sizing per API 520 Part I liquid relief equation",
-                              "Orifice selection per API 526 standard designations (D through T)",
-                            ],
-                            assumptions: [
-                              "Liquid is incompressible and fully trapped between two closed valves",
-                              "Thermal expansion coefficient assumed constant over temperature range",
-                              "Solar heat flux per API 521: 947 W/m² (bare) / 315 W/m² (insulated)",
-                              "TRV sizing uses liquid relief equation with Kd = " + deviceSizing.kd,
-                              "Pressure rise rate estimated using water isothermal compressibility",
-                              "No allowance for pipe/vessel flexibility or thermal expansion of metal",
-                            ],
-                            references: [
-                              "API 521: Pressure-Relieving and Depressuring Systems, Section 5.18",
-                              "API 520 Part I: Sizing of pressure-relieving devices",
-                              "API 526: Flanged Steel Pressure-Relief Valves (standard orifice designations D–T)",
-                              "ASME B31.3: Process Piping (blocked-in liquid overpressure)",
-                              "Perry's Chemical Engineers' Handbook, Chapter 2 (thermal properties)",
-                            ],
-                            warnings: finalResult.warnings,
-                          };
-                          exportToExcel(ds);
-                        }}>
-                          <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
-                          Export as Excel
+                        <DropdownMenuItem data-testid="button-export-final-excel" onClick={() => exportToExcel(buildExportDatasheet())}>
+                          <FileSpreadsheet className="w-3.5 h-3.5 mr-2" /> Export Excel
                         </DropdownMenuItem>
-                        <DropdownMenuItem data-testid="button-export-final-json" onClick={() => {
-                          const ds: ExportDatasheet = {
-                            calculatorName: "Thermal Expansion Relief Calculator",
-                            projectInfo: [
-                              { label: "Project", value: project.name || "—" },
-                              { label: "Client", value: project.client || "—" },
-                              { label: "Location", value: project.location || "—" },
-                              { label: "Case ID", value: project.caseId || "—" },
-                              { label: "Engineer", value: project.engineer || "—" },
-                              { label: "Date", value: project.date },
-                            ],
-                            inputs: [
-                              { label: "Equipment Tag", value: equipment.tag || "—" },
-                              { label: "Service", value: equipment.service || "—" },
-                              { label: "Trapped Volume", value: equipment.trappedVolume, unit: "m³" },
-                              { label: "MAWP", value: equipment.mawp, unit: `${pU}g` },
-                              { label: "Set Pressure", value: equipment.setPressure, unit: `${pU}g` },
-                              { label: "Overpressure", value: equipment.overpressurePercent, unit: "%" },
-                              { label: "Heat Source", value: heatSource.type.replace("_", " ") },
-                              { label: "Heating Duration", value: heatSource.heatingDuration, unit: "hours" },
-                              { label: "Fluid", value: fluid.name || "Custom" },
-                              { label: "Density", value: fluid.density, unit: "kg/m³" },
-                              { label: "Specific Heat", value: fluid.specificHeat, unit: "kJ/(kg·K)" },
-                              { label: "Thermal Expansion Coeff.", value: fluid.thermalExpansion, unit: "x10⁻⁴ /°C" },
-                              { label: "Initial Temperature", value: temperatures.initial, unit: tU },
-                              { label: "Final Temperature", value: temperatures.final, unit: tU },
-                              { label: "Discharge Coefficient (Kd)", value: deviceSizing.kd },
-                              { label: "Back Pressure", value: deviceSizing.backPressure, unit: `${pU}g` },
-                            ],
-                            results: [
-                              { label: "Temperature Rise", value: finalResult.expansionResult.temperatureRise, unit: "°C" },
-                              { label: "Expansion Volume", value: finalResult.expansionResult.expansionVolume_L, unit: "L", highlight: true },
-                              { label: "Relief Rate", value: finalResult.reliefRateResult.reliefRate_Lmin, unit: "L/min", highlight: true },
-                              { label: "Relief Rate", value: finalResult.reliefRateResult.reliefRate_m3h, unit: "m³/h" },
-                              { label: "Required Orifice Area", value: finalResult.sizingResult.requiredOrificeArea_mm2, unit: "mm²", highlight: true },
-                              { label: "API 526 Orifice", value: finalResult.trvSelection.designation, unit: "" },
-                              { label: "Effective Area", value: finalResult.trvSelection.area_mm2, unit: "mm²" },
-                              { label: "Flanges (Inlet x Outlet)", value: `${finalResult.trvSelection.inletFlange} x ${finalResult.trvSelection.outletFlange}`, unit: "" },
-                              { label: "Margin", value: `+${finalResult.trvSelection.margin.toFixed(1)}%`, unit: "" },
-                              { label: "Pressure Rise Rate", value: finalResult.pressureRiseRate, unit: "bar/°C" },
-                            ],
-                            methodology: [
-                              "Thermal expansion relief rate per API 521 Section 5.18",
-                              "TRV sizing per API 520 Part I liquid relief equation",
-                              "Orifice selection per API 526 standard designations (D through T)",
-                            ],
-                            assumptions: [
-                              "Liquid is incompressible and fully trapped between two closed valves",
-                              "Thermal expansion coefficient assumed constant over temperature range",
-                              "Solar heat flux per API 521: 947 W/m² (bare) / 315 W/m² (insulated)",
-                              "TRV sizing uses liquid relief equation with Kd = " + deviceSizing.kd,
-                              "Pressure rise rate estimated using water isothermal compressibility",
-                              "No allowance for pipe/vessel flexibility or thermal expansion of metal",
-                            ],
-                            references: [
-                              "API 521: Pressure-Relieving and Depressuring Systems, Section 5.18",
-                              "API 520 Part I: Sizing of pressure-relieving devices",
-                              "API 526: Flanged Steel Pressure-Relief Valves (standard orifice designations D–T)",
-                              "ASME B31.3: Process Piping (blocked-in liquid overpressure)",
-                              "Perry's Chemical Engineers' Handbook, Chapter 2 (thermal properties)",
-                            ],
-                            warnings: finalResult.warnings,
-                          };
-                          exportToJSON(ds);
-                        }}>
-                          <Download className="w-4 h-4 mr-2 text-blue-400" />
-                          Export as JSON
+                        <DropdownMenuItem data-testid="button-export-final-json" onClick={() => exportToJSON(buildExportDatasheet())}>
+                          <Download className="w-3.5 h-3.5 mr-2" /> Export JSON
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
 
+                  {finalResult.flags.length > 0 && (
+                    <Card className="border-yellow-500/30 bg-yellow-500/5" data-testid="card-flags">
+                      <CardContent className="p-4">
+                        <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                          Engineering Flags
+                        </h4>
+                        <div className="space-y-2">
+                          {finalResult.flags.map((flag, i) => {
+                            const info = FLAG_LABELS[flag];
+                            return (
+                              <div key={i} className="flex items-center gap-2 text-xs" data-testid={`flag-${flag}`}>
+                                <FlagIcon severity={info?.severity || "info"} />
+                                <span className={info?.severity === "error" ? "text-destructive" : info?.severity === "warning" ? "text-yellow-400" : "text-muted-foreground"}>
+                                  {info?.label || flag}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   <WarningPanel warnings={finalResult.warnings} />
 
-                  <Card className="border-primary/30">
+                  <Card>
                     <CardContent className="p-4">
-                      <h4 className="font-semibold text-sm mb-3">Thermal Relief Summary</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-xs">
+                      <h4 className="font-semibold text-sm mb-3">Summary</h4>
+                      <div className="space-y-1 text-xs">
                         <div className="flex justify-between py-1 border-b border-muted/20">
-                          <span className="text-muted-foreground">Project:</span>
-                          <span className="font-mono" data-testid="text-result-project">{finalResult.project.name}</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-muted/20">
-                          <span className="text-muted-foreground">Equipment:</span>
-                          <span className="font-mono" data-testid="text-result-equip">{finalResult.equipment.tag} - {finalResult.equipment.service}</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-muted/20">
-                          <span className="text-muted-foreground">Fluid:</span>
-                          <span className="font-mono">{finalResult.fluid.name}</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-muted/20">
-                          <span className="text-muted-foreground">Heat Source:</span>
-                          <span className="font-mono">{finalResult.heatSource.type.replace("_", " ")}</span>
+                          <span className="text-muted-foreground">Heat Input:</span>
+                          <span className="font-mono">{finalResult.heatResult.heatInput_kW.toFixed(3)} kW</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
                           <span className="text-muted-foreground">Temperature Rise:</span>
@@ -1004,15 +912,23 @@ export default function ThermalReliefPage() {
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
                           <span className="text-muted-foreground">Expansion Volume:</span>
-                          <span className="font-mono text-primary font-bold">{finalResult.expansionResult.expansionVolume_L.toFixed(2)} L</span>
+                          <span className="font-mono text-primary font-bold">{finalResult.expansionResult.expansionVolume_L.toFixed(3)} L</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
                           <span className="text-muted-foreground">Relief Rate:</span>
-                          <span className="font-mono text-primary font-bold">{finalResult.reliefRateResult.reliefRate_Lmin.toFixed(3)} L/min</span>
+                          <span className="font-mono text-primary font-bold">{finalResult.reliefRateResult.reliefRate_Lmin.toFixed(4)} L/min</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-muted/20">
+                          <span className="text-muted-foreground">Method:</span>
+                          <span className="font-mono text-xs">{finalResult.reliefRateResult.method}</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
                           <span className="text-muted-foreground">Required Area:</span>
-                          <span className="font-mono">{finalResult.sizingResult.requiredOrificeArea_mm2.toFixed(1)} mm²</span>
+                          <span className="font-mono">{finalResult.sizingResult.requiredOrificeArea_mm2.toFixed(2)} mm²</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-muted/20">
+                          <span className="text-muted-foreground">Kd / Kw / Kp:</span>
+                          <span className="font-mono">{finalResult.sizingResult.kd} / {finalResult.sizingResult.kw} / {finalResult.sizingResult.kp.toFixed(3)}</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
                           <span className="text-muted-foreground">API 526 Orifice:</span>
@@ -1034,6 +950,32 @@ export default function ThermalReliefPage() {
                     </CardContent>
                   </Card>
 
+                  {(finalResult.inletPiping || finalResult.outletPiping) && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <h4 className="font-semibold text-sm mb-3">Piping Checks</h4>
+                        <div className="space-y-3">
+                          {finalResult.inletPiping && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <Badge variant={finalResult.inletPiping.pass ? "secondary" : "destructive"} className="text-[10px]">
+                                {finalResult.inletPiping.pass ? "PASS" : "FAIL"}
+                              </Badge>
+                              <span>Inlet: {finalResult.inletPiping.pressureDrop_bar.toFixed(4)} bar ({finalResult.inletPiping.percentOfSet.toFixed(1)}%), v={finalResult.inletPiping.velocity.toFixed(2)} m/s</span>
+                            </div>
+                          )}
+                          {finalResult.outletPiping && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <Badge variant={finalResult.outletPiping.pass ? "secondary" : "destructive"} className="text-[10px]">
+                                {finalResult.outletPiping.pass ? "PASS" : "FAIL"}
+                              </Badge>
+                              <span>Outlet: {finalResult.outletPiping.pressureDrop_bar.toFixed(4)} bar ({finalResult.outletPiping.percentOfSet.toFixed(1)}%), v={finalResult.outletPiping.velocity.toFixed(2)} m/s</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   <Card>
                     <CardContent className="p-4">
                       <h4 className="font-semibold text-sm mb-3">Action Items</h4>
@@ -1048,15 +990,42 @@ export default function ThermalReliefPage() {
                     </CardContent>
                   </Card>
 
+                  <Card>
+                    <CardContent className="p-4">
+                      <button
+                        className="flex items-center gap-2 w-full text-left"
+                        onClick={() => setShowTrace(!showTrace)}
+                        data-testid="button-toggle-trace"
+                      >
+                        <h4 className="font-semibold text-sm">Calculation Trace</h4>
+                        {showTrace ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+                      </button>
+                      {showTrace && (
+                        <div className="mt-3 space-y-3">
+                          {finalResult.calcTrace.steps.map((step, i) => (
+                            <div key={i} className="border border-muted/30 rounded-md p-3">
+                              <p className="text-xs font-medium text-primary mb-1">Step {i + 1}: {step.name}</p>
+                              <p className="text-[10px] font-mono text-muted-foreground mb-2">{step.equation}</p>
+                              <div className="grid grid-cols-2 gap-1 text-[10px]">
+                                {Object.entries(step.variables).map(([k, v]) => (
+                                  <div key={k} className="flex justify-between">
+                                    <span className="text-muted-foreground">{k}:</span>
+                                    <span className="font-mono">{typeof v === "number" ? v.toFixed(6) : v}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-1 pt-1 border-t border-muted/20">
+                                <p className="text-[10px] font-mono font-bold">{step.result}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
                   <AssumptionsPanel
-                    assumptions={[
-                      "Liquid is incompressible and fully trapped between two closed valves",
-                      "Thermal expansion coefficient assumed constant over temperature range",
-                      "Solar heat flux per API 521: 947 W/m² (bare) / 315 W/m² (insulated)",
-                      "TRV sizing uses liquid relief equation with Kd = " + deviceSizing.kd,
-                      "Pressure rise rate estimated using water isothermal compressibility",
-                      "No allowance for pipe/vessel flexibility or thermal expansion of metal",
-                    ]}
+                    assumptions={finalResult.calcTrace.assumptions}
                     references={[
                       "API 521: Pressure-Relieving and Depressuring Systems, Section 5.18",
                       "API 520 Part I: Sizing of pressure-relieving devices",

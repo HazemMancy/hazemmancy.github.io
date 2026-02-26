@@ -1,148 +1,9 @@
 # Hazem El Mancy — Process Engineer Portfolio & Calculator Suite
 
 ## Overview
-Professional engineering portfolio website with validated process engineering calculators for Oil & Gas applications. Built for Hazem El Mancy, a Process Engineer specializing in FEED/EPC projects.
+This project is a professional engineering portfolio website for Hazem El Mancy, a Process Engineer, coupled with a suite of validated process engineering calculators. The primary purpose is to showcase expertise and provide practical tools for Oil & Gas applications, particularly in FEED/EPC projects. The calculators are designed to be client-side and cover various engineering disciplines.
 
-## Architecture
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS + shadcn/ui
-- **Backend**: Express.js (serves frontend, minimal API)
-- **Routing**: wouter (client-side)
-- **State**: React local state (no database needed - static portfolio + client-side calculators)
-- **Engineering Library**: Separate calculation modules in `client/src/lib/engineering/`
-- **Export**: jsPDF + jspdf-autotable (PDF), xlsx (Excel), JSON — shared utility in `exportUtils.ts`
-- **Theme**: Dark navy (#0c1222) + golden amber (#d4a04a), single-page scrolling portfolio
-
-## Project Structure
-```
-client/src/
-  components/
-    engineering/     - Reusable calculator UI components
-    layout/          - Navbar, Footer
-    chatgpt-popup.tsx - Floating ChatGPT popup button (calculator pages only)
-    theme-provider   - Dark mode (always dark)
-    theme-toggle
-  lib/engineering/   - Engineering calculation modules
-    constants.ts     - Physical constants, PIPE_SPECS (216 entries, full ASME B36.10M/B36.19M schedules), COMMON_GASES (48 components with MW/γ/Tc/Pc/ω by category), common liquids, fitting K values
-    unitConversion.ts - SI/Field unit conversion (pressure, head, power, flow, etc.)
-    unitToggle.ts    - convertFormValues helper for in-place unit conversion on toggle
-    validation.ts    - Zod schemas for calc inputs
-    gasSizing.ts     - Gas line sizing (Darcy-Weisbach)
-    liquidSizing.ts  - Liquid line sizing
-    multiphase.ts    - Multiphase screening (API RP 14E)
-    gasMixing.ts     - Gas mixture MW, SG, pseudocritical properties, 13 preset O&G compositions
-    gasVolume.ts     - Standard/actual volume conversion
-    pumpSizing.ts    - Centrifugal pump sizing (TDH, power, NPSH)
-    restrictionOrifice.ts - Restriction orifice sizing (ISO 5167, liquid & gas, 5-tab wizard engine: bisection solver, choked-flow detection, cavitation/flashing checks, β correction, calc traces)
-    controlValve.ts  - Control valve Cv sizing (IEC 60534/ISA S75, 7-tab wizard engine: multi-point min/normal/max, liquid/gas/steam, valve selection, cavitation/flashing/noise risk)
-    separatorSizing.ts - Separator/KO drum sizing (Souders-Brown, 7-tab wizard engine: multi-case operating points, horizontal iterative solver, holdup/surge/retention, KO drum & 3-phase preliminary, geometry assembly, engineering flags, calc traces)
-    heatExchanger.ts - Heat exchanger sizing (LMTD/Kern, 7-tab wizard engine: multi-case, energy balance modes, F-correction, U/fouling modes, engineering flags, calc traces)
-    prdSizing.ts     - PRD/Flare relief device sizing (API 521/520/526, 9-tab wizard engine)
-    psvSizing.ts     - (Legacy) PSV sizing screening — replaced by prdSizing.ts
-    thermalRelief.ts - Thermal expansion relief screening (API 521, API 526 orifice selection)
-    compressorSizing.ts - Compressor sizing (polytropic/isentropic, multi-stage, API 617/618)
-    piping/              - Piping components module
-      schemas.ts         - Zod schemas for all 7 lookup categories (pipe, flanges, fittings, gaskets, valves, line-blanks, olets)
-      datasetManager.ts  - IndexedDB persistence, CSV/JSON import, validation pipeline
-      flexibility.ts     - Pipe flexibility screening (guided cantilever, ASME B31.3)
-      safeSpans.ts       - Safe span screening (stress + deflection criteria)
-  components/piping/     - Piping module shared UI components
-    svg-drawings.tsx     - SVG technical drawings (pipe section, flange, elbow, tee, reducer, gasket, valve, line blank, olet)
-    dataset-import-wizard.tsx - CSV/JSON import wizard (upload → validate → preview → save)
-    dataset-status.tsx   - Dataset loaded/not-loaded status bar
-    dimension-table.tsx  - Filterable dimension lookup table
-  pages/
-    home.tsx         - Single-page portfolio (Hero, About, Experience, Projects, Skills, Contact)
-    calculators/     - 13 calculator pages + piping components module
-      gas-line-sizing.tsx
-      liquid-line-sizing.tsx
-      multiphase-line.tsx
-      gas-mixing.tsx
-      gas-volume.tsx
-      pump-sizing.tsx
-      restriction-orifice.tsx  - RO sizing calculator (5-tab wizard: Project → Service → Sizing → Results → Recommendations)
-      control-valve.tsx
-      separator.tsx        - Separator/KO drum calculator (7-tab wizard: Project → Cases → Design → Gas Sizing → Holdup → Geometry → Results)
-      heat-exchanger.tsx   - Heat exchanger sizing calculator (7-tab wizard: Project → Streams → Config → LMTD → U & Area → Geometry → Results)
-      psv-sizing.tsx   - Now: PRD/Flare Relief Calculator (9-tab wizard)
-      thermal-relief.tsx
-      compressor.tsx
-      piping-components/   - Piping Components module (9 categories)
-        index.tsx          - Hub page with category cards
-        pipe.tsx           - Pipe dimensions lookup (ASME B36.10M/B36.19M)
-        flanges.tsx        - Flange dimensions lookup (ASME B16.5/B16.47)
-        fittings.tsx       - Fitting dimensions lookup (ASME B16.9/B16.11)
-        gaskets.tsx        - Gasket dimensions lookup (ASME B16.20/B16.21)
-        valves.tsx         - Valve dimensions lookup (ASME B16.10/API 600)
-        line-blanks.tsx    - Line blank dimensions lookup (ASME B16.48)
-        olets.tsx          - Olet dimensions lookup (MSS SP-97)
-        pipe-flexibility.tsx - Pipe flexibility screening calculator
-        safe-spans.tsx     - Safe span screening calculator
-```
-
-## Running
-- `npm run dev` starts both Express backend and Vite frontend
-- Frontend binds to port 5000
-
-## Key Decisions
-- No database: All content is hardcoded (portfolio) or computed client-side (calculators)
-- Engineering calculations separated from UI in dedicated library modules
-- Dark mode only (dark navy theme)
-- Unit system toggle (SI / Field units) on every calculator
-- Unit toggle converts input values in-place when switching between SI and Field
-- NPS pipe size selector with auto-fill of OD/WT/ID dimensions, manual override supported
-- Single-page scrolling portfolio with section anchors (#home, #about, etc.)
-- Calculator pages on separate routes (/calculators/*)
-- Navbar dropdown categorizes 13 calculators by discipline: Hydraulics, Fluid Properties, Equipment, Relief
-- All calculators built per industry standards with documented assumptions and calculation traces
-- All engine modules include comprehensive equation references (API, ISO, IEC, TEMA standards)
-- Feedback section on every calculator page (FormSubmit.co to mancy.hazem@gmail.com)
-- FeedbackSection component at `client/src/components/engineering/feedback-section.tsx`
-- Gas volume conversion: standard units (Nm3/h, Sm3/h, SCFM, MMSCFD) have disabled P/T/Z fields (fixed reference conditions)
-- PRD Calculator: 9-tab wizard (Project → Equipment → Scenarios → Governing → Device → Sizing → Orifice → Piping → Results)
-  - Engine module: prdSizing.ts with gas/vapor, steam, liquid sizing, API 526 orifice selection, inlet/outlet piping checks
-  - Supports API 521 scenario screening (blocked outlet, fire, CW failure, tube rupture, thermal expansion, etc.)
-  - Device type recommendation based on backpressure and service conditions
-  - Replaced simpler PSV sizing calculator (route path preserved at /calculators/psv-sizing)
-- Restriction Orifice Calculator: 5-tab wizard (Project → Service → Sizing → Results → Recommendations)
-  - Engine module: restrictionOrifice.ts with bisection solver, β⁴ correction, calc traces
-  - Liquid: W = Cd·A·√(2·ρ·ΔP/(1-β⁴)), cavitation/flashing checks using Pv, Reynolds number
-  - Gas: choked detection x_crit = (2/(k+1))^(k/(k-1)), subcritical with Y expansion factor, choked with f(k) critical flow function
-  - Sizing modes: "Size for flow" (solver finds d) and "Predict ΔP" (given d, compute flow)
-  - Engineering flags: CHOKED_FLOW, CAVITATION_RISK, FLASHING_LIKELY, HIGH_DP_FRACTION, BETA_OUT_OF_RANGE, etc.
-  - Rule-based recommendations engine + next-steps checklist
-  - Legacy calculateROLiquid/calculateROGas interfaces preserved for backward compatibility
-- Separator / KO Drum Calculator: 7-tab wizard (Project → Cases → Design → Gas Sizing → Holdup → Geometry → Results)
-  - Engine module: separatorSizing.ts with multi-case operating points, Souders-Brown core, horizontal iterative solver
-  - Core: v_s,max = K × √((ρ_l − ρ_g) / ρ_g), A_req = Q_g / v_s,max, D_req = √(4 × A_req / π)
-  - Horizontal: iterative gas-area correction for liquid level fraction with segment area calculation
-  - Separator types: Vertical, Horizontal, KO Drum, 3-Phase (preliminary)
-  - Multi-case: Normal/Maximum/Fire/Upset/Startup/Blowdown — governing case by largest D_req
-  - Holdup: residence time, surge time, slug volume, KO drum drain, 3-phase oil/water retention
-  - Geometry: vessel assembly with configurable allowances (inlet, disengagement, mist, sump, nozzle)
-  - Engineering flags: FOAM_RISK, SLUGGING_RISK, SOLIDS_SAND, HYDRATE_WAX, HIGH_LIQUID_LOAD, etc.
-  - K-value guidance: typical ranges for vertical/horizontal/KO drum with mesh/vane/none
-  - Test cases: Flare KO Drum (2-case) and Horizontal Production Separator (2-case)
-  - Legacy calculateSeparatorSizing interface preserved for backward compatibility
-- Thermal Relief Calculator: 9-tab wizard (Project → Equipment → Heat Source → Fluid → Temperature → Relief Rate → Sizing → Piping → Results)
-  - Engine module: thermalRelief.ts with blocked-in liquid expansion, API 520 liquid sizing, API 526 orifice selection
-  - Heat sources: solar bare/insulated (API 521), process heating, manual heat input
-  - Relief rate: heat input method (API 521) and volume/time method, governing by maximum
-  - TRV sizing: liquid relief equation A = Q / (N₁ × Kd × √(ΔP/G))
-  - API 526 orifice selection: standard designations D through T with effective areas and flange sizes
-  - Piping checks: inlet/outlet pressure drop vs 3% of set pressure
-  - Test case: Lean/Rich MEG Heat Exchanger (solar bare, Water 20°C)
-  - Legacy calculateThermalRelief interface preserved for backward compatibility
-- Control Valve Calculator: 7-tab wizard (Project → Service Data → Valve Type → Sizing → Selection → Risk → Results)
-  - Engine module: controlValve.ts with multi-point Cv sizing (min/normal/max), liquid/gas/steam modes
-  - Valve selection: opening %, rangeability check, valve authority assessment
-  - Risk assessment: cavitation index (σ vs FL²), flashing, choked gas, high noise screening
-  - Viscosity correction for high-viscosity liquids (Re-based FR factor)
-  - Test cases: Cooling Water (liquid) and Natural Gas (gas)
-  - Legacy calculateCVLiquid/calculateCVGas functions preserved for backward compatibility
-
-## User Preferences — Engineering Standards (Triple-Senior Builder)
-These guidelines govern all calculator development:
-
+## User Preferences
 ### Engineering Discipline Rules
 - Always enforce correct workflow: define scenario/basis → compute governing case → sizing/result → checks → recommendations
 - If two-phase/phase uncertainty is likely, flag and block or require explicit user acknowledgement — never silently proceed as single-phase
@@ -192,3 +53,30 @@ Every solver/calc must return a structured trace object containing:
 ### Reporting
 - Include: title block, basis, inputs+units, assumptions, step-by-step calculations, results+pass/fail, warnings/flags/action items
 - Stamp reports with engine version where available
+
+## System Architecture
+The application features a React-based frontend built with TypeScript, Vite, Tailwind CSS, and shadcn/ui for a modern, responsive user interface. The UI/UX adopts a single-page scrolling portfolio design with a dark navy and golden amber theme. Client-side routing is handled by `wouter`. The backend is a minimal Express.js server primarily responsible for serving the frontend.
+
+A core architectural decision is the absence of a database; all portfolio content is hardcoded, and all calculator logic and data processing occur client-side. Engineering calculations are modularized into a dedicated library (`client/src/lib/engineering/`) containing pure functions, ensuring separation of concerns from the UI components.
+
+Key features and implementations include:
+- **Calculator Suite**: 13 discipline-specific calculators covering hydraulics, fluid properties, equipment sizing, and relief systems.
+- **Wizard-style UI**: Complex calculators (e.g., Restriction Orifice, Control Valve, Separator, Heat Exchanger, PRD/Flare Relief) utilize multi-tab wizard interfaces for guided input and calculation flow.
+- **Unit Management**: A robust unit system toggle (SI / Field units) is present on every calculator, with in-place conversion of input values.
+- **Piping Components Module**: Includes lookup tables for pipe dimensions (ASME B36.10M/B36.19M), flanges, fittings, gaskets, valves, line blanks, and olets, along with calculators for pipe flexibility and safe spans. This module uses IndexedDB for data persistence and supports CSV/JSON imports.
+- **Calculation Engines**: Each calculator module (`.ts` file) contains detailed engineering logic based on industry standards (e.g., API, ISO, IEC). Engines provide comprehensive calculation traces, handle validation, and incorporate engineering flags for warnings and recommendations.
+- **NPS Pipe Size Selector**: Auto-fills OD/WT/ID dimensions with manual override capability.
+- **Theming**: A consistent dark navy theme is enforced throughout the application.
+
+## External Dependencies
+- **React**: Frontend UI library.
+- **TypeScript**: Superset of JavaScript for type safety.
+- **Vite**: Frontend build tool.
+- **Tailwind CSS**: Utility-first CSS framework.
+- **shadcn/ui**: Reusable UI components.
+- **Express.js**: Backend web framework.
+- **wouter**: Client-side routing library.
+- **jsPDF & jspdf-autotable**: For generating PDF reports.
+- **xlsx**: For exporting data to Excel format.
+- **Zod**: For schema validation of calculator inputs.
+- **FormSubmit.co**: For handling calculator feedback submissions.
