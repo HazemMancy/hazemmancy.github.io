@@ -45,8 +45,8 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
                 selectedIndex === idx
                   ? "bg-primary/10 border-primary/30"
                   : idx % 2 === 0
-                  ? "hover:bg-muted/20"
-                  : "bg-muted/[0.07] hover:bg-muted/20"
+                  ? "hover:bg-muted/25"
+                  : "bg-muted/[0.09] hover:bg-muted/25"
               }`}
               data-testid={`row-dim-${idx}`}
             >
@@ -59,7 +59,7 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
                     className={`px-3 py-2 tabular-nums whitespace-nowrap ${
                       colIdx === 0
                         ? `sticky left-0 z-[5] font-medium border-r-2 border-border/60 ${
-                            selectedIndex === idx ? "bg-primary/10" : idx % 2 === 0 ? "bg-background" : "bg-background"
+                            selectedIndex === idx ? "bg-primary/10" : idx % 2 === 0 ? "bg-background" : "bg-[hsl(var(--muted)/0.12)]"
                           }`
                         : ""
                     }`}
