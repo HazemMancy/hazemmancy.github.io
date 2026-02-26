@@ -5,7 +5,7 @@ const LABEL_STYLE = { fill: "#d4a04a", fontSize: 9, fontFamily: "monospace", tex
 const OUTLINE_STYLE = { stroke: "#94a3b8", strokeWidth: 1.5, fill: "none" };
 const SECTION_FILL = { stroke: "#94a3b8", strokeWidth: 1.5, fill: "#1e293b" };
 
-function LabelWithBg({ x, y, text, fontSize = 8, textAnchor = "middle" as const, padding = 2 }: { x: number; y: number; text: string; fontSize?: number; textAnchor?: string; padding?: number }) {
+function LabelWithBg({ x, y, text, fontSize = 8, textAnchor = "middle" as const, padding = 3 }: { x: number; y: number; text: string; fontSize?: number; textAnchor?: string; padding?: number }) {
   const charW = fontSize * 0.6;
   const estimatedW = text.length * charW + padding * 2;
   const anchorOffset = textAnchor === "start" ? estimatedW / 2 : textAnchor === "end" ? -estimatedW / 2 : 0;
@@ -13,14 +13,14 @@ function LabelWithBg({ x, y, text, fontSize = 8, textAnchor = "middle" as const,
     <g>
       <rect
         x={x + anchorOffset - estimatedW / 2}
-        y={y - fontSize + 1}
+        y={y - fontSize}
         width={estimatedW}
-        height={fontSize + padding}
+        height={fontSize + padding * 2}
         fill="#0c1222"
-        fillOpacity={0.85}
-        rx={1}
+        fillOpacity={0.92}
+        rx={2}
       />
-      <text x={x} y={y} {...LABEL_STYLE} fontSize={fontSize} textAnchor={textAnchor as "middle" | "start" | "end"}>{text}</text>
+      <text x={x} y={y + 1} {...LABEL_STYLE} fontSize={fontSize} textAnchor={textAnchor as "middle" | "start" | "end"}>{text}</text>
     </g>
   );
 }
@@ -30,28 +30,29 @@ function DimLine({ x1, y1, x2, y2, label, offset = 15, labelOffset = 0 }: { x1: 
   const mx = (x1 + x2) / 2;
   const my = (y1 + y2) / 2;
   const dimLen = isVert ? Math.abs(y2 - y1) : Math.abs(x2 - x1);
-  const fontSize = dimLen < 25 ? 5.5 : dimLen < 40 ? 6.5 : dimLen < 60 ? 7 : 8;
-  const arrowSize = dimLen < 30 ? 2 : 3;
+  const fontSize = dimLen < 20 ? 5 : dimLen < 30 ? 6 : dimLen < 50 ? 7 : 8;
+  const arrowSize = dimLen < 20 ? 1.5 : dimLen < 30 ? 2 : 3;
+  const extLen = dimLen < 30 ? 3 : 4;
 
   return (
     <g>
       {isVert ? (
         <>
-          <line x1={x1 - 4} y1={y1} x2={x1 + offset} y2={y1} {...DIM_STYLE} />
-          <line x1={x2 - 4} y1={y2} x2={x2 + offset} y2={y2} {...DIM_STYLE} />
+          <line x1={x1 - extLen} y1={y1} x2={x1 + offset} y2={y1} {...DIM_STYLE} />
+          <line x1={x2 - extLen} y1={y2} x2={x2 + offset} y2={y2} {...DIM_STYLE} />
           <line x1={x1 + offset - 3} y1={y1} x2={x2 + offset - 3} y2={y2} {...DIM_STYLE} />
           <polygon points={`${x1 + offset - 3},${y1 + arrowSize} ${x1 + offset - 3 - arrowSize / 2},${y1} ${x1 + offset - 3 + arrowSize / 2},${y1}`} fill="#d4a04a" />
           <polygon points={`${x2 + offset - 3},${y2 - arrowSize} ${x2 + offset - 3 - arrowSize / 2},${y2} ${x2 + offset - 3 + arrowSize / 2},${y2}`} fill="#d4a04a" />
-          <LabelWithBg x={mx + offset + 8 + labelOffset} y={my + 3} text={label} fontSize={fontSize} textAnchor="start" />
+          <LabelWithBg x={mx + offset + 10 + labelOffset} y={my + 3} text={label} fontSize={fontSize} textAnchor="start" />
         </>
       ) : (
         <>
-          <line x1={x1} y1={y1 - 4} x2={x1} y2={y1 + offset} {...DIM_STYLE} />
-          <line x1={x2} y1={y2 - 4} x2={x2} y2={y2 + offset} {...DIM_STYLE} />
+          <line x1={x1} y1={y1 - extLen} x2={x1} y2={y1 + offset} {...DIM_STYLE} />
+          <line x1={x2} y1={y2 - extLen} x2={x2} y2={y2 + offset} {...DIM_STYLE} />
           <line x1={x1} y1={y1 + offset - 3} x2={x2} y2={y2 + offset - 3} {...DIM_STYLE} />
           <polygon points={`${x1 + arrowSize},${y1 + offset - 3} ${x1},${y1 + offset - 3 - arrowSize / 2} ${x1},${y1 + offset - 3 + arrowSize / 2}`} fill="#d4a04a" />
           <polygon points={`${x2 - arrowSize},${y2 + offset - 3} ${x2},${y2 + offset - 3 - arrowSize / 2} ${x2},${y2 + offset - 3 + arrowSize / 2}`} fill="#d4a04a" />
-          <LabelWithBg x={mx} y={my + offset + 8 + labelOffset} text={label} fontSize={fontSize} />
+          <LabelWithBg x={mx} y={my + offset + 10 + labelOffset} text={label} fontSize={fontSize} />
         </>
       )}
     </g>
@@ -59,51 +60,49 @@ function DimLine({ x1, y1, x2, y2, label, offset = 15, labelOffset = 0 }: { x1: 
 }
 
 export function PipeSectionSVG({ row }: { row: PipeRow }) {
-  const w = 300; const h = 240; const cx = w / 2; const cy = h / 2;
+  const w = 300; const h = 260; const cx = w / 2; const cy = h / 2 - 5;
   const maxR = 65;
   const odR = maxR;
   const idR = row.id_mm ? (row.id_mm / row.od_mm) * maxR : ((row.od_mm - 2 * row.wt_mm) / row.od_mm) * maxR;
   const wallThick = odR - idR;
   const isSmall = wallThick < 8;
 
-  const odLabelY = cy + odR + 30;
-  const idLabelY = isSmall ? cy - odR - 16 : cy + odR + 45;
-
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[300px]">
       <circle cx={cx} cy={cy} r={odR} {...SECTION_FILL} />
       <circle cx={cx} cy={cy} r={idR} stroke="#94a3b8" strokeWidth={1} fill="#0c1222" />
-      <DimLine x1={cx - odR} y1={cy} x2={cx + odR} y2={cy} label={`OD ${row.od_mm.toFixed(1)}`} offset={odR + 25} />
+
+      <DimLine x1={cx - odR} y1={cy} x2={cx + odR} y2={cy} label={`OD ${row.od_mm.toFixed(1)}`} offset={odR + 28} />
 
       {isSmall ? (
         <>
-          <line x1={cx - idR} y1={cy - 6} x2={cx - idR} y2={cy - odR - 12} {...DIM_STYLE} />
-          <line x1={cx + idR} y1={cy - 6} x2={cx + idR} y2={cy - odR - 12} {...DIM_STYLE} />
-          <line x1={cx - idR} y1={cy - odR - 9} x2={cx + idR} y2={cy - odR - 9} {...DIM_STYLE} />
-          <polygon points={`${cx - idR + 2},${cy - odR - 9} ${cx - idR},${cy - odR - 9 - 1.5} ${cx - idR},${cy - odR - 9 + 1.5}`} fill="#d4a04a" />
-          <polygon points={`${cx + idR - 2},${cy - odR - 9} ${cx + idR},${cy - odR - 9 - 1.5} ${cx + idR},${cy - odR - 9 + 1.5}`} fill="#d4a04a" />
-          <LabelWithBg x={cx} y={cy - odR - 16} text={`ID ${(row.id_mm ?? row.od_mm - 2 * row.wt_mm).toFixed(1)}`} fontSize={7} />
+          <line x1={cx - idR} y1={cy - 6} x2={cx - idR} y2={cy - odR - 18} {...DIM_STYLE} />
+          <line x1={cx + idR} y1={cy - 6} x2={cx + idR} y2={cy - odR - 18} {...DIM_STYLE} />
+          <line x1={cx - idR} y1={cy - odR - 14} x2={cx + idR} y2={cy - odR - 14} {...DIM_STYLE} />
+          <polygon points={`${cx - idR + 2},${cy - odR - 14} ${cx - idR},${cy - odR - 14 - 1.5} ${cx - idR},${cy - odR - 14 + 1.5}`} fill="#d4a04a" />
+          <polygon points={`${cx + idR - 2},${cy - odR - 14} ${cx + idR},${cy - odR - 14 - 1.5} ${cx + idR},${cy - odR - 14 + 1.5}`} fill="#d4a04a" />
+          <LabelWithBg x={cx} y={cy - odR - 22} text={`ID ${(row.id_mm ?? row.od_mm - 2 * row.wt_mm).toFixed(1)}`} fontSize={7} />
         </>
       ) : (
-        <DimLine x1={cx - idR} y1={cy} x2={cx + idR} y2={cy} label={`ID ${(row.id_mm ?? row.od_mm - 2 * row.wt_mm).toFixed(1)}`} offset={odR + 40} />
+        <DimLine x1={cx - idR} y1={cy} x2={cx + idR} y2={cy} label={`ID ${(row.id_mm ?? row.od_mm - 2 * row.wt_mm).toFixed(1)}`} offset={odR + 44} />
       )}
 
       {wallThick >= 5 && (
         <>
-          <line x1={cx + idR} y1={cy - 8} x2={cx + odR} y2={cy - 8} stroke="#d4a04a" strokeWidth={0.5} />
-          <LabelWithBg x={cx + (idR + odR) / 2} y={cy - 13} text={`t=${row.wt_mm.toFixed(1)}`} fontSize={isSmall ? 6 : 7} />
+          <line x1={cx + idR + 1} y1={cy - 10} x2={cx + odR - 1} y2={cy - 10} stroke="#d4a04a" strokeWidth={0.5} />
+          <LabelWithBg x={cx + (idR + odR) / 2} y={cy - 16} text={`t=${row.wt_mm.toFixed(1)}`} fontSize={isSmall ? 6 : 7} />
         </>
       )}
       {wallThick < 5 && (
-        <LabelWithBg x={cx} y={h - 28} text={`t=${row.wt_mm.toFixed(1)} mm`} fontSize={7} />
+        <LabelWithBg x={cx} y={h - 32} text={`t=${row.wt_mm.toFixed(1)} mm`} fontSize={7} />
       )}
-      <LabelWithBg x={cx} y={h - 8} text={`NPS ${row.nps}" ${row.schedule}`} fontSize={8} />
+      <LabelWithBg x={cx} y={h - 10} text={`NPS ${row.nps}" ${row.schedule}`} fontSize={8} />
     </svg>
   );
 }
 
 export function FlangeSectionSVG({ row }: { row: FlangeRow }) {
-  const w = 340; const h = 260;
+  const w = 340; const h = 280;
   const cx = w / 2; const cy = h / 2;
   const flangeH = (row.thickness_mm ?? 30) * 1.2;
   const flangeW = Math.min((row.od_mm / 2) * 0.5, 100);
@@ -123,8 +122,8 @@ export function FlangeSectionSVG({ row }: { row: FlangeRow }) {
           ))}
         </>
       )}
-      <DimLine x1={cx - flangeW} y1={cy + flangeH / 2 + 10} x2={cx + flangeW} y2={cy + flangeH / 2 + 10} label={`OD ${row.od_mm}`} offset={20} />
-      {row.thickness_mm && <DimLine x1={cx + flangeW + 10} y1={cy - flangeH / 2} x2={cx + flangeW + 10} y2={cy + flangeH / 2} label={`t=${row.thickness_mm}`} offset={25} />}
+      <DimLine x1={cx - flangeW} y1={cy + flangeH / 2 + 12} x2={cx + flangeW} y2={cy + flangeH / 2 + 12} label={`OD ${row.od_mm}`} offset={22} />
+      {row.thickness_mm && <DimLine x1={cx + flangeW + 12} y1={cy - flangeH / 2} x2={cx + flangeW + 12} y2={cy + flangeH / 2} label={`t=${row.thickness_mm}`} offset={28} />}
       <LabelWithBg x={cx} y={h - 10} text={`${row.type} Flange NPS ${row.nps}" #${row.class_rating}`} fontSize={8} />
     </svg>
   );
@@ -199,15 +198,15 @@ export function ReducerSVG({ row }: { row: FittingRow }) {
 }
 
 export function GasketSVG({ row }: { row: GasketRow }) {
-  const w = 260; const h = 260; const cx = w / 2; const cy = h / 2;
-  const maxR = 75;
+  const w = 280; const h = 280; const cx = w / 2; const cy = h / 2;
+  const maxR = 80;
   const odR = maxR;
   const idR = (row.id_mm / row.od_mm) * maxR;
   const ringGap = odR - idR;
   const isSmall = ringGap < 15;
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[260px]">
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[280px]">
       <circle cx={cx} cy={cy} r={odR} fill="#1e293b" stroke="#94a3b8" strokeWidth={1.5} />
       <circle cx={cx} cy={cy} r={idR} fill="#0c1222" stroke="#94a3b8" strokeWidth={1} />
       {row.type === "SWG" && (
@@ -217,27 +216,27 @@ export function GasketSVG({ row }: { row: GasketRow }) {
           ))}
         </>
       )}
-      <DimLine x1={cx - odR} y1={cy} x2={cx + odR} y2={cy} label={`OD ${row.od_mm}`} offset={odR + 25} />
+      <DimLine x1={cx - odR} y1={cy} x2={cx + odR} y2={cy} label={`OD ${row.od_mm}`} offset={odR + 28} />
       {isSmall ? (
         <>
-          <line x1={cx - idR} y1={cy - 6} x2={cx - idR} y2={cy - odR - 12} {...DIM_STYLE} />
-          <line x1={cx + idR} y1={cy - 6} x2={cx + idR} y2={cy - odR - 12} {...DIM_STYLE} />
-          <line x1={cx - idR} y1={cy - odR - 9} x2={cx + idR} y2={cy - odR - 9} {...DIM_STYLE} />
-          <polygon points={`${cx - idR + 2},${cy - odR - 9} ${cx - idR},${cy - odR - 9 - 1.5} ${cx - idR},${cy - odR - 9 + 1.5}`} fill="#d4a04a" />
-          <polygon points={`${cx + idR - 2},${cy - odR - 9} ${cx + idR},${cy - odR - 9 - 1.5} ${cx + idR},${cy - odR - 9 + 1.5}`} fill="#d4a04a" />
-          <LabelWithBg x={cx} y={cy - odR - 16} text={`ID ${row.id_mm}`} fontSize={7} />
+          <line x1={cx - idR} y1={cy - 6} x2={cx - idR} y2={cy - odR - 18} {...DIM_STYLE} />
+          <line x1={cx + idR} y1={cy - 6} x2={cx + idR} y2={cy - odR - 18} {...DIM_STYLE} />
+          <line x1={cx - idR} y1={cy - odR - 14} x2={cx + idR} y2={cy - odR - 14} {...DIM_STYLE} />
+          <polygon points={`${cx - idR + 2},${cy - odR - 14} ${cx - idR},${cy - odR - 14 - 1.5} ${cx - idR},${cy - odR - 14 + 1.5}`} fill="#d4a04a" />
+          <polygon points={`${cx + idR - 2},${cy - odR - 14} ${cx + idR},${cy - odR - 14 - 1.5} ${cx + idR},${cy - odR - 14 + 1.5}`} fill="#d4a04a" />
+          <LabelWithBg x={cx} y={cy - odR - 22} text={`ID ${row.id_mm}`} fontSize={7} />
         </>
       ) : (
-        <DimLine x1={cx - idR} y1={cy} x2={cx + idR} y2={cy} label={`ID ${row.id_mm}`} offset={-(odR + 12)} labelOffset={isSmall ? 4 : 0} />
+        <DimLine x1={cx - idR} y1={cy} x2={cx + idR} y2={cy} label={`ID ${row.id_mm}`} offset={-(odR + 16)} labelOffset={isSmall ? 4 : 0} />
       )}
-      <LabelWithBg x={cx} y={h - 8} text={`${row.type} Gasket NPS ${row.nps}" #${row.class_rating}`} fontSize={8} />
+      <LabelWithBg x={cx} y={h - 10} text={`${row.type} Gasket NPS ${row.nps}" #${row.class_rating}`} fontSize={8} />
     </svg>
   );
 }
 
 export function ValveEnvelopeSVG({ row }: { row: ValveRow }) {
-  const w = 260; const h = 200;
-  const cx = w / 2; const cy = 120;
+  const w = 260; const h = 220;
+  const cx = w / 2; const cy = 130;
   const bodyW = 60; const bodyH = 50;
   const stemH = row.height_mm ? 40 : 30;
   return (
@@ -250,7 +249,7 @@ export function ValveEnvelopeSVG({ row }: { row: ValveRow }) {
       {row.type === "GLOBE" && <circle cx={cx} cy={cy - bodyH / 2 - stemH - 10} r={10} {...OUTLINE_STYLE} />}
       {row.type === "BALL" && <circle cx={cx} cy={cy} r={12} fill="none" stroke="#64748b" strokeWidth={0.8} />}
       {row.face_to_face_mm && (
-        <DimLine x1={cx - bodyW / 2 - 30} y1={cy + bodyH / 2 + 10} x2={cx + bodyW / 2 + 30} y2={cy + bodyH / 2 + 10} label={`F-F ${row.face_to_face_mm}`} offset={18} />
+        <DimLine x1={cx - bodyW / 2 - 30} y1={cy + bodyH / 2 + 12} x2={cx + bodyW / 2 + 30} y2={cy + bodyH / 2 + 12} label={`F-F ${row.face_to_face_mm}`} offset={20} />
       )}
       <LabelWithBg x={cx} y={18} text={`${row.type} Valve NPS ${row.nps}" #${row.class_rating}`} fontSize={8} />
     </svg>
@@ -258,7 +257,7 @@ export function ValveEnvelopeSVG({ row }: { row: ValveRow }) {
 }
 
 export function LineBlankSVG({ row }: { row: LineBlankRow }) {
-  const w = 300; const h = 180;
+  const w = 300; const h = 190;
   const cx = w / 2; const cy = h / 2;
   const diskR = 40;
   return (
@@ -290,18 +289,18 @@ export function LineBlankSVG({ row }: { row: LineBlankRow }) {
 }
 
 export function OletSVG({ row }: { row: OletRow }) {
-  const w = 240; const h = 200;
+  const w = 240; const h = 210;
   const cx = w / 2;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[260px]">
-      <ellipse cx={cx} cy={160} rx={80} ry={20} {...OUTLINE_STYLE} strokeWidth={2} />
-      <line x1={cx - 15} y1={160} x2={cx - 15} y2={60} {...OUTLINE_STYLE} strokeWidth={2} />
-      <line x1={cx + 15} y1={160} x2={cx + 15} y2={60} {...OUTLINE_STYLE} strokeWidth={2} />
+      <ellipse cx={cx} cy={165} rx={80} ry={20} {...OUTLINE_STYLE} strokeWidth={2} />
+      <line x1={cx - 15} y1={165} x2={cx - 15} y2={60} {...OUTLINE_STYLE} strokeWidth={2} />
+      <line x1={cx + 15} y1={165} x2={cx + 15} y2={60} {...OUTLINE_STYLE} strokeWidth={2} />
       <line x1={cx - 15} y1={60} x2={cx + 15} y2={60} {...OUTLINE_STYLE} />
-      <path d={`M${cx - 25},${155} Q${cx - 25},${140} ${cx - 15},${130}`} fill="none" stroke="#94a3b8" strokeWidth={1.5} />
-      <path d={`M${cx + 25},${155} Q${cx + 25},${140} ${cx + 15},${130}`} fill="none" stroke="#94a3b8" strokeWidth={1.5} />
+      <path d={`M${cx - 25},${160} Q${cx - 25},${145} ${cx - 15},${135}`} fill="none" stroke="#94a3b8" strokeWidth={1.5} />
+      <path d={`M${cx + 25},${160} Q${cx + 25},${145} ${cx + 15},${135}`} fill="none" stroke="#94a3b8" strokeWidth={1.5} />
       {row.height_mm && (
-        <DimLine x1={cx + 22} y1={60} x2={cx + 22} y2={155} label={`H=${row.height_mm}`} offset={25} />
+        <DimLine x1={cx + 22} y1={60} x2={cx + 22} y2={160} label={`H=${row.height_mm}`} offset={28} />
       )}
       <LabelWithBg x={cx} y={18} text={`${row.type} ${row.run_nps}"x${row.branch_nps}"`} fontSize={8} />
     </svg>

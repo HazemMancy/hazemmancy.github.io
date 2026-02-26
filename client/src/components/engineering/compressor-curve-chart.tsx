@@ -113,7 +113,7 @@ function CustomLegend({ payload, legendNames }: any) {
   if (!payload) return null;
   const filtered = payload.filter((entry: any) => entry.dataKey !== "surgeRegion");
   return (
-    <div style={{ display: "flex", justifyContent: "center", gap: "24px", paddingTop: "12px" }}>
+    <div style={{ display: "flex", justifyContent: "center", gap: "24px", paddingTop: "12px", flexWrap: "wrap" }}>
       {filtered.map((entry: any) => {
         const isDashed = entry.dataKey === "efficiency";
         return (

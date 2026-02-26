@@ -543,6 +543,293 @@ export function calculateMultiStreamMixing(
   };
 }
 
+// ─── Operating Conditions Calculations ────────────────────────────────
+/**
+ * Calculate mixture thermodynamic properties at specified T and P.
+ *
+ * Correlations used:
+ *   Z  — Pitzer correlation: Z = Z⁰ + ω·Z¹ (Standing-Katz based)
+ *        Z⁰, Z¹ from Pitzer et al. (1955) / Lee-Kesler (1975) simplified
+ *   ρ  — ρ = P·MW / (Z·R·T)
+ *   μ  — Lee-Gonzalez-Eakin (1966): μ = K·exp(X·ρ^Y) [cP]
+ *   Cp — Correlation: Cp_ideal + departure via reduced properties
+ *   a  — Speed of sound: a = √(γ·Z·R·T/MW) [m/s]
+ *
+ * References:
+ *   Standing & Katz (1942), Pitzer (1955), Lee-Kesler (1975),
+ *   Lee-Gonzalez-Eakin (1966), GPSA Engineering Data Book
+ */
+
+export interface OperatingConditions {
+  temperature: number;
+  temperatureUnit: "K" | "°C" | "°F" | "°R";
+  pressure: number;
+  pressureUnit: "bar" | "bara" | "barg" | "psia" | "psig" | "kPa" | "MPa" | "atm";
+  atmosphericPressure: number;
+}
+
+export interface ConditionsResult {
+  T_K: number;
+  P_bar: number;
+  Tr: number;
+  Pr: number;
+  Z: number;
+  density_kgm3: number;
+  specificVolume_m3kg: number;
+  molarVolume_m3kmol: number;
+  viscosity_cP: number;
+  Cp_kJkgK: number | null;
+  Cv_kJkgK: number | null;
+  gammaActual: number | null;
+  speedOfSound_ms: number | null;
+  JT_Kbar: number | null;
+  idealDensity_kgm3: number;
+  calcTrace: CondCalcStep[];
+  flags: string[];
+  warnings: string[];
+}
+
+export interface CondCalcStep {
+  label: string;
+  equation: string;
+  value: number;
+  unit: string;
+}
+
+function convertTemperatureToK(T: number, unit: string): number {
+  switch (unit) {
+    case "K": return T;
+    case "°C": return T + 273.15;
+    case "°F": return (T - 32) * 5 / 9 + 273.15;
+    case "°R": return T * 5 / 9;
+    default: return T;
+  }
+}
+
+function convertPressureToBar(P: number, unit: string, Patm: number): number {
+  switch (unit) {
+    case "bar":
+    case "bara": return P;
+    case "barg": return P + Patm;
+    case "psia": return P * 0.0689476;
+    case "psig": return (P + Patm / 0.0689476) * 0.0689476;
+    case "kPa": return P / 100;
+    case "MPa": return P * 10;
+    case "atm": return P * 1.01325;
+    default: return P;
+  }
+}
+
+/**
+ * Pitzer Z-factor correlation (simplified Lee-Kesler form).
+ *
+ * Z⁰ = 1 + B⁰·Pr/Tr + C⁰·(Pr/Tr)²
+ * B⁰ = 0.083 - 0.422/Tr^1.6
+ * C⁰ = 0.139 - 0.172/Tr^4.2
+ *
+ * Z¹ = B¹·Pr/Tr + C¹·(Pr/Tr)²
+ * B¹ = 0.139 - 0.172/Tr^4.2
+ * C¹ = 0.008 + 0.043/Tr^2
+ *
+ * Z = Z⁰ + ω·Z¹
+ *
+ * Valid for Pr < ~10, Tr > 0.5. For engineering screening, this is adequate.
+ * For high-accuracy work, use Peng-Robinson or SRK EOS.
+ */
+function pitzerZ(Tr: number, Pr: number, omega: number): number {
+  const B0 = 0.083 - 0.422 / Math.pow(Tr, 1.6);
+  const C0 = 0.139 - 0.172 / Math.pow(Tr, 4.2);
+  const Z0 = 1 + B0 * Pr / Tr + C0 * Math.pow(Pr / Tr, 2);
+
+  const B1 = 0.139 - 0.172 / Math.pow(Tr, 4.2);
+  const C1 = 0.008 + 0.043 / Math.pow(Tr, 2);
+  const Z1 = B1 * Pr / Tr + C1 * Math.pow(Pr / Tr, 2);
+
+  let Z = Z0 + omega * Z1;
+  if (Z < 0.05) Z = 0.05;
+  if (Z > 5.0) Z = 5.0;
+  return Z;
+}
+
+/**
+ * Lee-Gonzalez-Eakin gas viscosity correlation (1966).
+ *
+ * μ = K × exp(X × ρ^Y) × 1e-4 [cP]
+ * K = (9.379 + 0.01607·MW)·T^1.5 / (209.2 + 19.26·MW + T)
+ * X = 3.448 + 986.4/T + 0.01009·MW
+ * Y = 2.447 - 0.2224·X
+ * ρ in g/cm³
+ *
+ * Reference: Lee, A.L., Gonzalez, M.H., Eakin, B.E. (1966)
+ *            "The Viscosity of Natural Gases"
+ *            Journal of Petroleum Technology, SPE-1340-PA
+ */
+function lgeViscosity(T_R: number, density_gcm3: number, MW: number): number {
+  const K = (9.379 + 0.01607 * MW) * Math.pow(T_R, 1.5) / (209.2 + 19.26 * MW + T_R);
+  const X = 3.448 + 986.4 / T_R + 0.01009 * MW;
+  const Y = 2.447 - 0.2224 * X;
+  return K * Math.exp(X * Math.pow(density_gcm3, Y)) * 1e-4;
+}
+
+export function calculateMixtureAtConditions(
+  mixResult: GasMixingResult,
+  conditions: OperatingConditions,
+): ConditionsResult {
+  const flags: string[] = [];
+  const warnings: string[] = [];
+  const calcTrace: CondCalcStep[] = [];
+
+  const T_K = convertTemperatureToK(conditions.temperature, conditions.temperatureUnit);
+  const P_bar = convertPressureToBar(conditions.pressure, conditions.pressureUnit, conditions.atmosphericPressure);
+
+  if (T_K <= 0) throw new Error("Absolute temperature must be positive");
+  if (P_bar <= 0) throw new Error("Absolute pressure must be positive");
+
+  calcTrace.push({ label: "Temperature", equation: `${conditions.temperature} ${conditions.temperatureUnit}`, value: T_K, unit: "K" });
+  calcTrace.push({ label: "Pressure", equation: `${conditions.pressure} ${conditions.pressureUnit}`, value: P_bar, unit: "bar (abs)" });
+
+  const MW = mixResult.mixtureMW;
+  const TcPc = mixResult.TcPc;
+  const PcPc = mixResult.PcPc;
+  const omega = mixResult.omegaMix;
+  const gammaMix = mixResult.gammaMix;
+
+  let Tr = 0, Pr = 0, Z = 1;
+  let hasCritical = TcPc != null && PcPc != null && TcPc > 0 && PcPc > 0;
+
+  if (hasCritical) {
+    Tr = T_K / TcPc!;
+    Pr = P_bar / PcPc!;
+    calcTrace.push({ label: "Reduced Temperature (Tr)", equation: `${T_K.toFixed(2)} / ${TcPc!.toFixed(2)}`, value: Tr, unit: "—" });
+    calcTrace.push({ label: "Reduced Pressure (Pr)", equation: `${P_bar.toFixed(2)} / ${PcPc!.toFixed(2)}`, value: Pr, unit: "—" });
+
+    const w = omega ?? 0;
+    Z = pitzerZ(Tr, Pr, w);
+    calcTrace.push({
+      label: "Compressibility Factor (Z)",
+      equation: `Z⁰ + ω·Z¹ (Pitzer, ω=${w.toFixed(4)})`,
+      value: Z,
+      unit: "—",
+    });
+
+    if (Tr < 1.0) {
+      flags.push("NEAR_CRITICAL");
+      warnings.push(`Tr = ${Tr.toFixed(3)} < 1.0 — below pseudocritical temperature. Possible condensation. Pitzer correlation accuracy degrades significantly.`);
+    }
+    if (Pr > 10) {
+      flags.push("HIGH_PRESSURE");
+      warnings.push(`Pr = ${Pr.toFixed(2)} > 10 — very high reduced pressure. Use Peng-Robinson or SRK EOS for accurate Z.`);
+    }
+    if (Tr < 0.5 || Pr > 15) {
+      warnings.push("Operating conditions outside Pitzer correlation validity range. Results are approximate.");
+    }
+  } else {
+    flags.push("NO_CRITICAL_DATA");
+    warnings.push("Pseudocritical properties not available — assuming Z = 1.0 (ideal gas). Provide Tc and Pc for all components for real-gas calculations.");
+    Z = 1.0;
+    Tr = 0;
+    Pr = 0;
+  }
+
+  // R in consistent units: 8.31446 kJ/(kmol·K) = 0.0831446 (L·bar)/(mol·K)
+  // For ρ: P [Pa] = P_bar × 1e5, R_J = 8314.46 J/(kmol·K)
+  const R_J = 8314.46; // J/(kmol·K)
+  const P_Pa = P_bar * 1e5;
+
+  const density_kgm3 = (P_Pa * MW) / (Z * R_J * T_K);
+  const idealDensity = (P_Pa * MW) / (R_J * T_K);
+  const specificVolume = 1 / density_kgm3;
+  const molarVolume = (Z * R_J * T_K) / P_Pa; // m³/kmol
+
+  calcTrace.push({ label: "Gas Density", equation: `P·MW / (Z·R·T) = ${P_bar.toFixed(2)}×1e5 × ${MW.toFixed(3)} / (${Z.toFixed(4)} × 8314.46 × ${T_K.toFixed(2)})`, value: density_kgm3, unit: "kg/m³" });
+  calcTrace.push({ label: "Ideal Gas Density", equation: `P·MW / (R·T)`, value: idealDensity, unit: "kg/m³" });
+  calcTrace.push({ label: "Specific Volume", equation: `1/ρ`, value: specificVolume, unit: "m³/kg" });
+  calcTrace.push({ label: "Molar Volume", equation: `Z·R·T / P`, value: molarVolume, unit: "m³/kmol" });
+
+  // Viscosity (Lee-Gonzalez-Eakin) — uses T in °R and ρ in g/cm³
+  const T_R = T_K * 1.8; // K to °R
+  const density_gcm3 = density_kgm3 / 1000;
+  let viscosity_cP = lgeViscosity(T_R, density_gcm3, MW);
+
+  if (!isFinite(viscosity_cP) || viscosity_cP <= 0 || viscosity_cP > 1) {
+    viscosity_cP = 0.01;
+    warnings.push("Viscosity calculation returned unusual value — defaulted to 0.01 cP. Check conditions.");
+  }
+
+  calcTrace.push({ label: "Dynamic Viscosity", equation: `Lee-Gonzalez-Eakin (T=${T_R.toFixed(1)} °R, ρ=${density_gcm3.toExponential(4)} g/cm³)`, value: viscosity_cP, unit: "cP" });
+
+  // Cp estimation (ideal + departure for moderate pressures)
+  // Cp_ideal ≈ γ/(γ-1) × R/MW [kJ/(kg·K)] for the mixture
+  let Cp_kJkgK: number | null = null;
+  let Cv_kJkgK: number | null = null;
+  let gammaActual: number | null = null;
+  let speedOfSound: number | null = null;
+  let JT: number | null = null;
+
+  if (gammaMix != null && gammaMix > 1) {
+    const Rsp = R_UNIVERSAL / MW; // kJ/(kg·K)
+    const Cp_ideal = gammaMix / (gammaMix - 1) * Rsp;
+    const Cv_ideal = 1 / (gammaMix - 1) * Rsp;
+
+    // Departure correction for real gas (simplified)
+    // At low Pr: Cp ≈ Cp_ideal; at higher Pr: Cp increases
+    let CpDeparture = 0;
+    if (hasCritical && Tr > 0.5) {
+      // Simplified residual Cp/R from generalized correlation
+      // ΔCp/R ≈ -Tr × d²(B·Pr/Tr)/dTr² × Pr
+      // For screening: ΔCp ≈ Rsp × Pr²/(Tr³) × 0.422×1.6×2.6/Tr^1.6
+      const d2B0 = 0.422 * 1.6 * 2.6 / Math.pow(Tr, 3.6);
+      CpDeparture = Rsp * Pr * d2B0 * Tr;
+      if (CpDeparture < 0) CpDeparture = 0;
+    }
+
+    Cp_kJkgK = Cp_ideal + CpDeparture;
+    Cv_kJkgK = Cp_kJkgK - Rsp / Z; // Cp - R/Z for real gas
+    if (Cv_kJkgK <= 0) Cv_kJkgK = Cv_ideal;
+    gammaActual = Cp_kJkgK / Cv_kJkgK;
+
+    calcTrace.push({ label: "Cp (ideal)", equation: `γ/(γ-1) × R/MW = ${gammaMix.toFixed(4)}/(${gammaMix.toFixed(4)}-1) × ${Rsp.toFixed(6)}`, value: Cp_ideal, unit: "kJ/(kg·K)" });
+    calcTrace.push({ label: "Cp (at conditions)", equation: `Cp_ideal + departure`, value: Cp_kJkgK, unit: "kJ/(kg·K)" });
+    calcTrace.push({ label: "Cv (at conditions)", equation: `Cp - R/(Z)`, value: Cv_kJkgK, unit: "kJ/(kg·K)" });
+    calcTrace.push({ label: "γ (at conditions)", equation: `Cp/Cv`, value: gammaActual, unit: "—" });
+
+    // Speed of sound: a = √(γ·Z·R·T/MW) where R in J/(kg·K)
+    const Rsp_J = Rsp * 1000; // J/(kg·K)
+    speedOfSound = Math.sqrt(gammaActual * Z * Rsp_J * T_K);
+    calcTrace.push({ label: "Speed of Sound", equation: `√(γ·Z·R·T/MW)`, value: speedOfSound, unit: "m/s" });
+
+    // Joule-Thomson coefficient (simplified): μ_JT ≈ (T × dZ/dT_P - Z + 1) × V / (Cp × Z)
+    // Simplified: μ_JT ≈ (2/Pr × (T × B'(Tr)) - B0) / Cp  [K/bar]
+    if (hasCritical && Tr > 0.5) {
+      const B0 = 0.083 - 0.422 / Math.pow(Tr, 1.6);
+      const dB0dTr = 0.422 * 1.6 / Math.pow(Tr, 2.6);
+      const Tc_val = TcPc!;
+      const Pc_val = PcPc!;
+      JT = (Tc_val / (Pc_val * 100)) * (dB0dTr * Tr - B0) / Cp_kJkgK;
+      calcTrace.push({ label: "Joule-Thomson Coefficient", equation: `simplified virial`, value: JT, unit: "K/bar" });
+      if (JT < 0) {
+        flags.push("INVERSION");
+        warnings.push("Negative Joule-Thomson coefficient — above inversion temperature (heating on expansion).");
+      }
+    }
+  }
+
+  if (density_kgm3 > 500) {
+    flags.push("LIQUID_LIKE");
+    warnings.push("Density exceeds 500 kg/m³ — may be in liquid or supercritical phase.");
+  }
+
+  return {
+    T_K, P_bar, Tr, Pr, Z,
+    density_kgm3, specificVolume_m3kg: specificVolume, molarVolume_m3kmol: molarVolume,
+    viscosity_cP,
+    Cp_kJkgK, Cv_kJkgK, gammaActual, speedOfSound_ms: speedOfSound,
+    JT_Kbar: JT,
+    idealDensity_kgm3: idealDensity,
+    calcTrace, flags, warnings,
+  };
+}
+
 // ─── Defaults & Test Cases ────────────────────────────────────────────
 
 export const DEFAULT_PROJECT: GasMixProject = {

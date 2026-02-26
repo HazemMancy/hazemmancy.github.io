@@ -71,9 +71,9 @@ export default function PipingComponentsIndex() {
                       </div>
                       <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{info.desc}</p>
                       <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-auto flex-wrap">
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-1">
                           {info.standards.map(s => (
-                            <Badge key={s} variant="outline" className="text-[10px] no-default-hover-elevate no-default-active-elevate">{s}</Badge>
+                            <Badge key={s} variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">{s}</Badge>
                           ))}
                         </div>
                         <ArrowRight className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
