@@ -10,6 +10,7 @@ import {
   Tooltip,
   ReferenceDot,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
   Legend,
 } from "recharts";
@@ -36,15 +37,16 @@ const COLORS = {
   actualFlowGradientMid: "rgba(34, 197, 94, 0.05)",
   actualFlowGradientEnd: "rgba(34, 197, 94, 0.01)",
   slipLine: "#ef4444",
-  slipGradientStart: "rgba(239, 68, 68, 0.14)",
-  slipGradientMid: "rgba(239, 68, 68, 0.05)",
-  slipGradientEnd: "rgba(239, 68, 68, 0.01)",
+  slipFill: "rgba(239, 68, 68, 0.08)",
+  slipGradientStart: "rgba(239, 68, 68, 0.18)",
+  slipGradientMid: "rgba(239, 68, 68, 0.08)",
+  slipGradientEnd: "rgba(239, 68, 68, 0.02)",
   power: "#f59e0b",
   volEfficiency: "#8b5cf6",
   operatingPoint: "#3b82f6",
   operatingPointGlow: "rgba(59, 130, 246, 0.25)",
   grid: "hsl(var(--muted) / 0.15)",
-  gridMajor: "hsl(var(--muted) / 0.35)",
+  gridMajor: "hsl(var(--muted) / 0.25)",
   axisText: "hsl(var(--muted-foreground) / 0.65)",
   axisLabel: "hsl(var(--muted-foreground) / 0.9)",
 };
@@ -112,7 +114,7 @@ function CustomTooltip({ active, payload, label, flowUnit, pressureUnit, powerUn
         )}
         {slipEntry && slipEntry.value != null && slipEntry.value > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-            <div style={{ width: 10, height: 3, borderRadius: "1px", backgroundColor: "transparent", borderTop: `2px dashed ${COLORS.slipLine}`, flexShrink: 0 }} />
+            <div style={{ width: 10, height: 3, borderRadius: "1px", backgroundColor: COLORS.slipFill, borderTop: `2px solid ${COLORS.slipLine}`, flexShrink: 0 }} />
             <span style={{ color: "hsl(var(--muted-foreground))" }}>Slip</span>
             <span style={{ color: "hsl(var(--foreground))", fontWeight: 600, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>
               {slipEntry.value.toFixed(1)} {flowUnit}
@@ -148,12 +150,18 @@ function CustomLegend({ payload }: any) {
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: "24px", paddingTop: "12px", flexWrap: "wrap" }}>
       {filtered.map((entry: any) => {
-        const isDashed = entry.dataKey === "volEff" || entry.dataKey === "slipFlow";
+        const isDashed = entry.dataKey === "volEff";
+        const isSlip = entry.dataKey === "slipFlow";
         return (
           <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <svg width="18" height="10" viewBox="0 0 18 10" style={{ flexShrink: 0 }}>
               {isDashed ? (
                 <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2" strokeDasharray="4 2" />
+              ) : isSlip ? (
+                <>
+                  <rect x="0" y="2" width="18" height="6" fill={COLORS.slipFill} rx="1" />
+                  <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="1.5" strokeDasharray="3 2" />
+                </>
               ) : (
                 <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2.5" strokeLinecap="round" />
               )}
@@ -241,7 +249,7 @@ export function PDCurveChart({
               {`Flow (${flowUnit}) / Eff (%)`}
             </span>
           </div>
-          <div className="flex-1 h-[420px]">
+          <div className="flex-1 h-[420px] border border-border/20 rounded-sm">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
@@ -264,7 +272,7 @@ export function PDCurveChart({
                 strokeDasharray="2 6"
                 stroke={COLORS.grid}
                 vertical={true}
-                horizontalPoints={[]}
+                horizontal={true}
               />
 
               <XAxis
@@ -326,7 +334,7 @@ export function PDCurveChart({
                 dataKey="slipFlow"
                 fill="url(#pdSlipGrad)"
                 stroke={COLORS.slipLine}
-                strokeWidth={1}
+                strokeWidth={1.5}
                 strokeDasharray="4 2"
                 name="slipFlow"
                 activeDot={false}
@@ -455,6 +463,7 @@ export function PDCurveChart({
           <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="pd-curve-note">
             PD pump curves per API 674/676. Theoretical flow is constant (set by displacement and speed).
             Actual flow decreases with increasing differential pressure due to internal slip.
+            The shaded slip region shows the gap between theoretical and actual delivery.
             Power is proportional to differential pressure. Verify against manufacturer data sheets.
           </p>
         </div>

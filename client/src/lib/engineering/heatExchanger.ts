@@ -38,6 +38,7 @@ export type DutyMode = "both_outlets_known" | "one_outlet_unknown" | "duty_given
 
 export type EngFlag =
   | "ENERGY_BALANCE_MISMATCH"
+  | "ENERGY_BALANCE_BLOCKED"
   | "TEMPERATURE_CROSS"
   | "VERY_LOW_F"
   | "SMALL_APPROACH_TEMP"
@@ -48,10 +49,15 @@ export type EngFlag =
   | "NEGATIVE_LMTD"
   | "HIGH_AREA"
   | "CO_CURRENT_PENALTY"
-  | "F_APPROXIMATE";
+  | "F_APPROXIMATE"
+  | "MULTI_SHELL_F"
+  | "LOW_EFFECTIVENESS"
+  | "HIGH_NTU"
+  | "HIGH_OVERDESIGN";
 
 export const FLAG_LABELS: Record<EngFlag, string> = {
   ENERGY_BALANCE_MISMATCH: "Energy balance mismatch between hot and cold sides",
+  ENERGY_BALANCE_BLOCKED: "Calculation blocked — energy balance exceeds strict tolerance",
   TEMPERATURE_CROSS: "Temperature cross detected — infeasible configuration",
   VERY_LOW_F: "F-factor below 0.75 — inefficient configuration",
   SMALL_APPROACH_TEMP: "Very small approach temperature — large area expected",
@@ -63,10 +69,15 @@ export const FLAG_LABELS: Record<EngFlag, string> = {
   HIGH_AREA: "Large heat transfer area — consider multiple shells or plate HX",
   CO_CURRENT_PENALTY: "Co-current arrangement — counter-current would be more efficient",
   F_APPROXIMATE: "F-factor from approximate correlation — verify with TEMA charts",
+  MULTI_SHELL_F: "Multi-shell F-factor applied — verify with TEMA charts for N-shell configuration",
+  LOW_EFFECTIVENESS: "Low heat exchanger effectiveness — consider design optimization",
+  HIGH_NTU: "NTU > 3 — large exchanger, diminishing returns on area increase",
+  HIGH_OVERDESIGN: "Overdesign exceeds 30% — verify if intentional",
 };
 
 export const FLAG_SEVERITY: Record<EngFlag, "error" | "warning" | "info"> = {
   ENERGY_BALANCE_MISMATCH: "warning",
+  ENERGY_BALANCE_BLOCKED: "error",
   TEMPERATURE_CROSS: "error",
   VERY_LOW_F: "warning",
   SMALL_APPROACH_TEMP: "warning",
@@ -78,6 +89,40 @@ export const FLAG_SEVERITY: Record<EngFlag, "error" | "warning" | "info"> = {
   HIGH_AREA: "warning",
   CO_CURRENT_PENALTY: "info",
   F_APPROXIMATE: "warning",
+  MULTI_SHELL_F: "info",
+  LOW_EFFECTIVENESS: "info",
+  HIGH_NTU: "warning",
+  HIGH_OVERDESIGN: "info",
+};
+
+export const TEMA_FOULING_FACTORS: Record<string, { rf: number; description: string }> = {
+  "Cooling tower water (treated)": { rf: 0.000176, description: "TEMA RGP-T-2.4" },
+  "Cooling tower water (untreated)": { rf: 0.000352, description: "TEMA RGP-T-2.4" },
+  "Sea water (clean)": { rf: 0.000088, description: "TEMA RGP-T-2.4" },
+  "Sea water (brackish)": { rf: 0.000352, description: "TEMA RGP-T-2.4" },
+  "River water (clean)": { rf: 0.000176, description: "TEMA RGP-T-2.4" },
+  "River water (muddy)": { rf: 0.000528, description: "TEMA RGP-T-2.4" },
+  "Boiler feedwater (treated)": { rf: 0.000088, description: "TEMA RGP-T-2.4" },
+  "Steam (clean)": { rf: 0.000088, description: "TEMA RGP-T-2.4" },
+  "Steam (exhaust, oil-bearing)": { rf: 0.000264, description: "TEMA RGP-T-2.4" },
+  "Light hydrocarbons": { rf: 0.000176, description: "TEMA RGP-T-2.4" },
+  "Heavy hydrocarbons": { rf: 0.000352, description: "TEMA RGP-T-2.4" },
+  "Crude oil (dry, <120°C)": { rf: 0.000352, description: "TEMA RGP-T-2.4" },
+  "Crude oil (dry, >120°C)": { rf: 0.000528, description: "TEMA RGP-T-2.4" },
+  "Crude oil (salty)": { rf: 0.000528, description: "TEMA RGP-T-2.4" },
+  "Gasoline / Naphtha": { rf: 0.000176, description: "TEMA RGP-T-2.4" },
+  "Kerosene / Jet fuel": { rf: 0.000176, description: "TEMA RGP-T-2.4" },
+  "Diesel / Gas oil": { rf: 0.000352, description: "TEMA RGP-T-2.4" },
+  "Heavy fuel oil": { rf: 0.000528, description: "TEMA RGP-T-2.4" },
+  "Lean amine (MEA/DEA/MDEA)": { rf: 0.000352, description: "Industry practice" },
+  "Rich amine": { rf: 0.000352, description: "Industry practice" },
+  "Lean glycol (TEG/MEG)": { rf: 0.000176, description: "Industry practice" },
+  "Rich glycol": { rf: 0.000352, description: "Industry practice" },
+  "Natural gas (clean)": { rf: 0.000176, description: "Industry practice" },
+  "Natural gas (sour)": { rf: 0.000352, description: "Industry practice" },
+  "Refrigerant (clean)": { rf: 0.000088, description: "TEMA RGP-T-2.4" },
+  "Air (compressed, clean)": { rf: 0.000176, description: "TEMA RGP-T-2.4" },
+  "Flue gas": { rf: 0.000528, description: "Industry practice" },
 };
 
 export interface HXProject {
@@ -162,10 +207,15 @@ export interface CaseResult {
   uClean: number;
   uFouled: number;
   totalFoulingResistance: number;
+  cleanlinessFactor: number;
   uaReq: number;
   aReq: number;
   aDesign: number;
+  overdesignPct: number;
   approachTemp: number;
+  effectiveness: number;
+  ntu: number;
+  capacityRatio: number;
   hotSide: StreamSide;
   coldSide: StreamSide;
   trace: CalcTrace;
@@ -208,12 +258,11 @@ const ENERGY_BALANCE_DEFAULT_TOL = 5;
 
 function computeLMTD(dT1: number, dT2: number, trace: CalcTrace): number {
   if (dT1 <= 0 || dT2 <= 0) {
+    if (dT1 < 0 || dT2 < 0) {
+      trace.flags.push("NEGATIVE_LMTD");
+    }
     trace.flags.push("TEMPERATURE_CROSS");
     throw new Error("Temperature cross — ΔT1 or ΔT2 ≤ 0. Check terminal temperatures for selected flow arrangement.");
-  }
-  if (dT1 < 0 || dT2 < 0) {
-    trace.flags.push("NEGATIVE_LMTD");
-    throw new Error("Negative temperature difference — infeasible configuration");
   }
 
   if (Math.abs(dT1 - dT2) < LMTD_EPSILON) {
@@ -257,6 +306,70 @@ function correctionFactor1_2(R: number, P: number): number {
   return Math.min(Math.max(num / den, 0.3), 1.0);
 }
 
+function correctionFactorNShell(R: number, P: number, N: number): number {
+  if (N <= 1) return correctionFactor1_2(R, P);
+  if (P <= 0 || P >= 1) return 0.5;
+  const RP = R * P;
+  if (RP >= 1 || P >= 1) return 0.5;
+  const denom = 1 - RP;
+  if (Math.abs(denom) < 1e-12) return 0.5;
+  const ratio = ((1 - RP) / (1 - P));
+  if (ratio <= 0) return 0.5;
+  const ratioN = Math.pow(ratio, 1 / N);
+  const P1 = (ratioN - 1) / (ratioN - R);
+  if (!isFinite(P1) || P1 <= 0 || P1 >= 1) return 0.5;
+  return correctionFactor1_2(R, P1);
+}
+
+function computeEffectivenessNTU(
+  Ch: number,
+  Cc: number,
+  dutyKW: number,
+  tHotIn: number,
+  tColdIn: number,
+  trace: CalcTrace,
+): { effectiveness: number; ntu: number; capacityRatio: number } {
+  const Cmin = Math.min(Ch, Cc);
+  const Cmax = Math.max(Ch, Cc);
+  const Qmax = Cmin * (tHotIn - tColdIn);
+  const epsilon = Qmax > 0 ? dutyKW / Qmax : 0;
+  const Cr = Cmax > 0 ? Cmin / Cmax : 0;
+
+  let ntu = 0;
+  if (epsilon > 0 && epsilon < 1) {
+    if (Math.abs(Cr) < 1e-6) {
+      ntu = -Math.log(1 - epsilon);
+    } else if (Math.abs(Cr - 1) < 1e-6) {
+      ntu = epsilon / (1 - epsilon);
+    } else {
+      const arg = (1 - epsilon * Cr) / (1 - epsilon);
+      if (arg > 0) {
+        ntu = (1 / (Cr - 1)) * Math.log(arg);
+        ntu = Math.abs(ntu);
+      }
+    }
+  }
+
+  trace.steps.push({
+    name: "Effectiveness (ε)",
+    equation: "ε = Q / Q_max = Q / (C_min × (Th,in − Tc,in))",
+    substitution: `${dutyKW.toFixed(2)} / (${Cmin.toFixed(4)} × ${(tHotIn - tColdIn).toFixed(2)})`,
+    result: `${(epsilon * 100).toFixed(1)}%`,
+  });
+  trace.steps.push({
+    name: "NTU",
+    equation: "NTU = UA / C_min (derived from ε and C_r)",
+    substitution: `C_r = ${Cr.toFixed(4)}, ε = ${epsilon.toFixed(4)}`,
+    result: `${ntu.toFixed(3)}`,
+  });
+
+  trace.intermediateValues["effectiveness"] = epsilon;
+  trace.intermediateValues["NTU"] = ntu;
+  trace.intermediateValues["C_ratio"] = Cr;
+
+  return { effectiveness: epsilon, ntu, capacityRatio: Cr };
+}
+
 function computeFactor(
   config: ExchangerConfig,
   R: number,
@@ -295,23 +408,36 @@ function computeFactor(
   } else if (config.arrangement === "1_2_pass") {
     if (config.fMode === "user_entered") {
       F = config.fValue;
-      trace.assumptions.push(`User-entered F = ${F.toFixed(4)} for 1-2 S&T`);
+      trace.assumptions.push(`User-entered F = ${F.toFixed(4)} for ${config.shellPasses}-${config.tubePasses} S&T`);
       trace.steps.push({
         name: "F-factor",
-        equation: "F = user-entered (1-2 shell-and-tube)",
+        equation: `F = user-entered (${config.shellPasses}-${config.tubePasses} shell-and-tube)`,
         substitution: `F = ${F.toFixed(4)}`,
         result: `${F.toFixed(4)}`,
       });
     } else {
-      F = correctionFactor1_2(R, P);
-      trace.flags.push("F_APPROXIMATE");
-      trace.warnings.push("F-factor from approximate correlation — verify with TEMA charts or vendor data");
-      trace.steps.push({
-        name: "F-factor (approximate)",
-        equation: "F = f(R, P) — Bowman et al. correlation for 1-shell, 2-tube pass",
-        substitution: `R = ${R.toFixed(4)}, P = ${P.toFixed(4)}`,
-        result: `${F.toFixed(4)}`,
-      });
+      if (config.shellPasses > 1) {
+        F = correctionFactorNShell(R, P, config.shellPasses);
+        trace.flags.push("MULTI_SHELL_F");
+        trace.flags.push("F_APPROXIMATE");
+        trace.warnings.push(`F-factor for ${config.shellPasses} shells in series from analytical correlation — verify with TEMA charts`);
+        trace.steps.push({
+          name: `F-factor (${config.shellPasses}-shell approximate)`,
+          equation: `F = f(R, P, N=${config.shellPasses}) — multi-shell P₁ transformation + Bowman correlation`,
+          substitution: `R = ${R.toFixed(4)}, P = ${P.toFixed(4)}, N = ${config.shellPasses}`,
+          result: `${F.toFixed(4)}`,
+        });
+      } else {
+        F = correctionFactor1_2(R, P);
+        trace.flags.push("F_APPROXIMATE");
+        trace.warnings.push("F-factor from approximate correlation — verify with TEMA charts or vendor data");
+        trace.steps.push({
+          name: "F-factor (approximate)",
+          equation: "F = f(R, P) — Bowman et al. correlation for 1-shell, 2-tube pass",
+          substitution: `R = ${R.toFixed(4)}, P = ${P.toFixed(4)}`,
+          result: `${F.toFixed(4)}`,
+        });
+      }
     }
   }
 
@@ -517,6 +643,7 @@ function checkEnergyBalance(
   cold: StreamSide,
   dutyKW: number,
   tolerance: number,
+  strict: boolean,
   trace: CalcTrace,
 ) {
   const Ch = (hot.mDot / 3600) * hot.cp;
@@ -527,11 +654,29 @@ function checkEnergyBalance(
   if (Qh > 0 && Qc > 0) {
     const imbalance = Math.abs(Qh - Qc) / Math.max(Qh, Qc) * 100;
     trace.intermediateValues["energy_balance_pct"] = imbalance;
+    trace.intermediateValues["Q_hot_kW"] = Qh;
+    trace.intermediateValues["Q_cold_kW"] = Qc;
+
+    trace.steps.push({
+      name: "Energy balance check",
+      equation: "Imbalance = |Q_h − Q_c| / max(Q_h, Q_c) × 100%",
+      substitution: `|${Qh.toFixed(2)} − ${Qc.toFixed(2)}| / ${Math.max(Qh, Qc).toFixed(2)} × 100`,
+      result: `${imbalance.toFixed(1)}% (tolerance: ${tolerance}%)`,
+    });
+
     if (imbalance > tolerance) {
       trace.flags.push("ENERGY_BALANCE_MISMATCH");
       trace.warnings.push(
         `Energy balance mismatch: Q_hot = ${Qh.toFixed(1)} kW vs Q_cold = ${Qc.toFixed(1)} kW (${imbalance.toFixed(1)}% difference, tolerance ${tolerance}%)`
       );
+      if (strict) {
+        trace.flags.push("ENERGY_BALANCE_BLOCKED");
+        throw new Error(
+          `Strict energy balance enforcement: imbalance ${imbalance.toFixed(1)}% exceeds ${tolerance}% tolerance. ` +
+          `Q_hot = ${Qh.toFixed(1)} kW, Q_cold = ${Qc.toFixed(1)} kW. ` +
+          `Adjust temperatures, flow rates, or Cp values, or increase tolerance.`
+        );
+      }
     }
   }
 }
@@ -556,7 +701,7 @@ function computeCaseResult(
 
   const { hot, cold, dutyKW } = solveOutletTemps(opCase, trace);
 
-  checkEnergyBalance(hot, cold, dutyKW, project.balanceTolerance, trace);
+  checkEnergyBalance(hot, cold, dutyKW, project.balanceTolerance, project.strictEnergyBalance, trace);
 
   if (hot.tIn <= cold.tIn) {
     throw new Error("Hot inlet must be hotter than cold inlet");
@@ -648,9 +793,10 @@ function computeCaseResult(
   trace.intermediateValues["A_design"] = aDesign;
 
   const approachTemp = Math.min(dT1, dT2);
-  if (approachTemp < 5) {
+  const approachMin = config.approachTempMin > 0 ? config.approachTempMin : 5;
+  if (approachTemp < approachMin) {
     trace.flags.push("SMALL_APPROACH_TEMP");
-    trace.warnings.push(`Approach temperature = ${approachTemp.toFixed(1)}°C — very tight, expect large area`);
+    trace.warnings.push(`Approach temperature = ${approachTemp.toFixed(1)}°C < ${approachMin}°C minimum — very tight, expect large area`);
   }
   if (aDesign > 1000) {
     trace.flags.push("HIGH_AREA");
@@ -659,6 +805,33 @@ function computeCaseResult(
 
   const Ch = (hot.mDot / 3600) * hot.cp;
   const Cc = (cold.mDot / 3600) * cold.cp;
+
+  const uCleanVal = uInput.mode === "clean_plus_fouling" ? uInput.uClean : uFouled;
+  const cleanlinessFactor = uCleanVal > 0 ? uFouled / uCleanVal : 1.0;
+
+  if (cleanlinessFactor < 1.0) {
+    trace.steps.push({
+      name: "Cleanliness factor",
+      equation: "CF = U_fouled / U_clean",
+      substitution: `${uFouled.toFixed(1)} / ${uCleanVal.toFixed(1)}`,
+      result: `${(cleanlinessFactor * 100).toFixed(1)}%`,
+    });
+  }
+
+  const overdesignPct = aReq > 0 ? ((aDesign - aReq) / aReq) * 100 : 0;
+
+  const { effectiveness, ntu, capacityRatio } = computeEffectivenessNTU(
+    Ch, Cc, dutyKW, hot.tIn, cold.tIn, trace,
+  );
+
+  if (effectiveness < 0.3 && effectiveness > 0) {
+    trace.flags.push("LOW_EFFECTIVENESS");
+    trace.warnings.push(`Low effectiveness ε = ${(effectiveness * 100).toFixed(1)}% — heat recovery potential not fully utilized`);
+  }
+  if (ntu > 3) {
+    trace.flags.push("HIGH_NTU");
+    trace.warnings.push(`NTU = ${ntu.toFixed(2)} > 3.0 — large exchanger with diminishing returns on additional area`);
+  }
 
   return {
     caseName: opCase.name,
@@ -673,13 +846,18 @@ function computeCaseResult(
     P,
     F,
     correctedLMTD,
-    uClean: uInput.mode === "clean_plus_fouling" ? uInput.uClean : uFouled,
+    uClean: uCleanVal,
     uFouled,
     totalFoulingResistance: rfTotal,
+    cleanlinessFactor,
     uaReq,
     aReq,
     aDesign,
+    overdesignPct,
     approachTemp,
+    effectiveness,
+    ntu,
+    capacityRatio,
     hotSide: hot,
     coldSide: cold,
     trace,
@@ -738,6 +916,17 @@ export function calculateHeatExchangerFull(
   }
   if (globalFlags.includes("PHASE_CHANGE_NOT_MODELED")) {
     recommendations.push("Phase change detected — LMTD method may not be adequate; use zone analysis or specialized software");
+  }
+  if (globalFlags.includes("HIGH_NTU")) {
+    recommendations.push("High NTU indicates diminishing returns — evaluate if additional area investment is economically justified");
+  }
+  if (globalFlags.includes("MULTI_SHELL_F")) {
+    recommendations.push("Multi-shell configuration applied — confirm TEMA F-factor chart for the selected N-shell arrangement");
+  }
+
+  if (geometry && geometry.excessArea > 30) {
+    if (!globalFlags.includes("HIGH_OVERDESIGN")) globalFlags.push("HIGH_OVERDESIGN");
+    recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% — verify overdesign is intentional (fouling allowance, future capacity)`);
   }
 
   return {

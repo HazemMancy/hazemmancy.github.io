@@ -46,10 +46,12 @@ const COLORS = {
   efficiencyGradientMid: "rgba(34, 197, 94, 0.05)",
   efficiencyGradientEnd: "rgba(34, 197, 94, 0.01)",
   power: "#ef4444",
+  minMaxRegion: "rgba(59, 130, 246, 0.04)",
+  minMaxBorder: "rgba(59, 130, 246, 0.12)",
   operatingPoint: "#3b82f6",
   operatingPointGlow: "rgba(59, 130, 246, 0.25)",
   grid: "hsl(var(--muted) / 0.15)",
-  gridMajor: "hsl(var(--muted) / 0.35)",
+  gridMajor: "hsl(var(--muted) / 0.25)",
   axisText: "hsl(var(--muted-foreground) / 0.65)",
   axisLabel: "hsl(var(--muted-foreground) / 0.9)",
 };
@@ -184,6 +186,9 @@ export function PumpCurveChart({
   const effPeak = pumpEfficiency;
   const points = 80;
 
+  const minFlowFrac = 0.7;
+  const maxFlowFrac = 1.2;
+
   const data = [];
   for (let i = 0; i <= points; i++) {
     const qSI = (maxFlowSI * i) / points;
@@ -215,6 +220,7 @@ export function PumpCurveChart({
 
   const displayFlow = convertFlow(designFlowSI);
   const displayTDH = convertHead(tdhSI);
+  const displayShutoff = convertHead(shutoffHeadSI);
   const displayStaticHead = convertHead(staticHeadSI);
   const displayBrakePower = convertPower(brakePowerSI);
 
@@ -237,7 +243,7 @@ export function PumpCurveChart({
               {`Head (${headUnit}) / Eff (%)`}
             </span>
           </div>
-          <div className="flex-1 h-[420px]">
+          <div className="flex-1 h-[420px] border border-border/20 rounded-sm">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
@@ -265,7 +271,7 @@ export function PumpCurveChart({
                 strokeDasharray="2 6"
                 stroke={COLORS.grid}
                 vertical={true}
-                horizontalPoints={[]}
+                horizontal={true}
               />
 
               <XAxis
@@ -311,6 +317,23 @@ export function PumpCurveChart({
                 cursor={{ stroke: "hsl(var(--muted-foreground) / 0.12)", strokeWidth: 1, strokeDasharray: "4 4" }}
               />
               <Legend content={<CustomLegend />} />
+
+              <ReferenceArea
+                yAxisId="head"
+                x1={parseFloat(convertFlow(designFlowSI * minFlowFrac).toFixed(2))}
+                x2={parseFloat(convertFlow(designFlowSI * maxFlowFrac).toFixed(2))}
+                fill={COLORS.minMaxRegion}
+                stroke={COLORS.minMaxBorder}
+                strokeDasharray="3 3"
+                label={{
+                  value: "Preferred Range",
+                  position: "insideTop",
+                  fill: COLORS.operatingPoint,
+                  fontSize: 7,
+                  fontWeight: 500,
+                  opacity: 0.5,
+                }}
+              />
 
               <Area
                 yAxisId="head"
@@ -395,6 +418,22 @@ export function PumpCurveChart({
 
               <ReferenceLine
                 yAxisId="head"
+                y={parseFloat(displayShutoff.toFixed(2))}
+                stroke={COLORS.pumpCurve}
+                strokeWidth={0.8}
+                strokeDasharray="4 6"
+                label={{
+                  value: `Shutoff ${displayShutoff.toFixed(0)} ${headUnit}`,
+                  position: "insideTopRight",
+                  fill: COLORS.pumpCurve,
+                  fontSize: 8,
+                  fontWeight: 500,
+                  opacity: 0.6,
+                }}
+              />
+
+              <ReferenceLine
+                yAxisId="head"
                 x={parseFloat(displayFlow.toFixed(2))}
                 stroke="hsl(var(--muted-foreground) / 0.18)"
                 strokeDasharray="3 3"
@@ -466,6 +505,8 @@ export function PumpCurveChart({
           </div>
           <div className="text-muted-foreground">
             Static Head: <span className="text-foreground font-semibold">{displayStaticHead.toFixed(1)} {headUnit}</span>
+            <span className="mx-1.5 text-muted-foreground/40">|</span>
+            Shutoff: <span className="text-foreground font-semibold">{displayShutoff.toFixed(1)} {headUnit}</span>
           </div>
         </div>
 
@@ -473,7 +514,8 @@ export function PumpCurveChart({
           <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
           <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="pump-curve-note">
             Pump H-Q and efficiency curves are estimated based on typical centrifugal pump characteristics
-            with the design point as BEP. Actual performance must be verified against manufacturer data.
+            with the design point as BEP. Preferred operating range shown at 70-120% of design flow.
+            Actual performance must be verified against manufacturer data.
             Power is calculated as P = &#x3C1;gHQ/&#x3B7; at each flow point along the pump curve.
           </p>
         </div>

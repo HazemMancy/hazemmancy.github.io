@@ -25,7 +25,7 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
                 key={col.key}
                 className={`px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap ${
                   colIdx === 0
-                    ? "sticky left-0 z-30 bg-muted/95 backdrop-blur-sm min-w-[110px] border-r border-border/40"
+                    ? "sticky left-0 z-30 bg-muted/95 backdrop-blur-sm min-w-[110px] border-r-2 border-border/60"
                     : "min-w-[80px]"
                 }`}
               >
@@ -46,7 +46,7 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
                   ? "bg-primary/10 border-primary/30"
                   : idx % 2 === 0
                   ? "hover:bg-muted/20"
-                  : "bg-muted/5 hover:bg-muted/20"
+                  : "bg-muted/[0.07] hover:bg-muted/20"
               }`}
               data-testid={`row-dim-${idx}`}
             >
@@ -58,8 +58,8 @@ export function DimensionTable({ rows, columns, selectedIndex, onSelect }: Props
                     key={col.key}
                     className={`px-3 py-2 tabular-nums whitespace-nowrap ${
                       colIdx === 0
-                        ? `sticky left-0 z-[5] font-medium border-r border-border/40 ${
-                            selectedIndex === idx ? "bg-primary/10" : idx % 2 === 0 ? "bg-background" : "bg-muted/5"
+                        ? `sticky left-0 z-[5] font-medium border-r-2 border-border/60 ${
+                            selectedIndex === idx ? "bg-primary/10" : idx % 2 === 0 ? "bg-background" : "bg-background"
                           }`
                         : ""
                     }`}

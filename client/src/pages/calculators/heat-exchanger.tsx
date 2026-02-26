@@ -18,7 +18,7 @@ import {
   type FMode, type UMode, type DutyMode,
   DEFAULT_PROJECT, DEFAULT_CASE, DEFAULT_CONFIG, DEFAULT_U_INPUT, DEFAULT_STREAM,
   HX_TEST_CASE_OIL_COOLER, HX_TEST_CONFIG, HX_TEST_U_INPUT,
-  TYPICAL_U_VALUES, FLAG_LABELS, FLAG_SEVERITY,
+  TYPICAL_U_VALUES, TEMA_FOULING_FACTORS, FLAG_LABELS, FLAG_SEVERITY,
   calculateHeatExchangerFull,
 } from "@/lib/engineering/heatExchanger";
 import {
@@ -212,7 +212,12 @@ export default function HeatExchangerPage() {
       { label: "UA_req", value: gc.uaReq, unit: "W/K" },
       { label: "A_req", value: gc.aReq, unit: "m\u00B2" },
       { label: "A_design", value: gc.aDesign, unit: "m\u00B2", highlight: true },
+      { label: "Overdesign", value: gc.overdesignPct, unit: "%" },
+      { label: "Cleanliness Factor", value: gc.cleanlinessFactor * 100, unit: "%" },
       { label: "Approach Temp", value: gc.approachTemp, unit: "\u00B0C" },
+      { label: "\u03B5 (effectiveness)", value: gc.effectiveness * 100, unit: "%" },
+      { label: "NTU", value: gc.ntu, unit: "-" },
+      { label: "C_r (capacity ratio)", value: gc.capacityRatio, unit: "-" },
     ];
 
     const calcSteps: ExportDatasheet["calcSteps"] = gc.trace.steps.map(s => ({
@@ -642,10 +647,28 @@ export default function HeatExchangerPage() {
                           <SelectItem key={k} value={k}>{k} ({v.low}–{v.high})</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div><Label className="text-xs mb-1.5 block">Rf_hot (m²·K/W)</Label>
-                      <Input type="number" step="0.0001" value={uInput.rfHot || ""} onChange={e => updateUInput("rfHot", parseFloat(e.target.value) || 0)} data-testid="input-rf-hot" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Rf_cold (m²·K/W)</Label>
-                      <Input type="number" step="0.0001" value={uInput.rfCold || ""} onChange={e => updateUInput("rfCold", parseFloat(e.target.value) || 0)} data-testid="input-rf-cold" /></div>
+                    <div>
+                      <Label className="text-xs mb-1.5 block">Rf_hot (m²·K/W)</Label>
+                      <div className="flex gap-2">
+                        <Input type="number" step="0.0001" className="flex-1" value={uInput.rfHot || ""} onChange={e => updateUInput("rfHot", parseFloat(e.target.value) || 0)} data-testid="input-rf-hot" />
+                        <Select onValueChange={v => { const f = TEMA_FOULING_FACTORS[v]; if (f) updateUInput("rfHot", f.rf); }}>
+                          <SelectTrigger className="w-[180px] h-9 text-xs" data-testid="select-rf-hot-preset"><SelectValue placeholder="TEMA preset..." /></SelectTrigger>
+                          <SelectContent>{Object.entries(TEMA_FOULING_FACTORS).map(([k, v]) =>
+                            <SelectItem key={k} value={k} className="text-xs">{k} ({v.rf.toExponential(2)})</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1.5 block">Rf_cold (m²·K/W)</Label>
+                      <div className="flex gap-2">
+                        <Input type="number" step="0.0001" className="flex-1" value={uInput.rfCold || ""} onChange={e => updateUInput("rfCold", parseFloat(e.target.value) || 0)} data-testid="input-rf-cold" />
+                        <Select onValueChange={v => { const f = TEMA_FOULING_FACTORS[v]; if (f) updateUInput("rfCold", f.rf); }}>
+                          <SelectTrigger className="w-[180px] h-9 text-xs" data-testid="select-rf-cold-preset"><SelectValue placeholder="TEMA preset..." /></SelectTrigger>
+                          <SelectContent>{Object.entries(TEMA_FOULING_FACTORS).map(([k, v]) =>
+                            <SelectItem key={k} value={k} className="text-xs">{k} ({v.rf.toExponential(2)})</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {uInput.mode === "fouled_direct" && (
@@ -695,7 +718,10 @@ export default function HeatExchangerPage() {
                     <ResultBox label="A_req" value={`${fmtN(cr.aReq)} m²`} />
                     <ResultBox label="A_design" value={`${fmtN(cr.aDesign)} m²`} highlight />
                     <ResultBox label="Fouling Rf" value={`${cr.totalFoulingResistance.toExponential(3)} m²·K/W`} />
+                    <ResultBox label="CF" value={`${(cr.cleanlinessFactor * 100).toFixed(1)}%`} />
                     <ResultBox label="Approach" value={`${fmtN(cr.approachTemp)} °C`} highlight={cr.approachTemp < 5} />
+                    <ResultBox label="ε (effectiveness)" value={`${(cr.effectiveness * 100).toFixed(1)}%`} />
+                    <ResultBox label="NTU" value={fmtN(cr.ntu, 3)} highlight={cr.ntu > 3} />
                   </div>
                   {project.showSteps && (
                     <div className="pt-2 mt-2 border-t space-y-1 max-h-48 overflow-y-auto">
@@ -822,14 +848,18 @@ export default function HeatExchangerPage() {
                             { label: "Corrected LMTD (°C)", key: "correctedLMTD" },
                             { label: "A_req (m²)", key: "aReq" },
                             { label: "A_design (m²)", key: "aDesign" },
-                          ].map(row => (
+                            { label: "ε (%)", key: "effectiveness", pct: true },
+                            { label: "NTU", key: "ntu" },
+                          ].map((row: { label: string; key: string; pct?: boolean }) => (
                             <tr key={row.key} className="border-b border-muted/30">
                               <td className="py-1.5 px-2 text-muted-foreground">{row.label}</td>
-                              {result.cases.map((cr, i) => (
+                              {result.cases.map((cr, i) => {
+                                const val = (cr as unknown as Record<string, number>)[row.key];
+                                return (
                                 <td key={i} className="py-1.5 px-2 text-right font-mono tabular-nums">
-                                  {fmtN((cr as unknown as Record<string, number>)[row.key])}
+                                  {row.pct ? fmtN(val * 100) : fmtN(val)}
                                 </td>
-                              ))}
+                                ); })}
                             </tr>
                           ))}
                         </tbody>
@@ -918,16 +948,21 @@ function SummaryTable({ cr }: { cr: CaseResult }) {
     { label: "ΔT2", value: `${fmtN(cr.dT2)} °C`, hl: false },
     { label: "LMTD", value: `${fmtN(cr.lmtd)} °C`, hl: false },
     { label: "R (capacity ratio)", value: fmtN(cr.R, 4), hl: false },
-    { label: "P (effectiveness)", value: fmtN(cr.P, 4), hl: false },
+    { label: "P (thermal effectiveness)", value: fmtN(cr.P, 4), hl: false },
     { label: "F (correction factor)", value: fmtN(cr.F, 4), hl: cr.F < 0.8 },
     { label: "Corrected LMTD", value: `${fmtN(cr.correctedLMTD)} °C`, hl: true },
     { label: "U_clean", value: `${fmtN(cr.uClean)} W/(m²·K)`, hl: false },
     { label: "U_fouled", value: `${fmtN(cr.uFouled)} W/(m²·K)`, hl: false },
     { label: "Total Rf", value: `${cr.totalFoulingResistance.toExponential(3)} m²·K/W`, hl: false },
+    { label: "Cleanliness Factor", value: `${(cr.cleanlinessFactor * 100).toFixed(1)}%`, hl: false },
     { label: "UA_req", value: `${fmtN(cr.uaReq)} W/K`, hl: false },
     { label: "A_req", value: `${fmtN(cr.aReq)} m²`, hl: false },
     { label: "A_design", value: `${fmtN(cr.aDesign)} m²`, hl: true },
+    { label: "Overdesign", value: `${fmtN(cr.overdesignPct)}%`, hl: false },
     { label: "Approach Temp", value: `${fmtN(cr.approachTemp)} °C`, hl: cr.approachTemp < 5 },
+    { label: "ε (effectiveness)", value: `${(cr.effectiveness * 100).toFixed(1)}%`, hl: false },
+    { label: "NTU", value: fmtN(cr.ntu, 3), hl: cr.ntu > 3 },
+    { label: "C_r (capacity ratio)", value: fmtN(cr.capacityRatio, 4), hl: false },
   ];
   return (
     <div className="grid gap-1">

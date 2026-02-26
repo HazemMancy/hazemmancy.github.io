@@ -37,12 +37,14 @@ const COLORS = {
   surgeRegionStart: "rgba(245, 158, 11, 0.12)",
   surgeRegionEnd: "rgba(245, 158, 11, 0.02)",
   surgeRegionStroke: "rgba(245, 158, 11, 0.25)",
+  minFlow: "#ef4444",
   operatingPoint: "#3b82f6",
   operatingPointGlow: "rgba(59, 130, 246, 0.25)",
   grid: "hsl(var(--muted) / 0.15)",
-  gridMajor: "hsl(var(--muted) / 0.35)",
+  gridMajor: "hsl(var(--muted) / 0.25)",
   axisText: "hsl(var(--muted-foreground) / 0.65)",
   axisLabel: "hsl(var(--muted-foreground) / 0.9)",
+  frameBorder: "hsl(var(--border) / 0.4)",
 };
 
 function CustomTooltip({ active, payload, label, flowUnit, headUnitLabel, powerUnitLabel, legendNames }: any) {
@@ -140,6 +142,14 @@ function CustomLegend({ payload, legendNames }: any) {
           Surge Limit
         </span>
       </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <svg width="18" height="10" viewBox="0 0 18 10" style={{ flexShrink: 0 }}>
+          <line x1="0" y1="5" x2="18" y2="5" stroke={COLORS.minFlow} strokeWidth="1.5" strokeDasharray="2 3" />
+        </svg>
+        <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))", fontWeight: 500, letterSpacing: "0.01em" }}>
+          Min. Continuous Flow
+        </span>
+      </div>
     </div>
   );
 }
@@ -166,6 +176,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
   const convertPower = (kW: number): number => convertFromSI("power", kW, unitSystem);
 
   const surgeFlowSI = designFlowSI * 0.7;
+  const minContFlowSI = designFlowSI * 0.75;
   const maxFlowSI = designFlowSI * 1.6;
   const shutoffHeadKJkg = designHeadKJkg * 1.15;
   const points = 100;
@@ -227,7 +238,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
               {`Head (${headUnitLabel}) / Eff. (%)`}
             </span>
           </div>
-          <div className="flex-1 h-[420px]">
+          <div className="flex-1 h-[420px] border border-border/20 rounded-sm">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
@@ -261,7 +272,7 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
                 strokeDasharray="2 6"
                 stroke={COLORS.grid}
                 vertical={true}
-                horizontalPoints={[]}
+                horizontal={true}
               />
 
               <XAxis
@@ -398,6 +409,22 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
 
               <ReferenceLine
                 yAxisId="head"
+                x={parseFloat(minContFlowSI.toFixed(1))}
+                stroke={COLORS.minFlow}
+                strokeWidth={1}
+                strokeDasharray="2 4"
+                label={{
+                  value: "MIN",
+                  position: "insideTopRight",
+                  fill: COLORS.minFlow,
+                  fontSize: 8,
+                  fontWeight: 600,
+                  opacity: 0.8,
+                }}
+              />
+
+              <ReferenceLine
+                yAxisId="head"
                 x={displayFlow}
                 stroke="hsl(var(--muted-foreground) / 0.18)"
                 strokeDasharray="3 3"
@@ -479,8 +506,9 @@ export function CompressorCurveChart({ result, unitSystem }: CompressorCurveChar
           <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="compressor-curve-note">
             Curves are illustrative, based on typical {result.compressorType} compressor characteristics
             with the design point at best efficiency. The surge line is schematic (~70% of design flow).
-            Power is derived as P = m&#x0307; &times; H / &eta; at each flow point. Actual performance must be
-            verified against manufacturer data sheets per API {result.compressorType === "centrifugal" ? "617" : "618"}.
+            Min. continuous flow shown at ~75% of design. Power is derived as P = m&#x0307; &times; H / &eta;
+            at each flow point. Actual performance must be verified against manufacturer data sheets per
+            API {result.compressorType === "centrifugal" ? "617" : "618"}.
           </p>
         </div>
       </CardContent>
