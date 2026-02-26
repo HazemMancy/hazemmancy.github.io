@@ -5,19 +5,27 @@
  *   MW_mix = Σ(y_i × MW_i)              — mole-fraction weighted average
  *   w_i    = (y_i × MW_i) / MW_mix       — mass fraction from mole fraction
  *   R_mix  = R_u / MW_mix                 — mixture specific gas constant
+ *   SG     = MW_mix / MW_air              — gas specific gravity (relative to air)
+ *   γ_mix  = Σ(y_i × γ_i)               — approximate mixture Cp/Cv ratio
+ *   Tc_pc  = Σ(y_i × Tc_i)              — pseudocritical temperature (Kay's rule)
+ *   Pc_pc  = Σ(y_i × Pc_i)              — pseudocritical pressure (Kay's rule)
+ *   ω_mix  = Σ(y_i × ω_i)              — mixture acentric factor
  *   Multi-stream:
  *     F_total   = ΣF_j
  *     n_i       = Σ(F_j × y_i,j)
  *     y_i,mix   = n_i / F_total
  *
  * Reference: Perry's Chemical Engineers' Handbook, GPSA Engineering Data Book
+ *            Standing & Katz (1942) — pseudocritical correlations
  */
 
 import type { GasMixingInput } from "./validation";
+import { COMMON_GASES, type GasProperties } from "./constants";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
 const R_UNIVERSAL = 8.31446; // kJ/(kmol·K)
+const MW_AIR = 28.966;
 const SUM_TOLERANCE_STRICT = 5e-4;
 const SUM_TOLERANCE_INTERNAL = 1e-6;
 
@@ -39,6 +47,10 @@ export interface GasMixComponent {
   molecularWeight: number;
   moleFraction: number;
   notes: string;
+  gamma?: number;
+  Tc?: number;
+  Pc?: number;
+  omega?: number;
 }
 
 export interface GasMixStream {
@@ -64,14 +76,24 @@ export interface CalcStep {
 
 export interface ComponentResult {
   name: string;
+  formula: string;
   moleFraction: number;
   molecularWeight: number;
   massFraction: number;
   yiMWi: number;
+  gamma?: number;
+  Tc?: number;
+  Pc?: number;
+  omega?: number;
 }
 
 export interface GasMixingResult {
   mixtureMW: number;
+  gasSG: number;
+  gammaMix: number | null;
+  TcPc: number | null;
+  PcPc: number | null;
+  omegaMix: number | null;
   components: ComponentResult[];
   totalMoleFraction: number;
   wasNormalized: boolean;
@@ -96,14 +118,213 @@ export interface MultiStreamResult {
     composition: { name: string; yi: number; ni: number; massFraction: number }[];
     mwMix: number;
     rMix: number;
+    gasSG: number;
   };
   calcTrace: string[];
   warnings: string[];
 }
 
+// ─── Preset Compositions ──────────────────────────────────────────────
+
+export interface PresetComposition {
+  name: string;
+  description: string;
+  category: "Natural Gas" | "Refinery" | "Acid / Sour" | "Utility" | "Flare / Relief";
+  components: { name: string; moleFraction: number }[];
+}
+
+export const PRESET_COMPOSITIONS: PresetComposition[] = [
+  {
+    name: "Lean Natural Gas",
+    description: "Typical pipeline-quality dry natural gas (C1-dominant)",
+    category: "Natural Gas",
+    components: [
+      { name: "Methane", moleFraction: 0.9100 },
+      { name: "Ethane", moleFraction: 0.0450 },
+      { name: "Propane", moleFraction: 0.0120 },
+      { name: "i-Butane", moleFraction: 0.0025 },
+      { name: "n-Butane", moleFraction: 0.0030 },
+      { name: "i-Pentane", moleFraction: 0.0010 },
+      { name: "n-Pentane", moleFraction: 0.0008 },
+      { name: "Carbon Dioxide", moleFraction: 0.0150 },
+      { name: "Nitrogen", moleFraction: 0.0100 },
+      { name: "n-Hexane", moleFraction: 0.0007 },
+    ],
+  },
+  {
+    name: "Rich Natural Gas",
+    description: "Wellhead associated gas with heavier hydrocarbons",
+    category: "Natural Gas",
+    components: [
+      { name: "Methane", moleFraction: 0.7500 },
+      { name: "Ethane", moleFraction: 0.1000 },
+      { name: "Propane", moleFraction: 0.0600 },
+      { name: "i-Butane", moleFraction: 0.0150 },
+      { name: "n-Butane", moleFraction: 0.0200 },
+      { name: "i-Pentane", moleFraction: 0.0080 },
+      { name: "n-Pentane", moleFraction: 0.0060 },
+      { name: "n-Hexane", moleFraction: 0.0050 },
+      { name: "n-Heptane", moleFraction: 0.0030 },
+      { name: "Carbon Dioxide", moleFraction: 0.0200 },
+      { name: "Nitrogen", moleFraction: 0.0080 },
+      { name: "Hydrogen Sulfide", moleFraction: 0.0050 },
+    ],
+  },
+  {
+    name: "Sour Natural Gas",
+    description: "High H₂S and CO₂ content natural gas",
+    category: "Acid / Sour",
+    components: [
+      { name: "Methane", moleFraction: 0.7200 },
+      { name: "Ethane", moleFraction: 0.0500 },
+      { name: "Propane", moleFraction: 0.0250 },
+      { name: "i-Butane", moleFraction: 0.0050 },
+      { name: "n-Butane", moleFraction: 0.0060 },
+      { name: "Carbon Dioxide", moleFraction: 0.0800 },
+      { name: "Hydrogen Sulfide", moleFraction: 0.1000 },
+      { name: "Nitrogen", moleFraction: 0.0100 },
+      { name: "Water Vapor", moleFraction: 0.0040 },
+    ],
+  },
+  {
+    name: "Acid Gas (Amine Unit Off-Gas)",
+    description: "Acid gas from amine regenerator — mainly H₂S + CO₂",
+    category: "Acid / Sour",
+    components: [
+      { name: "Hydrogen Sulfide", moleFraction: 0.6500 },
+      { name: "Carbon Dioxide", moleFraction: 0.3200 },
+      { name: "Methane", moleFraction: 0.0150 },
+      { name: "Water Vapor", moleFraction: 0.0150 },
+    ],
+  },
+  {
+    name: "Fuel Gas (Refinery)",
+    description: "Typical refinery fuel gas header composition",
+    category: "Refinery",
+    components: [
+      { name: "Methane", moleFraction: 0.5000 },
+      { name: "Hydrogen", moleFraction: 0.2500 },
+      { name: "Ethane", moleFraction: 0.1000 },
+      { name: "Propane", moleFraction: 0.0500 },
+      { name: "Ethylene", moleFraction: 0.0400 },
+      { name: "Nitrogen", moleFraction: 0.0300 },
+      { name: "Carbon Dioxide", moleFraction: 0.0200 },
+      { name: "n-Butane", moleFraction: 0.0100 },
+    ],
+  },
+  {
+    name: "FCC Off-Gas",
+    description: "Fluid catalytic cracker regenerator off-gas",
+    category: "Refinery",
+    components: [
+      { name: "Nitrogen", moleFraction: 0.7800 },
+      { name: "Carbon Dioxide", moleFraction: 0.1200 },
+      { name: "Oxygen", moleFraction: 0.0300 },
+      { name: "Carbon Monoxide", moleFraction: 0.0400 },
+      { name: "Water Vapor", moleFraction: 0.0200 },
+      { name: "Sulfur Dioxide", moleFraction: 0.0100 },
+    ],
+  },
+  {
+    name: "Hydrogen-Rich (Reformer)",
+    description: "Hydrogen-rich stream from catalytic reformer",
+    category: "Refinery",
+    components: [
+      { name: "Hydrogen", moleFraction: 0.8000 },
+      { name: "Methane", moleFraction: 0.1000 },
+      { name: "Ethane", moleFraction: 0.0500 },
+      { name: "Propane", moleFraction: 0.0250 },
+      { name: "n-Butane", moleFraction: 0.0150 },
+      { name: "n-Pentane", moleFraction: 0.0100 },
+    ],
+  },
+  {
+    name: "Flare Gas (Emergency)",
+    description: "Typical emergency flare gas composition (mixed hydrocarbon)",
+    category: "Flare / Relief",
+    components: [
+      { name: "Methane", moleFraction: 0.4000 },
+      { name: "Ethane", moleFraction: 0.1500 },
+      { name: "Propane", moleFraction: 0.1200 },
+      { name: "n-Butane", moleFraction: 0.0800 },
+      { name: "n-Pentane", moleFraction: 0.0400 },
+      { name: "Hydrogen", moleFraction: 0.0500 },
+      { name: "Nitrogen", moleFraction: 0.1000 },
+      { name: "Carbon Dioxide", moleFraction: 0.0400 },
+      { name: "Hydrogen Sulfide", moleFraction: 0.0200 },
+    ],
+  },
+  {
+    name: "Nitrogen Blanket Gas",
+    description: "Nitrogen with trace impurities for blanketing service",
+    category: "Utility",
+    components: [
+      { name: "Nitrogen", moleFraction: 0.9950 },
+      { name: "Oxygen", moleFraction: 0.0030 },
+      { name: "Argon", moleFraction: 0.0010 },
+      { name: "Water Vapor", moleFraction: 0.0010 },
+    ],
+  },
+  {
+    name: "Instrument Air (Dry)",
+    description: "Dried instrument air composition",
+    category: "Utility",
+    components: [
+      { name: "Nitrogen", moleFraction: 0.7808 },
+      { name: "Oxygen", moleFraction: 0.2095 },
+      { name: "Argon", moleFraction: 0.0093 },
+      { name: "Carbon Dioxide", moleFraction: 0.0004 },
+    ],
+  },
+  {
+    name: "LPG Vapor",
+    description: "Typical LPG vapor (propane/butane blend)",
+    category: "Natural Gas",
+    components: [
+      { name: "Propane", moleFraction: 0.6000 },
+      { name: "i-Butane", moleFraction: 0.1500 },
+      { name: "n-Butane", moleFraction: 0.2200 },
+      { name: "Ethane", moleFraction: 0.0200 },
+      { name: "i-Pentane", moleFraction: 0.0100 },
+    ],
+  },
+  {
+    name: "Synthesis Gas (Steam Reformer)",
+    description: "Syngas from steam methane reformer (SMR)",
+    category: "Refinery",
+    components: [
+      { name: "Hydrogen", moleFraction: 0.7400 },
+      { name: "Carbon Monoxide", moleFraction: 0.0800 },
+      { name: "Carbon Dioxide", moleFraction: 0.1000 },
+      { name: "Methane", moleFraction: 0.0400 },
+      { name: "Nitrogen", moleFraction: 0.0200 },
+      { name: "Water Vapor", moleFraction: 0.0200 },
+    ],
+  },
+  {
+    name: "Tail Gas (SRU)",
+    description: "Sulfur Recovery Unit tail gas",
+    category: "Acid / Sour",
+    components: [
+      { name: "Nitrogen", moleFraction: 0.5500 },
+      { name: "Water Vapor", moleFraction: 0.2500 },
+      { name: "Carbon Dioxide", moleFraction: 0.0800 },
+      { name: "Hydrogen Sulfide", moleFraction: 0.0150 },
+      { name: "Sulfur Dioxide", moleFraction: 0.0050 },
+      { name: "Hydrogen", moleFraction: 0.0400 },
+      { name: "Carbon Monoxide", moleFraction: 0.0200 },
+      { name: "Carbonyl Sulfide", moleFraction: 0.0050 },
+      { name: "Methane", moleFraction: 0.0350 },
+    ],
+  },
+];
+
 // ─── Core Calculation ─────────────────────────────────────────────────
 
-export function calculateGasMixing(input: GasMixingInput): GasMixingResult {
+export function calculateGasMixing(
+  input: GasMixingInput,
+  componentExtras?: GasMixComponent[],
+): GasMixingResult {
   const warnings: string[] = [];
   const flags: string[] = [];
 
@@ -154,14 +375,57 @@ export function calculateGasMixing(input: GasMixingInput): GasMixingResult {
   }));
 
   const mixtureMW = calcSteps.reduce((sum, s) => sum + s.product, 0);
+  const gasSG = mixtureMW / MW_AIR;
 
-  const componentsWithMass: ComponentResult[] = normalizedComponents.map(c => ({
-    name: c.name,
-    moleFraction: c.moleFraction,
-    molecularWeight: c.molecularWeight,
-    massFraction: mixtureMW > 0 ? (c.moleFraction * c.molecularWeight) / mixtureMW : 0,
-    yiMWi: c.moleFraction * c.molecularWeight,
-  }));
+  const extraMap = new Map<string, GasMixComponent>();
+  if (componentExtras) {
+    for (const ce of componentExtras) {
+      extraMap.set(ce.name, ce);
+    }
+  }
+
+  let gammaMix: number | null = null;
+  let TcPc: number | null = null;
+  let PcPc: number | null = null;
+  let omegaMix: number | null = null;
+  let hasAllGamma = true;
+  let hasAllCritical = true;
+  let hasAllOmega = true;
+  let gammaSum = 0;
+  let tcSum = 0;
+  let pcSum = 0;
+  let omegaSum = 0;
+
+  const componentsWithMass: ComponentResult[] = normalizedComponents.map(c => {
+    const extra = extraMap.get(c.name);
+    const gasLib = COMMON_GASES[c.name] as GasProperties | undefined;
+    const gamma = extra?.gamma ?? gasLib?.gamma;
+    const Tc = extra?.Tc ?? gasLib?.Tc;
+    const Pc = extra?.Pc ?? gasLib?.Pc;
+    const omega = extra?.omega ?? gasLib?.omega;
+    const formula = extra?.formula ?? gasLib?.formula ?? "";
+
+    if (gamma != null) { gammaSum += c.moleFraction * gamma; } else { hasAllGamma = false; }
+    if (Tc != null && Pc != null) { tcSum += c.moleFraction * Tc; pcSum += c.moleFraction * Pc; } else { hasAllCritical = false; }
+    if (omega != null) { omegaSum += c.moleFraction * omega; } else { hasAllOmega = false; }
+
+    return {
+      name: c.name,
+      formula,
+      moleFraction: c.moleFraction,
+      molecularWeight: c.molecularWeight,
+      massFraction: mixtureMW > 0 ? (c.moleFraction * c.molecularWeight) / mixtureMW : 0,
+      yiMWi: c.moleFraction * c.molecularWeight,
+      gamma,
+      Tc,
+      Pc,
+      omega,
+    };
+  });
+
+  if (hasAllGamma) gammaMix = gammaSum;
+  if (hasAllCritical) { TcPc = tcSum; PcPc = pcSum; }
+  if (hasAllOmega) omegaMix = omegaSum;
 
   const massFractionTotal = componentsWithMass.reduce((s, c) => s + c.massFraction, 0);
   const rMix = mixtureMW > 0 ? R_UNIVERSAL / mixtureMW : 0;
@@ -174,12 +438,28 @@ export function calculateGasMixing(input: GasMixingInput): GasMixingResult {
     flags.push("HIGH MW");
     warnings.push("Mixture MW is unusually high for a gas — verify component data");
   }
+  if (gasSG > 2.0) {
+    flags.push("HEAVY GAS");
+    warnings.push("Gas SG > 2.0 — very heavy gas, may condense at moderate pressures");
+  }
   if (Math.abs(massFractionTotal - 1.0) > SUM_TOLERANCE_INTERNAL && mixtureMW > 0) {
     warnings.push(`Mass fraction total = ${massFractionTotal.toFixed(8)} (rounding artifact)`);
   }
 
+  const h2sFrac = normalizedComponents.find(c => c.name === "Hydrogen Sulfide")?.moleFraction ?? 0;
+  const co2Frac = normalizedComponents.find(c => c.name === "Carbon Dioxide")?.moleFraction ?? 0;
+  if (h2sFrac > 0.0001) {
+    flags.push("SOUR GAS");
+    if (h2sFrac > 0.04) warnings.push(`H₂S mole fraction ${(h2sFrac * 100).toFixed(2)}% — classified as sour gas. Apply Wichert–Aziz correction for pseudocritical properties.`);
+  }
+  if (co2Frac > 0.05) {
+    flags.push("HIGH CO₂");
+    warnings.push(`CO₂ mole fraction ${(co2Frac * 100).toFixed(1)}% — significant acid gas content`);
+  }
+
   return {
-    mixtureMW, components: componentsWithMass, totalMoleFraction,
+    mixtureMW, gasSG, gammaMix, TcPc, PcPc, omegaMix,
+    components: componentsWithMass, totalMoleFraction,
     wasNormalized, normalizationTrace, calcSteps, massFractionTotal,
     rMix, rMixUnit: "kJ/(kg·K)", flags, warnings,
   };
@@ -251,12 +531,14 @@ export function calculateMultiStreamMixing(
   }
 
   const rMix = mwMix > 0 ? R_UNIVERSAL / mwMix : 0;
+  const gasSG = mwMix / MW_AIR;
   calcTrace.push(`MW_mix = ${mwMix.toFixed(4)} kg/kmol`);
+  calcTrace.push(`SG = ${mwMix.toFixed(4)} / ${MW_AIR} = ${gasSG.toFixed(4)}`);
   calcTrace.push(`R_mix = ${R_UNIVERSAL.toFixed(5)} / ${mwMix.toFixed(4)} = ${rMix.toFixed(6)} kJ/(kg·K)`);
 
   return {
     streams: streamResults,
-    mixedStream: { totalFlow, composition: mixedComposition, mwMix, rMix },
+    mixedStream: { totalFlow, composition: mixedComposition, mwMix, rMix, gasSG },
     calcTrace, warnings,
   };
 }
@@ -276,22 +558,43 @@ export function createEmptyComponent(): GasMixComponent {
   return { id: nextId(), name: "", formula: "", molecularWeight: 0, moleFraction: 0, notes: "" };
 }
 
+export function componentFromLibrary(gasName: string, moleFraction: number): GasMixComponent {
+  const gas = COMMON_GASES[gasName];
+  if (!gas) return { ...createEmptyComponent(), name: gasName, moleFraction };
+  return {
+    id: nextId(),
+    name: gasName,
+    formula: gas.formula,
+    molecularWeight: gas.mw,
+    moleFraction,
+    notes: "",
+    gamma: gas.gamma,
+    Tc: gas.Tc,
+    Pc: gas.Pc,
+    omega: gas.omega,
+  };
+}
+
+export function loadPreset(preset: PresetComposition): GasMixComponent[] {
+  return preset.components.map(c => componentFromLibrary(c.name, c.moleFraction));
+}
+
 export const GAS_MIXING_TEST_CASE: GasMixingInput = {
   components: [
-    { name: "Methane (CH4)", moleFraction: 0.85, molecularWeight: 16.04 },
-    { name: "Ethane (C2H6)", moleFraction: 0.08, molecularWeight: 30.07 },
-    { name: "Propane (C3H8)", moleFraction: 0.04, molecularWeight: 44.10 },
-    { name: "Nitrogen (N2)", moleFraction: 0.02, molecularWeight: 28.01 },
-    { name: "CO2", moleFraction: 0.01, molecularWeight: 44.01 },
+    { name: "Methane", moleFraction: 0.85, molecularWeight: 16.043 },
+    { name: "Ethane", moleFraction: 0.08, molecularWeight: 30.070 },
+    { name: "Propane", moleFraction: 0.04, molecularWeight: 44.096 },
+    { name: "Nitrogen", moleFraction: 0.02, molecularWeight: 28.014 },
+    { name: "Carbon Dioxide", moleFraction: 0.01, molecularWeight: 44.010 },
   ],
 };
 
 export const GAS_MIXING_TEST_COMPONENTS: GasMixComponent[] = [
-  { id: "t1", name: "Methane (CH4)", formula: "CH4", molecularWeight: 16.04, moleFraction: 0.85, notes: "" },
-  { id: "t2", name: "Ethane (C2H6)", formula: "C2H6", molecularWeight: 30.07, moleFraction: 0.08, notes: "" },
-  { id: "t3", name: "Propane (C3H8)", formula: "C3H8", molecularWeight: 44.10, moleFraction: 0.04, notes: "" },
-  { id: "t4", name: "Nitrogen (N2)", formula: "N2", molecularWeight: 28.01, moleFraction: 0.02, notes: "" },
-  { id: "t5", name: "CO2", formula: "CO2", molecularWeight: 44.01, moleFraction: 0.01, notes: "" },
+  { id: "t1", name: "Methane", formula: "CH₄", molecularWeight: 16.043, moleFraction: 0.85, notes: "", gamma: 1.31, Tc: 190.56, Pc: 45.99, omega: 0.0115 },
+  { id: "t2", name: "Ethane", formula: "C₂H₆", molecularWeight: 30.070, moleFraction: 0.08, notes: "", gamma: 1.19, Tc: 305.32, Pc: 48.72, omega: 0.0995 },
+  { id: "t3", name: "Propane", formula: "C₃H₈", molecularWeight: 44.096, moleFraction: 0.04, notes: "", gamma: 1.13, Tc: 369.83, Pc: 42.48, omega: 0.1523 },
+  { id: "t4", name: "Nitrogen", formula: "N₂", molecularWeight: 28.014, moleFraction: 0.02, notes: "", gamma: 1.40, Tc: 126.20, Pc: 33.98, omega: 0.0372 },
+  { id: "t5", name: "Carbon Dioxide", formula: "CO₂", molecularWeight: 44.010, moleFraction: 0.01, notes: "", gamma: 1.29, Tc: 304.13, Pc: 73.77, omega: 0.2239 },
 ];
 
 export const MULTI_STREAM_TEST = {
@@ -320,4 +623,4 @@ export const MULTI_STREAM_TEST = {
   ] as GasMixStream[],
 };
 
-export { R_UNIVERSAL };
+export { R_UNIVERSAL, MW_AIR };

@@ -22,14 +22,14 @@ client/src/
     theme-provider   - Dark mode (always dark)
     theme-toggle
   lib/engineering/   - Engineering calculation modules
-    constants.ts     - Physical constants, PIPE_SPECS (216 entries, full ASME B36.10M/B36.19M schedules), common liquids, fitting K values
+    constants.ts     - Physical constants, PIPE_SPECS (216 entries, full ASME B36.10M/B36.19M schedules), COMMON_GASES (48 components with MW/γ/Tc/Pc/ω by category), common liquids, fitting K values
     unitConversion.ts - SI/Field unit conversion (pressure, head, power, flow, etc.)
     unitToggle.ts    - convertFormValues helper for in-place unit conversion on toggle
     validation.ts    - Zod schemas for calc inputs
     gasSizing.ts     - Gas line sizing (Darcy-Weisbach)
     liquidSizing.ts  - Liquid line sizing
     multiphase.ts    - Multiphase screening (API RP 14E)
-    gasMixing.ts     - Gas mixture MW calculation
+    gasMixing.ts     - Gas mixture MW, SG, pseudocritical properties, 13 preset O&G compositions
     gasVolume.ts     - Standard/actual volume conversion
     pumpSizing.ts    - Centrifugal pump sizing (TDH, power, NPSH)
     restrictionOrifice.ts - Restriction orifice sizing (ISO 5167, liquid & gas, 5-tab wizard engine: bisection solver, choked-flow detection, cavitation/flashing checks, β correction, calc traces)

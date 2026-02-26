@@ -341,17 +341,81 @@ export const GAS_SPECIFIC_HEAT_RATIO: Record<string, number> = {
   "Hydrogen": 1.41,
 };
 
-export const COMMON_GASES: Record<string, { mw: number; gamma: number }> = {
-  "Methane (CH4)": { mw: 16.04, gamma: 1.31 },
-  "Ethane (C2H6)": { mw: 30.07, gamma: 1.19 },
-  "Propane (C3H8)": { mw: 44.10, gamma: 1.13 },
-  "n-Butane (C4H10)": { mw: 58.12, gamma: 1.09 },
-  "Nitrogen (N2)": { mw: 28.01, gamma: 1.40 },
-  "Carbon Dioxide (CO2)": { mw: 44.01, gamma: 1.29 },
-  "Hydrogen Sulfide (H2S)": { mw: 34.08, gamma: 1.32 },
-  "Hydrogen (H2)": { mw: 2.016, gamma: 1.41 },
-  "Oxygen (O2)": { mw: 32.00, gamma: 1.40 },
-  "Water Vapor (H2O)": { mw: 18.015, gamma: 1.33 },
+export type GasCategory =
+  | "Paraffins"
+  | "Olefins"
+  | "Naphthenes"
+  | "Aromatics"
+  | "Acid / Sour"
+  | "Inerts"
+  | "Sulfur Compounds"
+  | "Other";
+
+export interface GasProperties {
+  mw: number;
+  gamma: number;
+  formula: string;
+  category: GasCategory;
+  Tc?: number;
+  Pc?: number;
+  omega?: number;
+}
+
+export const COMMON_GASES: Record<string, GasProperties> = {
+  "Methane": { mw: 16.043, gamma: 1.31, formula: "CH₄", category: "Paraffins", Tc: 190.56, Pc: 45.99, omega: 0.0115 },
+  "Ethane": { mw: 30.070, gamma: 1.19, formula: "C₂H₆", category: "Paraffins", Tc: 305.32, Pc: 48.72, omega: 0.0995 },
+  "Propane": { mw: 44.096, gamma: 1.13, formula: "C₃H₈", category: "Paraffins", Tc: 369.83, Pc: 42.48, omega: 0.1523 },
+  "i-Butane": { mw: 58.123, gamma: 1.10, formula: "i-C₄H₁₀", category: "Paraffins", Tc: 408.14, Pc: 36.40, omega: 0.1770 },
+  "n-Butane": { mw: 58.123, gamma: 1.09, formula: "n-C₄H₁₀", category: "Paraffins", Tc: 425.12, Pc: 37.96, omega: 0.2002 },
+  "i-Pentane": { mw: 72.150, gamma: 1.07, formula: "i-C₅H₁₂", category: "Paraffins", Tc: 460.39, Pc: 33.81, omega: 0.2275 },
+  "n-Pentane": { mw: 72.150, gamma: 1.07, formula: "n-C₅H₁₂", category: "Paraffins", Tc: 469.70, Pc: 33.70, omega: 0.2515 },
+  "n-Hexane": { mw: 86.177, gamma: 1.06, formula: "n-C₆H₁₄", category: "Paraffins", Tc: 507.60, Pc: 30.25, omega: 0.3013 },
+  "n-Heptane": { mw: 100.204, gamma: 1.05, formula: "n-C₇H₁₆", category: "Paraffins", Tc: 540.20, Pc: 27.40, omega: 0.3495 },
+  "n-Octane": { mw: 114.231, gamma: 1.04, formula: "n-C₈H₁₈", category: "Paraffins", Tc: 568.70, Pc: 24.90, omega: 0.3996 },
+  "n-Nonane": { mw: 128.258, gamma: 1.04, formula: "n-C₉H₂₀", category: "Paraffins", Tc: 594.60, Pc: 22.90, omega: 0.4435 },
+  "n-Decane": { mw: 142.285, gamma: 1.03, formula: "n-C₁₀H₂₂", category: "Paraffins", Tc: 617.70, Pc: 21.10, omega: 0.4923 },
+  "Neo-Pentane": { mw: 72.150, gamma: 1.07, formula: "neo-C₅H₁₂", category: "Paraffins", Tc: 433.78, Pc: 31.96, omega: 0.1964 },
+
+  "Ethylene": { mw: 28.054, gamma: 1.24, formula: "C₂H₄", category: "Olefins", Tc: 282.34, Pc: 50.41, omega: 0.0862 },
+  "Propylene": { mw: 42.081, gamma: 1.15, formula: "C₃H₆", category: "Olefins", Tc: 365.57, Pc: 46.65, omega: 0.1376 },
+  "1-Butene": { mw: 56.108, gamma: 1.11, formula: "1-C₄H₈", category: "Olefins", Tc: 419.50, Pc: 40.43, omega: 0.1845 },
+  "1,3-Butadiene": { mw: 54.092, gamma: 1.12, formula: "C₄H₆", category: "Olefins", Tc: 425.17, Pc: 43.30, omega: 0.1932 },
+
+  "Cyclopentane": { mw: 70.134, gamma: 1.09, formula: "c-C₅H₁₀", category: "Naphthenes", Tc: 511.69, Pc: 45.02, omega: 0.1963 },
+  "Cyclohexane": { mw: 84.161, gamma: 1.07, formula: "c-C₆H₁₂", category: "Naphthenes", Tc: 553.58, Pc: 40.73, omega: 0.2108 },
+  "Methylcyclohexane": { mw: 98.188, gamma: 1.06, formula: "MCH", category: "Naphthenes", Tc: 572.19, Pc: 34.71, omega: 0.2350 },
+
+  "Benzene": { mw: 78.114, gamma: 1.10, formula: "C₆H₆", category: "Aromatics", Tc: 562.05, Pc: 48.98, omega: 0.2103 },
+  "Toluene": { mw: 92.141, gamma: 1.07, formula: "C₇H₈", category: "Aromatics", Tc: 591.75, Pc: 41.06, omega: 0.2640 },
+  "Ethylbenzene": { mw: 106.167, gamma: 1.06, formula: "C₈H₁₀", category: "Aromatics", Tc: 617.15, Pc: 36.09, omega: 0.3035 },
+  "o-Xylene": { mw: 106.167, gamma: 1.06, formula: "o-C₈H₁₀", category: "Aromatics", Tc: 630.33, Pc: 37.34, omega: 0.3101 },
+  "p-Xylene": { mw: 106.167, gamma: 1.06, formula: "p-C₈H₁₀", category: "Aromatics", Tc: 616.23, Pc: 35.11, omega: 0.3218 },
+  "Styrene": { mw: 104.152, gamma: 1.07, formula: "C₈H₈", category: "Aromatics", Tc: 636.00, Pc: 38.40, omega: 0.2971 },
+
+  "Carbon Dioxide": { mw: 44.010, gamma: 1.29, formula: "CO₂", category: "Acid / Sour", Tc: 304.13, Pc: 73.77, omega: 0.2239 },
+  "Hydrogen Sulfide": { mw: 34.082, gamma: 1.32, formula: "H₂S", category: "Acid / Sour", Tc: 373.53, Pc: 89.63, omega: 0.0942 },
+  "Sulfur Dioxide": { mw: 64.066, gamma: 1.26, formula: "SO₂", category: "Acid / Sour", Tc: 430.80, Pc: 78.84, omega: 0.2451 },
+
+  "Carbonyl Sulfide": { mw: 60.075, gamma: 1.21, formula: "COS", category: "Sulfur Compounds", Tc: 378.80, Pc: 63.49, omega: 0.0978 },
+  "Carbon Disulfide": { mw: 76.141, gamma: 1.21, formula: "CS₂", category: "Sulfur Compounds", Tc: 552.00, Pc: 79.00, omega: 0.1087 },
+  "Methyl Mercaptan": { mw: 48.109, gamma: 1.19, formula: "CH₃SH", category: "Sulfur Compounds", Tc: 469.95, Pc: 72.30, omega: 0.1530 },
+  "Ethyl Mercaptan": { mw: 62.136, gamma: 1.14, formula: "C₂H₅SH", category: "Sulfur Compounds", Tc: 499.15, Pc: 54.90, omega: 0.1900 },
+  "Dimethyl Sulfide": { mw: 62.136, gamma: 1.15, formula: "(CH₃)₂S", category: "Sulfur Compounds", Tc: 503.04, Pc: 55.30, omega: 0.1936 },
+
+  "Nitrogen": { mw: 28.014, gamma: 1.40, formula: "N₂", category: "Inerts", Tc: 126.20, Pc: 33.98, omega: 0.0372 },
+  "Oxygen": { mw: 31.999, gamma: 1.40, formula: "O₂", category: "Inerts", Tc: 154.58, Pc: 50.43, omega: 0.0222 },
+  "Hydrogen": { mw: 2.016, gamma: 1.41, formula: "H₂", category: "Inerts", Tc: 33.19, Pc: 13.13, omega: -0.2160 },
+  "Helium": { mw: 4.003, gamma: 1.66, formula: "He", category: "Inerts", Tc: 5.19, Pc: 2.27, omega: -0.3900 },
+  "Argon": { mw: 39.948, gamma: 1.67, formula: "Ar", category: "Inerts", Tc: 150.86, Pc: 48.98, omega: -0.0022 },
+  "Water Vapor": { mw: 18.015, gamma: 1.33, formula: "H₂O", category: "Other", Tc: 647.14, Pc: 220.64, omega: 0.3449 },
+  "Carbon Monoxide": { mw: 28.010, gamma: 1.40, formula: "CO", category: "Other", Tc: 132.85, Pc: 34.94, omega: 0.0482 },
+  "Ammonia": { mw: 17.031, gamma: 1.31, formula: "NH₃", category: "Other", Tc: 405.40, Pc: 113.53, omega: 0.2526 },
+  "Nitric Oxide": { mw: 30.006, gamma: 1.40, formula: "NO", category: "Other", Tc: 180.00, Pc: 64.80, omega: 0.5830 },
+  "Nitrous Oxide": { mw: 44.013, gamma: 1.27, formula: "N₂O", category: "Other", Tc: 309.57, Pc: 72.45, omega: 0.1413 },
+  "Hydrogen Chloride": { mw: 36.461, gamma: 1.40, formula: "HCl", category: "Other", Tc: 324.65, Pc: 83.10, omega: 0.1319 },
+  "Acetylene": { mw: 26.038, gamma: 1.24, formula: "C₂H₂", category: "Other", Tc: 308.30, Pc: 61.14, omega: 0.1912 },
+  "Methanol Vapor": { mw: 32.042, gamma: 1.20, formula: "CH₃OH", category: "Other", Tc: 512.64, Pc: 80.97, omega: 0.5656 },
+  "Air (dry)": { mw: 28.966, gamma: 1.40, formula: "—", category: "Inerts", Tc: 132.45, Pc: 37.71, omega: 0.0350 },
 };
 
 export const VELOCITY_LIMITS = {
