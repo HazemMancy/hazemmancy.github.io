@@ -200,39 +200,6 @@ export default function CalculatorsIndexPage() {
           </div>
 
           <div className="grid gap-3 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            <Link href="/calculators/piping-components">
-              <Card
-                className="h-full hover-elevate cursor-pointer transition-all group border-primary/20"
-                data-testid="card-calc-piping-components"
-              >
-                <CardContent className="p-4 md:p-6 flex flex-col h-full">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="p-2.5 rounded-md bg-primary/10 shrink-0">
-                      <Cylinder className="w-5 h-5 text-primary" />
-                    </div>
-                    <Badge variant="outline" className="text-[10px] shrink-0 text-primary">
-                      Data Module
-                    </Badge>
-                  </div>
-                  <h3 className="font-semibold text-sm mb-2" data-testid="text-calc-title-piping-components">
-                    Piping Components
-                  </h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed mb-4 flex-1">
-                    Built-in ASME dimensional data bank for pipe, flanges, fittings, gaskets, valves, line blanks & olets — plus pipe flexibility and safe span screening.
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    <Badge variant="secondary" className="text-[10px] font-normal">9 Categories</Badge>
-                    <Badge variant="secondary" className="text-[10px] font-normal">ASME Data</Badge>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-muted/30 pt-3 mt-auto">
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-[10px] text-muted-foreground/70">ASME B16/B36</span>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
             {calculators.map((calc) => (
               <Link key={calc.href} href={calc.href}>
                 <Card
@@ -284,6 +251,39 @@ export default function CalculatorsIndexPage() {
                 </Card>
               </Link>
             ))}
+            <Link href="/calculators/piping-components">
+              <Card
+                className="h-full hover-elevate cursor-pointer transition-all group border-primary/20"
+                data-testid="card-calc-piping-components"
+              >
+                <CardContent className="p-4 md:p-6 flex flex-col h-full">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="p-2.5 rounded-md bg-primary/10 shrink-0">
+                      <Cylinder className="w-5 h-5 text-primary" />
+                    </div>
+                    <Badge variant="outline" className="text-[10px] shrink-0 text-primary">
+                      Data Module
+                    </Badge>
+                  </div>
+                  <h3 className="font-semibold text-sm mb-2" data-testid="text-calc-title-piping-components">
+                    Piping Components
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-4 flex-1">
+                    Built-in ASME dimensional data bank for pipe, flanges, fittings, gaskets, valves, line blanks & olets — plus pipe flexibility and safe span screening.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    <Badge variant="secondary" className="text-[10px] font-normal">9 Categories</Badge>
+                    <Badge variant="secondary" className="text-[10px] font-normal">ASME Data</Badge>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-muted/30 pt-3 mt-auto">
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-[10px] text-muted-foreground/70">ASME B16/B36</span>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           </div>
 
           <div className="text-center mt-12 md:mt-16">
