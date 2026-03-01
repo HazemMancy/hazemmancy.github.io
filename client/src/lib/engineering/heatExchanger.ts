@@ -290,20 +290,39 @@ function computeLMTD(dT1: number, dT2: number, trace: CalcTrace): number {
 
 function correctionFactor1_2(R: number, P: number): number {
   if (P <= 0 || P >= 1) return 0.5;
+  if (R <= 0) return 0.5;
+
   if (Math.abs(R - 1) < 1e-6) {
-    const F = (P * Math.sqrt(2)) / ((1 - P) * Math.log((2 - P * (2 - Math.sqrt(2))) / (2 - P * (2 + Math.sqrt(2)))));
+    const sqrt2 = Math.sqrt(2);
+    const innerDen = 2 - P * (2 + sqrt2);
+    if (innerDen <= 0) return 0.5;
+    const innerNum = 2 - P * (2 - sqrt2);
+    const ratio = innerNum / innerDen;
+    if (ratio <= 0) return 0.5;
+    const logRatio = Math.log(ratio);
+    if (Math.abs(logRatio) < 1e-10) return 1.0;
+    const F = (P * sqrt2) / ((1 - P) * logRatio);
+    if (!isFinite(F)) return 0.5;
     return Math.min(Math.max(F, 0.3), 1.0);
   }
-  const S = Math.sqrt(R * R + 1) / (R - 1);
-  const W = (1 - P * R) / (1 - P);
-  if (W <= 0) return 0.5;
+
+  const sqrtR2p1 = Math.sqrt(R * R + 1);
+  const S = sqrtR2p1 / (R - 1);
+
+  const wDen = 1 - P * R;
+  if (wDen <= 0) return 0.5;
+  const W = (1 - P) / wDen;
+  if (W <= 0 || !isFinite(W)) return 0.5;
   const num = S * Math.log(W);
-  const A = (2 / P - 1 - R + Math.sqrt(R * R + 1));
-  const B = (2 / P - 1 - R - Math.sqrt(R * R + 1));
-  if (B === 0 || A / B <= 0) return 0.75;
+
+  const A = (2 / P - 1 - R + sqrtR2p1);
+  const B = (2 / P - 1 - R - sqrtR2p1);
+  if (B <= 0 || A / B <= 0) return 0.5;
   const den = Math.log(A / B);
   if (Math.abs(den) < 1e-10) return 1.0;
-  return Math.min(Math.max(num / den, 0.3), 1.0);
+  const F = num / den;
+  if (!isFinite(F)) return 0.5;
+  return Math.min(Math.max(F, 0.3), 1.0);
 }
 
 function correctionFactorNShell(R: number, P: number, N: number): number {
@@ -1113,7 +1132,7 @@ export const HX_TEST_CASE_OIL_COOLER: OperatingCase = {
     mDot: 30000,
     cp: 4.18,
     tIn: 25,
-    tOut: 65,
+    tOut: 53,
     tOutKnown: true,
     phaseNote: "single_phase",
   },

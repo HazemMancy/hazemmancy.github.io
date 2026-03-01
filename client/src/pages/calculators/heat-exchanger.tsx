@@ -48,6 +48,9 @@ const TABS = [
 
 const pU = (param: string, us: UnitSystem) => getUnit(param, us);
 
+const numVal = (v: number): string | number => (v === 0 ? "" : v);
+const tempVal = (v: number): number => v;
+
 function fmtN(n: number, d = 2): string {
   if (Math.abs(n) >= 1e6 || (Math.abs(n) < 0.001 && n !== 0)) return n.toExponential(3);
   if (Math.abs(n) >= 1000) return n.toFixed(1);
@@ -115,7 +118,7 @@ export default function HeatExchangerPage() {
       const geo = geoArea ? parseFloat(geoArea) : undefined;
       const r = calculateHeatExchangerFull(project, convertedCases, config, uInput, geo);
       setResult(r);
-      setActiveTab("lmtd");
+      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);
@@ -433,13 +436,13 @@ export default function HeatExchangerPage() {
                       <p className="text-xs font-medium text-red-400/80">Hot Side</p>
                       <div className="grid gap-2 grid-cols-2">
                         <div><Label className="text-xs mb-1 block">T_in ({pU("temperature", unitSystem)})</Label>
-                          <Input type="number" className="h-8 text-xs" value={c.hotSide.tIn || ""} onChange={e => updateCaseHot(idx, "tIn", parseFloat(e.target.value) || 0)} data-testid={`input-thi-${idx}`} /></div>
+                          <Input type="number" className="h-8 text-xs" value={tempVal(c.hotSide.tIn)} onChange={e => updateCaseHot(idx, "tIn", parseFloat(e.target.value) || 0)} data-testid={`input-thi-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">T_out ({pU("temperature", unitSystem)}){c.dutyMode === "one_outlet_unknown" && !c.hotSide.tOutKnown ? " (auto)" : ""}</Label>
-                          <Input type="number" className="h-8 text-xs" value={c.hotSide.tOut || ""} onChange={e => updateCaseHot(idx, "tOut", parseFloat(e.target.value) || 0)}
+                          <Input type="number" className="h-8 text-xs" value={tempVal(c.hotSide.tOut)} onChange={e => updateCaseHot(idx, "tOut", parseFloat(e.target.value) || 0)}
                             disabled={c.dutyMode === "one_outlet_unknown" && !c.hotSide.tOutKnown}
                             data-testid={`input-tho-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Flow ({pU("flowMass", unitSystem)})</Label>
-                          <Input type="number" className="h-8 text-xs" value={c.hotSide.mDot || ""} onChange={e => updateCaseHot(idx, "mDot", parseFloat(e.target.value) || 0)} data-testid={`input-hot-flow-${idx}`} /></div>
+                          <Input type="number" className="h-8 text-xs" value={numVal(c.hotSide.mDot)} onChange={e => updateCaseHot(idx, "mDot", parseFloat(e.target.value) || 0)} data-testid={`input-hot-flow-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Cp (kJ/(kg·K))</Label>
                           <Input type="number" className="h-8 text-xs" value={c.hotSide.cp || ""} onChange={e => updateCaseHot(idx, "cp", parseFloat(e.target.value) || 0)} data-testid={`input-hot-cp-${idx}`} /></div>
                       </div>
@@ -457,13 +460,13 @@ export default function HeatExchangerPage() {
                       <p className="text-xs font-medium text-blue-400/80">Cold Side</p>
                       <div className="grid gap-2 grid-cols-2">
                         <div><Label className="text-xs mb-1 block">T_in ({pU("temperature", unitSystem)})</Label>
-                          <Input type="number" className="h-8 text-xs" value={c.coldSide.tIn || ""} onChange={e => updateCaseCold(idx, "tIn", parseFloat(e.target.value) || 0)} data-testid={`input-tci-${idx}`} /></div>
+                          <Input type="number" className="h-8 text-xs" value={tempVal(c.coldSide.tIn)} onChange={e => updateCaseCold(idx, "tIn", parseFloat(e.target.value) || 0)} data-testid={`input-tci-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">T_out ({pU("temperature", unitSystem)}){c.dutyMode === "one_outlet_unknown" && !c.coldSide.tOutKnown ? " (auto)" : ""}</Label>
-                          <Input type="number" className="h-8 text-xs" value={c.coldSide.tOut || ""} onChange={e => updateCaseCold(idx, "tOut", parseFloat(e.target.value) || 0)}
+                          <Input type="number" className="h-8 text-xs" value={tempVal(c.coldSide.tOut)} onChange={e => updateCaseCold(idx, "tOut", parseFloat(e.target.value) || 0)}
                             disabled={c.dutyMode === "one_outlet_unknown" && !c.coldSide.tOutKnown}
                             data-testid={`input-tco-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Flow ({pU("flowMass", unitSystem)})</Label>
-                          <Input type="number" className="h-8 text-xs" value={c.coldSide.mDot || ""} onChange={e => updateCaseCold(idx, "mDot", parseFloat(e.target.value) || 0)} data-testid={`input-cold-flow-${idx}`} /></div>
+                          <Input type="number" className="h-8 text-xs" value={numVal(c.coldSide.mDot)} onChange={e => updateCaseCold(idx, "mDot", parseFloat(e.target.value) || 0)} data-testid={`input-cold-flow-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Cp (kJ/(kg·K))</Label>
                           <Input type="number" className="h-8 text-xs" value={c.coldSide.cp || ""} onChange={e => updateCaseCold(idx, "cp", parseFloat(e.target.value) || 0)} data-testid={`input-cold-cp-${idx}`} /></div>
                       </div>
@@ -912,19 +915,26 @@ export default function HeatExchangerPage() {
         </TabsContent>
       </Tabs>
 
+      {error && (
+        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md mt-4" data-testid="text-error-global">
+          <AlertTriangle className="w-4 h-4 inline mr-2" />{error}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 mt-4">
         <Button size="sm" variant="outline" onClick={goPrev} disabled={tabIdx <= 0} data-testid="button-prev">
           <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Back
         </Button>
-        {activeTab !== "results" ? (
-          <Button size="sm" onClick={goNext} data-testid="button-next">
-            Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="default" onClick={handleCalculate} data-testid="button-calculate-main">
+            <Calculator className="w-3.5 h-3.5 mr-1" /> Calculate
           </Button>
-        ) : (
-          <Button size="sm" onClick={handleCalculate} data-testid="button-recalculate">
-            Recalculate
-          </Button>
-        )}
+          {activeTab !== "results" && tabIdx < TABS.length - 1 && (
+            <Button size="sm" variant="outline" onClick={goNext} data-testid="button-next">
+              Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
