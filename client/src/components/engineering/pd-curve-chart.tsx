@@ -37,10 +37,10 @@ const COLORS = {
   actualFlowGradientMid: "rgba(34, 197, 94, 0.05)",
   actualFlowGradientEnd: "rgba(34, 197, 94, 0.01)",
   slipLine: "#ef4444",
-  slipFill: "rgba(239, 68, 68, 0.12)",
-  slipGradientStart: "rgba(239, 68, 68, 0.25)",
-  slipGradientMid: "rgba(239, 68, 68, 0.12)",
-  slipGradientEnd: "rgba(239, 68, 68, 0.04)",
+  slipFill: "rgba(239, 68, 68, 0.18)",
+  slipGradientStart: "rgba(239, 68, 68, 0.35)",
+  slipGradientMid: "rgba(239, 68, 68, 0.18)",
+  slipGradientEnd: "rgba(239, 68, 68, 0.06)",
   power: "#f59e0b",
   volEfficiency: "#8b5cf6",
   operatingPoint: "#3b82f6",
@@ -336,10 +336,28 @@ export function PDCurveChart({
                 fill="url(#pdSlipGrad)"
                 fillOpacity={1}
                 stroke={COLORS.slipLine}
-                strokeWidth={1.8}
+                strokeWidth={2}
                 strokeDasharray="5 3"
                 name="slipFlow"
                 activeDot={false}
+              />
+
+              <ReferenceArea
+                yAxisId="flow"
+                x1={parseFloat(convertPressure(differentialPressureBar * 0.6).toFixed(2))}
+                x2={parseFloat(convertPressure(differentialPressureBar * 1.4).toFixed(2))}
+                y1={parseFloat(convertFlow(designFlowSI / volEff * 0.92).toFixed(2))}
+                y2={parseFloat(convertFlow(designFlowSI / volEff).toFixed(2))}
+                fill="transparent"
+                stroke="none"
+                label={{
+                  value: "Slip Region",
+                  position: "insideTop",
+                  fill: COLORS.slipLine,
+                  fontSize: 8,
+                  fontWeight: 600,
+                  opacity: 0.55,
+                }}
               />
 
               <Line

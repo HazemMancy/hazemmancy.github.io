@@ -69,7 +69,7 @@ export default function PipingComponentsIndex() {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{info.desc}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1 line-clamp-3">{info.desc}</p>
                       <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-auto flex-wrap">
                         <div className="flex flex-wrap gap-1">
                           {info.standards.map(s => (
@@ -100,7 +100,7 @@ export default function PipingComponentsIndex() {
                         <h3 className="font-semibold text-sm flex-1">{CATEGORY_LABELS[cat as PipingCategory]}</h3>
                         <Badge variant="outline" className="text-[10px] shrink-0 no-default-hover-elevate no-default-active-elevate">Calculator</Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{info.desc}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1 line-clamp-3">{info.desc}</p>
                       <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-auto flex-wrap">
                         <Badge variant="outline" className="text-[10px] no-default-hover-elevate no-default-active-elevate">{info.standards[0]}</Badge>
                         <ArrowRight className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
