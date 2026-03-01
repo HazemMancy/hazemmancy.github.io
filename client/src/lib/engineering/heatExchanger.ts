@@ -221,6 +221,308 @@ export interface CaseResult {
   trace: CalcTrace;
 }
 
+export interface TubeGeometryInput {
+  tubeOD_mm: number;
+  tubeWT_mm: number;
+  tubeLength_m: number;
+  tubePitch: "triangular" | "square";
+  pitchRatio: number;
+  tubePasses: number;
+  tubeSideDensity: number;
+}
+
+export interface TubeGeometryResult {
+  tubeID_mm: number;
+  singleTubeArea_m2: number;
+  numberOfTubes: number;
+  tubeSideFlowArea_m2: number;
+  tubeSideVelocity_ms: number;
+  bundleDiameter_mm: number;
+  shellID_mm: number;
+  shellClearance_mm: number;
+  velocityCheck: "low" | "ok" | "high";
+  velocityNote: string;
+  steps: CalcStep[];
+}
+
+export const STANDARD_TUBE_SIZES: { od_mm: number; bwg: number; wt_mm: number; id_mm: number }[] = [
+  { od_mm: 19.05, bwg: 14, wt_mm: 2.11, id_mm: 14.83 },
+  { od_mm: 19.05, bwg: 16, wt_mm: 1.65, id_mm: 15.75 },
+  { od_mm: 25.4, bwg: 12, wt_mm: 2.77, id_mm: 19.86 },
+  { od_mm: 25.4, bwg: 14, wt_mm: 2.11, id_mm: 21.18 },
+  { od_mm: 25.4, bwg: 16, wt_mm: 1.65, id_mm: 22.10 },
+  { od_mm: 31.75, bwg: 14, wt_mm: 2.11, id_mm: 27.53 },
+  { od_mm: 38.1, bwg: 14, wt_mm: 2.11, id_mm: 33.88 },
+  { od_mm: 50.8, bwg: 14, wt_mm: 2.11, id_mm: 46.58 },
+];
+
+export type TEMAType = "BEM" | "AES" | "AET" | "BEU" | "AEP" | "AKT";
+
+export interface TEMAGuidance {
+  recommended: TEMAType;
+  alternatives: TEMAType[];
+  reasoning: string[];
+  tubeSideIsHot: boolean;
+  fluidAllocation: {
+    tubeSide: string;
+    shellSide: string;
+    reasons: string[];
+  };
+}
+
+export const TEMA_TYPES: Record<TEMAType, { name: string; description: string; pros: string[]; cons: string[] }> = {
+  BEM: {
+    name: "Fixed Tubesheet",
+    description: "Bonnet cover, single-pass shell, fixed tubesheet",
+    pros: ["Simple & economical", "High heat transfer efficiency", "Compact design"],
+    cons: ["Shell-side cleaning difficult", "Limited to low ΔT (thermal expansion)", "Cannot handle high fouling shell-side"],
+  },
+  AES: {
+    name: "Floating Head (split ring)",
+    description: "Channel with removable cover, single-pass shell, split-ring floating head",
+    pros: ["Allows thermal expansion", "Easy mechanical cleaning both sides", "Suitable for high ΔT"],
+    cons: ["Higher cost than fixed tubesheet", "More complex sealing", "Larger footprint"],
+  },
+  AET: {
+    name: "Floating Head (pull-through)",
+    description: "Channel with removable cover, single-pass shell, pull-through floating head",
+    pros: ["Easiest bundle removal", "Best for heavy fouling", "Full cleaning access"],
+    cons: ["Most expensive floating head", "Larger shell required", "Some bypass around floating head flange"],
+  },
+  BEU: {
+    name: "U-Tube",
+    description: "Bonnet cover, single-pass shell, U-tube bundle",
+    pros: ["Thermal expansion naturally absorbed", "Lower cost than floating head", "Good for high ΔT"],
+    cons: ["Tube-side mechanical cleaning difficult", "Cannot replace individual tubes", "Inner tube rows difficult to support"],
+  },
+  AEP: {
+    name: "Outside Packed Floating Head",
+    description: "Channel with removable cover, single-pass shell, outside packed floating head",
+    pros: ["Allows thermal expansion", "Less costly than AES/AET", "Easy tube-side cleaning"],
+    cons: ["Shell-side cleaning limited", "Packing may leak", "Not for hazardous shell-side fluids"],
+  },
+  AKT: {
+    name: "Kettle Reboiler",
+    description: "Channel with removable cover, kettle-type shell, pull-through floating head",
+    pros: ["Ideal for vaporization/reboiler service", "Large vapor disengaging space", "High heat flux capability"],
+    cons: ["Large shell diameter", "High cost", "Shell-side level control required"],
+  },
+};
+
+const BUNDLE_CONSTANTS: Record<string, Record<number, { K1: number; n1: number }>> = {
+  triangular: {
+    1: { K1: 0.319, n1: 2.142 },
+    2: { K1: 0.249, n1: 2.207 },
+    4: { K1: 0.175, n1: 2.285 },
+    6: { K1: 0.0743, n1: 2.499 },
+    8: { K1: 0.0365, n1: 2.675 },
+  },
+  square: {
+    1: { K1: 0.215, n1: 2.207 },
+    2: { K1: 0.156, n1: 2.291 },
+    4: { K1: 0.158, n1: 2.263 },
+    6: { K1: 0.0402, n1: 2.617 },
+    8: { K1: 0.0331, n1: 2.643 },
+  },
+};
+
+export function computeTubeGeometry(
+  aDesign_m2: number,
+  tubeSideMassFlow_kgph: number,
+  tubeInput: TubeGeometryInput,
+): TubeGeometryResult {
+  const steps: CalcStep[] = [];
+
+  const tubeID_mm = tubeInput.tubeOD_mm - 2 * tubeInput.tubeWT_mm;
+  const tubeID_m = tubeID_mm / 1000;
+  const tubeOD_m = tubeInput.tubeOD_mm / 1000;
+
+  const singleTubeArea = Math.PI * tubeOD_m * tubeInput.tubeLength_m;
+  steps.push({
+    name: "Single tube area",
+    equation: "A_tube = π × OD × L",
+    substitution: `π × ${tubeOD_m.toFixed(4)} × ${tubeInput.tubeLength_m.toFixed(2)}`,
+    result: `${singleTubeArea.toFixed(4)} m²`,
+  });
+
+  const nTubes = Math.ceil(aDesign_m2 / singleTubeArea);
+  steps.push({
+    name: "Number of tubes",
+    equation: "N_t = A_design / A_tube (rounded up)",
+    substitution: `${aDesign_m2.toFixed(2)} / ${singleTubeArea.toFixed(4)}`,
+    result: `${nTubes} tubes`,
+  });
+
+  const tubesPerPass = nTubes / tubeInput.tubePasses;
+  const flowAreaPerTube = (Math.PI / 4) * tubeID_m * tubeID_m;
+  const tubeSideFlowArea = tubesPerPass * flowAreaPerTube;
+
+  steps.push({
+    name: "Tube-side flow area",
+    equation: "A_flow = (N_t / N_passes) × (π/4) × ID²",
+    substitution: `(${nTubes}/${tubeInput.tubePasses}) × (π/4) × ${tubeID_m.toFixed(4)}²`,
+    result: `${(tubeSideFlowArea * 1e4).toFixed(2)} cm² (${tubeSideFlowArea.toFixed(6)} m²)`,
+  });
+
+  const massFlowKgs = tubeSideMassFlow_kgph / 3600;
+  let velocity = 0;
+  if (tubeInput.tubeSideDensity > 0 && tubeSideFlowArea > 0) {
+    const volFlowM3s = massFlowKgs / tubeInput.tubeSideDensity;
+    velocity = volFlowM3s / tubeSideFlowArea;
+  }
+
+  steps.push({
+    name: "Tube-side velocity",
+    equation: "v = ṁ / (ρ × A_flow)",
+    substitution: tubeInput.tubeSideDensity > 0
+      ? `(${tubeSideMassFlow_kgph.toFixed(0)} / 3600) / (${tubeInput.tubeSideDensity.toFixed(0)} × ${tubeSideFlowArea.toFixed(6)})`
+      : "density = 0 — cannot compute velocity",
+    result: tubeInput.tubeSideDensity > 0 ? `${velocity.toFixed(2)} m/s` : "N/A (density required)",
+  });
+
+  let velocityCheck: "low" | "ok" | "high" = "ok";
+  let velocityNote = `${velocity.toFixed(2)} m/s — within typical range`;
+  if (tubeInput.tubeSideDensity <= 0) {
+    velocityCheck = "low";
+    velocityNote = "Density not provided — cannot check velocity";
+  } else if (velocity < 1.0) {
+    velocityCheck = "low";
+    velocityNote = `${velocity.toFixed(2)} m/s — LOW: may cause fouling/sedimentation (min ~1 m/s for water, 1.5 m/s = 5 ft/s recommended)`;
+  } else if (velocity > 3.0) {
+    velocityCheck = "high";
+    velocityNote = `${velocity.toFixed(2)} m/s — HIGH: check erosion limits and pressure drop (typical max ~3 m/s for liquids)`;
+  }
+
+  const passes = tubeInput.tubePasses;
+  const closestPasses = [1, 2, 4, 6, 8].reduce((prev, curr) =>
+    Math.abs(curr - passes) < Math.abs(prev - passes) ? curr : prev
+  );
+  const constants = BUNDLE_CONSTANTS[tubeInput.tubePitch][closestPasses];
+  const K1 = constants.K1;
+  const n1 = constants.n1;
+  const bundleDiameter = tubeInput.tubeOD_mm * Math.pow(nTubes / K1, 1 / n1);
+
+  steps.push({
+    name: "Bundle diameter (Db)",
+    equation: `Db = OD × (N_t / K1)^(1/n1) — K1=${K1}, n1=${n1} (${tubeInput.tubePitch}, ${closestPasses}-pass, Pt/OD=${tubeInput.pitchRatio})`,
+    substitution: `${tubeInput.tubeOD_mm} × (${nTubes} / ${K1})^(1/${n1})`,
+    result: `${bundleDiameter.toFixed(0)} mm`,
+  });
+
+  const clearance = bundleDiameter < 300 ? 12 : bundleDiameter < 600 ? 25 : bundleDiameter < 1000 ? 35 : 45;
+  const shellID = bundleDiameter + clearance * 2;
+
+  steps.push({
+    name: "Shell ID estimate",
+    equation: "D_s = Db + 2 × clearance",
+    substitution: `${bundleDiameter.toFixed(0)} + 2 × ${clearance}`,
+    result: `${shellID.toFixed(0)} mm`,
+  });
+
+  return {
+    tubeID_mm,
+    singleTubeArea_m2: singleTubeArea,
+    numberOfTubes: nTubes,
+    tubeSideFlowArea_m2: tubeSideFlowArea,
+    tubeSideVelocity_ms: velocity,
+    bundleDiameter_mm: bundleDiameter,
+    shellID_mm: shellID,
+    shellClearance_mm: clearance,
+    velocityCheck,
+    velocityNote,
+    steps,
+  };
+}
+
+export function generateTEMAGuidance(
+  hotSide: StreamSide,
+  coldSide: StreamSide,
+  tempDiffMax: number,
+  config: ExchangerConfig,
+): TEMAGuidance {
+  const reasons: string[] = [];
+  const fluidReasons: string[] = [];
+  let tubeSideIsHot = false;
+  let recommended: TEMAType = "BEM";
+  const alternatives: TEMAType[] = [];
+
+  const maxMetalDeltaT = Math.max(
+    tempDiffMax,
+    Math.abs(hotSide.tIn - coldSide.tOut),
+    Math.abs(hotSide.tOut - coldSide.tIn),
+  );
+
+  const isCondensing = hotSide.phaseNote === "condensing" || coldSide.phaseNote === "condensing";
+  const isBoiling = hotSide.phaseNote === "boiling" || coldSide.phaseNote === "boiling";
+
+  if (maxMetalDeltaT > 80) {
+    recommended = "BEU";
+    reasons.push(`Large ΔT across exchanger (${maxMetalDeltaT.toFixed(0)}°C > 80°C) — U-tube or floating head needed for thermal expansion`);
+    alternatives.push("AES");
+    if (maxMetalDeltaT > 150) {
+      recommended = "AES";
+      reasons.push(`Very large ΔT (${maxMetalDeltaT.toFixed(0)}°C > 150°C) — floating head preferred for cleaning access and expansion`);
+      alternatives.push("BEU", "AET");
+    }
+  } else {
+    recommended = "BEM";
+    reasons.push(`Moderate ΔT (${maxMetalDeltaT.toFixed(0)}°C ≤ 80°C) — fixed tubesheet is simplest and most economical`);
+    alternatives.push("BEU");
+  }
+
+  if (isBoiling) {
+    recommended = "AKT";
+    reasons.push("Boiling/reboiler service — kettle type provides vapor disengaging space");
+    alternatives.length = 0;
+    alternatives.push("BEU", "AES");
+  }
+
+  let allocated = false;
+  if (isCondensing) {
+    tubeSideIsHot = hotSide.phaseNote !== "condensing";
+    allocated = true;
+    fluidReasons.push("Condensing fluid → shell side (easier flow path, larger flow area)");
+  }
+
+  if (!allocated) {
+    const hotCh = hotSide.mDot * hotSide.cp;
+    const coldCc = coldSide.mDot * coldSide.cp;
+
+    if (hotSide.tIn > 200 || hotSide.tOut > 200) {
+      tubeSideIsHot = true;
+      allocated = true;
+      fluidReasons.push("High temperature fluid (>200°C) → tube side (minimizes special metallurgy cost)");
+    } else if (hotCh < coldCc) {
+      tubeSideIsHot = true;
+      fluidReasons.push("Lower heat capacity rate fluid → tube side; higher capacity rate → shell side");
+    } else {
+      tubeSideIsHot = false;
+      fluidReasons.push("Lower heat capacity rate fluid → tube side; higher capacity rate → shell side");
+    }
+    allocated = true;
+  }
+
+  if (!allocated) {
+    tubeSideIsHot = false;
+    fluidReasons.push("Default allocation: cooling medium on tube side for easier cleaning");
+  }
+
+  const tubeSideName = tubeSideIsHot ? (hotSide.name || "Hot fluid") : (coldSide.name || "Cold fluid");
+  const shellSideName = tubeSideIsHot ? (coldSide.name || "Cold fluid") : (hotSide.name || "Hot fluid");
+
+  return {
+    recommended,
+    alternatives: alternatives.filter(a => a !== recommended),
+    reasoning: reasons,
+    tubeSideIsHot,
+    fluidAllocation: {
+      tubeSide: tubeSideName,
+      shellSide: shellSideName,
+      reasons: fluidReasons,
+    },
+  };
+}
+
 export interface GeometryCheck {
   aSelected: number;
   qAchieved: number;

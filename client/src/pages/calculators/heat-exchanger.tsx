@@ -16,10 +16,12 @@ import {
   type HXProject, type OperatingCase, type ExchangerConfig, type UInput,
   type HXFullResult, type CaseResult, type StreamSide, type FlowArrangement,
   type FMode, type UMode, type DutyMode,
+  type TubeGeometryInput, type TubeGeometryResult, type TEMAGuidance,
   DEFAULT_PROJECT, DEFAULT_CASE, DEFAULT_CONFIG, DEFAULT_U_INPUT, DEFAULT_STREAM,
   HX_TEST_CASE_OIL_COOLER, HX_TEST_CONFIG, HX_TEST_U_INPUT,
   TYPICAL_U_VALUES, TEMA_FOULING_FACTORS, FLAG_LABELS, FLAG_SEVERITY,
-  calculateHeatExchangerFull,
+  STANDARD_TUBE_SIZES, TEMA_TYPES,
+  calculateHeatExchangerFull, computeTubeGeometry, generateTEMAGuidance,
 } from "@/lib/engineering/heatExchanger";
 import {
   DropdownMenu,
@@ -66,6 +68,12 @@ export default function HeatExchangerPage() {
   const [config, setConfig] = useState<ExchangerConfig>({ ...DEFAULT_CONFIG });
   const [uInput, setUInput] = useState<UInput>({ ...DEFAULT_U_INPUT });
   const [geoArea, setGeoArea] = useState<string>("");
+  const [tubeGeo, setTubeGeo] = useState<TubeGeometryInput>({
+    tubeOD_mm: 25.4, tubeWT_mm: 2.11, tubeLength_m: 6.0,
+    tubePitch: "triangular", pitchRatio: 1.25, tubePasses: 2, tubeSideDensity: 1000,
+  });
+  const [tubeGeoResult, setTubeGeoResult] = useState<TubeGeometryResult | null>(null);
+  const [temaGuidance, setTemaGuidance] = useState<TEMAGuidance | null>(null);
   const [result, setResult] = useState<HXFullResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,6 +105,15 @@ export default function HeatExchangerPage() {
     setCases(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const recomputeTubeGeo = () => {
+    if (!result?.governingCase || !temaGuidance) return;
+    const gc = result.governingCase;
+    const tubeSideMassFlow = temaGuidance.tubeSideIsHot ? gc.hotSide.mDot : gc.coldSide.mDot;
+    if (gc.aDesign > 0 && tubeSideMassFlow > 0) {
+      setTubeGeoResult(computeTubeGeometry(gc.aDesign, tubeSideMassFlow, tubeGeo));
+    }
+  };
+
   const handleCalculate = () => {
     setError(null);
     try {
@@ -118,6 +135,19 @@ export default function HeatExchangerPage() {
       const geo = geoArea ? parseFloat(geoArea) : undefined;
       const r = calculateHeatExchangerFull(project, convertedCases, config, uInput, geo);
       setResult(r);
+
+      if (r.governingCase) {
+        const gc = r.governingCase;
+        const guidance = generateTEMAGuidance(gc.hotSide, gc.coldSide, Math.abs(gc.hotSide.tIn - gc.coldSide.tIn), config);
+        setTemaGuidance(guidance);
+
+        const tubeSideMassFlow = guidance.tubeSideIsHot ? gc.hotSide.mDot : gc.coldSide.mDot;
+        if (gc.aDesign > 0 && tubeSideMassFlow > 0) {
+          const tgr = computeTubeGeometry(gc.aDesign, tubeSideMassFlow, tubeGeo);
+          setTubeGeoResult(tgr);
+        }
+      }
+
       setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
@@ -140,6 +170,7 @@ export default function HeatExchangerPage() {
     setConfig({ ...DEFAULT_CONFIG });
     setUInput({ ...DEFAULT_U_INPUT });
     setGeoArea("");
+    setTubeGeoResult(null); setTemaGuidance(null);
     setResult(null); setError(null);
     setActiveTab("project");
   };
@@ -748,33 +779,211 @@ export default function HeatExchangerPage() {
         </TabsContent>
 
         <TabsContent value="geometry">
-          <Card>
-            <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Geometry & Preliminary Selection</h3></CardHeader>
-            <CardContent className="space-y-4 pt-0">
-              <p className="text-xs text-muted-foreground">
-                Enter a candidate area to check achieved duty. Geometry and baffle design not included — vendor rating required.
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div><Label className="text-xs mb-1.5 block">Selected Area A (m²)</Label>
-                  <Input type="number" value={geoArea} onChange={e => setGeoArea(e.target.value)} placeholder="e.g. 50" data-testid="input-geo-area" /></div>
-              </div>
-              {geoArea && result?.governingCase && (
-                <div className="space-y-2">
-                  <Button size="sm" onClick={handleCalculate} data-testid="button-check-geometry">Check Area</Button>
-                  {result.geometry && (
-                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-                      <ResultBox label="A selected" value={`${fmtN(result.geometry.aSelected)} m²`} />
-                      <ResultBox label="Q achieved" value={`${fmtN(result.geometry.qAchieved)} kW`} />
-                      <ResultBox label="Excess area" value={`${fmtN(result.geometry.excessArea)}%`} highlight={result.geometry.excessArea < 0} />
-                    </div>
-                  )}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Tube Sizing (Preliminary)</h3></CardHeader>
+              <CardContent className="space-y-4 pt-0">
+                <p className="text-xs text-muted-foreground">
+                  Select tube dimensions to estimate tube count, bundle/shell diameter, and tube-side velocity. Per reference design steps 5-6.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Tube OD × BWG</Label>
+                    <Select value={`${tubeGeo.tubeOD_mm}_${tubeGeo.tubeWT_mm}`} onValueChange={v => {
+                      const [od, wt] = v.split("_").map(Number);
+                      setTubeGeo(g => ({ ...g, tubeOD_mm: od, tubeWT_mm: wt }));
+                    }}>
+                      <SelectTrigger className="text-xs" data-testid="select-tube-size"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STANDARD_TUBE_SIZES.map(t => (
+                          <SelectItem key={`${t.od_mm}_${t.wt_mm}`} value={`${t.od_mm}_${t.wt_mm}`} className="text-xs">
+                            {t.od_mm} mm OD × BWG {t.bwg} (WT {t.wt_mm}, ID {t.id_mm} mm)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Tube Length (m)</Label>
+                    <Select value={String(tubeGeo.tubeLength_m)} onValueChange={v => setTubeGeo(g => ({ ...g, tubeLength_m: parseFloat(v) }))}>
+                      <SelectTrigger className="text-xs" data-testid="select-tube-length"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[2.44, 3.05, 3.66, 4.88, 6.10].map(l => (
+                          <SelectItem key={l} value={String(l)} className="text-xs">{l} m ({(l * 3.281).toFixed(0)} ft)</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Tube Pitch</Label>
+                    <Select value={tubeGeo.tubePitch} onValueChange={v => setTubeGeo(g => ({ ...g, tubePitch: v as "triangular" | "square" }))}>
+                      <SelectTrigger className="text-xs" data-testid="select-tube-pitch"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="triangular">Triangular (30°) — higher HTC, compact</SelectItem>
+                        <SelectItem value="square">Square (90°) — easier cleaning</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Pitch Ratio (Pt/OD)</Label>
+                    <Input type="number" step={0.05} min={1.1} max={1.5} className="text-xs" value={tubeGeo.pitchRatio}
+                      onChange={e => setTubeGeo(g => ({ ...g, pitchRatio: parseFloat(e.target.value) || 1.25 }))} data-testid="input-pitch-ratio" />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Typical: 1.25 (triangular), 1.25–1.33 (square)</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Tube Passes</Label>
+                    <Select value={String(tubeGeo.tubePasses)} onValueChange={v => setTubeGeo(g => ({ ...g, tubePasses: parseInt(v) }))}>
+                      <SelectTrigger className="text-xs" data-testid="select-geo-tube-passes"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 4, 6, 8].map(n => (
+                          <SelectItem key={n} value={String(n)} className="text-xs">{n}-pass</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Tube-Side Density (kg/m³)</Label>
+                    <Input type="number" className="text-xs" value={tubeGeo.tubeSideDensity || ""}
+                      onChange={e => setTubeGeo(g => ({ ...g, tubeSideDensity: parseFloat(e.target.value) || 0 }))} data-testid="input-tube-density" />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Water ≈ 1000, light HC ≈ 700, heavy oil ≈ 850</p>
+                  </div>
                 </div>
-              )}
-              <div className="text-xs text-muted-foreground p-3 bg-muted/30 rounded-md">
-                Geometry and baffle design are not included in this preliminary sizing tool. Final design requires vendor thermal rating software.
-              </div>
-            </CardContent>
-          </Card>
+
+                {result?.governingCase && (
+                  <Button size="sm" variant="outline" onClick={recomputeTubeGeo} data-testid="button-recompute-tube-geo">
+                    Recalculate Tube Layout
+                  </Button>
+                )}
+
+                {tubeGeoResult && (
+                  <div className="pt-3 border-t space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground">Preliminary Tube Layout</p>
+                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+                      <ResultBox label="Tube ID" value={`${tubeGeoResult.tubeID_mm.toFixed(1)} mm`} />
+                      <ResultBox label="Tubes/Area" value={`${tubeGeoResult.singleTubeArea_m2.toFixed(4)} m²/tube`} />
+                      <ResultBox label="No. Tubes" value={`${tubeGeoResult.numberOfTubes}`} highlight />
+                      <ResultBox label="Bundle Ø" value={`${tubeGeoResult.bundleDiameter_mm.toFixed(0)} mm`} />
+                      <ResultBox label="Shell ID" value={`${tubeGeoResult.shellID_mm.toFixed(0)} mm`} highlight />
+                      <ResultBox label="Tube Velocity" value={`${tubeGeoResult.tubeSideVelocity_ms.toFixed(2)} m/s`}
+                        highlight={tubeGeoResult.velocityCheck !== "ok"} />
+                    </div>
+                    <div className={`text-xs p-2 rounded-md ${
+                      tubeGeoResult.velocityCheck === "ok" ? "bg-green-950/30 text-green-300" :
+                      tubeGeoResult.velocityCheck === "low" ? "bg-amber-950/30 text-amber-200" :
+                      "bg-red-950/30 text-red-300"
+                    }`}>
+                      {tubeGeoResult.velocityCheck === "ok" ? <CheckCircle2 className="w-3 h-3 inline mr-1" /> : <AlertTriangle className="w-3 h-3 inline mr-1" />}
+                      {tubeGeoResult.velocityNote}
+                    </div>
+                    {project.showSteps && (
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {tubeGeoResult.steps.map((step, si) => (
+                          <div key={si} className="text-xs bg-muted/30 p-2 rounded-md font-mono">
+                            <span className="text-muted-foreground">{step.name}:</span>{" "}
+                            <span className="text-primary/80">{step.equation}</span>
+                            <br />
+                            <span className="text-muted-foreground/70">{step.substitution}</span>
+                            <span className="text-foreground font-medium"> = {step.result}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Area Verification</h3></CardHeader>
+              <CardContent className="space-y-4 pt-0">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div><Label className="text-xs mb-1.5 block">Selected Area A (m²)</Label>
+                    <Input type="number" value={geoArea} onChange={e => setGeoArea(e.target.value)} placeholder="e.g. 50" data-testid="input-geo-area" /></div>
+                </div>
+                {geoArea && result?.governingCase && (
+                  <div className="space-y-2">
+                    <Button size="sm" onClick={handleCalculate} data-testid="button-check-geometry">Check Area</Button>
+                    {result.geometry && (
+                      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+                        <ResultBox label="A selected" value={`${fmtN(result.geometry.aSelected)} m²`} />
+                        <ResultBox label="Q achieved" value={`${fmtN(result.geometry.qAchieved)} kW`} />
+                        <ResultBox label="Excess area" value={`${fmtN(result.geometry.excessArea)}%`} highlight={result.geometry.excessArea < 0} />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {temaGuidance && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Settings2 className="w-4 h-4 text-primary" />
+                    <h3 className="font-semibold text-sm">TEMA Type & Fluid Allocation Guidance</h3>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-0">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="p-3 rounded-md border border-primary/30 bg-primary/5">
+                      <p className="text-xs font-semibold text-primary mb-1">Recommended: {temaGuidance.recommended}</p>
+                      <p className="text-xs text-muted-foreground">{TEMA_TYPES[temaGuidance.recommended].name}</p>
+                      <p className="text-[10px] text-muted-foreground/70 mt-1">{TEMA_TYPES[temaGuidance.recommended].description}</p>
+                      <div className="mt-2 space-y-0.5">
+                        {TEMA_TYPES[temaGuidance.recommended].pros.map((p, i) => (
+                          <p key={i} className="text-[10px] text-green-400/80">+ {p}</p>
+                        ))}
+                        {TEMA_TYPES[temaGuidance.recommended].cons.map((c, i) => (
+                          <p key={i} className="text-[10px] text-red-400/60">− {c}</p>
+                        ))}
+                      </div>
+                    </div>
+                    {temaGuidance.alternatives.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground">Alternatives</p>
+                        {temaGuidance.alternatives.slice(0, 2).map(alt => (
+                          <div key={alt} className="p-2 rounded-md border border-border/50 bg-muted/20">
+                            <p className="text-xs font-medium">{alt} — {TEMA_TYPES[alt].name}</p>
+                            <p className="text-[10px] text-muted-foreground">{TEMA_TYPES[alt].description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {temaGuidance.reasoning.map((r, i) => (
+                      <p key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                        <Info className="w-3 h-3 mt-0.5 shrink-0 text-primary/60" />{r}
+                      </p>
+                    ))}
+                  </div>
+                  <div className="pt-2 border-t">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Fluid Allocation</p>
+                    <div className="grid gap-2 grid-cols-2">
+                      <div className="p-2 rounded-md bg-blue-950/20 border border-blue-500/20">
+                        <p className="text-[10px] font-semibold text-blue-400 mb-0.5">TUBE SIDE</p>
+                        <p className="text-xs">{temaGuidance.fluidAllocation.tubeSide}</p>
+                      </div>
+                      <div className="p-2 rounded-md bg-amber-950/20 border border-amber-500/20">
+                        <p className="text-[10px] font-semibold text-amber-400 mb-0.5">SHELL SIDE</p>
+                        <p className="text-xs">{temaGuidance.fluidAllocation.shellSide}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 space-y-0.5">
+                      {temaGuidance.fluidAllocation.reasons.map((r, i) => (
+                        <p key={i} className="text-[10px] text-muted-foreground/70">• {r}</p>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="text-xs text-muted-foreground p-3 bg-muted/30 rounded-md">
+              <Info className="w-3 h-3 inline mr-1" />
+              Tube count and shell diameter are preliminary estimates. Baffle design, nozzle sizing, and detailed thermal-hydraulic analysis require vendor rating software (e.g., HTRI, Aspen EDR).
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="results">
