@@ -23,9 +23,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Container, FlaskConical, RotateCcw, ChevronLeft, ChevronRight,
-  Settings2, Flame, Droplets, Calculator, CheckCircle2,
+  Flame, Droplets, Calculator, CheckCircle2, BarChart3,
   Download, FileSpreadsheet, FileText, AlertTriangle, Info, XCircle,
-  ChevronDown, ChevronUp, Wind,
+  ChevronDown, ChevronUp, Wind, Layers,
 } from "lucide-react";
 
 const TABS = [
@@ -33,7 +33,8 @@ const TABS = [
   { id: "product", label: "Product", icon: Droplets, step: 2 },
   { id: "normal", label: "Normal", icon: Wind, step: 3 },
   { id: "emergency", label: "Emergency", icon: Flame, step: 4 },
-  { id: "results", label: "Results", icon: CheckCircle2, step: 5 },
+  { id: "scenarios", label: "Scenarios", icon: BarChart3, step: 5 },
+  { id: "results", label: "Results", icon: CheckCircle2, step: 6 },
 ];
 
 interface FormState {
@@ -52,6 +53,9 @@ interface FormState {
   designPressure: number;
   designVacuum: number;
   insulationType: InsulationType;
+  hasDrainage: boolean;
+  drainageFactor: number;
+  rimSealHeight: number;
 }
 
 const defaultForm: FormState = {
@@ -70,13 +74,10 @@ const defaultForm: FormState = {
   designPressure: 20,
   designVacuum: 6,
   insulationType: "bare",
+  hasDrainage: false,
+  drainageFactor: 1.0,
+  rimSealHeight: 0,
 };
-
-function FlagIcon({ severity }: { severity: "info" | "warning" | "error" }) {
-  if (severity === "error") return <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />;
-  if (severity === "warning") return <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 shrink-0" />;
-  return <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />;
-}
 
 function fmtResult(n: number): string {
   if (n === 0) return "0";
@@ -108,11 +109,12 @@ export default function TankVentingPage() {
       vaporDensity: Number(convertFromSI("density", convertToSI("density", prev.vaporDensity, unitSystem), newSystem).toFixed(4)),
       maxFillRate: Number(convertFromSI("flowVolume", convertToSI("flowVolume", prev.maxFillRate, unitSystem), newSystem).toFixed(2)),
       maxEmptyRate: Number(convertFromSI("flowVolume", convertToSI("flowVolume", prev.maxEmptyRate, unitSystem), newSystem).toFixed(2)),
+      rimSealHeight: Number(convertFromSI("length", convertToSI("length", prev.rimSealHeight, unitSystem), newSystem).toFixed(3)),
     }));
     setUnitSystem(newSystem);
   }, [unitSystem]);
 
-  const updateField = (field: keyof FormState, value: number | string) => {
+  const updateField = (field: keyof FormState, value: number | string | boolean) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
@@ -135,6 +137,9 @@ export default function TankVentingPage() {
       designPressure: tc.designPressure_mbar,
       designVacuum: tc.designVacuum_mbar,
       insulationType: tc.insulationType,
+      hasDrainage: tc.hasDrainage,
+      drainageFactor: tc.drainageFactor,
+      rimSealHeight: tc.rimSealHeight_m,
     });
     setResult(null);
     setError(null);
@@ -160,10 +165,13 @@ export default function TankVentingPage() {
         designPressure_mbar: form.designPressure,
         designVacuum_mbar: form.designVacuum,
         insulationType: form.insulationType,
+        hasDrainage: form.hasDrainage,
+        drainageFactor: form.drainageFactor,
+        rimSealHeight_m: convertToSI("length", form.rimSealHeight, unitSystem),
       };
       const res = calculateApi2000(input);
       setResult(res);
-      setActiveTab("results");
+      setActiveTab("scenarios");
     } catch (e: any) {
       setError(e.message || "Calculation error");
     }
@@ -195,22 +203,23 @@ export default function TankVentingPage() {
         { label: "Insulation", value: INSULATION_LABELS[form.insulationType] },
         { label: "Max Fill Rate", value: fmtResult(form.maxFillRate), unit: flowU },
         { label: "Max Empty Rate", value: fmtResult(form.maxEmptyRate), unit: flowU },
+        { label: "Drainage Provisions", value: form.hasDrainage ? `Yes (factor: ${form.drainageFactor})` : "No" },
       ],
       results: [
-        { label: "Tank Volume", value: fmtResult(result.geometry.volume_m3), unit: "m³" },
-        { label: "Wetted Area", value: fmtResult(result.geometry.wettedArea_m2), unit: "m²" },
-        { label: "Thermal Outbreathing", value: fmtResult(result.normalVenting.thermalOutbreathing_Nm3h), unit: "Nm³/h" },
-        { label: "Thermal Inbreathing", value: fmtResult(result.normalVenting.thermalInbreathing_Nm3h), unit: "Nm³/h" },
-        { label: "Total Outbreathing", value: fmtResult(result.normalVenting.totalOutbreathing_Nm3h), unit: "Nm³/h" },
-        { label: "Total Inbreathing", value: fmtResult(result.normalVenting.totalInbreathing_Nm3h), unit: "Nm³/h" },
-        { label: "Governing Normal", value: fmtResult(result.normalVenting.governingNormal_Nm3h), unit: "Nm³/h", highlight: true },
-        { label: "Emergency Venting", value: fmtResult(result.emergencyVenting.emergencyVenting_Nm3h), unit: "Nm³/h", highlight: true },
-        { label: "Fire Heat Input", value: fmtResult(result.emergencyVenting.heatInput_kW), unit: "kW" },
-        { label: "Pressure Vent Area", value: fmtResult(result.ventSizing.pressureVentArea_mm2), unit: "mm²", highlight: true },
-        { label: "Pressure Vent NPS", value: result.ventSizing.pressureNPS, unit: "" },
-        { label: "Vacuum Vent Area", value: fmtResult(result.ventSizing.vacuumVentArea_mm2), unit: "mm²", highlight: true },
-        { label: "Vacuum Vent NPS", value: result.ventSizing.vacuumNPS, unit: "" },
-        { label: "Governing Side", value: result.ventSizing.governingSide, unit: "" },
+        { label: "Tank Volume", value: fmtResult(result.geometry.volume_m3), unit: "m\u00B3" },
+        { label: "Wetted Area", value: fmtResult(result.geometry.wettedArea_m2), unit: "m\u00B2" },
+        ...(result.scenarios || []).filter(s => s.isApplicable).map(s => ({
+          label: `${s.id}: ${s.name}`, value: fmtResult(s.flow_Nm3h), unit: "Nm\u00B3/h",
+          highlight: s.id === "E1" || s.id === "E2" || s.id === "E3",
+        })),
+        { label: "Total Normal Outbreathing", value: fmtResult(result.normalVenting.totalOutbreathing_Nm3h), unit: "Nm\u00B3/h" },
+        { label: "Total Normal Inbreathing", value: fmtResult(result.normalVenting.totalInbreathing_Nm3h), unit: "Nm\u00B3/h" },
+        { label: "Emergency Venting", value: fmtResult(result.emergencyVenting.emergencyVenting_Nm3h), unit: "Nm\u00B3/h", highlight: true },
+        { label: "Normal Credit", value: `-${fmtResult(result.emergencyVenting.normalCredit_Nm3h)}`, unit: "Nm\u00B3/h" },
+        { label: "Net Emergency", value: fmtResult(result.emergencyVenting.netEmergency_Nm3h), unit: "Nm\u00B3/h", highlight: true },
+        { label: "Pressure Vent NPS", value: result.ventSizing.pressureNPS, unit: "", highlight: true },
+        { label: "Vacuum Vent NPS", value: result.ventSizing.vacuumNPS, unit: "", highlight: true },
+        { label: "Emergency Vent NPS", value: result.ventSizing.emergencyNPS, unit: "", highlight: true },
       ],
       assumptions: result.assumptions,
       warnings: result.warnings,
@@ -242,7 +251,7 @@ export default function TankVentingPage() {
                   API 2000 Tank Venting
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Atmospheric &amp; low-pressure storage tank venting per API Std 2000
+                  All scenarios: Normal (thermal + liquid) &amp; Emergency (fire) per API Std 2000, 7th Ed.
                 </p>
               </div>
             </div>
@@ -283,11 +292,12 @@ export default function TankVentingPage() {
               ))}
             </TabsList>
 
+            {/* TAB 1: TANK GEOMETRY */}
             <TabsContent value="tank">
               <Card>
                 <CardHeader className="pb-3">
                   <h2 className="text-sm font-semibold flex items-center gap-2">
-                    <Container className="w-4 h-4 text-primary" /> Tank Geometry
+                    <Container className="w-4 h-4 text-primary" /> Tank Geometry &amp; Design
                   </h2>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -353,10 +363,22 @@ export default function TankVentingPage() {
                       />
                     </div>
                   </div>
+                  {form.tankType === "floating_roof" && (
+                    <div>
+                      <Label className="text-xs">Rim Seal Height ({lenU}) — for floating roof fire scenario (E4)</Label>
+                      <Input
+                        type="number"
+                        value={form.rimSealHeight || ""}
+                        onChange={e => updateField("rimSealHeight", parseFloat(e.target.value) || 0)}
+                        data-testid="input-rim-seal-height"
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
 
+            {/* TAB 2: PRODUCT PROPERTIES */}
             <TabsContent value="product">
               <Card>
                 <CardHeader className="pb-3">
@@ -366,7 +388,7 @@ export default function TankVentingPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <Label className="text-xs">Product Category (API 2000)</Label>
+                    <Label className="text-xs">Product Category (API 2000 Table 2/3)</Label>
                     <Select value={form.productCategory} onValueChange={v => updateField("productCategory", v)}>
                       <SelectTrigger data-testid="select-product-category"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -394,7 +416,7 @@ export default function TankVentingPage() {
                         onChange={e => updateField("flashFactor", parseFloat(e.target.value) || 0)}
                         data-testid="input-flash-factor"
                       />
-                      <p className="text-[10px] text-muted-foreground mt-1">Ratio of vapor generated to liquid pumped in (≥ 1.0)</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Ratio of vapor generated to liquid pumped in ({"\u2265"} 1.0). 1.0 for non-volatile, {">"}1 for volatile stocks with flash vaporization.</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -430,54 +452,66 @@ export default function TankVentingPage() {
               </Card>
             </TabsContent>
 
+            {/* TAB 3: NORMAL VENTING */}
             <TabsContent value="normal">
               <Card>
                 <CardHeader className="pb-3">
                   <h2 className="text-sm font-semibold flex items-center gap-2">
-                    <Wind className="w-4 h-4 text-primary" /> Normal Venting — Liquid Movement
+                    <Wind className="w-4 h-4 text-primary" /> Normal Venting — Section 4
                   </h2>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="rounded-md bg-blue-500/10 border border-blue-500/20 p-3 text-xs text-blue-300 space-y-1.5">
+                    <p className="font-medium flex items-center gap-1.5"><Info className="w-3.5 h-3.5" /> API 2000 Normal Venting Scenarios</p>
+                    <p><strong>N1</strong> — Thermal Outbreathing (Section 4.3.2): Tank heats up, vapor expelled. q = C_out {"\u00D7"} V^0.7</p>
+                    <p><strong>N2</strong> — Thermal Inbreathing (Section 4.3.3): Tank cools down, air drawn in. q = C_in {"\u00D7"} V^0.7</p>
+                    <p><strong>N3</strong> — Liquid Pump-In (Section 4.4.1): Liquid fill displaces vapor. q = fill_rate {"\u00D7"} flash_factor</p>
+                    <p><strong>N4</strong> — Liquid Pump-Out (Section 4.4.2): Liquid withdrawal draws air in. q = empty_rate</p>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-xs">Max Liquid Fill Rate ({flowU})</Label>
+                      <Label className="text-xs">Max Liquid Fill Rate ({flowU}) — Scenario N3</Label>
                       <Input
                         type="number"
                         value={form.maxFillRate || ""}
                         onChange={e => updateField("maxFillRate", parseFloat(e.target.value) || 0)}
                         data-testid="input-fill-rate"
                       />
-                      <p className="text-[10px] text-muted-foreground mt-1">Contributes to outbreathing</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Contributes to outbreathing (N3)</p>
                     </div>
                     <div>
-                      <Label className="text-xs">Max Liquid Empty Rate ({flowU})</Label>
+                      <Label className="text-xs">Max Liquid Empty Rate ({flowU}) — Scenario N4</Label>
                       <Input
                         type="number"
                         value={form.maxEmptyRate || ""}
                         onChange={e => updateField("maxEmptyRate", parseFloat(e.target.value) || 0)}
                         data-testid="input-empty-rate"
                       />
-                      <p className="text-[10px] text-muted-foreground mt-1">Contributes to inbreathing</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Contributes to inbreathing (N4)</p>
                     </div>
-                  </div>
-                  <div className="rounded-md bg-blue-500/10 border border-blue-500/20 p-3 text-xs text-blue-300 space-y-1">
-                    <p className="font-medium flex items-center gap-1.5"><Info className="w-3.5 h-3.5" /> API 2000 Section 4 — Normal Venting</p>
-                    <p>Total outbreathing = thermal outbreathing + liquid fill rate × flash factor</p>
-                    <p>Total inbreathing = thermal inbreathing + liquid empty rate</p>
-                    <p>Thermal breathing scales as C × V^0.7 per API 2000 Table 2/3</p>
                   </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
+            {/* TAB 4: EMERGENCY VENTING */}
             <TabsContent value="emergency">
               <Card>
                 <CardHeader className="pb-3">
                   <h2 className="text-sm font-semibold flex items-center gap-2">
-                    <Flame className="w-4 h-4 text-primary" /> Emergency Venting — Fire Exposure
+                    <Flame className="w-4 h-4 text-primary" /> Emergency Venting — Section 5
                   </h2>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-300 space-y-1.5">
+                    <p className="font-medium flex items-center gap-1.5"><Flame className="w-3.5 h-3.5" /> API 2000 Emergency Scenarios</p>
+                    <p><strong>E1</strong> — External Fire, Bare Tank (Section 5.2): Q = 43,200 {"\u00D7"} F {"\u00D7"} A_w^0.82</p>
+                    <p><strong>E2</strong> — External Fire with Insulation Credit (Section 5.2.3): Reduced F factor</p>
+                    <p><strong>E3</strong> — External Fire with Drainage (Section 5.2.2): Drainage reduces fire exposure</p>
+                    <p><strong>E4</strong> — Floating Roof Rim Seal Fire (Section 5.4): Only rim area exposed</p>
+                    <p className="border-t border-red-500/20 pt-1.5 mt-1.5"><strong>Section 5.3</strong> — Normal venting capacity credited against emergency requirement</p>
+                  </div>
+
                   <div>
                     <Label className="text-xs">Insulation / Environmental Factor</Label>
                     <Select value={form.insulationType} onValueChange={v => updateField("insulationType", v)}>
@@ -489,22 +523,194 @@ export default function TankVentingPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-300 space-y-1">
-                    <p className="font-medium flex items-center gap-1.5"><Flame className="w-3.5 h-3.5" /> API 2000 Section 5 — Emergency Venting</p>
-                    <p>Heat input: Q = 43,200 × F × A_w^0.82 (W) for wetted area A_w &gt; 2.8 m²</p>
-                    <p>Environmental factor F reduces heat input for insulated or earth-covered tanks</p>
-                    <p>Emergency venting converted to Nm³/h free air equivalent</p>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={form.hasDrainage}
+                      onChange={e => updateField("hasDrainage", e.target.checked)}
+                      className="w-4 h-4 rounded"
+                      data-testid="checkbox-drainage"
+                    />
+                    <div>
+                      <Label className="text-xs">Drainage Provisions (Section 5.2.2)</Label>
+                      <p className="text-[10px] text-muted-foreground">Prompt drainage of flammable liquid away from tank base</p>
+                    </div>
                   </div>
+
+                  {form.hasDrainage && (
+                    <div className="pl-7">
+                      <Label className="text-xs">Drainage Credit Factor (0 to 1.0)</Label>
+                      <Input
+                        type="number"
+                        value={form.drainageFactor}
+                        onChange={e => updateField("drainageFactor", parseFloat(e.target.value) || 0)}
+                        min={0} max={1} step={0.1}
+                        data-testid="input-drainage-factor"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">1.0 = no credit, 0.5 = 50% reduction in fire heat input</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
 
+            {/* TAB 5: SCENARIO MATRIX */}
+            <TabsContent value="scenarios">
+              {result && result.scenarios ? (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <h2 className="text-sm font-semibold flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-primary" /> API 2000 Scenario Matrix
+                      </h2>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs" data-testid="table-scenarios">
+                          <thead>
+                            <tr className="border-b border-muted/30">
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">ID</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">Scenario</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">Section</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">Direction</th>
+                              <th className="text-right py-2 px-2 font-medium text-muted-foreground">Flow (Nm{"\u00B3"}/h)</th>
+                              <th className="text-center py-2 px-2 font-medium text-muted-foreground">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(result.scenarios || []).map(s => (
+                              <tr
+                                key={s.id}
+                                className={`border-b border-muted/10 ${!s.isApplicable ? "opacity-40" : ""} ${
+                                  s.id.startsWith("E") ? "bg-red-500/5" : "bg-blue-500/5"
+                                }`}
+                                data-testid={`row-scenario-${s.id}`}
+                              >
+                                <td className="py-2 px-2 font-mono font-medium">{s.id}</td>
+                                <td className="py-2 px-2">
+                                  <div>{s.name}</div>
+                                  <div className="text-[10px] text-muted-foreground mt-0.5 max-w-xs">{s.description}</div>
+                                </td>
+                                <td className="py-2 px-2 text-muted-foreground">{s.section}</td>
+                                <td className="py-2 px-2">
+                                  <Badge variant="outline" className={`text-[9px] ${
+                                    s.direction === "outbreathing" ? "text-amber-400 border-amber-500/30" :
+                                    s.direction === "inbreathing" ? "text-blue-400 border-blue-500/30" :
+                                    "text-red-400 border-red-500/30"
+                                  }`}>
+                                    {s.direction}
+                                  </Badge>
+                                </td>
+                                <td className="py-2 px-2 text-right font-mono">
+                                  {s.isApplicable ? fmtResult(s.flow_Nm3h) : "\u2014"}
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  {s.isApplicable ? (
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-green-400 inline" />
+                                  ) : (
+                                    <span className="text-[10px] text-muted-foreground">{s.notApplicableReason}</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card className="border-blue-500/20">
+                      <CardHeader className="pb-2">
+                        <h3 className="text-xs font-semibold flex items-center gap-1.5">
+                          <Wind className="w-3.5 h-3.5 text-blue-400" /> Normal Venting Summary
+                        </h3>
+                      </CardHeader>
+                      <CardContent className="space-y-1.5">
+                        <ResultRow label="N1: Thermal outbreathing" value={fmtResult(result.normalVenting.thermalOutbreathing_Nm3h)} unit="Nm\u00B3/h" />
+                        <ResultRow label="N3: Liquid movement out" value={fmtResult(result.normalVenting.liquidMovementOut_Nm3h)} unit="Nm\u00B3/h" />
+                        <div className="border-t pt-1.5">
+                          <ResultRow label="Total Outbreathing" value={fmtResult(result.normalVenting.totalOutbreathing_Nm3h)} unit="Nm\u00B3/h" highlight />
+                        </div>
+                        <div className="border-t pt-1.5">
+                          <ResultRow label="N2: Thermal inbreathing" value={fmtResult(result.normalVenting.thermalInbreathing_Nm3h)} unit="Nm\u00B3/h" />
+                          <ResultRow label="N4: Liquid movement in" value={fmtResult(result.normalVenting.liquidMovementIn_Nm3h)} unit="Nm\u00B3/h" />
+                        </div>
+                        <div className="border-t pt-1.5">
+                          <ResultRow label="Total Inbreathing" value={fmtResult(result.normalVenting.totalInbreathing_Nm3h)} unit="Nm\u00B3/h" highlight />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-red-500/20">
+                      <CardHeader className="pb-2">
+                        <h3 className="text-xs font-semibold flex items-center gap-1.5">
+                          <Flame className="w-3.5 h-3.5 text-red-400" /> Emergency Venting Summary
+                        </h3>
+                      </CardHeader>
+                      <CardContent className="space-y-1.5">
+                        <ResultRow label="Effective wetted area" value={fmtResult(result.emergencyVenting.effectiveWettedArea_m2)} unit="m\u00B2" />
+                        <ResultRow label="Environmental factor F" value={String(result.emergencyVenting.envFactor)} unit="" />
+                        {result.emergencyVenting.drainageFactor < 1 && (
+                          <ResultRow label="Drainage factor" value={String(result.emergencyVenting.drainageFactor)} unit="" />
+                        )}
+                        <ResultRow label="Fire heat input" value={fmtResult(result.emergencyVenting.heatInput_kW)} unit="kW" />
+                        <ResultRow label="Vaporization rate" value={fmtResult(result.emergencyVenting.vaporizationRate_kg_h)} unit="kg/h" />
+                        <div className="border-t pt-1.5">
+                          <ResultRow label="Gross emergency venting" value={fmtResult(result.emergencyVenting.emergencyVenting_Nm3h)} unit="Nm\u00B3/h" highlight />
+                          <ResultRow label="Normal credit (Sec. 5.3)" value={`\u2212${fmtResult(result.emergencyVenting.normalCredit_Nm3h)}`} unit="Nm\u00B3/h" />
+                          <ResultRow label="Net emergency requirement" value={fmtResult(result.emergencyVenting.netEmergency_Nm3h)} unit="Nm\u00B3/h" highlight />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card className="border-primary/20">
+                    <CardHeader className="pb-2">
+                      <h3 className="text-xs font-semibold flex items-center gap-1.5">
+                        <BarChart3 className="w-3.5 h-3.5 text-primary" /> Governing Cases
+                      </h3>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-md bg-amber-500/5 border border-amber-500/20 p-3 space-y-1.5">
+                          <p className="text-[10px] text-amber-400 font-medium">PRESSURE SIDE (Outbreathing)</p>
+                          <p className="text-sm font-mono font-medium text-primary" data-testid="text-governing-pressure">
+                            {fmtResult(result.scenarioSummary.governingPressure_Nm3h)} Nm{"\u00B3"}/h
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">{result.scenarioSummary.governingPressureScenario}</p>
+                        </div>
+                        <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-3 space-y-1.5">
+                          <p className="text-[10px] text-blue-400 font-medium">VACUUM SIDE (Inbreathing)</p>
+                          <p className="text-sm font-mono font-medium text-primary" data-testid="text-governing-vacuum">
+                            {fmtResult(result.scenarioSummary.governingVacuum_Nm3h)} Nm{"\u00B3"}/h
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">{result.scenarioSummary.governingVacuumScenario}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <BarChart3 className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground" data-testid="text-no-scenarios">
+                      Complete input tabs and click Calculate to generate scenario matrix
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            {/* TAB 6: RESULTS & SIZING */}
             <TabsContent value="results">
-              {result ? (
+              {result && result.scenarioSummary ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-400" /> Calculation Results
+                      <CheckCircle2 className="w-4 h-4 text-green-400" /> Vent Sizing Results
                     </h2>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -513,92 +719,79 @@ export default function TankVentingPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }}>
+                        <DropdownMenuItem data-testid="button-export-excel" onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }}>
                           <FileSpreadsheet className="w-3.5 h-3.5 mr-2" /> Excel
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }}>
+                        <DropdownMenuItem data-testid="button-export-pdf" onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }}>
                           <FileText className="w-3.5 h-3.5 mr-2" /> PDF
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }}>
+                        <DropdownMenuItem data-testid="button-export-json" onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }}>
                           <Download className="w-3.5 h-3.5 mr-2" /> JSON
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <h3 className="text-xs font-semibold text-muted-foreground">Tank Geometry</h3>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <ResultRow label="Volume" value={fmtResult(result.geometry.volume_m3)} unit="m³" testId="text-volume" />
-                        <ResultRow label="Shell Area" value={fmtResult(result.geometry.shellArea_m2)} unit="m²" />
-                        <ResultRow label="Wetted Area" value={fmtResult(result.geometry.wettedArea_m2)} unit="m²" testId="text-wetted-area" />
-                        <ResultRow label="Vapor Space" value={fmtResult(result.geometry.vaporSpace_m3)} unit="m³" />
-                      </CardContent>
-                    </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <h3 className="text-xs font-semibold text-muted-foreground">Tank Geometry</h3>
+                    </CardHeader>
+                    <CardContent className="space-y-1.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
+                        <ResultRow label="Volume" value={fmtResult(result.geometry.volume_m3)} unit="m\u00B3" testId="text-volume" />
+                        <ResultRow label="Shell Area" value={fmtResult(result.geometry.shellArea_m2)} unit="m\u00B2" />
+                        <ResultRow label="Wetted Area" value={fmtResult(result.geometry.wettedArea_m2)} unit="m\u00B2" testId="text-wetted-area" />
+                        <ResultRow label="Liquid Volume" value={fmtResult(result.geometry.liquidVolume_m3)} unit="m\u00B3" />
+                        <ResultRow label="Vapor Space" value={fmtResult(result.geometry.vaporSpace_m3)} unit="m\u00B3" />
+                        <ResultRow label="Roof Area" value={fmtResult(result.geometry.roofArea_m2)} unit="m\u00B2" />
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                    <Card>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card className="border-amber-500/20">
                       <CardHeader className="pb-2">
-                        <h3 className="text-xs font-semibold text-muted-foreground">Normal Venting</h3>
+                        <h3 className="text-xs font-semibold text-amber-400">PV Valve — Pressure Side</h3>
+                        <p className="text-[10px] text-muted-foreground">Normal outbreathing</p>
                       </CardHeader>
-                      <CardContent className="space-y-2">
-                        <ResultRow label="Thermal Out" value={fmtResult(result.normalVenting.thermalOutbreathing_Nm3h)} unit="Nm³/h" />
-                        <ResultRow label="Thermal In" value={fmtResult(result.normalVenting.thermalInbreathing_Nm3h)} unit="Nm³/h" />
-                        <ResultRow label="Liquid Movement Out" value={fmtResult(result.normalVenting.liquidMovementOut_Nm3h)} unit="Nm³/h" />
-                        <ResultRow label="Liquid Movement In" value={fmtResult(result.normalVenting.liquidMovementIn_Nm3h)} unit="Nm³/h" />
-                        <div className="border-t pt-2">
-                          <ResultRow label="Total Outbreathing" value={fmtResult(result.normalVenting.totalOutbreathing_Nm3h)} unit="Nm³/h" highlight />
-                          <ResultRow label="Total Inbreathing" value={fmtResult(result.normalVenting.totalInbreathing_Nm3h)} unit="Nm³/h" highlight />
-                        </div>
-                        <Badge variant="outline" className="text-[10px] mt-1" data-testid="badge-governing-direction">
-                          Governing: {result.normalVenting.governingDirection} ({fmtResult(result.normalVenting.governingNormal_Nm3h)} Nm³/h)
-                        </Badge>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <h3 className="text-xs font-semibold text-muted-foreground">Emergency Venting (Fire)</h3>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <ResultRow label="Wetted Area" value={fmtResult(result.emergencyVenting.wettedArea_m2)} unit="m²" />
-                        <ResultRow label="Environmental Factor F" value={String(result.emergencyVenting.envFactor)} unit="" />
-                        <ResultRow label="Fire Heat Input" value={fmtResult(result.emergencyVenting.heatInput_kW)} unit="kW" testId="text-heat-input" />
-                        <ResultRow label="Emergency Venting" value={fmtResult(result.emergencyVenting.emergencyVenting_Nm3h)} unit="Nm³/h" highlight testId="text-emergency-venting" />
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <h3 className="text-xs font-semibold text-muted-foreground">Vent Sizing — Pressure (PV Valve)</h3>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <ResultRow label="Flow (outbreathing + emergency)" value={fmtResult(Math.max(result.normalVenting.totalOutbreathing_Nm3h, result.emergencyVenting.emergencyVenting_Nm3h))} unit="Nm³/h" />
-                        <ResultRow label="Design ΔP" value={fmtResult(form.designPressure)} unit="mbar" />
-                        <ResultRow label="Required Area" value={fmtResult(result.ventSizing.pressureVentArea_mm2)} unit="mm²" highlight testId="text-pressure-vent-area" />
-                        <ResultRow label="Equivalent Diameter" value={fmtResult(result.ventSizing.pressureVentDia_mm)} unit="mm" />
+                      <CardContent className="space-y-1.5">
+                        <ResultRow label="Flow" value={fmtResult(result.normalVenting.totalOutbreathing_Nm3h)} unit="Nm\u00B3/h" />
+                        <ResultRow label="Required Area" value={fmtResult(result.ventSizing.pressureVentArea_mm2)} unit="mm\u00B2" highlight testId="text-pressure-vent-area" />
+                        <ResultRow label="Equiv. Diameter" value={fmtResult(result.ventSizing.pressureVentDia_mm)} unit="mm" />
                         <ResultRow label="Suggested NPS" value={result.ventSizing.pressureNPS} unit="" highlight testId="text-pressure-nps" />
                       </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="border-blue-500/20">
                       <CardHeader className="pb-2">
-                        <h3 className="text-xs font-semibold text-muted-foreground">Vent Sizing — Vacuum (Vacuum Breaker)</h3>
+                        <h3 className="text-xs font-semibold text-blue-400">PV Valve — Vacuum Side</h3>
+                        <p className="text-[10px] text-muted-foreground">Normal inbreathing</p>
                       </CardHeader>
-                      <CardContent className="space-y-2">
-                        <ResultRow label="Flow (inbreathing)" value={fmtResult(result.normalVenting.totalInbreathing_Nm3h)} unit="Nm³/h" />
-                        <ResultRow label="Design ΔP" value={fmtResult(form.designVacuum)} unit="mbar" />
-                        <ResultRow label="Required Area" value={fmtResult(result.ventSizing.vacuumVentArea_mm2)} unit="mm²" highlight testId="text-vacuum-vent-area" />
-                        <ResultRow label="Equivalent Diameter" value={fmtResult(result.ventSizing.vacuumVentDia_mm)} unit="mm" />
+                      <CardContent className="space-y-1.5">
+                        <ResultRow label="Flow" value={fmtResult(result.normalVenting.totalInbreathing_Nm3h)} unit="Nm\u00B3/h" />
+                        <ResultRow label="Required Area" value={fmtResult(result.ventSizing.vacuumVentArea_mm2)} unit="mm\u00B2" highlight testId="text-vacuum-vent-area" />
+                        <ResultRow label="Equiv. Diameter" value={fmtResult(result.ventSizing.vacuumVentDia_mm)} unit="mm" />
                         <ResultRow label="Suggested NPS" value={result.ventSizing.vacuumNPS} unit="" highlight testId="text-vacuum-nps" />
-                        <Badge variant="outline" className="text-[10px] mt-2" data-testid="badge-governing-side">
-                          Governing side: {result.ventSizing.governingSide}
-                        </Badge>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-red-500/20">
+                      <CardHeader className="pb-2">
+                        <h3 className="text-xs font-semibold text-red-400">Emergency Vent</h3>
+                        <p className="text-[10px] text-muted-foreground">Net of normal credit (Sec. 5.3)</p>
+                      </CardHeader>
+                      <CardContent className="space-y-1.5">
+                        <ResultRow label="Net Flow" value={fmtResult(result.emergencyVenting.netEmergency_Nm3h)} unit="Nm\u00B3/h" />
+                        <ResultRow label="Required Area" value={fmtResult(result.ventSizing.emergencyVentArea_mm2)} unit="mm\u00B2" highlight testId="text-emergency-vent-area" />
+                        <ResultRow label="Equiv. Diameter" value={fmtResult(result.ventSizing.emergencyVentDia_mm)} unit="mm" />
+                        <ResultRow label="Suggested NPS" value={result.ventSizing.emergencyNPS} unit="" highlight testId="text-emergency-nps" />
                       </CardContent>
                     </Card>
                   </div>
+
+                  <Badge variant="outline" className="text-[10px]" data-testid="badge-governing-side">
+                    PV Valve Governing Side: {result.ventSizing.governingSide}
+                  </Badge>
 
                   {result.warnings.length > 0 && <WarningPanel warnings={result.warnings} />}
 
@@ -614,12 +807,18 @@ export default function TankVentingPage() {
                         {showTrace ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
                       </button>
                       {showTrace && (
-                        <div className="mt-3 space-y-1.5 border-t pt-3">
+                        <div className="mt-3 space-y-1 border-t pt-3">
                           {result.trace.map((t, i) => (
-                            <div key={i} className="flex items-start gap-2 text-[11px]">
-                              <span className="text-muted-foreground/60 font-mono w-5 text-right shrink-0">{i + 1}</span>
-                              <span className="text-muted-foreground">{t.step}</span>
-                              <span className="ml-auto font-mono text-primary whitespace-nowrap">{t.value}</span>
+                            <div key={i} className={`flex items-start gap-2 text-[11px] ${t.step.startsWith("\u2550") ? "mt-3 mb-1" : ""}`}>
+                              {t.step.startsWith("\u2550") ? (
+                                <span className="font-semibold text-primary text-xs col-span-2">{t.step}</span>
+                              ) : (
+                                <>
+                                  <span className="text-muted-foreground/60 font-mono w-5 text-right shrink-0">{i + 1}</span>
+                                  <span className="text-muted-foreground">{t.step}</span>
+                                  <span className="ml-auto font-mono text-primary whitespace-nowrap">{t.value}</span>
+                                </>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -658,19 +857,24 @@ export default function TankVentingPage() {
             >
               <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Previous
             </Button>
-            {activeTab !== "results" ? (
-              activeTab === TABS[TABS.length - 2].id ? (
-                <Button size="sm" onClick={handleCalculate} data-testid="button-calculate">
-                  <Calculator className="w-3.5 h-3.5 mr-1.5" /> Calculate
+            {activeTab === "emergency" ? (
+              <Button size="sm" onClick={handleCalculate} data-testid="button-calculate">
+                <Calculator className="w-3.5 h-3.5 mr-1.5" /> Calculate All Scenarios
+              </Button>
+            ) : activeTab === "scenarios" || activeTab === "results" ? (
+              <div className="flex gap-2">
+                {activeTab === "scenarios" && (
+                  <Button variant="outline" size="sm" onClick={() => setActiveTab("results")} data-testid="button-view-sizing">
+                    View Sizing <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                  </Button>
+                )}
+                <Button size="sm" onClick={handleCalculate} data-testid="button-recalculate">
+                  <Calculator className="w-3.5 h-3.5 mr-1.5" /> Recalculate
                 </Button>
-              ) : (
-                <Button variant="outline" size="sm" onClick={() => goTab(1)} data-testid="button-next">
-                  Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                </Button>
-              )
+              </div>
             ) : (
-              <Button size="sm" onClick={handleCalculate} data-testid="button-recalculate">
-                <Calculator className="w-3.5 h-3.5 mr-1.5" /> Recalculate
+              <Button variant="outline" size="sm" onClick={() => goTab(1)} data-testid="button-next">
+                Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             )}
           </div>

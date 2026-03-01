@@ -1,51 +1,91 @@
 /**
  * API 2000 — Venting of Atmospheric and Low-Pressure Storage Tanks
+ * 7th Edition (2014), Comprehensive Scenario-Based Calculator
  *
- * Calculates normal and emergency venting requirements for storage tanks
- * per API Std 2000, 7th Edition.
+ * ═══════════════════════════════════════════════════════════════════
+ * NORMAL VENTING — Section 4
+ * ═══════════════════════════════════════════════════════════════════
  *
- * Normal Venting (Section 4):
- *   Thermal breathing: inbreathing/outbreathing due to ambient temperature changes
- *   Liquid movement: breathing due to liquid pump-in or pump-out
- *   Total normal = thermal + liquid movement (in each direction)
+ * N1 — Thermal Outbreathing (Section 4.3.2):
+ *   Tank heats up → vapor space expands → vapor expelled
+ *   q_ot = C_out × V^0.7 (Nm³/h of free air)
+ *   C_out per product category (API 2000 Table 2):
+ *     Hexane & below: 0.339
+ *     Above hexane:   0.169
+ *     Non-volatile:   0.106 (air expansion in vapor space)
  *
- * Thermal Breathing (Section 4.3):
- *   Outbreathing (warming): vapor expelled as tank heats up
- *   Inbreathing (cooling): air drawn in as tank cools down
- *   For non-refrigerated tanks, per API 2000 Table 2:
- *     q_thermal = C × V^0.7  (Nm³/h of free air)
- *   where V = tank capacity (m³), C = coefficient from table
+ * N2 — Thermal Inbreathing (Section 4.3.3):
+ *   Tank cools down → vapor space contracts → air drawn in
+ *   q_it = C_in × V^0.7 (Nm³/h of free air)
+ *   C_in = 0.221 for all products (air contraction)
  *
- * Liquid Movement (Section 4.4):
- *   Outbreathing = liquid pump-in rate (1:1 volume displacement at atmospheric P, T)
- *   Inbreathing = liquid pump-out rate (1:1 volume displacement)
- *   For volatile liquids: multiply by flash factor (vapor generation ratio)
+ * N3 — Liquid Pump-In / Outbreathing (Section 4.4.1):
+ *   Liquid fills tank → displaces vapor space → vapor expelled
+ *   q_ol = fill_rate × flash_factor
+ *   flash_factor ≥ 1.0 (1.0 for non-volatile, >1 for volatile)
  *
- * Emergency Venting (Section 5):
- *   Fire exposure on wetted shell area:
- *     Q_heat = 43,200 × F × A_w^0.82  (W)  for A_w > 2.8 m²
- *   where:
- *     F = environmental factor (1.0 bare, 0.3 approved insulation, etc.)
- *     A_w = wetted area (m²)
- *   Convert to venting rate:
- *     q_emergency = Q_heat / (ρ_vap × L_v)  (m³/h at relieving conditions)
- *   then to free air equivalent.
- *   Simplified: q_air (Nm³/h) ≈ 906.6 × F × A_w^0.82 × √(28.97/M) × √(T_relieve/273.15)
+ * N4 — Liquid Pump-Out / Inbreathing (Section 4.4.2):
+ *   Liquid withdrawn → creates vacuum in vapor space → air drawn in
+ *   q_il = empty_rate (1:1 volume displacement)
  *
- * Vent Sizing:
- *   Required orifice area per API 2000 Annex A:
- *     A = q / (C_d × √(2 × ΔP × ρ))
- *   or simplified with discharge coefficient for PV valves.
+ * Total Normal Outbreathing = N1 + N3 (thermal + pump-in)
+ * Total Normal Inbreathing  = N2 + N4 (thermal + pump-out)
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * EMERGENCY VENTING — Section 5
+ * ═══════════════════════════════════════════════════════════════════
+ *
+ * E1 — External Fire on Wetted Area (Section 5.2):
+ *   Q = 43,200 × F × A_w^0.82  (W) for A_w > 2.8 m²
+ *   Vaporization rate = Q / (L_v × 1000)  (kg/s)
+ *   Free air equivalent via ideal gas law correction
+ *
+ * E2 — Fire with Insulation Credit (Section 5.2.3):
+ *   Environmental factor F < 1.0 for approved insulation
+ *   F = 0.3 (approved insulation), 0.5 (concrete), 0.03 (earth-covered)
+ *
+ * E3 — Fire with Drainage (Section 5.2.2):
+ *   Prompt drainage of flammable liquid away from tank
+ *   Reduces effective wetted area or applies drainage credit factor
+ *
+ * E4 — Floating Roof Fire (Section 5.4):
+ *   Reduced emergency venting — rim seal fire only
+ *   Effective area = π × D × rim_height (not full wetted area)
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * COMBINED / TOTAL VENTING — Section 6
+ * ═══════════════════════════════════════════════════════════════════
+ *
+ * Pressure side: max(total_normal_outbreathing, emergency_outbreathing)
+ * Vacuum side:   total_normal_inbreathing (emergency does not add to vacuum)
+ *
+ * API 2000 Section 5.3: Normal venting capacity can be credited against
+ * emergency venting requirement (net emergency = emergency - normal_capacity)
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * VENT DEVICE SIZING — Section 6 / Annex A
+ * ═══════════════════════════════════════════════════════════════════
+ *
+ * Separate sizing for:
+ *   - PV valve (pressure relief + vacuum break in one device)
+ *   - Pressure-only vent (conservation vent)
+ *   - Vacuum-only breaker
+ *   - Emergency vent (manhole cover, rupture pin, etc.)
+ *   - Open vent with flame arrester
+ *
+ * A = q / (Cd × √(2 × ΔP × ρ))
+ * Cd = 0.62 (PV valves), 0.72 (open vents)
  *
  * Reference:
- * - API Std 2000, 7th Edition (2014): Venting Atmospheric and Low-Pressure Storage Tanks
- * - API 2510: Design and Construction of LPG Installations
+ * - API Std 2000, 7th Edition (2014)
+ * - API 2510: LPG Installations
  * - NFPA 30: Flammable and Combustible Liquids Code
  */
 
 export type TankType = "cone_roof" | "dome_roof" | "flat_roof" | "floating_roof";
 export type ProductCategory = "hexane_and_below" | "above_hexane" | "non_volatile";
 export type InsulationType = "bare" | "concrete" | "insulated_approved" | "insulated_unapproved" | "earth_covered" | "underground";
+export type VentDeviceType = "pv_valve" | "open_vent" | "emergency_manhole" | "rupture_pin";
 
 export interface Api2000Input {
   tankDiameter_m: number;
@@ -63,6 +103,9 @@ export interface Api2000Input {
   designPressure_mbar: number;
   designVacuum_mbar: number;
   insulationType: InsulationType;
+  hasDrainage: boolean;
+  drainageFactor: number;
+  rimSealHeight_m: number;
 }
 
 export interface TankGeometry {
@@ -72,6 +115,19 @@ export interface TankGeometry {
   wettedArea_m2: number;
   liquidVolume_m3: number;
   vaporSpace_m3: number;
+  diameter_m: number;
+  height_m: number;
+}
+
+export interface ScenarioResult {
+  id: string;
+  name: string;
+  section: string;
+  direction: "outbreathing" | "inbreathing" | "outbreathing (emergency)";
+  flow_Nm3h: number;
+  description: string;
+  isApplicable: boolean;
+  notApplicableReason?: string;
 }
 
 export interface NormalVentingResult {
@@ -87,9 +143,14 @@ export interface NormalVentingResult {
 
 export interface EmergencyVentingResult {
   wettedArea_m2: number;
+  effectiveWettedArea_m2: number;
   envFactor: number;
+  drainageFactor: number;
   heatInput_kW: number;
+  vaporizationRate_kg_h: number;
   emergencyVenting_Nm3h: number;
+  netEmergency_Nm3h: number;
+  normalCredit_Nm3h: number;
 }
 
 export interface VentSizingResult {
@@ -98,18 +159,31 @@ export interface VentSizingResult {
   emergencyRequired_Nm3h: number;
   pressureVentArea_mm2: number;
   vacuumVentArea_mm2: number;
+  emergencyVentArea_mm2: number;
   pressureVentDia_mm: number;
   vacuumVentDia_mm: number;
+  emergencyVentDia_mm: number;
   pressureNPS: string;
   vacuumNPS: string;
+  emergencyNPS: string;
   governingSide: "pressure" | "vacuum";
 }
 
 export interface Api2000Result {
   geometry: TankGeometry;
+  scenarios: ScenarioResult[];
   normalVenting: NormalVentingResult;
   emergencyVenting: EmergencyVentingResult;
   ventSizing: VentSizingResult;
+  scenarioSummary: {
+    totalNormalOutbreathing_Nm3h: number;
+    totalNormalInbreathing_Nm3h: number;
+    emergencyOutbreathing_Nm3h: number;
+    governingPressure_Nm3h: number;
+    governingVacuum_Nm3h: number;
+    governingPressureScenario: string;
+    governingVacuumScenario: string;
+  };
   trace: { step: string; value: string }[];
   assumptions: string[];
   warnings: string[];
@@ -146,12 +220,26 @@ const THERMAL_COEFF_IN: Record<ProductCategory, number> = {
 };
 
 export const PRODUCT_LABELS: Record<ProductCategory, string> = {
-  hexane_and_below: "Hexane and lighter (flash point ≤ -1°C / 30°F)",
-  above_hexane: "Above hexane (flash point > -1°C and ≤ 37.8°C / 100°F)",
-  non_volatile: "Non-volatile (flash point > 37.8°C / 100°F)",
+  hexane_and_below: "Hexane and lighter (flash point \u2264 -1\u00B0C / 30\u00B0F)",
+  above_hexane: "Above hexane (flash point > -1\u00B0C and \u2264 37.8\u00B0C / 100\u00B0F)",
+  non_volatile: "Non-volatile (flash point > 37.8\u00B0C / 100\u00B0F)",
 };
 
 export const INSULATION_LABELS = ENV_LABELS;
+
+export const VENT_DEVICE_LABELS: Record<VentDeviceType, string> = {
+  pv_valve: "PV Valve (Pressure/Vacuum)",
+  open_vent: "Open Vent with Flame Arrester",
+  emergency_manhole: "Emergency Manhole Cover (weighted)",
+  rupture_pin: "Rupture Pin Device",
+};
+
+const VENT_CD: Record<VentDeviceType, number> = {
+  pv_valve: 0.62,
+  open_vent: 0.72,
+  emergency_manhole: 0.55,
+  rupture_pin: 0.62,
+};
 
 function fmtNum(n: number, digits = 2): string {
   if (Math.abs(n) >= 1000) return n.toFixed(1);
@@ -205,84 +293,51 @@ export function calculateTankGeometry(
     wettedArea_m2: wettedArea,
     liquidVolume_m3: liquidVolume,
     vaporSpace_m3: Math.max(vaporSpace, 0),
+    diameter_m: D,
+    height_m: H,
   };
 }
 
-export function calculateNormalVenting(
-  tankVolume_m3: number,
-  productCategory: ProductCategory,
-  fillRate_m3h: number,
-  emptyRate_m3h: number,
-  flashFactor: number,
-): NormalVentingResult {
-  const C_out = THERMAL_COEFF_OUT[productCategory];
-  const C_in = THERMAL_COEFF_IN[productCategory];
-
-  const thermalOut = tankVolume_m3 > 0 ? C_out * Math.pow(tankVolume_m3, 0.7) : 0;
-  const thermalIn = tankVolume_m3 > 0 ? C_in * Math.pow(tankVolume_m3, 0.7) : 0;
-
-  const liquidOut = fillRate_m3h * Math.max(flashFactor, 1.0);
-  const liquidIn = emptyRate_m3h;
-
-  const totalOut = thermalOut + liquidOut;
-  const totalIn = thermalIn + liquidIn;
-
-  const governing = totalOut > totalIn ? "outbreathing" : "inbreathing";
-  const governingFlow = Math.max(totalOut, totalIn);
-
-  return {
-    thermalOutbreathing_Nm3h: thermalOut,
-    thermalInbreathing_Nm3h: thermalIn,
-    liquidMovementOut_Nm3h: liquidOut,
-    liquidMovementIn_Nm3h: liquidIn,
-    totalOutbreathing_Nm3h: totalOut,
-    totalInbreathing_Nm3h: totalIn,
-    governingNormal_Nm3h: governingFlow,
-    governingDirection: governing,
-  };
+function calcFireHeat(
+  effectiveArea_m2: number, F: number, drainageFactor: number
+): number {
+  if (effectiveArea_m2 <= 2.8 || F <= 0) return 0;
+  return 43200 * F * drainageFactor * Math.pow(effectiveArea_m2, 0.82);
 }
 
-export function calculateEmergencyVenting(
-  wettedArea_m2: number,
-  insulationType: InsulationType,
-  vaporMW: number,
-  relievingTemp_C: number,
+function calcEmergencyFlow(
+  heatInput_W: number,
   latentHeat_kJ_kg: number,
   vaporDensity_kg_m3: number,
-): EmergencyVentingResult {
-  const F = ENV_FACTORS[insulationType];
-
-  let heatInput_W = 0;
-  if (wettedArea_m2 > 2.8 && F > 0) {
-    heatInput_W = 43200 * F * Math.pow(wettedArea_m2, 0.82);
-  }
+  vaporMW: number,
+  relievingTemp_C: number,
+  F: number,
+  effectiveArea_m2: number,
+): { vap_kg_h: number; flow_Nm3h: number } {
+  const T_K = relievingTemp_C + 273.15;
   const heatInput_kW = heatInput_W / 1000;
 
-  let q_emergency_Nm3h = 0;
-  if (latentHeat_kJ_kg > 0 && vaporDensity_kg_m3 > 0) {
-    const vaporizationRate_kg_h = (heatInput_kW * 3600) / latentHeat_kJ_kg;
-    const actualVolumeRate_m3h = vaporizationRate_kg_h / vaporDensity_kg_m3;
-    const T_relieve_K = relievingTemp_C + 273.15;
-    q_emergency_Nm3h = actualVolumeRate_m3h * (273.15 / T_relieve_K) * (101.325 / 101.325);
-  } else if (heatInput_kW > 0) {
-    const T_relieve_K = relievingTemp_C + 273.15;
-    q_emergency_Nm3h = 906.6 * F * Math.pow(wettedArea_m2, 0.82) *
-      Math.sqrt(28.97 / Math.max(vaporMW, 1)) * Math.sqrt(T_relieve_K / 273.15);
+  if (latentHeat_kJ_kg > 0 && vaporDensity_kg_m3 > 0 && heatInput_kW > 0) {
+    const vap_kg_h = (heatInput_kW * 3600) / latentHeat_kJ_kg;
+    const actual_m3h = vap_kg_h / vaporDensity_kg_m3;
+    const flow_Nm3h = actual_m3h * (273.15 / T_K);
+    return { vap_kg_h, flow_Nm3h };
   }
 
-  return {
-    wettedArea_m2: wettedArea_m2,
-    envFactor: F,
-    heatInput_kW,
-    emergencyVenting_Nm3h: q_emergency_Nm3h,
-  };
+  if (heatInput_W > 0) {
+    const flow_Nm3h = 906.6 * F * Math.pow(effectiveArea_m2, 0.82) *
+      Math.sqrt(28.97 / Math.max(vaporMW, 1)) * Math.sqrt(T_K / 273.15);
+    const vap_kg_h = latentHeat_kJ_kg > 0 ? (heatInput_kW * 3600) / latentHeat_kJ_kg : 0;
+    return { vap_kg_h, flow_Nm3h };
+  }
+
+  return { vap_kg_h: 0, flow_Nm3h: 0 };
 }
 
 function sizeVentForDP(
-  flowRate_Nm3h: number, dp_mbar: number
+  flowRate_Nm3h: number, dp_mbar: number, Cd: number
 ): { area_mm2: number; dia_mm: number; nps: string } {
   const rho_air = 1.225;
-  const Cd = 0.62;
   const dp_Pa = dp_mbar * 100;
 
   let area_m2 = 0;
@@ -311,39 +366,11 @@ function sizeVentForDP(
   return { area_mm2, dia_mm, nps };
 }
 
-export function calculateVentSize(
-  outbreathingRequired_Nm3h: number,
-  inbreathingRequired_Nm3h: number,
-  emergencyRequired_Nm3h: number,
-  designPressure_mbar: number,
-  designVacuum_mbar: number,
-): VentSizingResult {
-  const pressureFlow = Math.max(outbreathingRequired_Nm3h, emergencyRequired_Nm3h);
-  const vacuumFlow = inbreathingRequired_Nm3h;
-
-  const pressureVent = sizeVentForDP(pressureFlow, designPressure_mbar);
-  const vacuumVent = sizeVentForDP(vacuumFlow, designVacuum_mbar);
-
-  const governingSide = pressureVent.area_mm2 >= vacuumVent.area_mm2 ? "pressure" : "vacuum";
-
-  return {
-    totalRequired_Nm3h: Math.max(pressureFlow, vacuumFlow),
-    normalRequired_Nm3h: Math.max(outbreathingRequired_Nm3h, inbreathingRequired_Nm3h),
-    emergencyRequired_Nm3h,
-    pressureVentArea_mm2: pressureVent.area_mm2,
-    vacuumVentArea_mm2: vacuumVent.area_mm2,
-    pressureVentDia_mm: pressureVent.dia_mm,
-    vacuumVentDia_mm: vacuumVent.dia_mm,
-    pressureNPS: pressureVent.nps,
-    vacuumNPS: vacuumVent.nps,
-    governingSide,
-  };
-}
-
 export function calculateApi2000(input: Api2000Input): Api2000Result {
   const trace: { step: string; value: string }[] = [];
   const assumptions: string[] = [];
   const warnings: string[] = [];
+  const scenarios: ScenarioResult[] = [];
 
   if (input.tankDiameter_m <= 0) throw new Error("Tank diameter must be positive");
   if (input.tankHeight_m <= 0) throw new Error("Tank height must be positive");
@@ -355,102 +382,381 @@ export function calculateApi2000(input: Api2000Input): Api2000Result {
     input.tankDiameter_m, input.tankHeight_m, input.tankType, input.liquidLevel_percent
   );
 
-  trace.push({ step: "Tank volume V = π/4 × D² × H", value: `${fmtNum(geom.volume_m3)} m³` });
-  trace.push({ step: "Shell area = π × D × H", value: `${fmtNum(geom.shellArea_m2)} m²` });
-  trace.push({ step: "Wetted area = π × D × H_liquid", value: `${fmtNum(geom.wettedArea_m2)} m²` });
-  trace.push({ step: "Vapor space", value: `${fmtNum(geom.vaporSpace_m3)} m³` });
-
-  const normal = calculateNormalVenting(
-    geom.volume_m3,
-    input.productCategory,
-    input.maxFillRate_m3_h,
-    input.maxEmptyRate_m3_h,
-    input.flashFactor,
-  );
+  trace.push({ step: "\u2550\u2550\u2550 TANK GEOMETRY \u2550\u2550\u2550", value: "" });
+  trace.push({ step: "Tank diameter D", value: `${fmtNum(geom.diameter_m)} m` });
+  trace.push({ step: "Tank height H", value: `${fmtNum(geom.height_m)} m` });
+  trace.push({ step: "Tank volume V = \u03C0/4 \u00D7 D\u00B2 \u00D7 H + roof", value: `${fmtNum(geom.volume_m3)} m\u00B3` });
+  trace.push({ step: "Shell area = \u03C0 \u00D7 D \u00D7 H", value: `${fmtNum(geom.shellArea_m2)} m\u00B2` });
+  trace.push({ step: `Liquid level = ${input.liquidLevel_percent}%`, value: `H_liq = ${fmtNum(geom.height_m * input.liquidLevel_percent / 100)} m` });
+  trace.push({ step: "Wetted area = \u03C0 \u00D7 D \u00D7 H_liquid", value: `${fmtNum(geom.wettedArea_m2)} m\u00B2` });
+  trace.push({ step: "Vapor space", value: `${fmtNum(geom.vaporSpace_m3)} m\u00B3` });
 
   const C_out = THERMAL_COEFF_OUT[input.productCategory];
   const C_in = THERMAL_COEFF_IN[input.productCategory];
 
-  trace.push({ step: `Thermal outbreathing = ${C_out} × V^0.7 (API 2000 Table 2)`, value: `${fmtNum(normal.thermalOutbreathing_Nm3h)} Nm³/h` });
-  trace.push({ step: `Thermal inbreathing = ${C_in} × V^0.7 (API 2000 Table 3)`, value: `${fmtNum(normal.thermalInbreathing_Nm3h)} Nm³/h` });
-  if (input.maxFillRate_m3_h > 0) {
-    trace.push({ step: `Liquid movement outbreathing = fill rate × flash factor`, value: `${fmtNum(normal.liquidMovementOut_Nm3h)} Nm³/h` });
-  }
-  if (input.maxEmptyRate_m3_h > 0) {
-    trace.push({ step: `Liquid movement inbreathing = empty rate`, value: `${fmtNum(normal.liquidMovementIn_Nm3h)} Nm³/h` });
-  }
-  trace.push({ step: "Total outbreathing = thermal + liquid movement", value: `${fmtNum(normal.totalOutbreathing_Nm3h)} Nm³/h` });
-  trace.push({ step: "Total inbreathing = thermal + liquid movement", value: `${fmtNum(normal.totalInbreathing_Nm3h)} Nm³/h` });
-  trace.push({ step: `Governing normal venting (${normal.governingDirection})`, value: `${fmtNum(normal.governingNormal_Nm3h)} Nm³/h` });
+  trace.push({ step: "\u2550\u2550\u2550 NORMAL VENTING \u2014 Section 4 \u2550\u2550\u2550", value: "" });
 
-  const emergency = calculateEmergencyVenting(
-    geom.wettedArea_m2,
-    input.insulationType,
-    input.vaporMW,
-    input.relievingTemp_C,
-    input.latentHeat_kJ_kg,
-    input.vaporDensity_kg_m3,
-  );
+  const thermalOut = geom.volume_m3 > 0 ? C_out * Math.pow(geom.volume_m3, 0.7) : 0;
+  const thermalIn = geom.volume_m3 > 0 ? C_in * Math.pow(geom.volume_m3, 0.7) : 0;
 
-  trace.push({ step: `Environmental factor F (${ENV_LABELS[input.insulationType]})`, value: `${emergency.envFactor}` });
-  if (geom.wettedArea_m2 > 2.8) {
-    trace.push({ step: "Q_fire = 43,200 × F × A_w^0.82 (API 2000 Eq. 3)", value: `${fmtNum(emergency.heatInput_kW)} kW` });
+  scenarios.push({
+    id: "N1",
+    name: "Thermal Outbreathing",
+    section: "4.3.2",
+    direction: "outbreathing",
+    flow_Nm3h: thermalOut,
+    description: `Tank heats up \u2192 vapor space expands. q = ${C_out} \u00D7 V^0.7 = ${C_out} \u00D7 ${fmtNum(geom.volume_m3)}^0.7`,
+    isApplicable: true,
+  });
+
+  trace.push({ step: `N1: Thermal outbreathing = ${C_out} \u00D7 V^0.7 (Table 2)`, value: `${fmtNum(thermalOut)} Nm\u00B3/h` });
+
+  scenarios.push({
+    id: "N2",
+    name: "Thermal Inbreathing",
+    section: "4.3.3",
+    direction: "inbreathing",
+    flow_Nm3h: thermalIn,
+    description: `Tank cools down \u2192 vapor space contracts. q = ${C_in} \u00D7 V^0.7 = ${C_in} \u00D7 ${fmtNum(geom.volume_m3)}^0.7`,
+    isApplicable: true,
+  });
+
+  trace.push({ step: `N2: Thermal inbreathing = ${C_in} \u00D7 V^0.7 (Table 3)`, value: `${fmtNum(thermalIn)} Nm\u00B3/h` });
+
+  const liquidOut = input.maxFillRate_m3_h * Math.max(input.flashFactor, 1.0);
+  const hasLiquidIn = input.maxFillRate_m3_h > 0;
+
+  scenarios.push({
+    id: "N3",
+    name: "Liquid Pump-In (Outbreathing)",
+    section: "4.4.1",
+    direction: "outbreathing",
+    flow_Nm3h: liquidOut,
+    description: `Liquid fills tank \u2192 displaces vapor. q = fill_rate \u00D7 flash_factor = ${fmtNum(input.maxFillRate_m3_h)} \u00D7 ${fmtNum(input.flashFactor)}`,
+    isApplicable: hasLiquidIn,
+    notApplicableReason: hasLiquidIn ? undefined : "No liquid fill rate specified",
+  });
+
+  if (hasLiquidIn) {
+    trace.push({ step: `N3: Liquid pump-in outbreathing = ${fmtNum(input.maxFillRate_m3_h)} \u00D7 ${fmtNum(input.flashFactor)}`, value: `${fmtNum(liquidOut)} Nm\u00B3/h` });
   } else {
-    trace.push({ step: "Wetted area ≤ 2.8 m²", value: "No emergency venting required per API 2000" });
+    trace.push({ step: "N3: Liquid pump-in outbreathing", value: "N/A (no fill rate)" });
   }
-  trace.push({ step: "Emergency venting (free air equivalent)", value: `${fmtNum(emergency.emergencyVenting_Nm3h)} Nm³/h` });
 
-  const ventSize = calculateVentSize(
-    normal.totalOutbreathing_Nm3h,
-    normal.totalInbreathing_Nm3h,
-    emergency.emergencyVenting_Nm3h,
-    input.designPressure_mbar,
-    input.designVacuum_mbar,
+  const liquidIn = input.maxEmptyRate_m3_h;
+  const hasLiquidOut = input.maxEmptyRate_m3_h > 0;
+
+  scenarios.push({
+    id: "N4",
+    name: "Liquid Pump-Out (Inbreathing)",
+    section: "4.4.2",
+    direction: "inbreathing",
+    flow_Nm3h: liquidIn,
+    description: `Liquid withdrawn \u2192 air drawn in. q = empty_rate = ${fmtNum(input.maxEmptyRate_m3_h)} m\u00B3/h (1:1 displacement)`,
+    isApplicable: hasLiquidOut,
+    notApplicableReason: hasLiquidOut ? undefined : "No liquid empty rate specified",
+  });
+
+  if (hasLiquidOut) {
+    trace.push({ step: `N4: Liquid pump-out inbreathing = empty rate`, value: `${fmtNum(liquidIn)} Nm\u00B3/h` });
+  } else {
+    trace.push({ step: "N4: Liquid pump-out inbreathing", value: "N/A (no empty rate)" });
+  }
+
+  const totalNormalOut = thermalOut + liquidOut;
+  const totalNormalIn = thermalIn + liquidIn;
+
+  trace.push({ step: "Total normal outbreathing = N1 + N3", value: `${fmtNum(totalNormalOut)} Nm\u00B3/h` });
+  trace.push({ step: "Total normal inbreathing = N2 + N4", value: `${fmtNum(totalNormalIn)} Nm\u00B3/h` });
+
+  const normalGoverning = totalNormalOut > totalNormalIn ? "outbreathing" : "inbreathing";
+  const normalMax = Math.max(totalNormalOut, totalNormalIn);
+  trace.push({ step: `Governing normal direction: ${normalGoverning}`, value: `${fmtNum(normalMax)} Nm\u00B3/h` });
+
+  const normal: NormalVentingResult = {
+    thermalOutbreathing_Nm3h: thermalOut,
+    thermalInbreathing_Nm3h: thermalIn,
+    liquidMovementOut_Nm3h: liquidOut,
+    liquidMovementIn_Nm3h: liquidIn,
+    totalOutbreathing_Nm3h: totalNormalOut,
+    totalInbreathing_Nm3h: totalNormalIn,
+    governingNormal_Nm3h: normalMax,
+    governingDirection: normalGoverning,
+  };
+
+  trace.push({ step: "\u2550\u2550\u2550 EMERGENCY VENTING \u2014 Section 5 \u2550\u2550\u2550", value: "" });
+
+  const F = ENV_FACTORS[input.insulationType];
+  const drainageF = input.hasDrainage ? Math.max(input.drainageFactor, 0) : 1.0;
+  const isFloating = input.tankType === "floating_roof";
+  const isUnderground = input.insulationType === "underground";
+
+  let effectiveWettedArea = geom.wettedArea_m2;
+  if (isFloating && input.rimSealHeight_m > 0) {
+    effectiveWettedArea = Math.PI * geom.diameter_m * input.rimSealHeight_m;
+  }
+
+  trace.push({ step: `Environmental factor F (${ENV_LABELS[input.insulationType]})`, value: `${F}` });
+  if (input.hasDrainage) {
+    trace.push({ step: "Drainage factor (Section 5.2.2)", value: `${fmtNum(drainageF)}` });
+  }
+
+  const fireHeat_W_bare = calcFireHeat(effectiveWettedArea, 1.0, 1.0);
+  const fireFlow_bare = calcEmergencyFlow(
+    fireHeat_W_bare, input.latentHeat_kJ_kg, input.vaporDensity_kg_m3,
+    input.vaporMW, input.relievingTemp_C, 1.0, effectiveWettedArea
   );
 
-  trace.push({ step: "--- Pressure Vent (outbreathing + emergency) ---", value: "" });
-  trace.push({ step: "Pressure vent flow = max(outbreathing, emergency)", value: `${fmtNum(Math.max(normal.totalOutbreathing_Nm3h, emergency.emergencyVenting_Nm3h))} Nm³/h` });
-  trace.push({ step: `Pressure vent area (Cd=0.62, ΔP=${input.designPressure_mbar} mbar)`, value: `${fmtNum(ventSize.pressureVentArea_mm2)} mm²` });
-  trace.push({ step: "Pressure vent diameter", value: `${fmtNum(ventSize.pressureVentDia_mm)} mm → ${ventSize.pressureNPS}` });
-  trace.push({ step: "--- Vacuum Vent (inbreathing) ---", value: "" });
-  trace.push({ step: "Vacuum vent flow = total inbreathing", value: `${fmtNum(normal.totalInbreathing_Nm3h)} Nm³/h` });
-  trace.push({ step: `Vacuum vent area (Cd=0.62, ΔP=${input.designVacuum_mbar} mbar)`, value: `${fmtNum(ventSize.vacuumVentArea_mm2)} mm²` });
-  trace.push({ step: "Vacuum vent diameter", value: `${fmtNum(ventSize.vacuumVentDia_mm)} mm → ${ventSize.vacuumNPS}` });
-  trace.push({ step: "Governing side", value: ventSize.governingSide });
+  const e1Applicable = !isFloating && !isUnderground && effectiveWettedArea > 2.8;
+
+  scenarios.push({
+    id: "E1",
+    name: "External Fire \u2014 Bare Tank",
+    section: "5.2",
+    direction: "outbreathing (emergency)",
+    flow_Nm3h: e1Applicable ? fireFlow_bare.flow_Nm3h : 0,
+    description: e1Applicable
+      ? `Q = 43,200 \u00D7 1.0 \u00D7 ${fmtNum(effectiveWettedArea)}^0.82 = ${fmtNum(fireHeat_W_bare / 1000)} kW`
+      : isFloating ? "Not applicable \u2014 floating roof (see E4)" : isUnderground ? "Not applicable \u2014 underground tank" : "Wetted area \u2264 2.8 m\u00B2",
+    isApplicable: e1Applicable,
+    notApplicableReason: !e1Applicable ? (isFloating ? "Floating roof \u2014 use E4" : isUnderground ? "Underground tank (F=0)" : "Wetted area \u2264 2.8 m\u00B2") : undefined,
+  });
+
+  trace.push({ step: "E1: Fire (bare, F=1.0, no drainage credit)", value: `Q = ${fmtNum(fireHeat_W_bare / 1000)} kW \u2192 ${fmtNum(fireFlow_bare.flow_Nm3h)} Nm\u00B3/h` });
+
+  const fireHeat_W_insulated = calcFireHeat(effectiveWettedArea, F, 1.0);
+  const fireFlow_insulated = calcEmergencyFlow(
+    fireHeat_W_insulated, input.latentHeat_kJ_kg, input.vaporDensity_kg_m3,
+    input.vaporMW, input.relievingTemp_C, F, effectiveWettedArea
+  );
+  const isInsulated = F < 1.0;
+
+  const e2Applicable = !isFloating && !isUnderground && isInsulated && effectiveWettedArea > 2.8;
+
+  scenarios.push({
+    id: "E2",
+    name: "External Fire \u2014 Insulation Credit",
+    section: "5.2.3",
+    direction: "outbreathing (emergency)",
+    flow_Nm3h: e2Applicable ? fireFlow_insulated.flow_Nm3h : 0,
+    description: e2Applicable
+      ? `Q = 43,200 \u00D7 ${F} \u00D7 ${fmtNum(effectiveWettedArea)}^0.82 = ${fmtNum(fireHeat_W_insulated / 1000)} kW`
+      : isFloating ? "Not applicable \u2014 floating roof (see E4)" : isUnderground ? "Not applicable \u2014 underground tank" : !isInsulated ? "Tank is bare (F = 1.0)" : "Wetted area \u2264 2.8 m\u00B2",
+    isApplicable: e2Applicable,
+    notApplicableReason: !e2Applicable ? (isFloating ? "Floating roof \u2014 use E4" : isUnderground ? "Underground tank (F=0)" : !isInsulated ? "Tank is bare (F = 1.0)" : "Wetted area \u2264 2.8 m\u00B2") : undefined,
+  });
+
+  if (isInsulated) {
+    trace.push({ step: `E2: Fire (insulated, F=${F})`, value: `Q = ${fmtNum(fireHeat_W_insulated / 1000)} kW \u2192 ${fmtNum(fireFlow_insulated.flow_Nm3h)} Nm\u00B3/h` });
+  } else {
+    trace.push({ step: "E2: Fire with insulation credit", value: "N/A (bare tank)" });
+  }
+
+  const fireHeat_W_drained = calcFireHeat(effectiveWettedArea, F, drainageF);
+  const fireFlow_drained = calcEmergencyFlow(
+    fireHeat_W_drained, input.latentHeat_kJ_kg, input.vaporDensity_kg_m3,
+    input.vaporMW, input.relievingTemp_C, F * drainageF, effectiveWettedArea
+  );
+
+  const e3Applicable = !isFloating && !isUnderground && input.hasDrainage && effectiveWettedArea > 2.8;
+
+  scenarios.push({
+    id: "E3",
+    name: "External Fire \u2014 With Drainage",
+    section: "5.2.2",
+    direction: "outbreathing (emergency)",
+    flow_Nm3h: e3Applicable ? fireFlow_drained.flow_Nm3h : 0,
+    description: e3Applicable
+      ? `Q = 43,200 \u00D7 ${F} \u00D7 ${fmtNum(drainageF)} \u00D7 ${fmtNum(effectiveWettedArea)}^0.82 = ${fmtNum(fireHeat_W_drained / 1000)} kW`
+      : isFloating ? "Not applicable \u2014 floating roof (see E4)" : isUnderground ? "Not applicable \u2014 underground tank" : !input.hasDrainage ? "No drainage provisions" : "Wetted area \u2264 2.8 m\u00B2",
+    isApplicable: e3Applicable,
+    notApplicableReason: !e3Applicable ? (isFloating ? "Floating roof \u2014 use E4" : isUnderground ? "Underground tank (F=0)" : !input.hasDrainage ? "No drainage provisions" : "Wetted area \u2264 2.8 m\u00B2") : undefined,
+  });
+
+  if (input.hasDrainage) {
+    trace.push({ step: `E3: Fire with drainage (F=${F}, drainage=${fmtNum(drainageF)})`, value: `Q = ${fmtNum(fireHeat_W_drained / 1000)} kW \u2192 ${fmtNum(fireFlow_drained.flow_Nm3h)} Nm\u00B3/h` });
+  } else {
+    trace.push({ step: "E3: Fire with drainage provisions", value: "N/A (no drainage)" });
+  }
+
+  let floatingRoofEmergency = 0;
+  if (isFloating && input.rimSealHeight_m > 0) {
+    const rimArea = Math.PI * geom.diameter_m * input.rimSealHeight_m;
+    const rimHeat = calcFireHeat(rimArea, F, drainageF);
+    const rimFlow = calcEmergencyFlow(
+      rimHeat, input.latentHeat_kJ_kg, input.vaporDensity_kg_m3,
+      input.vaporMW, input.relievingTemp_C, F, rimArea
+    );
+    floatingRoofEmergency = rimFlow.flow_Nm3h;
+  }
+
+  const e4Applicable = isFloating && !isUnderground;
+
+  scenarios.push({
+    id: "E4",
+    name: "Floating Roof \u2014 Rim Seal Fire",
+    section: "5.4",
+    direction: "outbreathing (emergency)",
+    flow_Nm3h: e4Applicable ? floatingRoofEmergency : 0,
+    description: e4Applicable
+      ? `Rim seal fire only. Effective area = \u03C0 \u00D7 D \u00D7 rim_height = ${fmtNum(Math.PI * geom.diameter_m * input.rimSealHeight_m)} m\u00B2`
+      : isUnderground ? "Not applicable \u2014 underground tank" : "Not applicable \u2014 fixed roof tank",
+    isApplicable: e4Applicable,
+    notApplicableReason: !e4Applicable ? (isUnderground ? "Underground tank (F=0)" : "Not a floating roof tank") : undefined,
+  });
+
+  if (isFloating) {
+    trace.push({ step: "E4: Floating roof rim seal fire", value: `${fmtNum(floatingRoofEmergency)} Nm\u00B3/h` });
+  } else {
+    trace.push({ step: "E4: Floating roof rim seal fire", value: "N/A (fixed roof tank)" });
+  }
+
+  let governingEmergency_Nm3h: number;
+  let governingEmergencyScenario: string;
+
+  if (input.insulationType === "underground") {
+    governingEmergency_Nm3h = 0;
+    governingEmergencyScenario = "None (underground tank)";
+  } else if (isFloating) {
+    governingEmergency_Nm3h = floatingRoofEmergency;
+    governingEmergencyScenario = "E4 (floating roof rim seal)";
+  } else if (input.hasDrainage) {
+    governingEmergency_Nm3h = fireFlow_drained.flow_Nm3h;
+    governingEmergencyScenario = "E3 (fire with drainage)";
+  } else if (isInsulated) {
+    governingEmergency_Nm3h = fireFlow_insulated.flow_Nm3h;
+    governingEmergencyScenario = "E2 (fire with insulation)";
+  } else {
+    governingEmergency_Nm3h = fireFlow_bare.flow_Nm3h;
+    governingEmergencyScenario = "E1 (fire, bare tank)";
+  }
+
+  const normalCredit = totalNormalOut;
+  const netEmergency = Math.max(governingEmergency_Nm3h - normalCredit, 0);
+
+  trace.push({ step: `Governing emergency scenario: ${governingEmergencyScenario}`, value: `${fmtNum(governingEmergency_Nm3h)} Nm\u00B3/h` });
+  trace.push({ step: "Normal outbreathing credit (Section 5.3)", value: `\u2212${fmtNum(normalCredit)} Nm\u00B3/h` });
+  trace.push({ step: "Net emergency vent requirement", value: `${fmtNum(netEmergency)} Nm\u00B3/h` });
+
+  const emergency: EmergencyVentingResult = {
+    wettedArea_m2: geom.wettedArea_m2,
+    effectiveWettedArea_m2: effectiveWettedArea,
+    envFactor: F,
+    drainageFactor: drainageF,
+    heatInput_kW: (isFloating ? calcFireHeat(effectiveWettedArea, F, drainageF) : (input.hasDrainage ? fireHeat_W_drained : isInsulated ? fireHeat_W_insulated : fireHeat_W_bare)) / 1000,
+    vaporizationRate_kg_h: (input.hasDrainage ? fireFlow_drained : isInsulated ? fireFlow_insulated : fireFlow_bare).vap_kg_h,
+    emergencyVenting_Nm3h: governingEmergency_Nm3h,
+    netEmergency_Nm3h: netEmergency,
+    normalCredit_Nm3h: normalCredit,
+  };
+
+  trace.push({ step: "\u2550\u2550\u2550 SCENARIO SUMMARY \u2550\u2550\u2550", value: "" });
+
+  const totalPressureSide = totalNormalOut + netEmergency;
+  const governingPressure = totalPressureSide;
+  const governingPressureScenario = netEmergency > 0
+    ? `Normal (${fmtNum(totalNormalOut)}) + net emergency (${fmtNum(netEmergency)}) via ${governingEmergencyScenario}`
+    : "Normal outbreathing (N1+N3)";
+  const governingVacuum = totalNormalIn;
+  const governingVacuumScenario = "Normal inbreathing (N2+N4)";
+
+  trace.push({ step: `Pressure side governing: ${governingPressureScenario}`, value: `${fmtNum(governingPressure)} Nm\u00B3/h` });
+  trace.push({ step: `Vacuum side governing: ${governingVacuumScenario}`, value: `${fmtNum(governingVacuum)} Nm\u00B3/h` });
+
+  const scenarioSummary = {
+    totalNormalOutbreathing_Nm3h: totalNormalOut,
+    totalNormalInbreathing_Nm3h: totalNormalIn,
+    emergencyOutbreathing_Nm3h: governingEmergency_Nm3h,
+    governingPressure_Nm3h: governingPressure,
+    governingVacuum_Nm3h: governingVacuum,
+    governingPressureScenario,
+    governingVacuumScenario,
+  };
+
+  trace.push({ step: "\u2550\u2550\u2550 VENT SIZING \u2550\u2550\u2550", value: "" });
+
+  const Cd_pv = VENT_CD.pv_valve;
+  const Cd_emerg = VENT_CD.emergency_manhole;
+
+  const pressureVent = sizeVentForDP(totalNormalOut, input.designPressure_mbar, Cd_pv);
+  const vacuumVent = sizeVentForDP(totalNormalIn, input.designVacuum_mbar, Cd_pv);
+  const emergencyVent = sizeVentForDP(netEmergency, input.designPressure_mbar, Cd_emerg);
+
+  trace.push({ step: "--- PV Valve \u2014 Normal Pressure (Outbreathing) ---", value: "" });
+  trace.push({ step: `Flow = total normal outbreathing`, value: `${fmtNum(totalNormalOut)} Nm\u00B3/h` });
+  trace.push({ step: `Area (Cd=${Cd_pv}, \u0394P=${input.designPressure_mbar} mbar)`, value: `${fmtNum(pressureVent.area_mm2)} mm\u00B2 \u2192 ${pressureVent.nps}` });
+
+  trace.push({ step: "--- PV Valve \u2014 Normal Vacuum (Inbreathing) ---", value: "" });
+  trace.push({ step: `Flow = total normal inbreathing`, value: `${fmtNum(totalNormalIn)} Nm\u00B3/h` });
+  trace.push({ step: `Area (Cd=${Cd_pv}, \u0394P=${input.designVacuum_mbar} mbar)`, value: `${fmtNum(vacuumVent.area_mm2)} mm\u00B2 \u2192 ${vacuumVent.nps}` });
+
+  trace.push({ step: "--- Emergency Vent (net of normal credit) ---", value: "" });
+  trace.push({ step: `Flow = net emergency`, value: `${fmtNum(netEmergency)} Nm\u00B3/h` });
+  trace.push({ step: `Area (Cd=${Cd_emerg}, \u0394P=${input.designPressure_mbar} mbar)`, value: `${fmtNum(emergencyVent.area_mm2)} mm\u00B2 \u2192 ${emergencyVent.nps}` });
+
+  const governingSide = pressureVent.area_mm2 >= vacuumVent.area_mm2 ? "pressure" : "vacuum";
+  trace.push({ step: "PV valve governing side", value: governingSide });
+
+  const ventSizing: VentSizingResult = {
+    totalRequired_Nm3h: Math.max(governingPressure, governingVacuum),
+    normalRequired_Nm3h: normalMax,
+    emergencyRequired_Nm3h: governingEmergency_Nm3h,
+    pressureVentArea_mm2: pressureVent.area_mm2,
+    vacuumVentArea_mm2: vacuumVent.area_mm2,
+    emergencyVentArea_mm2: emergencyVent.area_mm2,
+    pressureVentDia_mm: pressureVent.dia_mm,
+    vacuumVentDia_mm: vacuumVent.dia_mm,
+    emergencyVentDia_mm: emergencyVent.dia_mm,
+    pressureNPS: pressureVent.nps,
+    vacuumNPS: vacuumVent.nps,
+    emergencyNPS: emergencyVent.nps,
+    governingSide,
+  };
 
   assumptions.push("Non-refrigerated atmospheric storage tank per API 2000, 7th Edition");
-  assumptions.push(`Thermal breathing coefficients: C_out = ${C_out}, C_in = ${C_in} (empirical, API 2000 Table 2/3)`);
-  assumptions.push("Liquid movement: 1:1 volume displacement at atmospheric conditions");
-  assumptions.push("Fire heat input: Q = 43,200 × F × A_w^0.82 W (API 2000 Eq. 3, A_w > 2.8 m²)");
-  assumptions.push("Vent discharge coefficient Cd = 0.62 (typical for PV valves)");
-  assumptions.push("Standard conditions: 0°C (273.15 K), 101.325 kPa for Nm³/h");
+  assumptions.push(`Thermal breathing coefficients: C_out = ${C_out}, C_in = ${C_in} (API 2000 Table 2/3)`);
+  assumptions.push("Liquid movement: 1:1 volume displacement at atmospheric conditions (Section 4.4)");
+  assumptions.push("Fire heat input: Q = 43,200 \u00D7 F \u00D7 drainage \u00D7 A_w^0.82 W (Section 5.2, A_w > 2.8 m\u00B2)");
+  assumptions.push(`Normal venting credit applied to emergency per Section 5.3: ${fmtNum(normalCredit)} Nm\u00B3/h`);
+  assumptions.push(`PV valve Cd = ${Cd_pv}; Emergency vent Cd = ${Cd_emerg}`);
+  assumptions.push("Standard conditions: 0\u00B0C (273.15 K), 101.325 kPa for Nm\u00B3/h");
 
-  if (input.tankType === "floating_roof") {
-    warnings.push("Floating roof tanks: emergency venting may be reduced per API 2000 Section 5.4");
+  if (isFloating) {
+    warnings.push("Floating roof tank: emergency venting based on rim seal area only (Section 5.4)");
+    if (input.rimSealHeight_m <= 0) {
+      warnings.push("Rim seal height not specified \u2014 emergency venting may be underestimated");
+    }
   }
   if (geom.volume_m3 > 50000) {
-    warnings.push("Very large tank (>50,000 m³): verify thermal breathing coefficients with API 2000 Table 2/3 extrapolation");
+    warnings.push("Very large tank (>50,000 m\u00B3): verify thermal breathing with API 2000 Table 2/3 extrapolation");
   }
   if (input.designPressure_mbar < 3.5) {
     warnings.push("Very low design pressure (<3.5 mbar): consider structural adequacy of tank shell");
   }
   if (input.flashFactor > 5) {
-    warnings.push(`High flash factor (${input.flashFactor}): verify with process simulation — volatile liquid vaporization may dominate`);
+    warnings.push(`High flash factor (${input.flashFactor}): verify with process simulation`);
   }
-  if (emergency.emergencyVenting_Nm3h > normal.governingNormal_Nm3h * 10) {
-    warnings.push("Emergency venting greatly exceeds normal venting: verify insulation and drainage provisions");
+  if (governingEmergency_Nm3h > totalNormalOut * 10 && governingEmergency_Nm3h > 0) {
+    warnings.push("Emergency venting \u226B normal venting: verify insulation and drainage provisions");
   }
-  if (ventSize.pressureVentDia_mm > 600 || ventSize.vacuumVentDia_mm > 600) {
-    warnings.push("Required vent diameter exceeds 24\": consider multiple PV valves or open vent with flame arrester");
+  if (netEmergency > 0 && emergencyVent.dia_mm > 600) {
+    warnings.push("Emergency vent diameter exceeds 24\": consider multiple devices or weighted manhole covers");
   }
-
-  warnings.push("Screening calculation only. Final sizing per API 2000 with vendor-rated PV valve capacity data.");
+  if (pressureVent.dia_mm > 600 || vacuumVent.dia_mm > 600) {
+    warnings.push("PV valve diameter exceeds 24\": consider multiple PV valves");
+  }
+  if (input.insulationType === "insulated_unapproved") {
+    warnings.push("Unapproved insulation does not receive environmental credit (F = 1.0 per API 2000)");
+  }
+  warnings.push("Screening calculation. Final sizing requires vendor-rated PV valve and emergency vent capacity data.");
 
   return {
     geometry: geom,
+    scenarios,
     normalVenting: normal,
     emergencyVenting: emergency,
-    ventSizing: ventSize,
+    ventSizing: ventSizing,
+    scenarioSummary,
     trace,
     assumptions,
     warnings,
@@ -473,4 +779,7 @@ export const API_2000_TEST_CASE: Api2000Input = {
   designPressure_mbar: 20,
   designVacuum_mbar: 6,
   insulationType: "bare",
+  hasDrainage: false,
+  drainageFactor: 1.0,
+  rimSealHeight_m: 0,
 };
