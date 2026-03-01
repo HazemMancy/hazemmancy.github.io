@@ -53,21 +53,23 @@ export function calculateFlexibility(input: FlexibilityInput): FlexibilityResult
 
   const E = input.elastic_modulus_gpa * 1e3;
   const L_mm = input.straight_run_m * 1000;
-  const C = input.fixed_both_ends ? 3 : 12;
-  const sigma = (C * E * Do * Math.abs(thermalExpansion)) / (2 * L_mm * L_mm);
-  trace.push({ step: `σ_guided = ${C}·E·Do·δ / (2·L²)`, value: `${sigma.toFixed(1)} MPa` });
+  const delta = Math.abs(thermalExpansion);
+
+  const sigma = (3 * E * Do * delta) / (L_mm * L_mm);
+  trace.push({ step: "σ_guided = 3·E·Do·δ / L² (guided cantilever per M.W. Kellogg / ASME B31.3)", value: `${sigma.toFixed(1)} MPa` });
 
   const pass = sigma <= input.allowable_stress_mpa;
   const loopRequired = !pass;
 
   let minLoopLeg = 0;
-  if (loopRequired && Math.abs(thermalExpansion) > 0) {
-    minLoopLeg = Math.sqrt((3 * E * Do * Math.abs(thermalExpansion)) / (2 * input.allowable_stress_mpa * 1000)) / 1000;
-    trace.push({ step: "L_loop = √(3·E·Do·δ / (2·S_a))", value: `${minLoopLeg.toFixed(2)} m` });
+  if (loopRequired && delta > 0) {
+    minLoopLeg = Math.sqrt((3 * E * Do * delta) / input.allowable_stress_mpa) / 1000;
+    trace.push({ step: "L_loop = √(3·E·Do·δ / S_a) (guided cantilever loop leg)", value: `${minLoopLeg.toFixed(2)} m` });
   }
 
   if (Math.abs(deltaT) > 300) warnings.push("Large ΔT (>300°C): verify material properties at elevated temperature");
   if (sigma > 2 * input.allowable_stress_mpa) warnings.push("Stress exceeds 2× allowable: expansion loop or bellows required");
+  if (input.fixed_both_ends) warnings.push("Both ends anchored: guided cantilever assumes lateral displacement absorption at one end. Verify boundary conditions.");
 
   warnings.push("Screening tool only. Detailed flexibility/stress analysis requires Caesar II / AutoPIPE per ASME B31.3.");
 
