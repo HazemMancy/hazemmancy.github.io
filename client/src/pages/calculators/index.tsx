@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Wind, Droplets, Gauge, Blend, ArrowLeftRight, ArrowRight, Calculator,
-  Waves, CircleDot, Container, Thermometer, Shield, Flame, Cog, Cylinder,
+  Waves, CircleDot, Container, Thermometer, Shield, Flame, Cog, Cylinder, CloudRain,
 } from "lucide-react";
 
 interface CalculatorEntry {
@@ -155,6 +155,16 @@ const calculators: CalculatorEntry[] = [
     categoryColor: "text-red-400",
     tags: ["API 521", "Blocked-in Liquid", "Solar Heat"],
     standards: ["API 521", "ASME B31.3"],
+  },
+  {
+    title: "Tank Venting (API 2000)",
+    description: "Atmospheric and low-pressure storage tank venting per API 2000. Normal venting (thermal breathing + liquid movement) and emergency venting (fire exposure) with vent device sizing.",
+    href: "/calculators/tank-venting",
+    icon: CloudRain,
+    category: "Relief",
+    categoryColor: "text-red-400",
+    tags: ["API 2000", "Normal/Emergency", "PV Valve Sizing"],
+    standards: ["API 2000", "NFPA 30"],
   },
 ];
 

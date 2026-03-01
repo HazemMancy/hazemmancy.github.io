@@ -21,6 +21,7 @@ import HeatExchangerPage from "@/pages/calculators/heat-exchanger";
 import PSVSizingPage from "@/pages/calculators/psv-sizing";
 import ThermalReliefPage from "@/pages/calculators/thermal-relief";
 import CompressorPage from "@/pages/calculators/compressor";
+import TankVentingPage from "@/pages/calculators/tank-venting";
 import CalculatorsIndexPage from "@/pages/calculators/index";
 import PipingComponentsIndex from "@/pages/calculators/piping-components/index";
 import PipePage from "@/pages/calculators/piping-components/pipe";
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/calculators/psv-sizing" component={PSVSizingPage} />
       <Route path="/calculators/thermal-relief" component={ThermalReliefPage} />
       <Route path="/calculators/compressor" component={CompressorPage} />
+      <Route path="/calculators/tank-venting" component={TankVentingPage} />
       <Route path="/calculators/piping-components" component={PipingComponentsIndex} />
       <Route path="/calculators/piping-components/pipe" component={PipePage} />
       <Route path="/calculators/piping-components/flanges" component={FlangesPage} />

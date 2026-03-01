@@ -28,6 +28,7 @@ import {
   Shield,
   Flame,
   Cog,
+  CloudRain,
 } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 
@@ -214,6 +215,7 @@ const calculatorCategories = [
     items: [
       { title: "PRD / Flare Relief", description: "9-step wizard: scenario screening (API 521), sizing (API 520), orifice selection (API 526), piping checks", icon: Shield, href: "/calculators/psv-sizing" },
       { title: "Thermal Relief", description: "Thermal expansion relief sizing for blocked-in liquid scenarios per API 521", icon: Flame, href: "/calculators/thermal-relief" },
+      { title: "Tank Venting (API 2000)", description: "Normal and emergency venting for atmospheric storage tanks per API 2000", icon: CloudRain, href: "/calculators/tank-venting" },
     ],
   },
 ];
