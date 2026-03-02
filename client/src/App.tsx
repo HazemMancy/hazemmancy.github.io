@@ -16,7 +16,9 @@ import GasVolumePage from "@/pages/calculators/gas-volume";
 import PumpSizingPage from "@/pages/calculators/pump-sizing";
 import RestrictionOrificePage from "@/pages/calculators/restriction-orifice";
 import ControlValvePage from "@/pages/calculators/control-valve";
-import SeparatorPage from "@/pages/calculators/separator";
+import ConventionalSeparatorPage from "@/pages/calculators/conventional-separator";
+import TwoPhaseSeparatorPage from "@/pages/calculators/two-phase-separator";
+import FlareKODrumPage from "@/pages/calculators/flare-ko-drum";
 import HeatExchangerPage from "@/pages/calculators/heat-exchanger";
 import PSVSizingPage from "@/pages/calculators/psv-sizing";
 import ThermalReliefPage from "@/pages/calculators/thermal-relief";
@@ -48,7 +50,9 @@ function Router() {
       <Route path="/calculators/pump-sizing" component={PumpSizingPage} />
       <Route path="/calculators/restriction-orifice" component={RestrictionOrificePage} />
       <Route path="/calculators/control-valve" component={ControlValvePage} />
-      <Route path="/calculators/separator" component={SeparatorPage} />
+      <Route path="/calculators/conventional-separator" component={ConventionalSeparatorPage} />
+      <Route path="/calculators/two-phase-separator" component={TwoPhaseSeparatorPage} />
+      <Route path="/calculators/flare-ko-drum" component={FlareKODrumPage} />
       <Route path="/calculators/heat-exchanger" component={HeatExchangerPage} />
       <Route path="/calculators/psv-sizing" component={PSVSizingPage} />
       <Route path="/calculators/thermal-relief" component={ThermalReliefPage} />
