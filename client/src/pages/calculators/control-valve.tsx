@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -463,13 +464,13 @@ export default function ControlValvePage() {
                     </Select></div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Density ({getUnit("density", unitSystem)})</Label>
-                      <Input type="number" value={serviceData.liquidProps.density || ""} onChange={e => setServiceData(sd => ({ ...sd, liquidProps: { ...sd.liquidProps, density: parseFloat(e.target.value) || 0 } }))} data-testid="input-density" /></div>
+                      <NumericInput value={serviceData.liquidProps.density} onValueChange={v => setServiceData(sd => ({ ...sd, liquidProps: { ...sd.liquidProps, density: v } }))} data-testid="input-density" /></div>
                     <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
-                      <Input type="number" value={serviceData.liquidProps.viscosity || ""} onChange={e => setServiceData(sd => ({ ...sd, liquidProps: { ...sd.liquidProps, viscosity: parseFloat(e.target.value) || 0 } }))} data-testid="input-viscosity" /></div>
+                      <NumericInput value={serviceData.liquidProps.viscosity} onValueChange={v => setServiceData(sd => ({ ...sd, liquidProps: { ...sd.liquidProps, viscosity: v } }))} data-testid="input-viscosity" /></div>
                     <div><Label className="text-xs mb-1.5 block">Vapor Pressure ({getUnit("pressureKpa", unitSystem)})</Label>
-                      <Input type="number" value={serviceData.liquidProps.vaporPressure || ""} onChange={e => setServiceData(sd => ({ ...sd, liquidProps: { ...sd.liquidProps, vaporPressure: parseFloat(e.target.value) || 0 } }))} data-testid="input-pv" /></div>
+                      <NumericInput value={serviceData.liquidProps.vaporPressure} onValueChange={v => setServiceData(sd => ({ ...sd, liquidProps: { ...sd.liquidProps, vaporPressure: v } }))} data-testid="input-pv" /></div>
                     <div><Label className="text-xs mb-1.5 block">Critical Pressure ({pU})</Label>
-                      <Input type="number" value={serviceData.liquidProps.criticalPressure || ""} onChange={e => setServiceData(sd => ({ ...sd, liquidProps: { ...sd.liquidProps, criticalPressure: parseFloat(e.target.value) || 0 } }))} data-testid="input-pc" /></div>
+                      <NumericInput value={serviceData.liquidProps.criticalPressure} onValueChange={v => setServiceData(sd => ({ ...sd, liquidProps: { ...sd.liquidProps, criticalPressure: v } }))} data-testid="input-pc" /></div>
                   </div>
                 </div>
               )}
@@ -491,13 +492,13 @@ export default function ControlValvePage() {
                   )}
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Molecular Weight (kg/kmol)</Label>
-                      <Input type="number" value={serviceData.fluidType === "steam" ? STEAM_PROPS.molecularWeight : (serviceData.gasProps.molecularWeight || "")} disabled={serviceData.fluidType === "steam"} onChange={e => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, molecularWeight: parseFloat(e.target.value) || 0 } }))} data-testid="input-mw" /></div>
+                      <NumericInput value={serviceData.fluidType === "steam" ? STEAM_PROPS.molecularWeight : serviceData.gasProps.molecularWeight} disabled={serviceData.fluidType === "steam"} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, molecularWeight: v } }))} data-testid="input-mw" /></div>
                     <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
-                      <Input type="number" value={serviceData.fluidType === "steam" ? STEAM_PROPS.specificHeatRatio : (serviceData.gasProps.specificHeatRatio || "")} disabled={serviceData.fluidType === "steam"} onChange={e => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, specificHeatRatio: parseFloat(e.target.value) || 0 } }))} data-testid="input-k" /></div>
+                      <NumericInput value={serviceData.fluidType === "steam" ? STEAM_PROPS.specificHeatRatio : serviceData.gasProps.specificHeatRatio} disabled={serviceData.fluidType === "steam"} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, specificHeatRatio: v } }))} data-testid="input-k" /></div>
                     <div><Label className="text-xs mb-1.5 block">Z-factor</Label>
-                      <Input type="number" value={serviceData.fluidType === "steam" ? STEAM_PROPS.compressibilityFactor : (serviceData.gasProps.compressibilityFactor || "")} disabled={serviceData.fluidType === "steam"} onChange={e => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, compressibilityFactor: parseFloat(e.target.value) || 0 } }))} data-testid="input-z" /></div>
+                      <NumericInput value={serviceData.fluidType === "steam" ? STEAM_PROPS.compressibilityFactor : serviceData.gasProps.compressibilityFactor} disabled={serviceData.fluidType === "steam"} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, compressibilityFactor: v } }))} data-testid="input-z" /></div>
                     <div><Label className="text-xs mb-1.5 block">Critical Pressure ({pU})</Label>
-                      <Input type="number" value={serviceData.gasProps.criticalPressure || ""} onChange={e => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, criticalPressure: parseFloat(e.target.value) || 0 } }))} data-testid="input-gas-pc" /></div>
+                      <NumericInput value={serviceData.gasProps.criticalPressure} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, criticalPressure: v } }))} data-testid="input-gas-pc" /></div>
                   </div>
                 </div>
               )}
@@ -523,10 +524,10 @@ export default function ControlValvePage() {
                       {serviceData.operatingPoints.map((op, i) => (
                         <tr key={i} className="border-b border-muted/20">
                           <td className="py-1 pr-2 font-medium">{op.label}</td>
-                          <td className="py-1 px-1"><Input type="number" className="h-8 text-xs" value={op.flowRate || ""} onChange={e => updateOP(i, "flowRate", parseFloat(e.target.value) || 0)} data-testid={`input-flow-${i}`} /></td>
-                          <td className="py-1 px-1"><Input type="number" className="h-8 text-xs" value={op.upstreamPressure || ""} onChange={e => updateOP(i, "upstreamPressure", parseFloat(e.target.value) || 0)} data-testid={`input-p1-${i}`} /></td>
-                          <td className="py-1 px-1"><Input type="number" className="h-8 text-xs" value={op.downstreamPressure || ""} onChange={e => updateOP(i, "downstreamPressure", parseFloat(e.target.value) || 0)} data-testid={`input-p2-${i}`} /></td>
-                          <td className="py-1 px-1"><Input type="number" className="h-8 text-xs" value={op.temperature || ""} onChange={e => updateOP(i, "temperature", parseFloat(e.target.value) || 0)} data-testid={`input-t-${i}`} /></td>
+                          <td className="py-1 px-1"><NumericInput className="h-8 text-xs" value={op.flowRate} onValueChange={v => updateOP(i, "flowRate", v)} data-testid={`input-flow-${i}`} /></td>
+                          <td className="py-1 px-1"><NumericInput className="h-8 text-xs" value={op.upstreamPressure} onValueChange={v => updateOP(i, "upstreamPressure", v)} data-testid={`input-p1-${i}`} /></td>
+                          <td className="py-1 px-1"><NumericInput className="h-8 text-xs" value={op.downstreamPressure} onValueChange={v => updateOP(i, "downstreamPressure", v)} data-testid={`input-p2-${i}`} /></td>
+                          <td className="py-1 px-1"><NumericInput className="h-8 text-xs" value={op.temperature} onValueChange={v => updateOP(i, "temperature", v)} data-testid={`input-t-${i}`} /></td>
                           <td className="py-1 text-center"><input type="checkbox" checked={op.enabled} onChange={e => updateOP(i, "enabled", e.target.checked)} data-testid={`check-en-${i}`} /></td>
                         </tr>
                       ))}
@@ -569,20 +570,20 @@ export default function ControlValvePage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><Label className="text-xs mb-1.5 block">Rated Cv (vendor)</Label>
-                  <Input type="number" value={valveData.ratedCv || ""} onChange={e => setValveData(vd => ({ ...vd, ratedCv: parseFloat(e.target.value) || 0 }))} placeholder="Enter after sizing" data-testid="input-rated-cv" /></div>
+                  <NumericInput value={valveData.ratedCv} onValueChange={v => setValveData(vd => ({ ...vd, ratedCv: v }))} placeholder="Enter after sizing" data-testid="input-rated-cv" /></div>
                 <div><Label className="text-xs mb-1.5 block">Rangeability</Label>
-                  <Input type="number" value={valveData.rangeability} onChange={e => setValveData(vd => ({ ...vd, rangeability: parseFloat(e.target.value) || 50 }))} data-testid="input-rangeability" /></div>
+                  <NumericInput value={valveData.rangeability} onValueChange={v => setValveData(vd => ({ ...vd, rangeability: v || 50 }))} data-testid="input-rangeability" /></div>
               </div>
 
               <div className="border-t pt-4">
                 <h4 className="text-xs font-medium mb-3">Recovery & Capacity Factors (Vendor Data)</h4>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div><Label className="text-xs mb-1.5 block">FL (Liquid Recovery)</Label>
-                    <Input type="number" value={valveData.fl} onChange={e => setValveData(vd => ({ ...vd, fl: parseFloat(e.target.value) || 0.9 }))} data-testid="input-fl" /></div>
+                    <NumericInput value={valveData.fl} onValueChange={v => setValveData(vd => ({ ...vd, fl: v || 0.9 }))} data-testid="input-fl" /></div>
                   <div><Label className="text-xs mb-1.5 block">xT (Gas Pressure Ratio)</Label>
-                    <Input type="number" value={valveData.xt} onChange={e => setValveData(vd => ({ ...vd, xt: parseFloat(e.target.value) || 0.7 }))} data-testid="input-xt" /></div>
+                    <NumericInput value={valveData.xt} onValueChange={v => setValveData(vd => ({ ...vd, xt: v || 0.7 }))} data-testid="input-xt" /></div>
                   <div><Label className="text-xs mb-1.5 block">Fd (Valve Style Modifier)</Label>
-                    <Input type="number" value={valveData.fd} onChange={e => setValveData(vd => ({ ...vd, fd: parseFloat(e.target.value) || 0.46 }))} data-testid="input-fd" /></div>
+                    <NumericInput value={valveData.fd} onValueChange={v => setValveData(vd => ({ ...vd, fd: v || 0.46 }))} data-testid="input-fd" /></div>
                 </div>
                 <Card className="bg-muted/30 mt-3"><CardContent className="p-3">
                   <p className="text-[10px] md:text-xs text-muted-foreground">Typical values for {valveData.style}: FL={TYPICAL_VALVE_DEFAULTS[valveData.style].fl}, xT={TYPICAL_VALVE_DEFAULTS[valveData.style].xt}, Fd={TYPICAL_VALVE_DEFAULTS[valveData.style].fd}. Confirm with manufacturer data.</p>
@@ -600,9 +601,9 @@ export default function ControlValvePage() {
                 />
                 <div className="grid gap-4 sm:grid-cols-2 mt-3">
                   <div><Label className="text-xs mb-1.5 block">Valve Size ({dU}) — blank=line-size</Label>
-                    <Input type="number" value={valveData.valveSize || ""} onChange={e => setValveData(vd => ({ ...vd, valveSize: parseFloat(e.target.value) || 0 }))} placeholder="Line-size" data-testid="input-valve-size" /></div>
+                    <NumericInput value={valveData.valveSize} onValueChange={v => setValveData(vd => ({ ...vd, valveSize: v }))} placeholder="Line-size" data-testid="input-valve-size" /></div>
                   <div><Label className="text-xs mb-1.5 block">Fp Override (0=auto)</Label>
-                    <Input type="number" value={installation.fpOverride || ""} onChange={e => setInstallation(inst => ({ ...inst, fpOverride: parseFloat(e.target.value) || 0 }))} placeholder="Auto-calculate" data-testid="input-fp" /></div>
+                    <NumericInput value={installation.fpOverride} onValueChange={v => setInstallation(inst => ({ ...inst, fpOverride: v }))} placeholder="Auto-calculate" data-testid="input-fp" /></div>
                 </div>
               </div>
             </CardContent>

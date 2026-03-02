@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -304,19 +305,17 @@ export default function TankVentingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs">Tank Diameter ({lenU})</Label>
-                      <Input
-                        type="number"
-                        value={form.tankDiameter || ""}
-                        onChange={e => updateField("tankDiameter", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.tankDiameter}
+                        onValueChange={v => updateField("tankDiameter", v)}
                         data-testid="input-tank-diameter"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Tank Height ({lenU})</Label>
-                      <Input
-                        type="number"
-                        value={form.tankHeight || ""}
-                        onChange={e => updateField("tankHeight", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.tankHeight}
+                        onValueChange={v => updateField("tankHeight", v)}
                         data-testid="input-tank-height"
                       />
                     </div>
@@ -334,10 +333,9 @@ export default function TankVentingPage() {
                     </div>
                     <div>
                       <Label className="text-xs">Liquid Level (%)</Label>
-                      <Input
-                        type="number"
-                        value={form.liquidLevel || ""}
-                        onChange={e => updateField("liquidLevel", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.liquidLevel}
+                        onValueChange={v => updateField("liquidLevel", v)}
                         min={0} max={100}
                         data-testid="input-liquid-level"
                       />
@@ -346,19 +344,17 @@ export default function TankVentingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs">Design Pressure (mbar g)</Label>
-                      <Input
-                        type="number"
-                        value={form.designPressure || ""}
-                        onChange={e => updateField("designPressure", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.designPressure}
+                        onValueChange={v => updateField("designPressure", v)}
                         data-testid="input-design-pressure"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Design Vacuum (mbar)</Label>
-                      <Input
-                        type="number"
-                        value={form.designVacuum || ""}
-                        onChange={e => updateField("designVacuum", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.designVacuum}
+                        onValueChange={v => updateField("designVacuum", v)}
                         data-testid="input-design-vacuum"
                       />
                     </div>
@@ -366,10 +362,9 @@ export default function TankVentingPage() {
                   {form.tankType === "floating_roof" && (
                     <div>
                       <Label className="text-xs">Rim Seal Height ({lenU}) — for floating roof fire scenario (E4)</Label>
-                      <Input
-                        type="number"
-                        value={form.rimSealHeight || ""}
-                        onChange={e => updateField("rimSealHeight", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.rimSealHeight}
+                        onValueChange={v => updateField("rimSealHeight", v)}
                         data-testid="input-rim-seal-height"
                       />
                     </div>
@@ -401,19 +396,17 @@ export default function TankVentingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs">Vapor Molecular Weight</Label>
-                      <Input
-                        type="number"
-                        value={form.vaporMW || ""}
-                        onChange={e => updateField("vaporMW", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.vaporMW}
+                        onValueChange={v => updateField("vaporMW", v)}
                         data-testid="input-vapor-mw"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Flash Factor</Label>
-                      <Input
-                        type="number"
-                        value={form.flashFactor || ""}
-                        onChange={e => updateField("flashFactor", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.flashFactor}
+                        onValueChange={v => updateField("flashFactor", v)}
                         data-testid="input-flash-factor"
                       />
                       <p className="text-[10px] text-muted-foreground mt-1">Ratio of vapor generated to liquid pumped in ({"\u2265"} 1.0). 1.0 for non-volatile, {">"}1 for volatile stocks with flash vaporization.</p>
@@ -422,29 +415,26 @@ export default function TankVentingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs">Relieving Temperature ({tU})</Label>
-                      <Input
-                        type="number"
-                        value={form.relievingTemp || ""}
-                        onChange={e => updateField("relievingTemp", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.relievingTemp}
+                        onValueChange={v => updateField("relievingTemp", v)}
                         data-testid="input-relieving-temp"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Latent Heat of Vaporization (kJ/kg)</Label>
-                      <Input
-                        type="number"
-                        value={form.latentHeat || ""}
-                        onChange={e => updateField("latentHeat", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.latentHeat}
+                        onValueChange={v => updateField("latentHeat", v)}
                         data-testid="input-latent-heat"
                       />
                     </div>
                   </div>
                   <div>
                     <Label className="text-xs">Vapor Density at Relieving Conditions ({densU})</Label>
-                    <Input
-                      type="number"
-                      value={form.vaporDensity || ""}
-                      onChange={e => updateField("vaporDensity", parseFloat(e.target.value) || 0)}
+                    <NumericInput
+                      value={form.vaporDensity}
+                      onValueChange={v => updateField("vaporDensity", v)}
                       data-testid="input-vapor-density"
                     />
                   </div>
@@ -471,20 +461,18 @@ export default function TankVentingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs">Max Liquid Fill Rate ({flowU}) — Scenario N3</Label>
-                      <Input
-                        type="number"
-                        value={form.maxFillRate || ""}
-                        onChange={e => updateField("maxFillRate", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.maxFillRate}
+                        onValueChange={v => updateField("maxFillRate", v)}
                         data-testid="input-fill-rate"
                       />
                       <p className="text-[10px] text-muted-foreground mt-1">Contributes to outbreathing (N3)</p>
                     </div>
                     <div>
                       <Label className="text-xs">Max Liquid Empty Rate ({flowU}) — Scenario N4</Label>
-                      <Input
-                        type="number"
-                        value={form.maxEmptyRate || ""}
-                        onChange={e => updateField("maxEmptyRate", parseFloat(e.target.value) || 0)}
+                      <NumericInput
+                        value={form.maxEmptyRate}
+                        onValueChange={v => updateField("maxEmptyRate", v)}
                         data-testid="input-empty-rate"
                       />
                       <p className="text-[10px] text-muted-foreground mt-1">Contributes to inbreathing (N4)</p>
@@ -541,10 +529,9 @@ export default function TankVentingPage() {
                   {form.hasDrainage && (
                     <div className="pl-7">
                       <Label className="text-xs">Drainage Credit Factor (0 to 1.0)</Label>
-                      <Input
-                        type="number"
+                      <NumericInput
                         value={form.drainageFactor}
-                        onChange={e => updateField("drainageFactor", parseFloat(e.target.value) || 0)}
+                        onValueChange={v => updateField("drainageFactor", v)}
                         min={0} max={1} step={0.1}
                         data-testid="input-drainage-factor"
                       />

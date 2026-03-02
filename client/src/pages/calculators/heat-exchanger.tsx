@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -407,7 +408,7 @@ export default function HeatExchangerPage() {
                     </div>
                     <div className="flex items-center gap-3">
                       <Label className="text-xs whitespace-nowrap">Energy balance tolerance (%)</Label>
-                      <Input type="number" className="w-20 h-8 text-xs" value={project.balanceTolerance} onChange={e => updateProject("balanceTolerance", parseFloat(e.target.value) || 5)} data-testid="input-balance-tol" />
+                      <NumericInput className="w-20 h-8 text-xs" value={project.balanceTolerance} onValueChange={v => updateProject("balanceTolerance", v || 5)} data-testid="input-balance-tol" />
                     </div>
                   </div>
                 </div>
@@ -465,7 +466,7 @@ export default function HeatExchangerPage() {
                   {c.dutyMode === "duty_given" && (
                     <div className="flex items-center gap-2">
                       <Label className="text-xs whitespace-nowrap">Duty (kW)</Label>
-                      <Input type="number" className="w-32 h-8 text-xs" value={c.dutyKW || ""} onChange={e => updateCase(idx, "dutyKW", parseFloat(e.target.value) || 0)} data-testid={`input-duty-${idx}`} />
+                      <NumericInput className="w-32 h-8 text-xs" value={c.dutyKW} onValueChange={v => updateCase(idx, "dutyKW", v)} data-testid={`input-duty-${idx}`} />
                     </div>
                   )}
                   <div className="grid gap-4 md:grid-cols-2">
@@ -473,15 +474,15 @@ export default function HeatExchangerPage() {
                       <p className="text-xs font-semibold text-red-400/90 uppercase tracking-wider">Hot Side</p>
                       <div className="grid gap-2 grid-cols-2">
                         <div><Label className="text-xs mb-1 block">T_in ({pU("temperature", unitSystem)})</Label>
-                          <Input type="number" className="h-8 text-xs" value={tempVal(c.hotSide.tIn)} onChange={e => updateCaseHot(idx, "tIn", parseFloat(e.target.value) || 0)} data-testid={`input-thi-${idx}`} /></div>
+                          <NumericInput className="h-8 text-xs" value={c.hotSide.tIn} onValueChange={v => updateCaseHot(idx, "tIn", v)} data-testid={`input-thi-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">T_out ({pU("temperature", unitSystem)}){c.dutyMode === "one_outlet_unknown" && !c.hotSide.tOutKnown ? " (auto)" : ""}</Label>
-                          <Input type="number" className="h-8 text-xs" value={tempVal(c.hotSide.tOut)} onChange={e => updateCaseHot(idx, "tOut", parseFloat(e.target.value) || 0)}
+                          <NumericInput className="h-8 text-xs" value={c.hotSide.tOut} onValueChange={v => updateCaseHot(idx, "tOut", v)}
                             disabled={c.dutyMode === "one_outlet_unknown" && !c.hotSide.tOutKnown}
                             data-testid={`input-tho-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Flow ({pU("flowMass", unitSystem)})</Label>
-                          <Input type="number" className="h-8 text-xs" value={numVal(c.hotSide.mDot)} onChange={e => updateCaseHot(idx, "mDot", parseFloat(e.target.value) || 0)} data-testid={`input-hot-flow-${idx}`} /></div>
+                          <NumericInput className="h-8 text-xs" value={c.hotSide.mDot} onValueChange={v => updateCaseHot(idx, "mDot", v)} data-testid={`input-hot-flow-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Cp (kJ/(kg·K))</Label>
-                          <Input type="number" className="h-8 text-xs" value={c.hotSide.cp || ""} onChange={e => updateCaseHot(idx, "cp", parseFloat(e.target.value) || 0)} data-testid={`input-hot-cp-${idx}`} /></div>
+                          <NumericInput className="h-8 text-xs" value={c.hotSide.cp} onValueChange={v => updateCaseHot(idx, "cp", v)} data-testid={`input-hot-cp-${idx}`} /></div>
                       </div>
                       {c.dutyMode === "one_outlet_unknown" && (
                         <div className="flex items-center gap-2">
@@ -497,15 +498,15 @@ export default function HeatExchangerPage() {
                       <p className="text-xs font-semibold text-blue-400/90 uppercase tracking-wider">Cold Side</p>
                       <div className="grid gap-2 grid-cols-2">
                         <div><Label className="text-xs mb-1 block">T_in ({pU("temperature", unitSystem)})</Label>
-                          <Input type="number" className="h-8 text-xs" value={tempVal(c.coldSide.tIn)} onChange={e => updateCaseCold(idx, "tIn", parseFloat(e.target.value) || 0)} data-testid={`input-tci-${idx}`} /></div>
+                          <NumericInput className="h-8 text-xs" value={c.coldSide.tIn} onValueChange={v => updateCaseCold(idx, "tIn", v)} data-testid={`input-tci-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">T_out ({pU("temperature", unitSystem)}){c.dutyMode === "one_outlet_unknown" && !c.coldSide.tOutKnown ? " (auto)" : ""}</Label>
-                          <Input type="number" className="h-8 text-xs" value={tempVal(c.coldSide.tOut)} onChange={e => updateCaseCold(idx, "tOut", parseFloat(e.target.value) || 0)}
+                          <NumericInput className="h-8 text-xs" value={c.coldSide.tOut} onValueChange={v => updateCaseCold(idx, "tOut", v)}
                             disabled={c.dutyMode === "one_outlet_unknown" && !c.coldSide.tOutKnown}
                             data-testid={`input-tco-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Flow ({pU("flowMass", unitSystem)})</Label>
-                          <Input type="number" className="h-8 text-xs" value={numVal(c.coldSide.mDot)} onChange={e => updateCaseCold(idx, "mDot", parseFloat(e.target.value) || 0)} data-testid={`input-cold-flow-${idx}`} /></div>
+                          <NumericInput className="h-8 text-xs" value={c.coldSide.mDot} onValueChange={v => updateCaseCold(idx, "mDot", v)} data-testid={`input-cold-flow-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Cp (kJ/(kg·K))</Label>
-                          <Input type="number" className="h-8 text-xs" value={c.coldSide.cp || ""} onChange={e => updateCaseCold(idx, "cp", parseFloat(e.target.value) || 0)} data-testid={`input-cold-cp-${idx}`} /></div>
+                          <NumericInput className="h-8 text-xs" value={c.coldSide.cp} onValueChange={v => updateCaseCold(idx, "cp", v)} data-testid={`input-cold-cp-${idx}`} /></div>
                       </div>
                       {c.dutyMode === "one_outlet_unknown" && (
                         <div className="flex items-center gap-2">
@@ -564,7 +565,7 @@ export default function HeatExchangerPage() {
                   {(config.arrangement === "custom_F" || (config.arrangement === "1_2_pass" && config.fMode === "user_entered")) && (
                     <div>
                       <Label className="text-xs mb-1.5 block">F-Factor Value (0.5–1.0)</Label>
-                      <Input type="number" min={0.5} max={1} step={0.01} value={config.fValue} onChange={e => updateConfig("fValue", parseFloat(e.target.value) || 1)} data-testid="input-f-value" />
+                      <NumericInput min={0.5} max={1} step={0.01} value={config.fValue} onValueChange={v => updateConfig("fValue", v || 1)} data-testid="input-f-value" />
                       <p className="text-xs text-muted-foreground mt-1">Typical: 0.75–1.0. Below 0.75 = inefficient configuration.</p>
                     </div>
                   )}
@@ -577,11 +578,11 @@ export default function HeatExchangerPage() {
                 </div>
                 <div className="pt-3 border-t grid gap-4 sm:grid-cols-3">
                   <div><Label className="text-xs mb-1.5 block">Shell Passes</Label>
-                    <Input type="number" min={1} value={config.shellPasses} onChange={e => updateConfig("shellPasses", parseInt(e.target.value) || 1)} data-testid="input-shell-passes" /></div>
+                    <NumericInput min={1} value={config.shellPasses} onValueChange={v => updateConfig("shellPasses", Math.round(v) || 1)} data-testid="input-shell-passes" /></div>
                   <div><Label className="text-xs mb-1.5 block">Tube Passes</Label>
-                    <Input type="number" min={1} value={config.tubePasses} onChange={e => updateConfig("tubePasses", parseInt(e.target.value) || 1)} data-testid="input-tube-passes" /></div>
+                    <NumericInput min={1} value={config.tubePasses} onValueChange={v => updateConfig("tubePasses", Math.round(v) || 1)} data-testid="input-tube-passes" /></div>
                   <div><Label className="text-xs mb-1.5 block">Min Approach Temp ({pU("temperature", unitSystem)})</Label>
-                    <Input type="number" value={config.approachTempMin} onChange={e => updateConfig("approachTempMin", parseFloat(e.target.value) || 5)} data-testid="input-approach" /></div>
+                    <NumericInput value={config.approachTempMin} onValueChange={v => updateConfig("approachTempMin", v || 5)} data-testid="input-approach" /></div>
                 </div>
               </CardContent>
             </Card>
@@ -608,7 +609,7 @@ export default function HeatExchangerPage() {
                 {uInput.mode === "clean_plus_fouling" && (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">U_clean (W/(m²·K))</Label>
-                      <Input type="number" value={uInput.uClean || ""} onChange={e => updateUInput("uClean", parseFloat(e.target.value) || 0)} data-testid="input-u-clean" /></div>
+                      <NumericInput value={uInput.uClean} onValueChange={v => updateUInput("uClean", v)} data-testid="input-u-clean" /></div>
                     <div>
                       <Label className="text-xs mb-1.5 block">U Guidance (typical values)</Label>
                       <Select onValueChange={v => {
@@ -623,7 +624,7 @@ export default function HeatExchangerPage() {
                     <div>
                       <Label className="text-xs mb-1.5 block">Rf_hot (m²·K/W)</Label>
                       <div className="flex gap-2">
-                        <Input type="number" step="0.0001" className="flex-1" value={uInput.rfHot || ""} onChange={e => updateUInput("rfHot", parseFloat(e.target.value) || 0)} data-testid="input-rf-hot" />
+                        <NumericInput step="0.0001" className="flex-1" value={uInput.rfHot} onValueChange={v => updateUInput("rfHot", v)} data-testid="input-rf-hot" />
                         <Select onValueChange={v => { const f = TEMA_FOULING_FACTORS[v]; if (f) updateUInput("rfHot", f.rf); }}>
                           <SelectTrigger className="w-[180px] h-9 text-xs" data-testid="select-rf-hot-preset"><SelectValue placeholder="TEMA preset..." /></SelectTrigger>
                           <SelectContent>{Object.entries(TEMA_FOULING_FACTORS).map(([k, v]) =>
@@ -634,7 +635,7 @@ export default function HeatExchangerPage() {
                     <div>
                       <Label className="text-xs mb-1.5 block">Rf_cold (m²·K/W)</Label>
                       <div className="flex gap-2">
-                        <Input type="number" step="0.0001" className="flex-1" value={uInput.rfCold || ""} onChange={e => updateUInput("rfCold", parseFloat(e.target.value) || 0)} data-testid="input-rf-cold" />
+                        <NumericInput step="0.0001" className="flex-1" value={uInput.rfCold} onValueChange={v => updateUInput("rfCold", v)} data-testid="input-rf-cold" />
                         <Select onValueChange={v => { const f = TEMA_FOULING_FACTORS[v]; if (f) updateUInput("rfCold", f.rf); }}>
                           <SelectTrigger className="w-[180px] h-9 text-xs" data-testid="select-rf-cold-preset"><SelectValue placeholder="TEMA preset..." /></SelectTrigger>
                           <SelectContent>{Object.entries(TEMA_FOULING_FACTORS).map(([k, v]) =>
@@ -648,7 +649,7 @@ export default function HeatExchangerPage() {
                 {uInput.mode === "fouled_direct" && (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">U_fouled (W/(m²·K))</Label>
-                      <Input type="number" value={uInput.uFouled || ""} onChange={e => updateUInput("uFouled", parseFloat(e.target.value) || 0)} data-testid="input-u-fouled" /></div>
+                      <NumericInput value={uInput.uFouled} onValueChange={v => updateUInput("uFouled", v)} data-testid="input-u-fouled" /></div>
                   </div>
                 )}
 
@@ -671,7 +672,7 @@ export default function HeatExchangerPage() {
                 <div className="pt-3 border-t">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Design Margin (%)</Label>
-                      <Input type="number" value={uInput.designMargin} onChange={e => updateUInput("designMargin", parseFloat(e.target.value) || 0)} data-testid="input-margin" /></div>
+                      <NumericInput value={uInput.designMargin} onValueChange={v => updateUInput("designMargin", v)} data-testid="input-margin" /></div>
                   </div>
                 </div>
 
@@ -908,8 +909,8 @@ export default function HeatExchangerPage() {
                       </div>
                       <div>
                         <Label className="text-xs mb-1.5 block">Pitch Ratio (Pt/OD)</Label>
-                        <Input type="number" step={0.05} min={1.1} max={1.5} className="text-xs" value={tubeGeo.pitchRatio}
-                          onChange={e => setTubeGeo(g => ({ ...g, pitchRatio: parseFloat(e.target.value) || 1.25 }))} data-testid="input-pitch-ratio" />
+                        <NumericInput step={0.05} min={1.1} max={1.5} className="text-xs" value={tubeGeo.pitchRatio}
+                          onValueChange={v => setTubeGeo(g => ({ ...g, pitchRatio: v || 1.25 }))} data-testid="input-pitch-ratio" />
                         <p className="text-[10px] text-muted-foreground mt-0.5">Typical: 1.25 (tri), 1.25–1.33 (sq)</p>
                       </div>
                       <div>
@@ -925,8 +926,8 @@ export default function HeatExchangerPage() {
                       </div>
                       <div>
                         <Label className="text-xs mb-1.5 block">Tube-Side Density (kg/m³)</Label>
-                        <Input type="number" className="text-xs" value={tubeGeo.tubeSideDensity || ""}
-                          onChange={e => setTubeGeo(g => ({ ...g, tubeSideDensity: parseFloat(e.target.value) || 0 }))} data-testid="input-tube-density" />
+                        <NumericInput className="text-xs" value={tubeGeo.tubeSideDensity}
+                          onValueChange={v => setTubeGeo(g => ({ ...g, tubeSideDensity: v }))} data-testid="input-tube-density" />
                         <p className="text-[10px] text-muted-foreground mt-0.5">Water ≈ 1000, light HC ≈ 700</p>
                       </div>
                     </div>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Ruler, Calculator, AlertTriangle, CheckCircle2, RotateCcw, Info, Download, FileText, FileSpreadsheet } from "lucide-react";
@@ -124,25 +124,25 @@ export default function SafeSpansPage() {
               <CardContent className="space-y-4">
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pipe</h4>
                 <div className="grid grid-cols-3 gap-3">
-                  <div><Label className="text-xs">OD (mm)</Label><Input type="number" value={pipeOD} onChange={e => setPipeOD(Number(e.target.value))} className="h-8 text-xs" data-testid="input-pipe-od" /></div>
-                  <div><Label className="text-xs">WT (mm)</Label><Input type="number" value={pipeWT} onChange={e => setPipeWT(Number(e.target.value))} className="h-8 text-xs" data-testid="input-pipe-wt" /></div>
-                  <div><Label className="text-xs">ρ_pipe (kg/m³)</Label><Input type="number" value={pipeDensity} onChange={e => setPipeDensity(Number(e.target.value))} className="h-8 text-xs" data-testid="input-pipe-density" /></div>
+                  <div><Label className="text-xs">OD (mm)</Label><NumericInput value={pipeOD} onValueChange={setPipeOD} className="h-8 text-xs" data-testid="input-pipe-od" /></div>
+                  <div><Label className="text-xs">WT (mm)</Label><NumericInput value={pipeWT} onValueChange={setPipeWT} className="h-8 text-xs" data-testid="input-pipe-wt" /></div>
+                  <div><Label className="text-xs">ρ_pipe (kg/m³)</Label><NumericInput value={pipeDensity} onValueChange={setPipeDensity} className="h-8 text-xs" data-testid="input-pipe-density" /></div>
                 </div>
 
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fluid</h4>
-                <div><Label className="text-xs">Fluid Density (kg/m³)</Label><Input type="number" value={fluidDensity} onChange={e => setFluidDensity(Number(e.target.value))} className="h-8 text-xs" data-testid="input-fluid-density" /></div>
+                <div><Label className="text-xs">Fluid Density (kg/m³)</Label><NumericInput value={fluidDensity} onValueChange={setFluidDensity} className="h-8 text-xs" data-testid="input-fluid-density" /></div>
 
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Insulation</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Thickness (mm)</Label><Input type="number" value={insulThk} onChange={e => setInsulThk(Number(e.target.value))} className="h-8 text-xs" data-testid="input-insul-thk" /></div>
-                  <div><Label className="text-xs">ρ_insul (kg/m³)</Label><Input type="number" value={insulDensity} onChange={e => setInsulDensity(Number(e.target.value))} className="h-8 text-xs" data-testid="input-insul-density" /></div>
+                  <div><Label className="text-xs">Thickness (mm)</Label><NumericInput value={insulThk} onValueChange={setInsulThk} className="h-8 text-xs" data-testid="input-insul-thk" /></div>
+                  <div><Label className="text-xs">ρ_insul (kg/m³)</Label><NumericInput value={insulDensity} onValueChange={setInsulDensity} className="h-8 text-xs" data-testid="input-insul-density" /></div>
                 </div>
 
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Criteria</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Allowable Deflection (mm)</Label><Input type="number" value={allowDefl} onChange={e => setAllowDefl(Number(e.target.value))} className="h-8 text-xs" data-testid="input-allow-defl" /></div>
-                  <div><Label className="text-xs">E (GPa)</Label><Input type="number" value={elasticMod} onChange={e => setElasticMod(Number(e.target.value))} className="h-8 text-xs" data-testid="input-elastic-mod" /></div>
-                  <div><Label className="text-xs">Allowable Stress (MPa)</Label><Input type="number" value={allowStress} onChange={e => setAllowStress(Number(e.target.value))} className="h-8 text-xs" data-testid="input-allow-stress" /></div>
+                  <div><Label className="text-xs">Allowable Deflection (mm)</Label><NumericInput value={allowDefl} onValueChange={setAllowDefl} className="h-8 text-xs" data-testid="input-allow-defl" /></div>
+                  <div><Label className="text-xs">E (GPa)</Label><NumericInput value={elasticMod} onValueChange={setElasticMod} className="h-8 text-xs" data-testid="input-elastic-mod" /></div>
+                  <div><Label className="text-xs">Allowable Stress (MPa)</Label><NumericInput value={allowStress} onValueChange={setAllowStress} className="h-8 text-xs" data-testid="input-allow-stress" /></div>
                   <div><Label className="text-xs">Support Type</Label>
                     <Select value={supportType} onValueChange={v => setSupportType(v as "simple" | "continuous" | "fixed")}>
                       <SelectTrigger className="h-8 text-xs" data-testid="select-support-type"><SelectValue /></SelectTrigger>

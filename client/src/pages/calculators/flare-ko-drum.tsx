@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -341,7 +342,7 @@ export default function FlareKODrumPage() {
                   <p className="text-xs font-medium text-muted-foreground">Gas</p>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <div><Label className="text-xs mb-1 block">Gas Flow Rate ({s.gasFlowBasis === "actual" ? pU("flowActualGas", unitSystem) : pU("flowGas", unitSystem)})</Label>
-                      <Input type="number" value={s.gasFlowRate || ""} onChange={e => updateScenario(idx, "gasFlowRate", parseFloat(e.target.value) || 0)} data-testid={`input-gas-flow-${idx}`} /></div>
+                      <NumericInput value={s.gasFlowRate} onValueChange={v => updateScenario(idx, "gasFlowRate", v)} data-testid={`input-gas-flow-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Flow Basis</Label>
                       <Select value={s.gasFlowBasis} onValueChange={v => updateScenario(idx, "gasFlowBasis", v)}>
                         <SelectTrigger data-testid={`select-gas-basis-${idx}`}><SelectValue /></SelectTrigger>
@@ -351,25 +352,25 @@ export default function FlareKODrumPage() {
                         </SelectContent>
                       </Select></div>
                     <div><Label className="text-xs mb-1 block">Gas Density ({pU("density", unitSystem)})</Label>
-                      <Input type="number" value={s.gasDensity || ""} onChange={e => updateScenario(idx, "gasDensity", parseFloat(e.target.value) || 0)} data-testid={`input-gas-density-${idx}`} /></div>
+                      <NumericInput value={s.gasDensity} onValueChange={v => updateScenario(idx, "gasDensity", v)} data-testid={`input-gas-density-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">MW (kg/kmol)</Label>
-                      <Input type="number" value={s.gasMW || ""} onChange={e => updateScenario(idx, "gasMW", parseFloat(e.target.value) || 0)} data-testid={`input-gas-mw-${idx}`} /></div>
+                      <NumericInput value={s.gasMW} onValueChange={v => updateScenario(idx, "gasMW", v)} data-testid={`input-gas-mw-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Pressure ({pU("pressureAbs", unitSystem)}) abs</Label>
-                      <Input type="number" value={s.gasPressure || ""} onChange={e => updateScenario(idx, "gasPressure", parseFloat(e.target.value) || 0)} data-testid={`input-gas-p-${idx}`} /></div>
+                      <NumericInput value={s.gasPressure} onValueChange={v => updateScenario(idx, "gasPressure", v)} data-testid={`input-gas-p-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Temperature ({pU("temperature", unitSystem)})</Label>
-                      <Input type="number" value={s.gasTemperature || ""} onChange={e => updateScenario(idx, "gasTemperature", parseFloat(e.target.value) || 0)} data-testid={`input-gas-t-${idx}`} /></div>
+                      <NumericInput value={s.gasTemperature} onValueChange={v => updateScenario(idx, "gasTemperature", v)} data-testid={`input-gas-t-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Z factor</Label>
-                      <Input type="number" value={s.gasZ || ""} onChange={e => updateScenario(idx, "gasZ", parseFloat(e.target.value) || 0)} data-testid={`input-gas-z-${idx}`} /></div>
+                      <NumericInput value={s.gasZ} onValueChange={v => updateScenario(idx, "gasZ", v)} data-testid={`input-gas-z-${idx}`} /></div>
                   </div>
 
                   <p className="text-xs font-medium text-muted-foreground">Liquid Carryover</p>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <div><Label className="text-xs mb-1 block">Liquid Carryover Rate ({pU("flowLiquid", unitSystem)})</Label>
-                      <Input type="number" value={s.liquidCarryoverRate || ""} onChange={e => updateScenario(idx, "liquidCarryoverRate", parseFloat(e.target.value) || 0)} data-testid={`input-liq-carryover-${idx}`} /></div>
+                      <NumericInput value={s.liquidCarryoverRate} onValueChange={v => updateScenario(idx, "liquidCarryoverRate", v)} data-testid={`input-liq-carryover-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Liquid Density ({pU("density", unitSystem)})</Label>
-                      <Input type="number" value={s.liquidDensity || ""} onChange={e => updateScenario(idx, "liquidDensity", parseFloat(e.target.value) || 0)} data-testid={`input-liq-density-${idx}`} /></div>
+                      <NumericInput value={s.liquidDensity} onValueChange={v => updateScenario(idx, "liquidDensity", v)} data-testid={`input-liq-density-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Duration (minutes)</Label>
-                      <Input type="number" value={s.duration || ""} onChange={e => updateScenario(idx, "duration", parseFloat(e.target.value) || 0)} data-testid={`input-duration-${idx}`} /></div>
+                      <NumericInput value={s.duration} onValueChange={v => updateScenario(idx, "duration", v)} data-testid={`input-duration-${idx}`} /></div>
                   </div>
 
                   <div><Label className="text-xs mb-1 block">Notes</Label>
@@ -424,7 +425,7 @@ export default function FlareKODrumPage() {
                     </Select>
                   </div>
                   <div><Label className="text-xs mb-1.5 block">K Value (m/s)</Label>
-                    <Input type="number" step="0.001" value={config.kValue || ""} onChange={e => { updateConfig("kValue", parseFloat(e.target.value) || 0); updateConfig("kMode", "user"); }} data-testid="input-k-value" /></div>
+                    <NumericInput step="0.001" value={config.kValue} onValueChange={v => { updateConfig("kValue", v); updateConfig("kMode", "user"); }} data-testid="input-k-value" /></div>
                 </div>
                 {config.kMode === "typical" && (
                   <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-2">
@@ -445,9 +446,9 @@ export default function FlareKODrumPage() {
                 <p className="text-xs font-medium text-muted-foreground">Drain System</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Drain Line Nominal Size (in)</Label>
-                    <Input type="number" value={config.drainLineSize || ""} onChange={e => updateConfig("drainLineSize", parseFloat(e.target.value) || 0)} data-testid="input-drain-size" /></div>
+                    <NumericInput value={config.drainLineSize} onValueChange={v => updateConfig("drainLineSize", v)} data-testid="input-drain-size" /></div>
                   <div><Label className="text-xs mb-1.5 block">Drain Rate (m\u00B3/h)</Label>
-                    <Input type="number" value={config.drainRate || ""} onChange={e => updateConfig("drainRate", parseFloat(e.target.value) || 0)} data-testid="input-drain-rate" /></div>
+                    <NumericInput value={config.drainRate} onValueChange={v => updateConfig("drainRate", v)} data-testid="input-drain-rate" /></div>
                 </div>
               </div>
 
@@ -465,9 +466,9 @@ export default function FlareKODrumPage() {
                 <p className="text-xs font-medium text-muted-foreground">Constraints (optional)</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Max Vessel Diameter (mm) \u2014 0 = no limit</Label>
-                    <Input type="number" value={config.maxDiameter || ""} onChange={e => updateConfig("maxDiameter", parseFloat(e.target.value) || 0)} data-testid="input-max-dia" /></div>
+                    <NumericInput value={config.maxDiameter} onValueChange={v => updateConfig("maxDiameter", v)} data-testid="input-max-dia" /></div>
                   <div><Label className="text-xs mb-1.5 block">Max L/D \u2014 0 = default</Label>
-                    <Input type="number" value={config.maxLD || ""} onChange={e => updateConfig("maxLD", parseFloat(e.target.value) || 0)} data-testid="input-max-ld" /></div>
+                    <NumericInput value={config.maxLD} onValueChange={v => updateConfig("maxLD", v)} data-testid="input-max-ld" /></div>
                 </div>
               </div>
 
@@ -482,7 +483,7 @@ export default function FlareKODrumPage() {
                     { key: "nozzleZone", label: "Nozzle / Top" },
                   ].map(a => (
                     <div key={a.key}><Label className="text-xs mb-1 block">{a.label}</Label>
-                      <Input type="number" step="0.05" value={config.allowances[a.key as keyof typeof config.allowances] || ""} onChange={e => updateAllowance(a.key, parseFloat(e.target.value) || 0)} data-testid={`input-allow-${a.key}`} /></div>
+                      <NumericInput step="0.05" value={config.allowances[a.key as keyof typeof config.allowances]} onValueChange={v => updateAllowance(a.key, v)} data-testid={`input-allow-${a.key}`} /></div>
                   ))}
                 </div>
               </div>
@@ -551,10 +552,10 @@ export default function FlareKODrumPage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><Label className="text-xs mb-1.5 block">Holdup Time (min)</Label>
-                  <Input type="number" value={holdup.holdupTime || ""} onChange={e => updateHoldup("holdupTime", parseFloat(e.target.value) || 0)} data-testid="input-holdup-time" />
+                  <NumericInput value={holdup.holdupTime} onValueChange={v => updateHoldup("holdupTime", v)} data-testid="input-holdup-time" />
                   <p className="text-xs text-muted-foreground mt-1">Typical: 20\u201330 min (API 521)</p></div>
                 <div><Label className="text-xs mb-1.5 block">Rainout Fraction (0\u20131)</Label>
-                  <Input type="number" step="0.01" value={holdup.rainoutFraction || ""} onChange={e => updateHoldup("rainoutFraction", parseFloat(e.target.value) || 0)} data-testid="input-rainout" />
+                  <NumericInput step="0.01" value={holdup.rainoutFraction} onValueChange={v => updateHoldup("rainoutFraction", v)} data-testid="input-rainout" />
                   <p className="text-xs text-muted-foreground mt-1">Fraction of liquid that rains out from flare header</p></div>
               </div>
 

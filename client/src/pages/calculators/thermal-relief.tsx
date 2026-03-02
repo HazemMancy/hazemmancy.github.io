@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -400,7 +401,7 @@ export default function ThermalReliefPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><Label className="text-xs mb-1.5 block">Atmospheric Pressure (bar abs)</Label>
-                  <Input type="number" value={project.atmosphericPressure} onChange={e => setProject(p => ({ ...p, atmosphericPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-atm-p" /></div>
+                  <NumericInput value={project.atmosphericPressure} onValueChange={v => setProject(p => ({ ...p, atmosphericPressure: v }))} data-testid="input-atm-p" /></div>
               </div>
             </CardContent>
           </Card>
@@ -418,17 +419,17 @@ export default function ThermalReliefPage() {
                 <div><Label className="text-xs mb-1.5 block">Service</Label>
                   <Input value={equipment.service} onChange={e => setEquipment(eq => ({ ...eq, service: e.target.value }))} data-testid="input-service" /></div>
                 <div><Label className="text-xs mb-1.5 block">Trapped Liquid Volume (m³)</Label>
-                  <Input type="number" value={equipment.trappedVolume || ""} onChange={e => setEquipment(eq => ({ ...eq, trappedVolume: parseFloat(e.target.value) || 0 }))} data-testid="input-volume" /></div>
+                  <NumericInput value={equipment.trappedVolume} onValueChange={v => setEquipment(eq => ({ ...eq, trappedVolume: v }))} data-testid="input-volume" /></div>
                 <div><Label className="text-xs mb-1.5 block">MAWP ({pU}g)</Label>
-                  <Input type="number" value={equipment.mawp || ""} onChange={e => setEquipment(eq => ({ ...eq, mawp: parseFloat(e.target.value) || 0 }))} data-testid="input-mawp" /></div>
+                  <NumericInput value={equipment.mawp} onValueChange={v => setEquipment(eq => ({ ...eq, mawp: v }))} data-testid="input-mawp" /></div>
                 <div><Label className="text-xs mb-1.5 block">Set Pressure ({pU}g)</Label>
-                  <Input type="number" value={equipment.setPressure || ""} onChange={e => setEquipment(eq => ({ ...eq, setPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-set-p" /></div>
+                  <NumericInput value={equipment.setPressure} onValueChange={v => setEquipment(eq => ({ ...eq, setPressure: v }))} data-testid="input-set-p" /></div>
                 <div><Label className="text-xs mb-1.5 block">Overpressure (%)</Label>
-                  <Input type="number" value={equipment.overpressurePercent} onChange={e => setEquipment(eq => ({ ...eq, overpressurePercent: parseFloat(e.target.value) || 10 }))} data-testid="input-overpressure" /></div>
+                  <NumericInput value={equipment.overpressurePercent} onValueChange={v => setEquipment(eq => ({ ...eq, overpressurePercent: v }))} data-testid="input-overpressure" /></div>
                 <div><Label className="text-xs mb-1.5 block">Normal Op. Pressure ({pU}g)</Label>
-                  <Input type="number" value={equipment.normalOpPressure || ""} onChange={e => setEquipment(eq => ({ ...eq, normalOpPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-op-p" /></div>
+                  <NumericInput value={equipment.normalOpPressure} onValueChange={v => setEquipment(eq => ({ ...eq, normalOpPressure: v }))} data-testid="input-op-p" /></div>
                 <div><Label className="text-xs mb-1.5 block">Normal Op. Temp ({tU})</Label>
-                  <Input type="number" value={equipment.normalOpTemp || ""} onChange={e => setEquipment(eq => ({ ...eq, normalOpTemp: parseFloat(e.target.value) || 0 }))} data-testid="input-op-t" /></div>
+                  <NumericInput value={equipment.normalOpTemp} onValueChange={v => setEquipment(eq => ({ ...eq, normalOpTemp: v }))} data-testid="input-op-t" /></div>
               </div>
               {equipment.setPressure > 0 && (
                 <Card className="bg-muted/30">
@@ -466,12 +467,12 @@ export default function ThermalReliefPage() {
                     </SelectContent>
                   </Select></div>
                 <div><Label className="text-xs mb-1.5 block">Heating Duration (hours)</Label>
-                  <Input type="number" value={heatSource.heatingDuration || ""} onChange={e => setHeatSource(hs => ({ ...hs, heatingDuration: parseFloat(e.target.value) || 0 }))} data-testid="input-duration" /></div>
+                  <NumericInput value={heatSource.heatingDuration} onValueChange={v => setHeatSource(hs => ({ ...hs, heatingDuration: v }))} data-testid="input-duration" /></div>
               </div>
               {(heatSource.type === "solar_bare" || heatSource.type === "solar_insulated") && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Exposed Area (m²)</Label>
-                    <Input type="number" value={heatSource.exposedArea || ""} onChange={e => setHeatSource(hs => ({ ...hs, exposedArea: parseFloat(e.target.value) || 0 }))} data-testid="input-area" /></div>
+                    <NumericInput value={heatSource.exposedArea} onValueChange={v => setHeatSource(hs => ({ ...hs, exposedArea: v }))} data-testid="input-area" /></div>
                   <Card className="bg-muted/30"><CardContent className="p-3">
                     <p className="text-xs text-muted-foreground">Solar flux: <span className="font-mono text-foreground">{heatSource.type === "solar_bare" ? "947" : "315"} W/m²</span> per API 521</p>
                     {heatSource.exposedArea > 0 && (
@@ -483,7 +484,7 @@ export default function ThermalReliefPage() {
               {(heatSource.type === "process" || heatSource.type === "manual") && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Heat Input (kW)</Label>
-                    <Input type="number" value={heatSource.heatInputKW || ""} onChange={e => setHeatSource(hs => ({ ...hs, heatInputKW: parseFloat(e.target.value) || 0 }))} data-testid="input-heat" /></div>
+                    <NumericInput value={heatSource.heatInputKW} onValueChange={v => setHeatSource(hs => ({ ...hs, heatInputKW: v }))} data-testid="input-heat" /></div>
                 </div>
               )}
             </CardContent>
@@ -508,15 +509,15 @@ export default function ThermalReliefPage() {
                 <div><Label className="text-xs mb-1.5 block">Fluid Name</Label>
                   <Input value={fluid.name} onChange={e => setFluid(f => ({ ...f, name: e.target.value }))} data-testid="input-fluid-name" /></div>
                 <div><Label className="text-xs mb-1.5 block">Density (kg/m³)</Label>
-                  <Input type="number" value={fluid.density || ""} onChange={e => setFluid(f => ({ ...f, density: parseFloat(e.target.value) || 0 }))} data-testid="input-density" /></div>
+                  <NumericInput value={fluid.density} onValueChange={v => setFluid(f => ({ ...f, density: v }))} data-testid="input-density" /></div>
                 <div><Label className="text-xs mb-1.5 block">Specific Heat (kJ/(kg·K))</Label>
-                  <Input type="number" value={fluid.specificHeat || ""} onChange={e => setFluid(f => ({ ...f, specificHeat: parseFloat(e.target.value) || 0 }))} data-testid="input-cp" /></div>
+                  <NumericInput value={fluid.specificHeat} onValueChange={v => setFluid(f => ({ ...f, specificHeat: v }))} data-testid="input-cp" /></div>
                 <div><Label className="text-xs mb-1.5 block">Thermal Expansion Coeff. (×10⁻⁴ /°C)</Label>
-                  <Input type="number" value={fluid.thermalExpansion || ""} onChange={e => setFluid(f => ({ ...f, thermalExpansion: parseFloat(e.target.value) || 0 }))} data-testid="input-alpha" /></div>
+                  <NumericInput value={fluid.thermalExpansion} onValueChange={v => setFluid(f => ({ ...f, thermalExpansion: v }))} data-testid="input-alpha" /></div>
                 <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
-                  <Input type="number" value={fluid.viscosity || ""} onChange={e => setFluid(f => ({ ...f, viscosity: parseFloat(e.target.value) || 0 }))} data-testid="input-viscosity" /></div>
+                  <NumericInput value={fluid.viscosity} onValueChange={v => setFluid(f => ({ ...f, viscosity: v }))} data-testid="input-viscosity" /></div>
                 <div><Label className="text-xs mb-1.5 block">Bulk Modulus (MPa)</Label>
-                  <Input type="number" value={fluid.bulkModulus || ""} onChange={e => setFluid(f => ({ ...f, bulkModulus: parseFloat(e.target.value) || 0 }))} data-testid="input-bulk-modulus" /></div>
+                  <NumericInput value={fluid.bulkModulus} onValueChange={v => setFluid(f => ({ ...f, bulkModulus: v }))} data-testid="input-bulk-modulus" /></div>
               </div>
               <p className="text-[10px] text-muted-foreground">Bulk modulus is used to estimate pressure rise rate (dP/dT) in the blocked-in section. Set to 0 if unknown.</p>
             </CardContent>
@@ -532,9 +533,9 @@ export default function ThermalReliefPage() {
             <CardContent className="space-y-4 pt-0">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><Label className="text-xs mb-1.5 block">Initial Temperature ({tU})</Label>
-                  <Input type="number" value={temperatures.initial || ""} onChange={e => setTemperatures(t => ({ ...t, initial: parseFloat(e.target.value) || 0 }))} data-testid="input-t1" /></div>
+                  <NumericInput value={temperatures.initial} onValueChange={v => setTemperatures(t => ({ ...t, initial: v }))} data-testid="input-t1" /></div>
                 <div><Label className="text-xs mb-1.5 block">Final Temperature ({tU})</Label>
-                  <Input type="number" value={temperatures.final || ""} onChange={e => setTemperatures(t => ({ ...t, final: parseFloat(e.target.value) || 0 }))} data-testid="input-t2" /></div>
+                  <NumericInput value={temperatures.final} onValueChange={v => setTemperatures(t => ({ ...t, final: v }))} data-testid="input-t2" /></div>
               </div>
               {temperatures.initial > 0 && temperatures.final > temperatures.initial && (
                 <Card className="bg-muted/30">
@@ -640,13 +641,13 @@ export default function ThermalReliefPage() {
             <CardContent className="space-y-4 pt-0">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><Label className="text-xs mb-1.5 block">Discharge Coefficient (Kd)</Label>
-                  <Input type="number" value={deviceSizing.kd} onChange={e => setDeviceSizing(d => ({ ...d, kd: parseFloat(e.target.value) || 0.65 }))} data-testid="input-kd" />
+                  <NumericInput value={deviceSizing.kd} onValueChange={v => setDeviceSizing(d => ({ ...d, kd: v }))} data-testid="input-kd" />
                   <p className="text-[10px] text-muted-foreground mt-1">Typical: 0.65 for liquid TRV</p></div>
                 <div><Label className="text-xs mb-1.5 block">Backpressure Correction (Kw)</Label>
-                  <Input type="number" value={deviceSizing.kw} onChange={e => setDeviceSizing(d => ({ ...d, kw: parseFloat(e.target.value) || 1.0 }))} data-testid="input-kw" />
+                  <NumericInput value={deviceSizing.kw} onValueChange={v => setDeviceSizing(d => ({ ...d, kw: v }))} data-testid="input-kw" />
                   <p className="text-[10px] text-muted-foreground mt-1">1.0 for conventional; &lt;1.0 for balanced bellows</p></div>
                 <div><Label className="text-xs mb-1.5 block">Back Pressure ({pU}g)</Label>
-                  <Input type="number" value={deviceSizing.backPressure || ""} onChange={e => setDeviceSizing(d => ({ ...d, backPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-back-p" /></div>
+                  <NumericInput value={deviceSizing.backPressure} onValueChange={v => setDeviceSizing(d => ({ ...d, backPressure: v }))} data-testid="input-back-p" /></div>
               </div>
 
               <Button className="w-full" onClick={handleCalcSizing} data-testid="button-calculate">Calculate Required Area</Button>
@@ -767,13 +768,13 @@ export default function ThermalReliefPage() {
                 <h4 className="text-xs font-medium mb-3">Inlet Piping</h4>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Pipe Diameter ({getUnit("diameter", unitSystem)})</Label>
-                    <Input type="number" value={inletPiping.pipeDiameter || ""} onChange={e => setInletPiping(p => ({ ...p, pipeDiameter: parseFloat(e.target.value) || 0 }))} data-testid="input-inlet-dia" /></div>
+                    <NumericInput value={inletPiping.pipeDiameter} onValueChange={v => setInletPiping(p => ({ ...p, pipeDiameter: v }))} data-testid="input-inlet-dia" /></div>
                   <div><Label className="text-xs mb-1.5 block">Pipe Length ({getUnit("length", unitSystem)})</Label>
-                    <Input type="number" value={inletPiping.pipeLength || ""} onChange={e => setInletPiping(p => ({ ...p, pipeLength: parseFloat(e.target.value) || 0 }))} data-testid="input-inlet-len" /></div>
+                    <NumericInput value={inletPiping.pipeLength} onValueChange={v => setInletPiping(p => ({ ...p, pipeLength: v }))} data-testid="input-inlet-len" /></div>
                   <div><Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-                    <Input type="number" value={inletPiping.roughness} onChange={e => setInletPiping(p => ({ ...p, roughness: parseFloat(e.target.value) || 0.046 }))} data-testid="input-inlet-rough" /></div>
+                    <NumericInput value={inletPiping.roughness} onValueChange={v => setInletPiping(p => ({ ...p, roughness: v }))} data-testid="input-inlet-rough" /></div>
                   <div><Label className="text-xs mb-1.5 block">Fittings K (total)</Label>
-                    <Input type="number" value={inletPiping.fittingsK} onChange={e => setInletPiping(p => ({ ...p, fittingsK: parseFloat(e.target.value) || 0 }))} data-testid="input-inlet-k" /></div>
+                    <NumericInput value={inletPiping.fittingsK} onValueChange={v => setInletPiping(p => ({ ...p, fittingsK: v }))} data-testid="input-inlet-k" /></div>
                 </div>
               </div>
 
@@ -781,13 +782,13 @@ export default function ThermalReliefPage() {
                 <h4 className="text-xs font-medium mb-3">Outlet Piping</h4>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Pipe Diameter ({getUnit("diameter", unitSystem)})</Label>
-                    <Input type="number" value={outletPiping.pipeDiameter || ""} onChange={e => setOutletPiping(p => ({ ...p, pipeDiameter: parseFloat(e.target.value) || 0 }))} data-testid="input-outlet-dia" /></div>
+                    <NumericInput value={outletPiping.pipeDiameter} onValueChange={v => setOutletPiping(p => ({ ...p, pipeDiameter: v }))} data-testid="input-outlet-dia" /></div>
                   <div><Label className="text-xs mb-1.5 block">Pipe Length ({getUnit("length", unitSystem)})</Label>
-                    <Input type="number" value={outletPiping.pipeLength || ""} onChange={e => setOutletPiping(p => ({ ...p, pipeLength: parseFloat(e.target.value) || 0 }))} data-testid="input-outlet-len" /></div>
+                    <NumericInput value={outletPiping.pipeLength} onValueChange={v => setOutletPiping(p => ({ ...p, pipeLength: v }))} data-testid="input-outlet-len" /></div>
                   <div><Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-                    <Input type="number" value={outletPiping.roughness} onChange={e => setOutletPiping(p => ({ ...p, roughness: parseFloat(e.target.value) || 0.046 }))} data-testid="input-outlet-rough" /></div>
+                    <NumericInput value={outletPiping.roughness} onValueChange={v => setOutletPiping(p => ({ ...p, roughness: v }))} data-testid="input-outlet-rough" /></div>
                   <div><Label className="text-xs mb-1.5 block">Fittings K (total)</Label>
-                    <Input type="number" value={outletPiping.fittingsK} onChange={e => setOutletPiping(p => ({ ...p, fittingsK: parseFloat(e.target.value) || 0 }))} data-testid="input-outlet-k" /></div>
+                    <NumericInput value={outletPiping.fittingsK} onValueChange={v => setOutletPiping(p => ({ ...p, fittingsK: v }))} data-testid="input-outlet-k" /></div>
                 </div>
               </div>
 

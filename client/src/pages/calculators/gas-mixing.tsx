@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -475,18 +476,18 @@ export default function GasMixingPage() {
                             <span className="text-xs text-muted-foreground font-mono">{comp.formula || "—"}</span>
                           </td>
                           <td className="py-1 px-1">
-                            <Input type="number" className="h-8 text-xs" value={comp.moleFraction || ""} step="0.01"
-                              onChange={e => updateComponent(comp.id, "moleFraction", parseFloat(e.target.value) || 0)}
+                            <NumericInput className="h-8 text-xs" value={comp.moleFraction} step="0.01"
+                              onValueChange={v => updateComponent(comp.id, "moleFraction", v)}
                               data-testid={`input-mole-frac-${index}`} />
                           </td>
                           <td className="py-1 px-1">
-                            <Input type="number" className="h-8 text-xs" value={comp.moleFraction ? (comp.moleFraction * 100).toFixed(2) : ""} step="0.1"
-                              onChange={e => updateComponent(comp.id, "moleFraction", (parseFloat(e.target.value) || 0) / 100)}
+                            <NumericInput className="h-8 text-xs" value={comp.moleFraction ? parseFloat((comp.moleFraction * 100).toFixed(2)) : 0} step="0.1"
+                              onValueChange={v => updateComponent(comp.id, "moleFraction", v / 100)}
                               data-testid={`input-mol-pct-${index}`} />
                           </td>
                           <td className="py-1 px-1">
-                            <Input type="number" className="h-8 text-xs" value={comp.molecularWeight || ""}
-                              onChange={e => updateComponent(comp.id, "molecularWeight", parseFloat(e.target.value) || 0)}
+                            <NumericInput className="h-8 text-xs" value={comp.molecularWeight}
+                              onValueChange={v => updateComponent(comp.id, "molecularWeight", v)}
                               data-testid={`input-mw-${index}`} />
                           </td>
                           <td className="py-1 px-1">
@@ -860,8 +861,8 @@ export default function GasMixingPage() {
                         <Input className="h-8 text-xs max-w-40" value={stream.name}
                           onChange={e => updateStream(stream.id, "name", e.target.value)}
                           data-testid={`input-stream-name-${si}`} />
-                        <Input type="number" className="h-8 text-xs w-28" value={stream.molarFlow || ""}
-                          onChange={e => updateStream(stream.id, "molarFlow", parseFloat(e.target.value) || 0)}
+                        <NumericInput className="h-8 text-xs w-28" value={stream.molarFlow}
+                          onValueChange={v => updateStream(stream.id, "molarFlow", v)}
                           placeholder="kmol/h" data-testid={`input-stream-flow-${si}`} />
                         <span className="text-[10px] text-muted-foreground">kmol/h</span>
                       </div>
@@ -875,8 +876,8 @@ export default function GasMixingPage() {
                         return (
                           <div key={comp.id} className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground truncate w-32">{comp.name || `Comp ${ci + 1}`}</span>
-                            <Input type="number" className="h-7 text-xs w-24" value={sc?.moleFraction || ""}
-                              onChange={e => updateStreamComp(stream.id, comp.id, parseFloat(e.target.value) || 0)}
+                            <NumericInput className="h-7 text-xs w-24" value={sc?.moleFraction || 0}
+                              onValueChange={v => updateStreamComp(stream.id, comp.id, v)}
                               step="0.01" data-testid={`input-stream-${si}-comp-${ci}`} />
                           </div>
                         );

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -374,7 +375,7 @@ export default function PSVSizingPage() {
               <div className="pt-2 border-t">
                 <div className="max-w-xs">
                   <Label className="text-xs mb-1.5 block">Atmospheric Pressure (bar abs)</Label>
-                  <Input type="number" value={project.atmosphericPressure} onChange={e => setProject(p => ({ ...p, atmosphericPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-atm-pressure" />
+                  <NumericInput value={project.atmosphericPressure} onValueChange={v => setProject(p => ({ ...p, atmosphericPressure: v }))} data-testid="input-atm-pressure" />
                 </div>
               </div>
             </CardContent>
@@ -392,19 +393,19 @@ export default function PSVSizingPage() {
                 <div><Label className="text-xs mb-1.5 block">Service Description</Label>
                   <Input value={equipment.service} onChange={e => setEquipment(eq => ({ ...eq, service: e.target.value }))} data-testid="input-equip-service" /></div>
                 <div><Label className="text-xs mb-1.5 block">MAWP ({pU}g)</Label>
-                  <Input type="number" value={equipment.mawp || ""} onChange={e => setEquipment(eq => ({ ...eq, mawp: parseFloat(e.target.value) || 0 }))} data-testid="input-equip-mawp" /></div>
+                  <NumericInput value={equipment.mawp} onValueChange={v => setEquipment(eq => ({ ...eq, mawp: v }))} data-testid="input-equip-mawp" /></div>
                 <div><Label className="text-xs mb-1.5 block">Design Temperature ({tU})</Label>
-                  <Input type="number" value={equipment.designTemp || ""} onChange={e => setEquipment(eq => ({ ...eq, designTemp: parseFloat(e.target.value) || 0 }))} data-testid="input-equip-design-temp" /></div>
+                  <NumericInput value={equipment.designTemp} onValueChange={v => setEquipment(eq => ({ ...eq, designTemp: v }))} data-testid="input-equip-design-temp" /></div>
                 <div><Label className="text-xs mb-1.5 block">Normal Operating Pressure ({pU}g)</Label>
-                  <Input type="number" value={equipment.normalOpPressure || ""} onChange={e => setEquipment(eq => ({ ...eq, normalOpPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-equip-op-pressure" /></div>
+                  <NumericInput value={equipment.normalOpPressure} onValueChange={v => setEquipment(eq => ({ ...eq, normalOpPressure: v }))} data-testid="input-equip-op-pressure" /></div>
                 <div><Label className="text-xs mb-1.5 block">Normal Operating Temperature ({tU})</Label>
-                  <Input type="number" value={equipment.normalOpTemp || ""} onChange={e => setEquipment(eq => ({ ...eq, normalOpTemp: parseFloat(e.target.value) || 0 }))} data-testid="input-equip-op-temp" /></div>
+                  <NumericInput value={equipment.normalOpTemp} onValueChange={v => setEquipment(eq => ({ ...eq, normalOpTemp: v }))} data-testid="input-equip-op-temp" /></div>
               </div>
               <div className="pt-3 border-t">
                 <p className="text-xs font-medium text-muted-foreground mb-3">Set Pressure & Overpressure</p>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div><Label className="text-xs mb-1.5 block">Set Pressure ({pU}g)</Label>
-                    <Input type="number" value={equipment.setPressure || ""} onChange={e => setEquipment(eq => ({ ...eq, setPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-equip-set-p" /></div>
+                    <NumericInput value={equipment.setPressure} onValueChange={v => setEquipment(eq => ({ ...eq, setPressure: v }))} data-testid="input-equip-set-p" /></div>
                   <div><Label className="text-xs mb-1.5 block">Overpressure Basis</Label>
                     <Select value={equipment.overpressureBasis} onValueChange={(v: PRDEquipment["overpressureBasis"]) => {
                       const def = OVERPRESSURE_DEFAULTS[v];
@@ -418,7 +419,7 @@ export default function PSVSizingPage() {
                       </SelectContent>
                     </Select></div>
                   <div><Label className="text-xs mb-1.5 block">Overpressure (%)</Label>
-                    <Input type="number" value={equipment.overpressurePercent} onChange={e => setEquipment(eq => ({ ...eq, overpressurePercent: parseFloat(e.target.value) || 0 }))} data-testid="input-equip-op-pct" /></div>
+                    <NumericInput value={equipment.overpressurePercent} onValueChange={v => setEquipment(eq => ({ ...eq, overpressurePercent: v }))} data-testid="input-equip-op-pct" /></div>
                 </div>
               </div>
               {equipment.setPressure > 0 && (
@@ -479,7 +480,7 @@ export default function PSVSizingPage() {
                       <p className="text-xs text-muted-foreground">{tmpl?.description}</p>
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div><Label className="text-xs mb-1.5 block">Relief Rate ({scenario.relievingRateUnit})</Label>
-                          <Input type="number" value={scenario.relievingRate || ""} onChange={e => updateScenario(idx, { relievingRate: parseFloat(e.target.value) || 0 })} data-testid={`input-scenario-rate-${idx}`} /></div>
+                          <NumericInput value={scenario.relievingRate} onValueChange={v => updateScenario(idx, { relievingRate: v })} data-testid={`input-scenario-rate-${idx}`} /></div>
                         <div><Label className="text-xs mb-1.5 block">Fluid Phase</Label>
                           <Select value={scenario.fluidPhase} onValueChange={(v: PRDScenario["fluidPhase"]) => updateScenario(idx, { fluidPhase: v })}>
                             <SelectTrigger data-testid={`select-scenario-phase-${idx}`}><SelectValue /></SelectTrigger>
@@ -667,11 +668,11 @@ export default function PSVSizingPage() {
                             <SelectContent>{Object.keys(COMMON_GASES).map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
                           </Select></div>
                         <div><Label className="text-xs mb-1.5 block">MW (kg/kmol)</Label>
-                          <Input type="number" value={sizing.molecularWeight || ""} onChange={e => setSizing(s => ({ ...s, molecularWeight: parseFloat(e.target.value) || 0 }))} data-testid="input-mw" /></div>
+                          <NumericInput value={sizing.molecularWeight} onValueChange={v => setSizing(s => ({ ...s, molecularWeight: v }))} data-testid="input-mw" /></div>
                         <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
-                          <Input type="number" value={sizing.specificHeatRatio || ""} onChange={e => setSizing(s => ({ ...s, specificHeatRatio: parseFloat(e.target.value) || 0 }))} data-testid="input-k" /></div>
+                          <NumericInput value={sizing.specificHeatRatio} onValueChange={v => setSizing(s => ({ ...s, specificHeatRatio: v }))} data-testid="input-k" /></div>
                         <div><Label className="text-xs mb-1.5 block">Z-factor</Label>
-                          <Input type="number" value={sizing.compressibilityFactor || ""} onChange={e => setSizing(s => ({ ...s, compressibilityFactor: parseFloat(e.target.value) || 0 }))} data-testid="input-z" /></div>
+                          <NumericInput value={sizing.compressibilityFactor} onValueChange={v => setSizing(s => ({ ...s, compressibilityFactor: v }))} data-testid="input-z" /></div>
                       </div>
                     </div>
                   )}
@@ -679,7 +680,7 @@ export default function PSVSizingPage() {
                   {sizing.fluidType === "steam" && (
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div><Label className="text-xs mb-1.5 block">Superheat Correction Ksh</Label>
-                        <Input type="number" value={sizing.ksh || ""} onChange={e => setSizing(s => ({ ...s, ksh: parseFloat(e.target.value) || 0 }))} data-testid="input-ksh" /></div>
+                        <NumericInput value={sizing.ksh} onValueChange={v => setSizing(s => ({ ...s, ksh: v }))} data-testid="input-ksh" /></div>
                     </div>
                   )}
 
@@ -692,34 +693,34 @@ export default function PSVSizingPage() {
                             <SelectContent>{Object.keys(COMMON_LIQUIDS).map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
                           </Select></div>
                         <div><Label className="text-xs mb-1.5 block">Density (kg/m³)</Label>
-                          <Input type="number" value={sizing.liquidDensity || ""} onChange={e => setSizing(s => ({ ...s, liquidDensity: parseFloat(e.target.value) || 0 }))} data-testid="input-density" /></div>
+                          <NumericInput value={sizing.liquidDensity} onValueChange={v => setSizing(s => ({ ...s, liquidDensity: v }))} data-testid="input-density" /></div>
                         <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
-                          <Input type="number" value={sizing.viscosity || ""} onChange={e => setSizing(s => ({ ...s, viscosity: parseFloat(e.target.value) || 0 }))} data-testid="input-viscosity" /></div>
+                          <NumericInput value={sizing.viscosity} onValueChange={v => setSizing(s => ({ ...s, viscosity: v }))} data-testid="input-viscosity" /></div>
                         <div><Label className="text-xs mb-1.5 block">Vapor Pressure (kPa abs)</Label>
-                          <Input type="number" value={sizing.vaporPressure || ""} onChange={e => setSizing(s => ({ ...s, vaporPressure: parseFloat(e.target.value) || 0 }))} data-testid="input-vapor-p" /></div>
+                          <NumericInput value={sizing.vaporPressure} onValueChange={v => setSizing(s => ({ ...s, vaporPressure: v }))} data-testid="input-vapor-p" /></div>
                       </div>
                     </div>
                   )}
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Relieving Temperature ({tU})</Label>
-                      <Input type="number" value={sizing.relievingTemperature || ""} onChange={e => setSizing(s => ({ ...s, relievingTemperature: parseFloat(e.target.value) || 0 }))} data-testid="input-reliev-temp" /></div>
+                      <NumericInput value={sizing.relievingTemperature} onValueChange={v => setSizing(s => ({ ...s, relievingTemperature: v }))} data-testid="input-reliev-temp" /></div>
                     <div><Label className="text-xs mb-1.5 block">Back Pressure ({getUnit("pressureAbs", unitSystem)})</Label>
-                      <Input type="number" value={sizing.backPressureAbs || ""} onChange={e => setSizing(s => ({ ...s, backPressureAbs: parseFloat(e.target.value) || 0 }))} data-testid="input-back-pressure" /></div>
+                      <NumericInput value={sizing.backPressureAbs} onValueChange={v => setSizing(s => ({ ...s, backPressureAbs: v }))} data-testid="input-back-pressure" /></div>
                   </div>
 
                   <div className="pt-2 border-t">
                     <p className="text-xs font-medium text-muted-foreground mb-3">Correction Factors</p>
                     <div className="grid gap-4 sm:grid-cols-4">
                       <div><Label className="text-xs mb-1.5 block">Kd (discharge)</Label>
-                        <Input type="number" value={sizing.kd || ""} onChange={e => setSizing(s => ({ ...s, kd: parseFloat(e.target.value) || 0 }))} data-testid="input-kd" /></div>
+                        <NumericInput value={sizing.kd} onValueChange={v => setSizing(s => ({ ...s, kd: v }))} data-testid="input-kd" /></div>
                       <div><Label className="text-xs mb-1.5 block">Kb (backpressure)</Label>
-                        <Input type="number" value={sizing.kb || ""} onChange={e => setSizing(s => ({ ...s, kb: parseFloat(e.target.value) || 0 }))} data-testid="input-kb" /></div>
+                        <NumericInput value={sizing.kb} onValueChange={v => setSizing(s => ({ ...s, kb: v }))} data-testid="input-kb" /></div>
                       <div><Label className="text-xs mb-1.5 block">Kc (combination)</Label>
-                        <Input type="number" value={sizing.kc || ""} onChange={e => setSizing(s => ({ ...s, kc: parseFloat(e.target.value) || 0 }))} data-testid="input-kc" /></div>
+                        <NumericInput value={sizing.kc} onValueChange={v => setSizing(s => ({ ...s, kc: v }))} data-testid="input-kc" /></div>
                       {sizing.fluidType === "steam" && (
                         <div><Label className="text-xs mb-1.5 block">Ksh (superheat)</Label>
-                          <Input type="number" value={sizing.ksh || ""} onChange={e => setSizing(s => ({ ...s, ksh: parseFloat(e.target.value) || 0 }))} data-testid="input-ksh-corr" /></div>
+                          <NumericInput value={sizing.ksh} onValueChange={v => setSizing(s => ({ ...s, ksh: v }))} data-testid="input-ksh-corr" /></div>
                       )}
                     </div>
                   </div>
@@ -898,15 +899,15 @@ export default function PSVSizingPage() {
               <CardContent className="space-y-4 pt-0">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Pipe ID ({dU})</Label>
-                    <Input type="number" value={inletPiping.pipeDiameter || ""} onChange={e => setInletPiping(p => ({ ...p, pipeDiameter: parseFloat(e.target.value) || 0 }))} data-testid="input-inlet-dia" /></div>
+                    <NumericInput value={inletPiping.pipeDiameter} onValueChange={v => setInletPiping(p => ({ ...p, pipeDiameter: v }))} data-testid="input-inlet-dia" /></div>
                   <div><Label className="text-xs mb-1.5 block">Pipe Length ({lU})</Label>
-                    <Input type="number" value={inletPiping.pipeLength || ""} onChange={e => setInletPiping(p => ({ ...p, pipeLength: parseFloat(e.target.value) || 0 }))} data-testid="input-inlet-length" /></div>
+                    <NumericInput value={inletPiping.pipeLength} onValueChange={v => setInletPiping(p => ({ ...p, pipeLength: v }))} data-testid="input-inlet-length" /></div>
                   <div><Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-                    <Input type="number" value={inletPiping.roughness || ""} onChange={e => setInletPiping(p => ({ ...p, roughness: parseFloat(e.target.value) || 0 }))} data-testid="input-inlet-rough" /></div>
+                    <NumericInput value={inletPiping.roughness} onValueChange={v => setInletPiping(p => ({ ...p, roughness: v }))} data-testid="input-inlet-rough" /></div>
                   <div><Label className="text-xs mb-1.5 block">Fittings K (total)</Label>
-                    <Input type="number" value={inletPiping.fittingsK || ""} onChange={e => setInletPiping(p => ({ ...p, fittingsK: parseFloat(e.target.value) || 0 }))} data-testid="input-inlet-k" /></div>
+                    <NumericInput value={inletPiping.fittingsK} onValueChange={v => setInletPiping(p => ({ ...p, fittingsK: v }))} data-testid="input-inlet-k" /></div>
                   <div><Label className="text-xs mb-1.5 block">Elevation Change ({lU})</Label>
-                    <Input type="number" value={inletPiping.elevationChange || ""} onChange={e => setInletPiping(p => ({ ...p, elevationChange: parseFloat(e.target.value) || 0 }))} data-testid="input-inlet-elev" /></div>
+                    <NumericInput value={inletPiping.elevationChange} onValueChange={v => setInletPiping(p => ({ ...p, elevationChange: v }))} data-testid="input-inlet-elev" /></div>
                 </div>
                 <Card className="bg-accent/30">
                   <CardContent className="p-3">
@@ -924,17 +925,17 @@ export default function PSVSizingPage() {
               <CardContent className="space-y-4 pt-0">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Pipe ID ({dU})</Label>
-                    <Input type="number" value={outletPiping.pipeDiameter || ""} onChange={e => setOutletPiping(p => ({ ...p, pipeDiameter: parseFloat(e.target.value) || 0 }))} data-testid="input-outlet-dia" /></div>
+                    <NumericInput value={outletPiping.pipeDiameter} onValueChange={v => setOutletPiping(p => ({ ...p, pipeDiameter: v }))} data-testid="input-outlet-dia" /></div>
                   <div><Label className="text-xs mb-1.5 block">Pipe Length ({lU})</Label>
-                    <Input type="number" value={outletPiping.pipeLength || ""} onChange={e => setOutletPiping(p => ({ ...p, pipeLength: parseFloat(e.target.value) || 0 }))} data-testid="input-outlet-length" /></div>
+                    <NumericInput value={outletPiping.pipeLength} onValueChange={v => setOutletPiping(p => ({ ...p, pipeLength: v }))} data-testid="input-outlet-length" /></div>
                   <div><Label className="text-xs mb-1.5 block">Roughness (mm)</Label>
-                    <Input type="number" value={outletPiping.roughness || ""} onChange={e => setOutletPiping(p => ({ ...p, roughness: parseFloat(e.target.value) || 0 }))} data-testid="input-outlet-rough" /></div>
+                    <NumericInput value={outletPiping.roughness} onValueChange={v => setOutletPiping(p => ({ ...p, roughness: v }))} data-testid="input-outlet-rough" /></div>
                   <div><Label className="text-xs mb-1.5 block">Fittings K (total)</Label>
-                    <Input type="number" value={outletPiping.fittingsK || ""} onChange={e => setOutletPiping(p => ({ ...p, fittingsK: parseFloat(e.target.value) || 0 }))} data-testid="input-outlet-k" /></div>
+                    <NumericInput value={outletPiping.fittingsK} onValueChange={v => setOutletPiping(p => ({ ...p, fittingsK: v }))} data-testid="input-outlet-k" /></div>
                   <div><Label className="text-xs mb-1.5 block">Elevation Change ({lU})</Label>
-                    <Input type="number" value={outletPiping.elevationChange || ""} onChange={e => setOutletPiping(p => ({ ...p, elevationChange: parseFloat(e.target.value) || 0 }))} data-testid="input-outlet-elev" /></div>
+                    <NumericInput value={outletPiping.elevationChange} onValueChange={v => setOutletPiping(p => ({ ...p, elevationChange: v }))} data-testid="input-outlet-elev" /></div>
                   <div><Label className="text-xs mb-1.5 block">Superimposed Backpressure ({pU})</Label>
-                    <Input type="number" value={superimposedBP || ""} onChange={e => setSuperimposedBP(parseFloat(e.target.value) || 0)} data-testid="input-super-bp" /></div>
+                    <NumericInput value={superimposedBP} onValueChange={v => setSuperimposedBP(v)} data-testid="input-super-bp" /></div>
                 </div>
                 <Button className="w-full" onClick={handlePipingCheck} disabled={!sizingResult} data-testid="button-piping-check">
                   Run Piping Checks

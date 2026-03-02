@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, TrendingUp, Calculator, AlertTriangle, CheckCircle2, RotateCcw, Info, Download, FileText, FileSpreadsheet } from "lucide-react";
@@ -135,18 +135,18 @@ export default function PipeFlexibilityPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Ambient Temp (°C)</Label><Input type="number" value={tempAmbient} onChange={e => setTempAmbient(Number(e.target.value))} className="h-8 text-xs" data-testid="input-temp-ambient" /></div>
-                  <div><Label className="text-xs">Operating Temp (°C)</Label><Input type="number" value={tempOperating} onChange={e => setTempOperating(Number(e.target.value))} className="h-8 text-xs" data-testid="input-temp-operating" /></div>
+                  <div><Label className="text-xs">Ambient Temp (°C)</Label><NumericInput value={tempAmbient} onValueChange={setTempAmbient} className="h-8 text-xs" data-testid="input-temp-ambient" /></div>
+                  <div><Label className="text-xs">Operating Temp (°C)</Label><NumericInput value={tempOperating} onValueChange={setTempOperating} className="h-8 text-xs" data-testid="input-temp-operating" /></div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Pipe OD (mm)</Label><Input type="number" value={pipeOD} onChange={e => setPipeOD(Number(e.target.value))} className="h-8 text-xs" data-testid="input-pipe-od" /></div>
-                  <div><Label className="text-xs">Wall Thickness (mm)</Label><Input type="number" value={pipeWT} onChange={e => setPipeWT(Number(e.target.value))} className="h-8 text-xs" data-testid="input-pipe-wt" /></div>
+                  <div><Label className="text-xs">Pipe OD (mm)</Label><NumericInput value={pipeOD} onValueChange={setPipeOD} className="h-8 text-xs" data-testid="input-pipe-od" /></div>
+                  <div><Label className="text-xs">Wall Thickness (mm)</Label><NumericInput value={pipeWT} onValueChange={setPipeWT} className="h-8 text-xs" data-testid="input-pipe-wt" /></div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Straight Run (m)</Label><Input type="number" value={straightRun} onChange={e => setStraightRun(Number(e.target.value))} className="h-8 text-xs" data-testid="input-straight-run" /></div>
-                  <div><Label className="text-xs">Allowable Stress (MPa)</Label><Input type="number" value={allowableStress} onChange={e => setAllowableStress(Number(e.target.value))} className="h-8 text-xs" data-testid="input-allowable-stress" /></div>
+                  <div><Label className="text-xs">Straight Run (m)</Label><NumericInput value={straightRun} onValueChange={setStraightRun} className="h-8 text-xs" data-testid="input-straight-run" /></div>
+                  <div><Label className="text-xs">Allowable Stress (MPa)</Label><NumericInput value={allowableStress} onValueChange={setAllowableStress} className="h-8 text-xs" data-testid="input-allowable-stress" /></div>
                 </div>
 
                 <div>

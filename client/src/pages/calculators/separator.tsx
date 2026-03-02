@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -362,7 +363,7 @@ export default function SeparatorPage() {
                   <p className="text-xs font-medium text-muted-foreground">Gas</p>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <div><Label className="text-xs mb-1 block">Gas Flow ({c.gasFlowBasis === "actual" ? pU("flowActualGas", unitSystem) : pU("flowGas", unitSystem)})</Label>
-                      <Input type="number" value={c.gasFlowRate || ""} onChange={e => updateCase(idx, "gasFlowRate", parseFloat(e.target.value) || 0)} data-testid={`input-gas-flow-${idx}`} /></div>
+                      <NumericInput value={c.gasFlowRate} onValueChange={v => updateCase(idx, "gasFlowRate", v)} data-testid={`input-gas-flow-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Flow Basis</Label>
                       <Select value={c.gasFlowBasis} onValueChange={v => updateCase(idx, "gasFlowBasis", v)}>
                         <SelectTrigger data-testid={`select-gas-basis-${idx}`}><SelectValue /></SelectTrigger>
@@ -372,21 +373,21 @@ export default function SeparatorPage() {
                         </SelectContent>
                       </Select></div>
                     <div><Label className="text-xs mb-1 block">Gas Density ({pU("density", unitSystem)})</Label>
-                      <Input type="number" value={c.gasDensity || ""} onChange={e => updateCase(idx, "gasDensity", parseFloat(e.target.value) || 0)} data-testid={`input-gas-density-${idx}`} /></div>
+                      <NumericInput value={c.gasDensity} onValueChange={v => updateCase(idx, "gasDensity", v)} data-testid={`input-gas-density-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">MW (kg/kmol)</Label>
-                      <Input type="number" value={c.gasMW || ""} onChange={e => updateCase(idx, "gasMW", parseFloat(e.target.value) || 0)} data-testid={`input-gas-mw-${idx}`} /></div>
+                      <NumericInput value={c.gasMW} onValueChange={v => updateCase(idx, "gasMW", v)} data-testid={`input-gas-mw-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Pressure ({pU("pressureAbs", unitSystem)}) abs</Label>
-                      <Input type="number" value={c.gasPressure || ""} onChange={e => updateCase(idx, "gasPressure", parseFloat(e.target.value) || 0)} data-testid={`input-gas-p-${idx}`} /></div>
+                      <NumericInput value={c.gasPressure} onValueChange={v => updateCase(idx, "gasPressure", v)} data-testid={`input-gas-p-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Temperature ({pU("temperature", unitSystem)})</Label>
-                      <Input type="number" value={c.gasTemperature || ""} onChange={e => updateCase(idx, "gasTemperature", parseFloat(e.target.value) || 0)} data-testid={`input-gas-t-${idx}`} /></div>
+                      <NumericInput value={c.gasTemperature} onValueChange={v => updateCase(idx, "gasTemperature", v)} data-testid={`input-gas-t-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Z factor</Label>
-                      <Input type="number" value={c.gasZ || ""} onChange={e => updateCase(idx, "gasZ", parseFloat(e.target.value) || 0)} data-testid={`input-gas-z-${idx}`} /></div>
+                      <NumericInput value={c.gasZ} onValueChange={v => updateCase(idx, "gasZ", v)} data-testid={`input-gas-z-${idx}`} /></div>
                   </div>
 
                   <p className="text-xs font-medium text-muted-foreground">Liquid</p>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <div><Label className="text-xs mb-1 block">Liquid Flow ({c.liquidFlowBasis === "volume" ? pU("flowLiquid", unitSystem) : pU("flowMass", unitSystem)})</Label>
-                      <Input type="number" value={c.liquidFlowRate || ""} onChange={e => updateCase(idx, "liquidFlowRate", parseFloat(e.target.value) || 0)} data-testid={`input-liq-flow-${idx}`} /></div>
+                      <NumericInput value={c.liquidFlowRate} onValueChange={v => updateCase(idx, "liquidFlowRate", v)} data-testid={`input-liq-flow-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">Flow Basis</Label>
                       <Select value={c.liquidFlowBasis} onValueChange={v => updateCase(idx, "liquidFlowBasis", v)}>
                         <SelectTrigger data-testid={`select-liq-basis-${idx}`}><SelectValue /></SelectTrigger>
@@ -396,7 +397,7 @@ export default function SeparatorPage() {
                         </SelectContent>
                       </Select></div>
                     <div><Label className="text-xs mb-1 block">Liquid Density ({pU("density", unitSystem)})</Label>
-                      <Input type="number" value={c.liquidDensity || ""} onChange={e => updateCase(idx, "liquidDensity", parseFloat(e.target.value) || 0)} data-testid={`input-liq-density-${idx}`} /></div>
+                      <NumericInput value={c.liquidDensity} onValueChange={v => updateCase(idx, "liquidDensity", v)} data-testid={`input-liq-density-${idx}`} /></div>
                   </div>
 
                   <p className="text-xs font-medium text-muted-foreground">Flags & Conditions</p>
@@ -416,7 +417,7 @@ export default function SeparatorPage() {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1 block">Droplet Removal Basis (\u03BCm)</Label>
-                      <Input type="number" value={c.dropletBasis || ""} onChange={e => updateCase(idx, "dropletBasis", parseFloat(e.target.value) || 0)} data-testid={`input-droplet-${idx}`} /></div>
+                      <NumericInput value={c.dropletBasis} onValueChange={v => updateCase(idx, "dropletBasis", v)} data-testid={`input-droplet-${idx}`} /></div>
                   </div>
                 </div>
               ))}
@@ -476,7 +477,7 @@ export default function SeparatorPage() {
                     </Select>
                   </div>
                   <div><Label className="text-xs mb-1.5 block">K Value (m/s)</Label>
-                    <Input type="number" step="0.001" value={config.kValue || ""} onChange={e => { updateConfig("kValue", parseFloat(e.target.value) || 0); updateConfig("kMode", "user"); }} data-testid="input-k-value" /></div>
+                    <NumericInput step="0.001" value={config.kValue} onValueChange={v => { updateConfig("kValue", v); updateConfig("kMode", "user"); }} data-testid="input-k-value" /></div>
                 </div>
                 {config.kMode === "typical" && (
                   <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-2">
@@ -499,9 +500,9 @@ export default function SeparatorPage() {
                 <p className="text-xs font-medium text-muted-foreground">Constraints (optional)</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Max Vessel Diameter (mm) \u2014 0 = no limit</Label>
-                    <Input type="number" value={config.maxDiameter || ""} onChange={e => updateConfig("maxDiameter", parseFloat(e.target.value) || 0)} data-testid="input-max-dia" /></div>
+                    <NumericInput value={config.maxDiameter} onValueChange={v => updateConfig("maxDiameter", v)} data-testid="input-max-dia" /></div>
                   <div><Label className="text-xs mb-1.5 block">Max L/D \u2014 0 = default</Label>
-                    <Input type="number" value={config.maxLD || ""} onChange={e => updateConfig("maxLD", parseFloat(e.target.value) || 0)} data-testid="input-max-ld" /></div>
+                    <NumericInput value={config.maxLD} onValueChange={v => updateConfig("maxLD", v)} data-testid="input-max-ld" /></div>
                 </div>
               </div>
 
@@ -516,7 +517,7 @@ export default function SeparatorPage() {
                     { key: "nozzleZone", label: "Nozzle / Top" },
                   ].map(a => (
                     <div key={a.key}><Label className="text-xs mb-1 block">{a.label}</Label>
-                      <Input type="number" step="0.05" value={config.allowances[a.key as keyof typeof config.allowances] || ""} onChange={e => updateAllowance(a.key, parseFloat(e.target.value) || 0)} data-testid={`input-allow-${a.key}`} /></div>
+                      <NumericInput step="0.05" value={config.allowances[a.key as keyof typeof config.allowances]} onValueChange={v => updateAllowance(a.key, v)} data-testid={`input-allow-${a.key}`} /></div>
                   ))}
                 </div>
               </div>
@@ -586,10 +587,10 @@ export default function SeparatorPage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><Label className="text-xs mb-1.5 block">Liquid Residence Time (min)</Label>
-                  <Input type="number" value={holdup.residenceTime || ""} onChange={e => updateHoldup("residenceTime", parseFloat(e.target.value) || 0)} data-testid="input-res-time" />
+                  <NumericInput value={holdup.residenceTime} onValueChange={v => updateHoldup("residenceTime", v)} data-testid="input-res-time" />
                   <p className="text-xs text-muted-foreground mt-1">Typical: 2\u20135 min (GPSA)</p></div>
                 <div><Label className="text-xs mb-1.5 block">Surge Time (min)</Label>
-                  <Input type="number" value={holdup.surgeTime || ""} onChange={e => updateHoldup("surgeTime", parseFloat(e.target.value) || 0)} data-testid="input-surge-time" />
+                  <NumericInput value={holdup.surgeTime} onValueChange={v => updateHoldup("surgeTime", v)} data-testid="input-surge-time" />
                   <p className="text-xs text-muted-foreground mt-1">Typical: 2\u20133 min (process upset)</p></div>
               </div>
 
@@ -598,9 +599,9 @@ export default function SeparatorPage() {
                   <p className="text-xs font-medium text-muted-foreground">KO Drum Specific</p>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Design Slug Volume (m\u00B3)</Label>
-                      <Input type="number" value={holdup.slugVolume || ""} onChange={e => updateHoldup("slugVolume", parseFloat(e.target.value) || 0)} data-testid="input-slug-vol" /></div>
+                      <NumericInput value={holdup.slugVolume} onValueChange={v => updateHoldup("slugVolume", v)} data-testid="input-slug-vol" /></div>
                     <div><Label className="text-xs mb-1.5 block">Drain Rate (m\u00B3/h) \u2014 for notes</Label>
-                      <Input type="number" value={holdup.drainRate || ""} onChange={e => updateHoldup("drainRate", parseFloat(e.target.value) || 0)} data-testid="input-drain-rate" /></div>
+                      <NumericInput value={holdup.drainRate} onValueChange={v => updateHoldup("drainRate", v)} data-testid="input-drain-rate" /></div>
                   </div>
                 </div>
               )}
@@ -613,9 +614,9 @@ export default function SeparatorPage() {
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Oil Retention Time (min)</Label>
-                      <Input type="number" value={holdup.oilRetentionTime || ""} onChange={e => updateHoldup("oilRetentionTime", parseFloat(e.target.value) || 0)} data-testid="input-oil-ret" /></div>
+                      <NumericInput value={holdup.oilRetentionTime} onValueChange={v => updateHoldup("oilRetentionTime", v)} data-testid="input-oil-ret" /></div>
                     <div><Label className="text-xs mb-1.5 block">Water Retention Time (min)</Label>
-                      <Input type="number" value={holdup.waterRetentionTime || ""} onChange={e => updateHoldup("waterRetentionTime", parseFloat(e.target.value) || 0)} data-testid="input-water-ret" /></div>
+                      <NumericInput value={holdup.waterRetentionTime} onValueChange={v => updateHoldup("waterRetentionTime", v)} data-testid="input-water-ret" /></div>
                   </div>
                 </div>
               )}

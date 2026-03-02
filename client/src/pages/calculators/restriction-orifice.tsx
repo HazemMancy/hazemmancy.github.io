@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -355,9 +356,9 @@ export default function RestrictionOrificePage() {
                 <h4 className="text-xs font-semibold mb-2">Solver Settings</h4>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div><Label className="text-[10px] mb-1 block">Max Iterations</Label>
-                    <Input type="number" className="h-8 text-xs" value={project.maxIterations} onChange={e => updateProject("maxIterations", parseInt(e.target.value) || 50)} data-testid="input-max-iter" /></div>
+                    <NumericInput className="h-8 text-xs" value={project.maxIterations} onValueChange={v => updateProject("maxIterations", Math.round(v) || 50)} data-testid="input-max-iter" /></div>
                   <div><Label className="text-[10px] mb-1 block">Tolerance</Label>
-                    <Input type="number" className="h-8 text-xs" value={project.tolerance} step="0.000001" onChange={e => updateProject("tolerance", parseFloat(e.target.value) || 1e-6)} data-testid="input-tolerance" /></div>
+                    <NumericInput className="h-8 text-xs" value={project.tolerance} step="0.000001" onValueChange={v => updateProject("tolerance", v || 1e-6)} data-testid="input-tolerance" /></div>
                 </div>
               </CardContent></Card>
               <Card className="bg-muted/30"><CardContent className="p-3 text-[10px] text-muted-foreground">
@@ -404,24 +405,24 @@ export default function RestrictionOrificePage() {
                           </Select></div>
                         {service.flowBasis === "volume" ? (
                           <div><Label className="text-xs mb-1.5 block">Vol Flow ({pU("flowLiquid")})</Label>
-                            <Input type="number" value={service.volFlowRate || ""} onChange={e => updateService("volFlowRate", parseFloat(e.target.value) || 0)} data-testid="input-vol-flow" /></div>
+                            <NumericInput value={service.volFlowRate} onValueChange={v => updateService("volFlowRate", v)} data-testid="input-vol-flow" /></div>
                         ) : (
                           <div><Label className="text-xs mb-1.5 block">Mass Flow ({pU("flowMass")})</Label>
-                            <Input type="number" value={service.massFlowRate || ""} onChange={e => updateService("massFlowRate", parseFloat(e.target.value) || 0)} data-testid="input-mass-flow" /></div>
+                            <NumericInput value={service.massFlowRate} onValueChange={v => updateService("massFlowRate", v)} data-testid="input-mass-flow" /></div>
                         )}
                       </>
                     )}
                     {needsPressures && (
                       <>
                         <div><Label className="text-xs mb-1.5 block">P1 Upstream ({pU("pressureAbs")})</Label>
-                          <Input type="number" value={service.upstreamPressure || ""} onChange={e => updateService("upstreamPressure", parseFloat(e.target.value) || 0)} data-testid="input-p1" /></div>
+                          <NumericInput value={service.upstreamPressure} onValueChange={v => updateService("upstreamPressure", v)} data-testid="input-p1" /></div>
                         <div><Label className="text-xs mb-1.5 block">P2 Downstream ({pU("pressureAbs")})</Label>
-                          <Input type="number" value={service.downstreamPressure || ""} onChange={e => updateService("downstreamPressure", parseFloat(e.target.value) || 0)} data-testid="input-p2" /></div>
+                          <NumericInput value={service.downstreamPressure} onValueChange={v => updateService("downstreamPressure", v)} data-testid="input-p2" /></div>
                       </>
                     )}
                     {service.sizingMode === "predictDP" && (
                       <div><Label className="text-xs mb-1.5 block">P1 Upstream ({pU("pressureAbs")})</Label>
-                        <Input type="number" value={service.upstreamPressure || ""} onChange={e => updateService("upstreamPressure", parseFloat(e.target.value) || 0)} data-testid="input-p1" /></div>
+                        <NumericInput value={service.upstreamPressure} onValueChange={v => updateService("upstreamPressure", v)} data-testid="input-p1" /></div>
                     )}
                   </div>
 
@@ -433,11 +434,11 @@ export default function RestrictionOrificePage() {
                         <SelectContent>{Object.keys(COMMON_LIQUIDS).map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
                       </Select></div>
                     <div><Label className="text-xs mb-1.5 block">Density (kg/m³)</Label>
-                      <Input type="number" value={service.liquidProps.density || ""} onChange={e => updateLiquidProps("density", parseFloat(e.target.value) || 0)} data-testid="input-density" /></div>
+                      <NumericInput value={service.liquidProps.density} onValueChange={v => updateLiquidProps("density", v)} data-testid="input-density" /></div>
                     <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
-                      <Input type="number" value={service.liquidProps.viscosity || ""} onChange={e => updateLiquidProps("viscosity", parseFloat(e.target.value) || 0)} data-testid="input-viscosity" /></div>
+                      <NumericInput value={service.liquidProps.viscosity} onValueChange={v => updateLiquidProps("viscosity", v)} data-testid="input-viscosity" /></div>
                     <div><Label className="text-xs mb-1.5 block">Vapor Pressure ({pU("pressureAbs")})</Label>
-                      <Input type="number" value={service.liquidProps.vaporPressure || ""} onChange={e => updateLiquidProps("vaporPressure", parseFloat(e.target.value) || 0)} placeholder="Optional — for cavitation check" data-testid="input-vapor-pressure" /></div>
+                      <NumericInput value={service.liquidProps.vaporPressure} onValueChange={v => updateLiquidProps("vaporPressure", v)} placeholder="Optional — for cavitation check" data-testid="input-vapor-pressure" /></div>
                   </div>
                 </div>
               )}
@@ -448,22 +449,22 @@ export default function RestrictionOrificePage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     {needsFlow && (
                       <div><Label className="text-xs mb-1.5 block">Mass Flow ({pU("flowMass")})</Label>
-                        <Input type="number" value={service.massFlowRate || ""} onChange={e => updateService("massFlowRate", parseFloat(e.target.value) || 0)} data-testid="input-mass-flow" /></div>
+                        <NumericInput value={service.massFlowRate} onValueChange={v => updateService("massFlowRate", v)} data-testid="input-mass-flow" /></div>
                     )}
                     {needsPressures && (
                       <>
                         <div><Label className="text-xs mb-1.5 block">P1 Upstream ({pU("pressureAbs")})</Label>
-                          <Input type="number" value={service.upstreamPressure || ""} onChange={e => updateService("upstreamPressure", parseFloat(e.target.value) || 0)} data-testid="input-p1" /></div>
+                          <NumericInput value={service.upstreamPressure} onValueChange={v => updateService("upstreamPressure", v)} data-testid="input-p1" /></div>
                         <div><Label className="text-xs mb-1.5 block">P2 Downstream ({pU("pressureAbs")})</Label>
-                          <Input type="number" value={service.downstreamPressure || ""} onChange={e => updateService("downstreamPressure", parseFloat(e.target.value) || 0)} data-testid="input-p2" /></div>
+                          <NumericInput value={service.downstreamPressure} onValueChange={v => updateService("downstreamPressure", v)} data-testid="input-p2" /></div>
                       </>
                     )}
                     {service.sizingMode === "predictDP" && (
                       <div><Label className="text-xs mb-1.5 block">P1 Upstream ({pU("pressureAbs")})</Label>
-                        <Input type="number" value={service.upstreamPressure || ""} onChange={e => updateService("upstreamPressure", parseFloat(e.target.value) || 0)} data-testid="input-p1" /></div>
+                        <NumericInput value={service.upstreamPressure} onValueChange={v => updateService("upstreamPressure", v)} data-testid="input-p1" /></div>
                     )}
                     <div><Label className="text-xs mb-1.5 block">Temperature ({pU("temperature")})</Label>
-                      <Input type="number" value={service.temperature || ""} onChange={e => updateService("temperature", parseFloat(e.target.value) || 0)} data-testid="input-temp" /></div>
+                      <NumericInput value={service.temperature} onValueChange={v => updateService("temperature", v)} data-testid="input-temp" /></div>
                   </div>
 
                   <h4 className="text-xs font-semibold text-muted-foreground">Gas Properties</h4>
@@ -474,13 +475,13 @@ export default function RestrictionOrificePage() {
                         <SelectContent>{Object.keys(COMMON_GASES).map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
                       </Select></div>
                     <div><Label className="text-xs mb-1.5 block">MW (kg/kmol)</Label>
-                      <Input type="number" value={service.gasProps.molecularWeight || ""} onChange={e => updateGasProps("molecularWeight", parseFloat(e.target.value) || 0)} data-testid="input-mw" /></div>
+                      <NumericInput value={service.gasProps.molecularWeight} onValueChange={v => updateGasProps("molecularWeight", v)} data-testid="input-mw" /></div>
                     <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
-                      <Input type="number" value={service.gasProps.specificHeatRatio || ""} onChange={e => updateGasProps("specificHeatRatio", parseFloat(e.target.value) || 0)} data-testid="input-k" /></div>
+                      <NumericInput value={service.gasProps.specificHeatRatio} onValueChange={v => updateGasProps("specificHeatRatio", v)} data-testid="input-k" /></div>
                     <div><Label className="text-xs mb-1.5 block">Z-factor</Label>
-                      <Input type="number" value={service.gasProps.compressibilityFactor || ""} onChange={e => updateGasProps("compressibilityFactor", parseFloat(e.target.value) || 0)} data-testid="input-z" /></div>
+                      <NumericInput value={service.gasProps.compressibilityFactor} onValueChange={v => updateGasProps("compressibilityFactor", v)} data-testid="input-z" /></div>
                     <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
-                      <Input type="number" value={service.gasProps.viscosity || ""} step="0.001" onChange={e => updateGasProps("viscosity", parseFloat(e.target.value) || 0)} data-testid="input-gas-viscosity" /></div>
+                      <NumericInput value={service.gasProps.viscosity} step="0.001" onValueChange={v => updateGasProps("viscosity", v)} data-testid="input-gas-viscosity" /></div>
                   </div>
                 </div>
               )}
@@ -497,7 +498,7 @@ export default function RestrictionOrificePage() {
                   />
                 </div>
                 <div><Label className="text-xs mb-1.5 block">Pipe ID ({pU("diameter")})</Label>
-                  <Input type="number" value={service.pipeDiameter || ""} onChange={e => updateService("pipeDiameter", parseFloat(e.target.value) || 0)} data-testid="input-pipe-dia" /></div>
+                  <NumericInput value={service.pipeDiameter} onValueChange={v => updateService("pipeDiameter", v)} data-testid="input-pipe-dia" /></div>
                 <div><Label className="text-xs mb-1.5 block">Cd Mode</Label>
                   <Select value={service.orifice.cdMode} onValueChange={v => updateOrifice("cdMode", v as CdMode)}>
                     <SelectTrigger data-testid="select-cd-mode"><SelectValue /></SelectTrigger>
@@ -507,7 +508,7 @@ export default function RestrictionOrificePage() {
                     </SelectContent>
                   </Select></div>
                 <div><Label className="text-xs mb-1.5 block">Cd Value</Label>
-                  <Input type="number" value={service.orifice.cdValue || ""} step="0.01" onChange={e => updateOrifice("cdValue", parseFloat(e.target.value) || 0)} data-testid="input-cd" /></div>
+                  <NumericInput value={service.orifice.cdValue} step="0.01" onValueChange={v => updateOrifice("cdValue", v)} data-testid="input-cd" /></div>
                 <div><Label className="text-xs mb-1.5 block">Edge Type</Label>
                   <Select value={service.orifice.edgeType} onValueChange={v => updateOrifice("edgeType", v)}>
                     <SelectTrigger data-testid="select-edge"><SelectValue /></SelectTrigger>
@@ -525,7 +526,7 @@ export default function RestrictionOrificePage() {
                     </SelectContent>
                   </Select></div>
                 <div><Label className="text-xs mb-1.5 block">Plate Thickness ({pU("diameter")})</Label>
-                  <Input type="number" value={service.orifice.thickness || ""} onChange={e => updateOrifice("thickness", parseFloat(e.target.value) || 0)} placeholder="Informational" data-testid="input-thickness" /></div>
+                  <NumericInput value={service.orifice.thickness} onValueChange={v => updateOrifice("thickness", v)} placeholder="Informational" data-testid="input-thickness" /></div>
               </div>
             </CardContent>
           </Card>
@@ -549,7 +550,7 @@ export default function RestrictionOrificePage() {
                 </div>
                 {needsOrificeDia && (
                   <div><Label className="text-xs mb-1.5 block">Orifice Diameter ({pU("diameter")})</Label>
-                    <Input type="number" value={service.orificeDiameter || ""} onChange={e => updateService("orificeDiameter", parseFloat(e.target.value) || 0)} data-testid="input-orifice-dia" /></div>
+                    <NumericInput value={service.orificeDiameter} onValueChange={v => updateService("orificeDiameter", v)} data-testid="input-orifice-dia" /></div>
                 )}
               </div>
 
@@ -557,11 +558,11 @@ export default function RestrictionOrificePage() {
                 <h4 className="text-xs font-semibold mb-2">Constraints & Limits</h4>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div><Label className="text-[10px] mb-1 block">β min (warning threshold)</Label>
-                    <Input type="number" className="h-8 text-xs" value={service.betaMin} step="0.05" onChange={e => updateService("betaMin", parseFloat(e.target.value) || 0.2)} data-testid="input-beta-min" /></div>
+                    <NumericInput className="h-8 text-xs" value={service.betaMin} step="0.05" onValueChange={v => updateService("betaMin", v || 0.2)} data-testid="input-beta-min" /></div>
                   <div><Label className="text-[10px] mb-1 block">β max (warning threshold)</Label>
-                    <Input type="number" className="h-8 text-xs" value={service.betaMax} step="0.05" onChange={e => updateService("betaMax", parseFloat(e.target.value) || 0.75)} data-testid="input-beta-max" /></div>
+                    <NumericInput className="h-8 text-xs" value={service.betaMax} step="0.05" onValueChange={v => updateService("betaMax", v || 0.75)} data-testid="input-beta-max" /></div>
                   <div><Label className="text-[10px] mb-1 block">Number of Stages</Label>
-                    <Input type="number" className="h-8 text-xs" value={service.numStages} min={1} max={10} onChange={e => updateService("numStages", Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))} data-testid="input-num-stages" /></div>
+                    <NumericInput className="h-8 text-xs" value={service.numStages} min={1} max={10} onValueChange={v => updateService("numStages", Math.max(1, Math.min(10, Math.round(v) || 1)))} data-testid="input-num-stages" /></div>
                 </div>
               </CardContent></Card>
 
