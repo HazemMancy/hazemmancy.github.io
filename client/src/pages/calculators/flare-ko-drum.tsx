@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,12 +28,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { computeOrientationRecommendation, type OrientationResult } from "@/lib/engineering/orientationRecommendation";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import {
   Flame, ClipboardList, AlertCircle, Settings2, BarChart3, Gauge,
   ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  FileText, FileSpreadsheet, Container, Droplets,
+  FileText, FileSpreadsheet, Container, Droplets, Compass,
 } from "lucide-react";
 
 const TABS = [
@@ -66,6 +67,29 @@ export default function FlareKODrumPage() {
   const [holdup, setHoldup] = useState<HoldupBasis>({ ...DEFAULT_HOLDUP });
   const [result, setResult] = useState<FlareKODrumFullResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const orientationRec = useMemo<OrientationResult>(() => {
+    const caseInputs = scenarios.map(s => ({
+      gasFlowRate: s.gasFlowRate,
+      gasFlowBasis: s.gasFlowBasis,
+      gasDensity: s.gasDensity,
+      gasMW: s.gasMW,
+      gasPressure: s.gasPressure,
+      gasTemperature: s.gasTemperature,
+      gasZ: s.gasZ,
+      liquidFlowRate: s.liquidCarryoverRate,
+      liquidDensity: s.liquidDensity,
+      flagFoam: false,
+      flagSolids: false,
+      flagSlugging: false,
+    }));
+    return computeOrientationRecommendation({
+      cases: caseInputs,
+      serviceType: "flare_ko",
+      phaseMode: "two_phase",
+      currentOrientation: config.orientation,
+    });
+  }, [scenarios, config.orientation]);
 
   const updateProject = (k: keyof ProjectSetup, v: string | boolean) => setProject(p => ({ ...p, [k]: v }));
   const updateConfig = (k: keyof KODrumConfig, v: unknown) => setConfig(p => ({ ...p, [k]: v as never }));
@@ -387,16 +411,71 @@ export default function FlareKODrumPage() {
               <h3 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Design Basis</h3>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
+              <div className={`rounded-md p-3 space-y-2 ${
+                orientationRec.confidence === "strong"
+                  ? "bg-green-500/10 border border-green-500/30"
+                  : orientationRec.confidence === "moderate"
+                    ? "bg-yellow-500/10 border border-yellow-500/30"
+                    : "bg-blue-500/10 border border-blue-500/30"
+              }`} data-testid="panel-orientation-recommendation">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Compass className="w-4 h-4" />
+                    <span className="text-sm font-medium">Orientation Recommendation</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={`text-xs ${
+                      orientationRec.confidence === "strong"
+                        ? "border-green-500/50 text-green-600 dark:text-green-400"
+                        : orientationRec.confidence === "moderate"
+                          ? "border-yellow-500/50 text-yellow-600 dark:text-yellow-400"
+                          : "border-blue-500/50 text-blue-600 dark:text-blue-400"
+                    }`} data-testid="badge-confidence">
+                      {orientationRec.confidence}
+                    </Badge>
+                    <Badge variant="secondary" className="text-xs" data-testid="badge-recommended-orientation">
+                      {orientationRec.recommendedOrientation}
+                    </Badge>
+                  </div>
+                </div>
+                {orientationRec.gvf > 0 && (
+                  <p className="text-xs text-muted-foreground" data-testid="text-gvf-value">
+                    GVF = {orientationRec.gvf.toFixed(4)}
+                  </p>
+                )}
+                <ul className="text-xs space-y-0.5" data-testid="list-orientation-reasons">
+                  {orientationRec.reasons.map((r, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0" />
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground italic">
+                  Per API 521 Section 5.4.2, KO drums are typically vertical. Horizontal may be used for large liquid accumulation volumes.
+                </p>
+                {config.orientation !== orientationRec.recommendedOrientation && orientationRec.recommendedOrientation !== "either" && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                      Current selection ({config.orientation}) differs from recommendation ({orientationRec.recommendedOrientation})
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => updateConfig("orientation", orientationRec.recommendedOrientation)} data-testid="button-use-recommendation">
+                      Use Recommendation
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><Label className="text-xs mb-1.5 block">Orientation</Label>
                   <Select value={config.orientation} onValueChange={v => updateConfig("orientation", v)}>
                     <SelectTrigger data-testid="select-orientation"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="vertical">Vertical (recommended)</SelectItem>
+                      <SelectItem value="vertical">Vertical</SelectItem>
                       <SelectItem value="horizontal">Horizontal</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-1">Vertical is most common for flare KO drums</p>
                 </div>
                 <div><Label className="text-xs mb-1.5 block">Internals</Label>
                   <Select value={config.internals} onValueChange={v => updateConfig("internals", v)}>

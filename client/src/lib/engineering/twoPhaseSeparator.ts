@@ -2,6 +2,7 @@ import { PI } from "./constants";
 
 export type TwoPhaseSepOrientation = "vertical" | "horizontal";
 export type ServiceType = "gas_scrubber" | "inlet_separator" | "slug_catcher" | "test_separator";
+export type PhaseMode = "two_phase" | "three_phase";
 export type InletDeviceType = "diverter" | "half_pipe" | "cyclone" | "none";
 export type MistEliminatorType = "none" | "wire_mesh" | "vane_pack" | "high_efficiency";
 export type CaseType = "normal" | "maximum" | "fire" | "upset" | "startup" | "blowdown" | "turndown" | "custom";
@@ -36,11 +37,17 @@ export interface OperatingCase {
   flagHydrate: boolean;
   flagEmulsion: boolean;
   dropletBasis: number;
+  oilDensity?: number;
+  waterDensity?: number;
+  oilViscosity?: number;
+  waterViscosity?: number;
+  waterCut?: number;
 }
 
 export interface TwoPhaseSepConfig {
   orientation: TwoPhaseSepOrientation;
   serviceType: ServiceType;
+  phaseMode: PhaseMode;
   inletDevice: InletDeviceType;
   mistEliminator: MistEliminatorType;
   kValue: number;
@@ -68,6 +75,8 @@ export interface HoldupBasis {
   surgeTime: number;
   slugVolume: number;
   drainRate: number;
+  oilRetentionTime?: number;
+  waterRetentionTime?: number;
 }
 
 export interface ProjectSetup {
@@ -124,7 +133,8 @@ export type EngFlag =
   | "FOAM_K_DERATED"
   | "PRESSURE_K_CORRECTED"
   | "SETTLING_LENGTH_SHORT"
-  | "STOKES_RE_EXCEEDED";
+  | "STOKES_RE_EXCEEDED"
+  | "THREE_PHASE_PRELIM";
 
 export const FLAG_LABELS: Record<EngFlag, string> = {
   PROPERTY_UNCERTAINTY: "Fluid property uncertainty — validate with PVT data or lab analysis",
@@ -141,6 +151,7 @@ export const FLAG_LABELS: Record<EngFlag, string> = {
   PRESSURE_K_CORRECTED: "K value corrected for high operating pressure (GPSA Fig 7-9)",
   SETTLING_LENGTH_SHORT: "Horizontal settling length insufficient for droplet removal",
   STOKES_RE_EXCEEDED: "Particle Reynolds number exceeds Stokes regime (Re_p > 1) — settling velocity may be overpredicted",
+  THREE_PHASE_PRELIM: "3-phase sizing is preliminary — detailed design required (weirs, coalescers, emulsions)",
 };
 
 export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
@@ -158,6 +169,7 @@ export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
   PRESSURE_K_CORRECTED: "info",
   SETTLING_LENGTH_SHORT: "warning",
   STOKES_RE_EXCEEDED: "warning",
+  THREE_PHASE_PRELIM: "warning",
 };
 
 export interface TwoPhaseSepFullResult {
@@ -220,6 +232,7 @@ export const DEFAULT_ALLOWANCES: VesselAllowances = {
 export const DEFAULT_CONFIG: TwoPhaseSepConfig = {
   orientation: "vertical",
   serviceType: "gas_scrubber",
+  phaseMode: "two_phase",
   inletDevice: "diverter",
   mistEliminator: "wire_mesh",
   kValue: 0.07,
@@ -492,6 +505,7 @@ function computeHoldup(
   cases: OperatingCase[],
   holdup: HoldupBasis,
   governingCaseId: string,
+  config: TwoPhaseSepConfig,
 ): { totalVolume_m3: number; holdupVolume_m3: number; surgeVolume_m3: number; slugVolume_m3: number; steps: CalcStep[] } {
   const steps: CalcStep[] = [];
   const govCase = cases.find(c => c.id === governingCaseId) || cases[0];
@@ -515,8 +529,37 @@ function computeHoldup(
     steps.push({ label: "Slug volume (user)", equation: "V_slug (direct input)", substitution: `V_slug = ${slugVolume}`, result: slugVolume, unit: "m\u00B3" });
   }
 
-  const totalVolume = holdupVolume + surgeVolume + slugVolume;
-  steps.push({ label: "Total liquid volume", equation: "V_total = V_hold + V_surge + V_slug", substitution: `V_total = ${holdupVolume.toFixed(4)} + ${surgeVolume.toFixed(4)} + ${slugVolume.toFixed(4)}`, result: totalVolume, unit: "m\u00B3" });
+  let totalVolume = holdupVolume + surgeVolume + slugVolume;
+
+  if (config.phaseMode === "three_phase") {
+    const waterCut = govCase.waterCut ?? 0.5;
+    const oilRetTime = holdup.oilRetentionTime ?? holdup.residenceTime;
+    const waterRetTime = holdup.waterRetentionTime ?? holdup.residenceTime;
+    const Ql_oil_m3s = Ql_m3s * (1 - waterCut);
+    const Ql_water_m3s = Ql_m3s * waterCut;
+
+    steps.push({ label: "Water cut fraction", equation: "WC", substitution: `WC = ${waterCut}`, result: waterCut, unit: "-" });
+    steps.push({ label: "Oil flow rate", equation: "Q_oil = Q_l \u00D7 (1 \u2212 WC)", substitution: `Q_oil = ${Ql_m3s.toFixed(6)} \u00D7 (1 \u2212 ${waterCut})`, result: Ql_oil_m3s, unit: "m\u00B3/s" });
+    steps.push({ label: "Water flow rate", equation: "Q_water = Q_l \u00D7 WC", substitution: `Q_water = ${Ql_m3s.toFixed(6)} \u00D7 ${waterCut}`, result: Ql_water_m3s, unit: "m\u00B3/s" });
+
+    const oilVol = Ql_oil_m3s * oilRetTime * 60;
+    const waterVol = Ql_water_m3s * waterRetTime * 60;
+
+    steps.push({ label: "Oil phase volume", equation: "V_oil = Q_oil \u00D7 t_oil \u00D7 60", substitution: `V_oil = ${Ql_oil_m3s.toFixed(6)} \u00D7 ${oilRetTime} \u00D7 60`, result: oilVol, unit: "m\u00B3" });
+    steps.push({ label: "Water phase volume", equation: "V_water = Q_water \u00D7 t_water \u00D7 60", substitution: `V_water = ${Ql_water_m3s.toFixed(6)} \u00D7 ${waterRetTime} \u00D7 60`, result: waterVol, unit: "m\u00B3" });
+
+    totalVolume = Math.max(holdupVolume + surgeVolume + slugVolume, oilVol + waterVol + surgeVolume + slugVolume);
+  }
+
+  steps.push({
+    label: "Total liquid volume",
+    equation: config.phaseMode === "three_phase"
+      ? "V_total = max(V_hold+V_surge+V_slug, V_oil+V_water+V_surge+V_slug)"
+      : "V_total = V_hold + V_surge + V_slug",
+    substitution: `V_total = ${totalVolume.toFixed(4)}`,
+    result: totalVolume,
+    unit: "m\u00B3",
+  });
 
   return { totalVolume_m3: totalVolume, holdupVolume_m3: holdupVolume, surgeVolume_m3: surgeVolume, slugVolume_m3: slugVolume, steps };
 }
@@ -661,6 +704,7 @@ function collectFlags(
   if (config.mistEliminator !== "none") flags.push("VENDOR_MIST_CONFIRM");
 
   if (config.serviceType === "slug_catcher") flags.push("SLUG_CATCHER_REQUIRED");
+  if (config.phaseMode === "three_phase") flags.push("THREE_PHASE_PRELIM");
 
   if (geometry.actualGasVelocity > v_s_max && v_s_max > 0) flags.push("GAS_VELOCITY_EXCEEDED");
   if (v_s_max > 0 && geometry.actualGasVelocity > v_s_max * 0.85) flags.push("HIGH_GAS_VELOCITY");
@@ -758,6 +802,11 @@ function buildRecommendations(flags: EngFlag[], config: TwoPhaseSepConfig, geome
   if (flags.includes("STOKES_RE_EXCEEDED")) {
     recs.push("Particle Re > 1 — Stokes settling velocity may be overpredicted; consider intermediate-law correction");
   }
+  if (flags.includes("THREE_PHASE_PRELIM")) {
+    recs.push("3-phase sizing is preliminary — detailed design required for weir sizing, coalescers, and emulsion handling");
+    nextSteps.push("Perform detailed 3-phase separator design including weir placement and coalescer selection");
+    nextSteps.push("Review oil/water emulsion tendency and chemical treatment requirements");
+  }
 
   nextSteps.push("Validate fluid properties with PVT analysis at operating conditions");
   nextSteps.push("Perform mechanical design (wall thickness, nozzle sizing, skirt/saddle)");
@@ -790,6 +839,7 @@ function buildAssumptions(config: TwoPhaseSepConfig, holdup: HoldupBasis, K_eff:
   };
   a.push(`Service type: ${serviceLabels[config.serviceType]}`);
   a.push(`Orientation: ${config.orientation}`);
+  a.push(`Phase mode: ${config.phaseMode === "three_phase" ? "3-phase (gas/oil/water)" : "2-phase (gas/liquid)"}`);
 
   if (config.orientation === "horizontal") {
     a.push(`Normal liquid level fraction: ${(config.levelFraction * 100).toFixed(0)}% of diameter`);
@@ -799,6 +849,12 @@ function buildAssumptions(config: TwoPhaseSepConfig, holdup: HoldupBasis, K_eff:
   a.push(`Inlet device: ${config.inletDevice.replace("_", " ")}`);
   a.push(`Condensate residence time: ${holdup.residenceTime} min`);
   a.push(`Surge time: ${holdup.surgeTime} min`);
+  if (config.phaseMode === "three_phase") {
+    const oilRetTime = holdup.oilRetentionTime ?? holdup.residenceTime;
+    const waterRetTime = holdup.waterRetentionTime ?? holdup.residenceTime;
+    a.push(`Oil retention time: ${oilRetTime} min`);
+    a.push(`Water retention time: ${waterRetTime} min`);
+  }
   if (holdup.slugVolume > 0) a.push(`Slug volume: ${holdup.slugVolume} m\u00B3`);
   if (config.enableDropletCheck) {
     a.push(`Droplet settling check enabled (Stokes' law, d = ${config.dropletDiameter_um} \u03BCm)`);
@@ -911,7 +967,7 @@ export function calculateTwoPhaseSeparator(
   const governingReason = `Case "${caseResults[governingIdx].caseName}" requires largest diameter (${maxD.toFixed(0)} mm)`;
 
   const { totalVolume_m3, steps: holdupSteps } =
-    computeHoldup(cases, holdup, governingCaseId);
+    computeHoldup(cases, holdup, governingCaseId, config);
 
   const govCaseResult = caseResults[governingIdx];
   const geometry = assembleGeometry(maxD, totalVolume_m3, config, govCaseResult.Qg_actual_m3s);
@@ -982,6 +1038,7 @@ export const TEST_CASES: { name: string; project: ProjectSetup; cases: Operating
       ...DEFAULT_CONFIG,
       orientation: "vertical",
       serviceType: "gas_scrubber",
+      phaseMode: "two_phase",
       mistEliminator: "wire_mesh",
       kValue: 0.07,
       kMode: "typical",
@@ -1039,6 +1096,7 @@ export const TEST_CASES: { name: string; project: ProjectSetup; cases: Operating
       ...DEFAULT_CONFIG,
       orientation: "horizontal",
       serviceType: "inlet_separator",
+      phaseMode: "two_phase",
       mistEliminator: "wire_mesh",
       kValue: 0.10,
       kMode: "typical",

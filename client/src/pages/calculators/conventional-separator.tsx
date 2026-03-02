@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,8 +34,13 @@ import {
   Container, ClipboardList, Droplets, Settings2, BarChart3, Gauge,
   Ruler, ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  FileText, FileSpreadsheet,
+  FileText, FileSpreadsheet, Compass,
 } from "lucide-react";
+import {
+  computeOrientationRecommendation,
+  type OrientationResult,
+  type OrientationCaseInput,
+} from "@/lib/engineering/orientationRecommendation";
 
 const TABS = [
   { id: "project", label: "Project", icon: ClipboardList, step: 1 },
@@ -79,6 +84,29 @@ export default function ConventionalSeparatorPage() {
   const [holdup, setHoldup] = useState<HoldupBasis>({ ...DEFAULT_HOLDUP });
   const [result, setResult] = useState<ConvSepFullResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const orientationRec = useMemo<OrientationResult>(() => {
+    const orientCases: OrientationCaseInput[] = cases.map(c => ({
+      gasFlowRate: c.gasFlowRate,
+      gasFlowBasis: c.gasFlowBasis,
+      gasDensity: c.gasDensity,
+      gasMW: c.gasMW,
+      gasPressure: c.gasPressure,
+      gasTemperature: c.gasTemperature,
+      gasZ: c.gasZ,
+      liquidFlowRate: c.liquidFlowRate,
+      liquidFlowBasis: c.liquidFlowBasis,
+      liquidDensity: c.liquidDensity,
+      flagFoam: c.flagFoam,
+      flagSolids: c.flagSolids,
+      flagSlugging: c.flagSlugging,
+    }));
+    return computeOrientationRecommendation({
+      cases: orientCases,
+      phaseMode: config.phaseMode,
+      currentOrientation: config.orientation,
+    });
+  }, [cases, config.phaseMode, config.orientation]);
 
   const updateProject = (k: keyof ProjectSetup, v: string | boolean) => setProject(p => ({ ...p, [k]: v }));
   const updateConfig = (k: keyof ConvSepConfig, v: unknown) => setConfig(p => ({ ...p, [k]: v as never }));
@@ -446,6 +474,66 @@ export default function ConventionalSeparatorPage() {
         </TabsContent>
 
         <TabsContent value="config">
+          {cases.some(c => c.gasFlowRate > 0 || c.liquidFlowRate > 0) && (
+            <Card className="mb-4">
+              <CardHeader className="pb-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Compass className="w-4 h-4" /> Orientation Recommendation
+                </h3>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium" data-testid="text-rec-orientation">
+                    {orientationRec.recommendedOrientation === "either"
+                      ? "Either Orientation"
+                      : orientationRec.recommendedOrientation === "vertical"
+                        ? "Vertical"
+                        : "Horizontal"}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={
+                      orientationRec.confidence === "strong"
+                        ? "border-green-500/50 text-green-500"
+                        : orientationRec.confidence === "moderate"
+                          ? "border-amber-500/50 text-amber-500"
+                          : "border-blue-500/50 text-blue-500"
+                    }
+                    data-testid="badge-rec-confidence"
+                  >
+                    {orientationRec.confidence}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground font-mono" data-testid="text-rec-gvf">
+                    GVF = {orientationRec.gvf.toFixed(3)}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {orientationRec.reasons.map((r, i) => (
+                    <p key={i} className="text-xs text-muted-foreground" data-testid={`text-rec-reason-${i}`}>
+                      {r}
+                    </p>
+                  ))}
+                </div>
+                {orientationRec.recommendedOrientation !== "either" &&
+                  config.orientation !== orientationRec.recommendedOrientation && (
+                    <div className="flex flex-wrap items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span className="text-xs text-amber-500">
+                        Current selection ({config.orientation}) differs from recommendation ({orientationRec.recommendedOrientation})
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateConfig("orientation", orientationRec.recommendedOrientation)}
+                        data-testid="button-use-recommendation"
+                      >
+                        Use Recommendation
+                      </Button>
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Design Basis</h3>

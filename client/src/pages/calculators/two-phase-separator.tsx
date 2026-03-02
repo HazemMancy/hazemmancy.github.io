@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,12 @@ import {
   type ProjectSetup, type OperatingCase, type TwoPhaseSepConfig, type HoldupBasis,
   type TwoPhaseSepFullResult, type TwoPhaseSepOrientation, type ServiceType,
   type InletDeviceType, type MistEliminatorType, type CaseType, type EngFlag,
+  type PhaseMode,
   DEFAULT_PROJECT, DEFAULT_CASE, DEFAULT_CONFIG, DEFAULT_HOLDUP,
   K_GUIDANCE_GPSA, FLAG_LABELS, FLAG_SEVERITY,
   calculateTwoPhaseSeparator, TEST_CASES,
 } from "@/lib/engineering/twoPhaseSeparator";
+import { computeOrientationRecommendation } from "@/lib/engineering/orientationRecommendation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,7 +36,7 @@ import {
   Container, ClipboardList, Droplets, Settings2, BarChart3, Gauge,
   Ruler, ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  FileText, FileSpreadsheet,
+  FileText, FileSpreadsheet, Compass,
 } from "lucide-react";
 
 const TABS = [
@@ -70,6 +72,11 @@ const ORIENTATIONS: { value: TwoPhaseSepOrientation; label: string }[] = [
   { value: "horizontal", label: "Horizontal" },
 ];
 
+const PHASE_MODES: { value: PhaseMode; label: string }[] = [
+  { value: "two_phase", label: "2-Phase (Gas\u2013Liquid)" },
+  { value: "three_phase", label: "3-Phase (Gas\u2013Oil\u2013Water)" },
+];
+
 const pU = (param: string, us: UnitSystem) => getUnit(param, us);
 
 export default function TwoPhaseSeparatorPage() {
@@ -100,6 +107,30 @@ export default function TwoPhaseSeparatorPage() {
     if (cases.length <= 1) return;
     setCases(prev => prev.filter((_, i) => i !== idx));
   };
+
+  const orientationRec = useMemo(() => {
+    const hasAnyFlow = cases.some(c => c.gasFlowRate > 0 || c.liquidFlowRate > 0);
+    if (!hasAnyFlow) return null;
+    return computeOrientationRecommendation({
+      cases: cases.map(c => ({
+        gasFlowRate: c.gasFlowRate,
+        gasFlowBasis: c.gasFlowBasis,
+        gasDensity: c.gasDensity,
+        gasMW: c.gasMW,
+        gasPressure: c.gasPressure,
+        gasTemperature: c.gasTemperature,
+        gasZ: c.gasZ,
+        liquidFlowRate: c.liquidFlowRate,
+        liquidDensity: c.liquidDensity,
+        flagFoam: c.flagFoam,
+        flagSolids: c.flagSolids,
+        flagSlugging: c.flagSlugging,
+      })),
+      serviceType: config.serviceType,
+      phaseMode: config.phaseMode,
+      currentOrientation: config.orientation,
+    });
+  }, [cases, config.serviceType, config.phaseMode, config.orientation]);
 
   const handleCalculate = () => {
     setError(null);
@@ -417,6 +448,27 @@ export default function TwoPhaseSeparatorPage() {
                       <NumericInput value={c.liquidViscosity} onValueChange={v => updateCase(idx, "liquidViscosity", v)} data-testid={`input-liq-visc-${idx}`} /></div>
                   </div>
 
+                  {config.phaseMode === "three_phase" && (
+                    <>
+                      <p className="text-xs font-medium text-muted-foreground">3-Phase Liquid Properties</p>
+                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-2 mb-1">
+                        <p className="text-xs text-blue-400"><Info className="w-3 h-3 inline mr-1" />3-phase sizing is preliminary. Detailed design requires weir sizing, coalescer evaluation, and emulsion handling.</p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div><Label className="text-xs mb-1 block">Water Cut (fraction 0\u20131)</Label>
+                          <NumericInput value={c.waterCut ?? 0.5} onValueChange={v => updateCase(idx, "waterCut", v)} min={0} max={1} step="0.01" data-testid={`input-water-cut-${idx}`} /></div>
+                        <div><Label className="text-xs mb-1 block">Oil Density ({pU("density", unitSystem)})</Label>
+                          <NumericInput value={c.oilDensity ?? 0} onValueChange={v => updateCase(idx, "oilDensity", v)} data-testid={`input-oil-density-${idx}`} /></div>
+                        <div><Label className="text-xs mb-1 block">Water Density ({pU("density", unitSystem)})</Label>
+                          <NumericInput value={c.waterDensity ?? 0} onValueChange={v => updateCase(idx, "waterDensity", v)} data-testid={`input-water-density-${idx}`} /></div>
+                        <div><Label className="text-xs mb-1 block">Oil Viscosity (cP)</Label>
+                          <NumericInput value={c.oilViscosity ?? 0} onValueChange={v => updateCase(idx, "oilViscosity", v)} data-testid={`input-oil-visc-${idx}`} /></div>
+                        <div><Label className="text-xs mb-1 block">Water Viscosity (cP)</Label>
+                          <NumericInput value={c.waterViscosity ?? 0} onValueChange={v => updateCase(idx, "waterViscosity", v)} data-testid={`input-water-visc-${idx}`} /></div>
+                      </div>
+                    </>
+                  )}
+
                   <p className="text-xs font-medium text-muted-foreground">Flags & Conditions</p>
                   <div className="flex flex-wrap gap-4">
                     {[
@@ -443,6 +495,74 @@ export default function TwoPhaseSeparatorPage() {
         </TabsContent>
 
         <TabsContent value="config">
+          {orientationRec && (
+            <Card className="mb-4">
+              <CardHeader className="pb-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2"><Compass className="w-4 h-4" /> Orientation Recommendation</h3>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Recommended:</span>
+                    <Badge
+                      variant={orientationRec.recommendedOrientation === "either" ? "outline" : "default"}
+                      className="text-xs"
+                      data-testid="badge-rec-orientation"
+                    >
+                      {orientationRec.recommendedOrientation === "either"
+                        ? "Either"
+                        : orientationRec.recommendedOrientation.charAt(0).toUpperCase() + orientationRec.recommendedOrientation.slice(1)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Confidence:</span>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${
+                        orientationRec.confidence === "strong"
+                          ? "border-green-500/50 text-green-500"
+                          : orientationRec.confidence === "moderate"
+                          ? "border-amber-500/50 text-amber-500"
+                          : "border-blue-500/50 text-blue-500"
+                      }`}
+                      data-testid="badge-rec-confidence"
+                    >
+                      {orientationRec.confidence}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">GVF:</span>
+                    <span className="text-xs font-mono" data-testid="text-rec-gvf">{orientationRec.gvf.toFixed(3)}</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {orientationRec.reasons.map((r, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0 text-muted-foreground" />
+                      <span>{r}</span>
+                    </div>
+                  ))}
+                </div>
+                {orientationRec.recommendedOrientation !== "either" && config.orientation !== orientationRec.recommendedOrientation && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-2 flex items-center gap-2 flex-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span className="text-xs text-amber-400">Current selection ({config.orientation}) differs from recommendation</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateConfig("orientation", orientationRec.recommendedOrientation)}
+                      data-testid="button-use-recommendation"
+                    >
+                      Use Recommendation
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Design Basis</h3>
@@ -455,10 +575,31 @@ export default function TwoPhaseSeparatorPage() {
                     <SelectContent>{ORIENTATIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
                   </Select></div>
                 <div><Label className="text-xs mb-1.5 block">Service Type</Label>
-                  <Select value={config.serviceType} onValueChange={v => updateConfig("serviceType", v)}>
+                  <Select value={config.serviceType} onValueChange={v => {
+                    updateConfig("serviceType", v);
+                    if (v === "gas_scrubber" && config.phaseMode === "three_phase") {
+                      updateConfig("phaseMode", "two_phase");
+                    }
+                  }}>
                     <SelectTrigger data-testid="select-service-type"><SelectValue /></SelectTrigger>
                     <SelectContent>{SERVICE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
                   </Select></div>
+                <div><Label className="text-xs mb-1.5 block">Phase Mode</Label>
+                  <Select
+                    value={config.phaseMode}
+                    onValueChange={v => updateConfig("phaseMode", v)}
+                    disabled={config.serviceType === "gas_scrubber"}
+                  >
+                    <SelectTrigger data-testid="select-phase-mode"><SelectValue /></SelectTrigger>
+                    <SelectContent>{PHASE_MODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                  {config.serviceType === "gas_scrubber" && (
+                    <p className="text-xs text-muted-foreground mt-1">Gas scrubber is 2-phase only (gas + condensate)</p>
+                  )}
+                  {config.serviceType === "slug_catcher" && config.phaseMode === "two_phase" && (
+                    <p className="text-xs text-muted-foreground mt-1">Slug catchers are typically 2-phase, but 3-phase may be selected</p>
+                  )}
+                </div>
                 <div><Label className="text-xs mb-1.5 block">Inlet Device</Label>
                   <Select value={config.inletDevice} onValueChange={v => updateConfig("inletDevice", v)}>
                     <SelectTrigger data-testid="select-inlet"><SelectValue /></SelectTrigger>
@@ -667,6 +808,23 @@ export default function TwoPhaseSeparatorPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Slug Volume (m\u00B3)</Label>
                       <NumericInput value={holdup.slugVolume} onValueChange={v => updateHoldup("slugVolume", v)} data-testid="input-slug-vol" /></div>
+                  </div>
+                </div>
+              )}
+
+              {config.phaseMode === "three_phase" && (
+                <div className="pt-2 border-t space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">3-Phase Retention Times</p>
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-2 mb-1">
+                    <p className="text-xs text-blue-400"><Info className="w-3 h-3 inline mr-1" />Oil and water retention times for 3-phase separation. Total liquid volume = max(holdup + surge, oil_vol + water_vol + surge).</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div><Label className="text-xs mb-1.5 block">Oil Retention Time (min)</Label>
+                      <NumericInput value={holdup.oilRetentionTime ?? holdup.residenceTime} onValueChange={v => updateHoldup("oilRetentionTime", v)} data-testid="input-oil-ret-time" />
+                      <p className="text-xs text-muted-foreground mt-1">Typical: 3\u201310 min for oil/water separation</p></div>
+                    <div><Label className="text-xs mb-1.5 block">Water Retention Time (min)</Label>
+                      <NumericInput value={holdup.waterRetentionTime ?? holdup.residenceTime} onValueChange={v => updateHoldup("waterRetentionTime", v)} data-testid="input-water-ret-time" />
+                      <p className="text-xs text-muted-foreground mt-1">Typical: 3\u201310 min for water settling</p></div>
                   </div>
                 </div>
               )}
