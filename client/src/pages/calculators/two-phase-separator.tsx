@@ -36,17 +36,17 @@ import {
   Container, ClipboardList, Droplets, Settings2, BarChart3, Gauge,
   Ruler, ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  FileText, FileSpreadsheet, Compass,
+  FileText, FileSpreadsheet, Compass, Calculator,
 } from "lucide-react";
 
 const TABS = [
-  { id: "project", label: "Project", icon: ClipboardList, step: 1 },
-  { id: "cases", label: "Cases", icon: Droplets, step: 2 },
-  { id: "config", label: "Design", icon: Settings2, step: 3 },
-  { id: "gas", label: "Gas Sizing", icon: Gauge, step: 4 },
-  { id: "holdup", label: "Holdup", icon: Ruler, step: 5 },
-  { id: "geometry", label: "Geometry", icon: Container, step: 6 },
-  { id: "results", label: "Results", icon: BarChart3, step: 7 },
+  { id: "project", label: "Project", icon: ClipboardList, step: 1, desc: "Project setup & options" },
+  { id: "cases", label: "Cases", icon: Droplets, step: 2, desc: "Operating case data" },
+  { id: "config", label: "Design", icon: Settings2, step: 3, desc: "Service type, orientation & K-value" },
+  { id: "gas", label: "Gas Sizing", icon: Gauge, step: 4, desc: "Souders-Brown gas capacity" },
+  { id: "holdup", label: "Holdup", icon: Ruler, step: 5, desc: "Liquid residence & surge" },
+  { id: "geometry", label: "Geometry", icon: Container, step: 6, desc: "Vessel dimensions & L/D" },
+  { id: "results", label: "Results", icon: BarChart3, step: 7, desc: "Summary, flags & export" },
 ];
 
 const CASE_TYPES: { value: CaseType; label: string }[] = [
@@ -186,11 +186,9 @@ export default function TwoPhaseSeparatorPage() {
     setHoldup({ ...tc.holdup });
   };
 
-  const goTab = (dir: number) => {
-    const idx = TABS.findIndex(t => t.id === activeTab);
-    const next = idx + dir;
-    if (next >= 0 && next < TABS.length) setActiveTab(TABS[next].id);
-  };
+  const tabIdx = TABS.findIndex(t => t.id === activeTab);
+  const goNext = () => { if (tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id); };
+  const goPrev = () => { if (tabIdx > 0) setActiveTab(TABS[tabIdx - 1].id); };
 
   const buildExportData = (): ExportDatasheet | null => {
     if (!result) return null;
@@ -302,8 +300,6 @@ export default function TwoPhaseSeparatorPage() {
     };
   };
 
-  const tabIdx = TABS.findIndex(t => t.id === activeTab);
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -333,18 +329,54 @@ export default function TwoPhaseSeparatorPage() {
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full flex flex-wrap h-auto gap-0.5 mb-4">
-          {TABS.map(t => (
-            <TabsTrigger key={t.id} value={t.id} className="flex-1 min-w-0 text-xs gap-1 py-1.5" data-testid={`tab-${t.id}`}>
-              <t.icon className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline truncate">{t.label}</span>
-              <span className="sm:hidden">{t.step}</span>
-            </TabsTrigger>
+      <div className="flex items-center gap-1 mb-6 overflow-x-auto pb-1">
+        {TABS.map((t, i) => {
+          const isCurrent = activeTab === t.id;
+          const isCompleted = tabIdx > i;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap
+                ${isCurrent ? "bg-primary/15 text-primary border border-primary/30" :
+                  isCompleted ? "bg-muted/50 text-foreground hover:bg-muted/80" :
+                  "text-muted-foreground hover:bg-muted/30"}`}
+              data-testid={`step-${t.id}`}
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0
+                ${isCurrent ? "bg-primary text-primary-foreground" :
+                  isCompleted ? "bg-primary/40 text-primary-foreground" :
+                  "bg-muted text-muted-foreground"}`}>
+                {isCompleted ? "\u2713" : t.step}
+              </span>
+              <span className="hidden sm:inline">{t.label}</span>
+              {i < TABS.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground/40 ml-1" />}
+            </button>
+          );
+        })}
+      </div>
+
+      {result && result.flags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4" data-testid="flags-banner">
+          {result.flags.map(f => (
+            <Badge key={f} variant={FLAG_SEVERITY[f] === "error" ? "destructive" : "secondary"} className="text-xs" data-testid={`flag-${f}`}>
+              {FLAG_SEVERITY[f] === "error" || FLAG_SEVERITY[f] === "warning"
+                ? <AlertTriangle className="w-3 h-3 mr-1" />
+                : <Info className="w-3 h-3 mr-1" />}
+              {f.replace(/_/g, " ")}
+            </Badge>
           ))}
+        </div>
+      )}
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+        <TabsList className="hidden">
+          {TABS.map(t => <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>)}
         </TabsList>
 
         <TabsContent value="project">
+          <div className="space-y-4">
+            <StepHeader step={1} title="Project Setup" desc="Enter project information and calculation options." />
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Project Setup</h3>
@@ -371,9 +403,12 @@ export default function TwoPhaseSeparatorPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="cases">
+          <div className="space-y-4">
+            <StepHeader step={2} title="Operating Cases" desc="Define gas and liquid stream data for each operating case." />
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -492,9 +527,12 @@ export default function TwoPhaseSeparatorPage() {
               ))}
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="config">
+          <div className="space-y-4">
+            <StepHeader step={3} title="Design Basis" desc="Configure service type, orientation, K-value and vessel parameters." />
           {orientationRec && (
             <Card className="mb-4">
               <CardHeader className="pb-3">
@@ -714,9 +752,12 @@ export default function TwoPhaseSeparatorPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="gas">
+          <div className="space-y-4">
+            <StepHeader step={4} title="Gas Capacity Sizing" desc="Souders-Brown correlation results for each operating case." />
           {!result ? (
             <Card><CardContent className="py-12 text-center">
               <Gauge className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -780,9 +821,12 @@ export default function TwoPhaseSeparatorPage() {
               </CardContent>
             </Card>
           )}
+          </div>
         </TabsContent>
 
         <TabsContent value="holdup">
+          <div className="space-y-4">
+            <StepHeader step={5} title="Liquid Holdup & Surge" desc="Define condensate retention times and surge requirements." />
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Ruler className="w-4 h-4" /> Condensate Holdup / Surge</h3>
@@ -858,12 +902,14 @@ export default function TwoPhaseSeparatorPage() {
               )}
 
               {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">{error}</div>}
-              <Button className="w-full" onClick={handleCalculate} data-testid="button-calculate-holdup">Calculate / Recalculate</Button>
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="geometry">
+          <div className="space-y-4">
+            <StepHeader step={6} title="Vessel Geometry" desc="Assembled vessel dimensions, L/D ratio and capacity checks." />
           {!result ? (
             <Card><CardContent className="py-12 text-center">
               <Container className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -927,9 +973,12 @@ export default function TwoPhaseSeparatorPage() {
               </CardContent>
             </Card>
           )}
+          </div>
         </TabsContent>
 
         <TabsContent value="results">
+          <div className="space-y-4">
+            <StepHeader step={7} title="Results Summary" desc="Review vessel sizing, flags, recommendations and export." />
           {!result ? (
             <Card><CardContent className="py-12 text-center">
               <BarChart3 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -1069,24 +1118,57 @@ export default function TwoPhaseSeparatorPage() {
               <FeedbackSection calculatorName="Two-Phase Separator" />
             </div>
           )}
+          </div>
         </TabsContent>
       </Tabs>
 
-      <div className="flex items-center justify-between gap-2 mt-6">
-        <Button variant="outline" size="sm" onClick={() => goTab(-1)} disabled={tabIdx === 0} data-testid="button-prev">
-          <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+      <div className="flex items-center justify-between gap-2 mt-6 pt-4 border-t border-muted/30">
+        <Button size="sm" variant="outline" onClick={goPrev} disabled={tabIdx <= 0} data-testid="button-prev">
+          <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Back
         </Button>
+        <div className="text-xs text-muted-foreground">
+          Step {tabIdx + 1} of {TABS.length}
+        </div>
         <div className="flex items-center gap-2">
-          {error && activeTab !== "holdup" && (
-            <div className="text-xs text-destructive max-w-xs truncate">{error}</div>
-          )}
-          {activeTab === "cases" || activeTab === "holdup" || activeTab === "config" ? (
-            <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-nav">Calculate</Button>
+          {activeTab === "holdup" ? (
+            <>
+              <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-main">
+                <Calculator className="w-3.5 h-3.5 mr-1" /> {result ? "Recalculate" : "Calculate"}
+              </Button>
+              {result && (
+                <Button size="sm" variant="outline" onClick={goNext} data-testid="button-next">
+                  Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              )}
+            </>
+          ) : activeTab !== "results" ? (
+            <Button size="sm" variant="outline" onClick={goNext} disabled={tabIdx >= TABS.length - 1} data-testid="button-next">
+              Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          ) : result ? (
+            <Button size="sm" variant="outline" onClick={() => setActiveTab("holdup")} data-testid="button-back-to-calc">
+              <RotateCcw className="w-3.5 h-3.5 mr-1" /> Recalculate
+            </Button>
           ) : null}
         </div>
-        <Button variant="outline" size="sm" onClick={() => goTab(1)} disabled={tabIdx === TABS.length - 1} data-testid="button-next">
-          Next <ChevronRight className="w-4 h-4 ml-1" />
-        </Button>
+      </div>
+
+      {error && (
+        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md mt-4" data-testid="text-error">{error}</div>
+      )}
+    </div>
+  );
+}
+
+function StepHeader({ step, title, desc }: { step: number; title: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-3 mb-1">
+      <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+        {step}
+      </div>
+      <div>
+        <h2 className="font-semibold text-base">{title}</h2>
+        <p className="text-xs text-muted-foreground">{desc}</p>
       </div>
     </div>
   );

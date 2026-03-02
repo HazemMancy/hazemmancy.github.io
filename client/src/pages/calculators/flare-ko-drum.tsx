@@ -34,17 +34,17 @@ import {
   Flame, ClipboardList, AlertCircle, Settings2, BarChart3, Gauge,
   ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  FileText, FileSpreadsheet, Container, Droplets, Compass,
+  FileText, FileSpreadsheet, Container, Droplets, Compass, Calculator,
 } from "lucide-react";
 
 const TABS = [
-  { id: "project", label: "Project", icon: ClipboardList, step: 1 },
-  { id: "scenarios", label: "Scenarios", icon: AlertCircle, step: 2 },
-  { id: "config", label: "Design", icon: Settings2, step: 3 },
-  { id: "gas", label: "Gas Sizing", icon: Gauge, step: 4 },
-  { id: "liquid", label: "Liquid Accum.", icon: Droplets, step: 5 },
-  { id: "geometry", label: "Geometry", icon: Container, step: 6 },
-  { id: "results", label: "Results", icon: BarChart3, step: 7 },
+  { id: "project", label: "Project", icon: ClipboardList, step: 1, desc: "Project setup & options" },
+  { id: "scenarios", label: "Scenarios", icon: AlertCircle, step: 2, desc: "Relief & blowdown scenarios" },
+  { id: "config", label: "Design", icon: Settings2, step: 3, desc: "Orientation, internals & K-value" },
+  { id: "gas", label: "Gas Sizing", icon: Gauge, step: 4, desc: "Souders-Brown gas capacity" },
+  { id: "liquid", label: "Liquid Accum.", icon: Droplets, step: 5, desc: "Transient liquid accumulation" },
+  { id: "geometry", label: "Geometry", icon: Container, step: 6, desc: "Vessel dimensions & L/D" },
+  { id: "results", label: "Results", icon: BarChart3, step: 7, desc: "Summary, flags & export" },
 ];
 
 const SCENARIO_TYPES: { value: ScenarioType; label: string }[] = [
@@ -160,11 +160,9 @@ export default function FlareKODrumPage() {
     setHoldup({ ...tc.holdup });
   };
 
-  const goTab = (dir: number) => {
-    const idx = TABS.findIndex(t => t.id === activeTab);
-    const next = idx + dir;
-    if (next >= 0 && next < TABS.length) setActiveTab(TABS[next].id);
-  };
+  const tabIdx = TABS.findIndex(t => t.id === activeTab);
+  const goNext = () => { if (tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id); };
+  const goPrev = () => { if (tabIdx > 0) setActiveTab(TABS[tabIdx - 1].id); };
 
   const buildExportData = (): ExportDatasheet | null => {
     if (!result) return null;
@@ -264,8 +262,6 @@ export default function FlareKODrumPage() {
     };
   };
 
-  const tabIdx = TABS.findIndex(t => t.id === activeTab);
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -292,18 +288,54 @@ export default function FlareKODrumPage() {
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full flex flex-wrap h-auto gap-0.5 mb-4">
-          {TABS.map(t => (
-            <TabsTrigger key={t.id} value={t.id} className="flex-1 min-w-0 text-xs gap-1 py-1.5" data-testid={`tab-${t.id}`}>
-              <t.icon className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline truncate">{t.label}</span>
-              <span className="sm:hidden">{t.step}</span>
-            </TabsTrigger>
+      <div className="flex items-center gap-1 mb-6 overflow-x-auto pb-1">
+        {TABS.map((t, i) => {
+          const isCurrent = activeTab === t.id;
+          const isCompleted = tabIdx > i;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap
+                ${isCurrent ? "bg-primary/15 text-primary border border-primary/30" :
+                  isCompleted ? "bg-muted/50 text-foreground hover:bg-muted/80" :
+                  "text-muted-foreground hover:bg-muted/30"}`}
+              data-testid={`step-${t.id}`}
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0
+                ${isCurrent ? "bg-primary text-primary-foreground" :
+                  isCompleted ? "bg-primary/40 text-primary-foreground" :
+                  "bg-muted text-muted-foreground"}`}>
+                {isCompleted ? "\u2713" : t.step}
+              </span>
+              <span className="hidden sm:inline">{t.label}</span>
+              {i < TABS.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground/40 ml-1" />}
+            </button>
+          );
+        })}
+      </div>
+
+      {result && result.flags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4" data-testid="flags-banner">
+          {result.flags.map(f => (
+            <Badge key={f} variant={FLAG_SEVERITY[f] === "error" ? "destructive" : "secondary"} className="text-xs" data-testid={`flag-${f}`}>
+              {FLAG_SEVERITY[f] === "error" || FLAG_SEVERITY[f] === "warning"
+                ? <AlertTriangle className="w-3 h-3 mr-1" />
+                : <Info className="w-3 h-3 mr-1" />}
+              {f.replace(/_/g, " ")}
+            </Badge>
           ))}
+        </div>
+      )}
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+        <TabsList className="hidden">
+          {TABS.map(t => <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>)}
         </TabsList>
 
         <TabsContent value="project">
+          <div className="space-y-4">
+            <StepHeader step={1} title="Project Setup" desc="Enter project information and calculation options." />
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Project Setup</h3>
@@ -330,9 +362,12 @@ export default function FlareKODrumPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="scenarios">
+          <div className="space-y-4">
+            <StepHeader step={2} title="Relief / Blowdown Scenarios" desc="Define gas and liquid data for each relief or blowdown scenario." />
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -403,9 +438,12 @@ export default function FlareKODrumPage() {
               ))}
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="config">
+          <div className="space-y-4">
+            <StepHeader step={3} title="Design Basis" desc="Configure orientation, internals, K-value and vessel constraints." />
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Design Basis</h3>
@@ -568,9 +606,12 @@ export default function FlareKODrumPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="gas">
+          <div className="space-y-4">
+            <StepHeader step={4} title="Gas Capacity Sizing" desc="Souders-Brown correlation results for each scenario." />
           {!result ? (
             <Card><CardContent className="py-12 text-center">
               <Gauge className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -619,9 +660,12 @@ export default function FlareKODrumPage() {
               </CardContent>
             </Card>
           )}
+          </div>
         </TabsContent>
 
         <TabsContent value="liquid">
+          <div className="space-y-4">
+            <StepHeader step={5} title="Liquid Accumulation" desc="Define holdup time, rainout fraction and review liquid volumes." />
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Droplets className="w-4 h-4" /> Liquid Accumulation</h3>
@@ -708,12 +752,14 @@ export default function FlareKODrumPage() {
               )}
 
               {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">{error}</div>}
-              <Button className="w-full" onClick={handleCalculate} data-testid="button-calculate-liquid">Calculate / Recalculate</Button>
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="geometry">
+          <div className="space-y-4">
+            <StepHeader step={6} title="Geometry Assembly" desc="Review vessel dimensions, L/D ratio and geometry checks." />
           {!result ? (
             <Card><CardContent className="py-12 text-center">
               <Container className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -777,9 +823,12 @@ export default function FlareKODrumPage() {
               </CardContent>
             </Card>
           )}
+          </div>
         </TabsContent>
 
         <TabsContent value="results">
+          <div className="space-y-4">
+            <StepHeader step={7} title="Results Summary" desc="Review sizing results, flags and export." />
           {!result ? (
             <Card><CardContent className="py-12 text-center">
               <BarChart3 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -919,24 +968,53 @@ export default function FlareKODrumPage() {
               <FeedbackSection calculatorName="Flare KO Drum" />
             </div>
           )}
+          </div>
         </TabsContent>
       </Tabs>
 
-      <div className="flex items-center justify-between gap-2 mt-6">
-        <Button variant="outline" size="sm" onClick={() => goTab(-1)} disabled={tabIdx === 0} data-testid="button-prev">
-          <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+      <div className="flex items-center justify-between gap-2 mt-6 pt-4 border-t border-muted/30">
+        <Button size="sm" variant="outline" onClick={goPrev} disabled={tabIdx <= 0} data-testid="button-prev">
+          <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Back
         </Button>
+        <div className="text-xs text-muted-foreground">
+          Step {tabIdx + 1} of {TABS.length}
+        </div>
         <div className="flex items-center gap-2">
-          {error && activeTab !== "liquid" && (
-            <div className="text-xs text-destructive max-w-xs truncate">{error}</div>
-          )}
-          {activeTab === "scenarios" || activeTab === "liquid" || activeTab === "config" ? (
-            <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-nav">Calculate</Button>
+          {activeTab === "liquid" ? (
+            <>
+              <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-main">
+                <Calculator className="w-3.5 h-3.5 mr-1" /> {result ? "Recalculate" : "Calculate"}
+              </Button>
+              {result && (
+                <Button size="sm" variant="outline" onClick={goNext} data-testid="button-next">
+                  Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              )}
+            </>
+          ) : activeTab !== "results" ? (
+            <Button size="sm" variant="outline" onClick={goNext} disabled={tabIdx >= TABS.length - 1} data-testid="button-next">
+              Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          ) : result ? (
+            <Button size="sm" variant="outline" onClick={() => setActiveTab("liquid")} data-testid="button-back-to-calc">
+              <RotateCcw className="w-3.5 h-3.5 mr-1" /> Recalculate
+            </Button>
           ) : null}
         </div>
-        <Button variant="outline" size="sm" onClick={() => goTab(1)} disabled={tabIdx === TABS.length - 1} data-testid="button-next">
-          Next <ChevronRight className="w-4 h-4 ml-1" />
-        </Button>
+      </div>
+    </div>
+  );
+}
+
+function StepHeader({ step, title, desc }: { step: number; title: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-3 mb-1">
+      <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+        {step}
+      </div>
+      <div>
+        <h2 className="font-semibold text-base">{title}</h2>
+        <p className="text-xs text-muted-foreground">{desc}</p>
       </div>
     </div>
   );
