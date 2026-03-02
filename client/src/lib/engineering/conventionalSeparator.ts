@@ -57,6 +57,8 @@ export interface ConvSepConfig {
   maxDiameter: number;
   maxLD: number;
   allowances: VesselAllowances;
+  foamFactor: number;
+  applyPressureCorrection: boolean;
 }
 
 export interface HoldupBasis {
@@ -118,7 +120,11 @@ export type EngFlag =
   | "K_TYPICAL_MODE"
   | "VENDOR_MIST_CONFIRM"
   | "THREE_PHASE_PRELIM"
-  | "SPECIALIST_REQUIRED";
+  | "SPECIALIST_REQUIRED"
+  | "FOAM_K_DERATED"
+  | "PRESSURE_K_CORRECTED"
+  | "SETTLING_LENGTH_SHORT"
+  | "STOKES_RE_EXCEEDED";
 
 export const FLAG_LABELS: Record<EngFlag, string> = {
   FOAM_RISK: "Foam risk identified \u2014 consider antifoam and reduced K",
@@ -136,6 +142,10 @@ export const FLAG_LABELS: Record<EngFlag, string> = {
   VENDOR_MIST_CONFIRM: "Mist eliminator selection requires vendor confirmation",
   THREE_PHASE_PRELIM: "3-phase sizing is preliminary \u2014 detailed design required (weirs, coalescers, emulsions)",
   SPECIALIST_REQUIRED: "Non-standard conditions \u2014 specialist design review required",
+  FOAM_K_DERATED: "K value derated for foam tendency (GPSA guidance)",
+  PRESSURE_K_CORRECTED: "K value corrected for high pressure per GPSA Fig 7-9",
+  SETTLING_LENGTH_SHORT: "Horizontal settling length may be insufficient for droplet removal",
+  STOKES_RE_EXCEEDED: "Particle Reynolds number exceeds 1 \u2014 Stokes law may underestimate terminal velocity",
 };
 
 export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
@@ -154,6 +164,10 @@ export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
   VENDOR_MIST_CONFIRM: "info",
   THREE_PHASE_PRELIM: "warning",
   SPECIALIST_REQUIRED: "error",
+  FOAM_K_DERATED: "info",
+  PRESSURE_K_CORRECTED: "info",
+  SETTLING_LENGTH_SHORT: "warning",
+  STOKES_RE_EXCEEDED: "warning",
 };
 
 export interface ConvSepFullResult {
@@ -224,6 +238,8 @@ export const DEFAULT_CONFIG: ConvSepConfig = {
   maxDiameter: 0,
   maxLD: 0,
   allowances: { ...DEFAULT_ALLOWANCES },
+  foamFactor: 0.7,
+  applyPressureCorrection: true,
 };
 
 export const DEFAULT_HOLDUP: HoldupBasis = {
@@ -254,6 +270,118 @@ function segmentAreaFraction(h_over_D: number): number {
 
 function gasAreaFractionForLevel(levelFraction: number): number {
   return 1 - segmentAreaFraction(levelFraction);
+}
+
+export function computeKPressureCorrection(P_barg: number): { Cp: number; steps: CalcStep[] } {
+  const steps: CalcStep[] = [];
+  let Cp: number;
+
+  if (P_barg <= 6.9) {
+    Cp = 1.0;
+    steps.push({
+      label: "Pressure correction factor (GPSA Fig 7-9)",
+      equation: "Cp = 1.0 (P \u2264 6.9 barg)",
+      substitution: `Cp = 1.0 (P = ${P_barg.toFixed(1)} barg)`,
+      result: Cp,
+      unit: "-",
+    });
+  } else {
+    Cp = Math.max(0.5, 1.0 - 0.00483 * (P_barg - 6.9));
+    steps.push({
+      label: "Pressure correction factor (GPSA Fig 7-9)",
+      equation: "Cp = max(0.5, 1.0 \u2212 0.00483 \u00D7 (P \u2212 6.9))",
+      substitution: `Cp = max(0.5, 1.0 \u2212 0.00483 \u00D7 (${P_barg.toFixed(1)} \u2212 6.9))`,
+      result: Cp,
+      unit: "-",
+    });
+  }
+
+  return { Cp, steps };
+}
+
+export function computeEffectiveK(
+  K_base: number,
+  config: ConvSepConfig,
+  P_barg: number,
+  hasFoam: boolean,
+): { K_eff: number; steps: CalcStep[]; pressureCorrected: boolean; foamDerated: boolean } {
+  const steps: CalcStep[] = [];
+  let K_eff = K_base;
+  let pressureCorrected = false;
+  let foamDerated = false;
+
+  steps.push({
+    label: "K base value",
+    equation: "K_base",
+    substitution: `K_base = ${K_base}`,
+    result: K_base,
+    unit: "m/s",
+  });
+
+  if (config.applyPressureCorrection && P_barg > 6.9) {
+    const { Cp, steps: cpSteps } = computeKPressureCorrection(P_barg);
+    steps.push(...cpSteps);
+    K_eff = K_eff * Cp;
+    pressureCorrected = true;
+    steps.push({
+      label: "K after pressure correction",
+      equation: "K_p = K_base \u00D7 Cp",
+      substitution: `K_p = ${K_base} \u00D7 ${Cp.toFixed(4)}`,
+      result: K_eff,
+      unit: "m/s",
+    });
+  }
+
+  if (hasFoam && config.foamFactor > 0 && config.foamFactor < 1.0) {
+    const K_before = K_eff;
+    K_eff = K_eff * config.foamFactor;
+    foamDerated = true;
+    steps.push({
+      label: "K after foam derating",
+      equation: "K_foam = K_p \u00D7 F_foam",
+      substitution: `K_foam = ${K_before.toFixed(4)} \u00D7 ${config.foamFactor}`,
+      result: K_eff,
+      unit: "m/s",
+    });
+  }
+
+  steps.push({
+    label: "Effective K value",
+    equation: "K_eff",
+    substitution: `K_eff = ${K_eff.toFixed(4)}`,
+    result: K_eff,
+    unit: "m/s",
+  });
+
+  return { K_eff, steps, pressureCorrected, foamDerated };
+}
+
+function computeStokesSettling(
+  rhoL: number, rhoG: number, mu_g: number, d_micron: number,
+): { v_t: number; Re_p: number; steps: CalcStep[] } {
+  const steps: CalcStep[] = [];
+  const d_m = d_micron * 1e-6;
+  const g = 9.80665;
+
+  const v_t = (rhoL - rhoG) * g * d_m * d_m / (18 * mu_g * 1e-3);
+  steps.push({
+    label: "Stokes terminal velocity",
+    equation: "v_t = (\u03C1_l \u2212 \u03C1_g) \u00D7 g \u00D7 d\u00B2 / (18 \u00D7 \u03BC_g)",
+    substitution: `v_t = (${rhoL} \u2212 ${rhoG}) \u00D7 ${g} \u00D7 (${d_micron}\u00D710\u207B\u2076)\u00B2 / (18 \u00D7 ${mu_g}\u00D710\u207B\u00B3)`,
+    result: v_t,
+    unit: "m/s",
+  });
+
+  const Re_p = rhoG * v_t * d_m / (mu_g * 1e-3);
+  steps.push({
+    label: "Particle Reynolds number",
+    equation: "Re_p = \u03C1_g \u00D7 v_t \u00D7 d / \u03BC_g",
+    substitution: `Re_p = ${rhoG} \u00D7 ${v_t.toFixed(6)} \u00D7 ${d_m.toExponential(3)} / ${(mu_g * 1e-3).toExponential(3)}`,
+    result: Re_p,
+    unit: "-",
+  });
+
+  return { v_t, Re_p, steps };
 }
 
 function computeActualGasFlow(c: OperatingCase): { Qg_m3s: number; steps: CalcStep[] } {
@@ -542,25 +670,54 @@ function assembleGeometry(
     holdupCapacity = totalLiquidVol;
     surgeCapacity = 0;
 
-    const allowTotal = allow.inletZone + allow.disengagementZone + allow.mistEliminatorZone + allow.sumpZone + allow.nozzleZone;
     steps.push({
-      label: "Liquid height",
+      label: "API 12J Seam-to-Seam buildup: Sump zone",
+      equation: "h_sump",
+      substitution: `h_sump = ${allow.sumpZone}`,
+      result: allow.sumpZone,
+      unit: "m",
+    });
+    steps.push({
+      label: "API 12J Seam-to-Seam buildup: Liquid height",
       equation: "h_liq = V_liq / A_vessel",
       substitution: `h_liq = ${totalLiquidVol.toFixed(4)} / ${A_vessel.toFixed(6)}`,
       result: liquidHeight,
       unit: "m",
     });
     steps.push({
-      label: "Allowances total",
-      equation: "h_allow = inlet + disengage + mist + sump + nozzle",
-      substitution: `h_allow = ${allow.inletZone} + ${allow.disengagementZone} + ${allow.mistEliminatorZone} + ${allow.sumpZone} + ${allow.nozzleZone}`,
-      result: allowTotal,
+      label: "API 12J Seam-to-Seam buildup: Inlet zone",
+      equation: "h_inlet",
+      substitution: `h_inlet = ${allow.inletZone}`,
+      result: allow.inletZone,
       unit: "m",
     });
     steps.push({
-      label: "Total vessel height",
-      equation: "H = h_liq + h_allow",
-      substitution: `H = ${liquidHeight.toFixed(3)} + ${allowTotal.toFixed(3)}`,
+      label: "API 12J Seam-to-Seam buildup: Disengagement zone",
+      equation: "h_disengage",
+      substitution: `h_disengage = ${allow.disengagementZone}`,
+      result: allow.disengagementZone,
+      unit: "m",
+    });
+    steps.push({
+      label: "API 12J Seam-to-Seam buildup: Mist eliminator zone",
+      equation: "h_mist",
+      substitution: `h_mist = ${allow.mistEliminatorZone}`,
+      result: allow.mistEliminatorZone,
+      unit: "m",
+    });
+    steps.push({
+      label: "API 12J Seam-to-Seam buildup: Nozzle zone",
+      equation: "h_nozzle",
+      substitution: `h_nozzle = ${allow.nozzleZone}`,
+      result: allow.nozzleZone,
+      unit: "m",
+    });
+
+    const allowTotal = allow.inletZone + allow.disengagementZone + allow.mistEliminatorZone + allow.sumpZone + allow.nozzleZone;
+    steps.push({
+      label: "Total vessel height (seam-to-seam)",
+      equation: "H = h_sump + h_liq + h_inlet + h_disengage + h_mist + h_nozzle",
+      substitution: `H = ${allow.sumpZone} + ${liquidHeight.toFixed(3)} + ${allow.inletZone} + ${allow.disengagementZone} + ${allow.mistEliminatorZone} + ${allow.nozzleZone}`,
       result: L_mm / 1000,
       unit: "m",
     });
@@ -695,6 +852,10 @@ function collectFlags(
   config: ConvSepConfig,
   geometry: GeometryResult,
   v_s_max: number,
+  pressureCorrected: boolean,
+  foamDerated: boolean,
+  stokesReExceeded: boolean,
+  settlingShort: boolean,
 ): EngFlag[] {
   const flags: EngFlag[] = [];
 
@@ -714,6 +875,11 @@ function collectFlags(
 
   if (config.kMode === "user") flags.push("K_USER_ASSUMED");
   if (config.kMode === "typical") flags.push("K_TYPICAL_MODE");
+
+  if (pressureCorrected) flags.push("PRESSURE_K_CORRECTED");
+  if (foamDerated) flags.push("FOAM_K_DERATED");
+  if (stokesReExceeded) flags.push("STOKES_RE_EXCEEDED");
+  if (settlingShort) flags.push("SETTLING_LENGTH_SHORT");
 
   if (config.mistEliminator !== "none") flags.push("VENDOR_MIST_CONFIRM");
   if (config.phaseMode === "three_phase") flags.push("THREE_PHASE_PRELIM");
@@ -782,6 +948,19 @@ function buildRecommendations(flags: EngFlag[], config: ConvSepConfig, geometry:
   if (flags.includes("EMULSION_RISK")) {
     recs.push("Consider chemical demulsifier injection and coalescing internals");
   }
+  if (flags.includes("PRESSURE_K_CORRECTED")) {
+    recs.push("K value reduced for high-pressure operation per GPSA Fig 7-9 piecewise correlation");
+  }
+  if (flags.includes("FOAM_K_DERATED")) {
+    recs.push("K value derated for foam tendency \u2014 verify foam factor with field/lab data");
+  }
+  if (flags.includes("SETTLING_LENGTH_SHORT")) {
+    recs.push("Horizontal settling length insufficient for target droplet removal \u2014 increase L/D or vessel diameter");
+  }
+  if (flags.includes("STOKES_RE_EXCEEDED")) {
+    recs.push("Particle Re > 1 \u2014 Stokes law assumption may be non-conservative; consider drag-corrected settling");
+    nextSteps.push("Evaluate intermediate-law or iterative drag coefficient for droplet settling");
+  }
 
   nextSteps.push("Validate fluid properties with PVT analysis at operating conditions");
   nextSteps.push("Perform mechanical design (wall thickness, nozzle sizing, saddle/skirt)");
@@ -794,7 +973,13 @@ function buildRecommendations(flags: EngFlag[], config: ConvSepConfig, geometry:
 function buildAssumptions(config: ConvSepConfig, holdup: HoldupBasis): string[] {
   const a: string[] = [];
   a.push("Souders\u2013Brown equation for maximum allowable gas velocity (API 12J)");
-  a.push(`K value = ${config.kValue} m/s (${config.kMode === "typical" ? "from typical guidance" : "user-entered"})`);
+  a.push(`K value (base) = ${config.kValue} m/s (${config.kMode === "typical" ? "from typical guidance" : "user-entered"})`);
+  if (config.applyPressureCorrection) {
+    a.push("Pressure correction applied to K per GPSA Fig 7-9 (Cp = 1.0 for P \u2264 6.9 barg, piecewise linear above)");
+  }
+  if (config.foamFactor < 1.0) {
+    a.push(`Foam derating factor: ${config.foamFactor} (applied when foam flagged on case)`);
+  }
   a.push(`Orientation: ${config.orientation === "vertical" ? "Vertical" : "Horizontal"} production separator`);
   a.push(`Phase mode: ${config.phaseMode === "two_phase" ? "2-phase (gas-liquid)" : "3-phase (gas-oil-water)"}`);
 
@@ -834,6 +1019,11 @@ export function calculateConventionalSeparator(
 
   const isHorizontal = config.orientation === "horizontal";
 
+  let anyPressureCorrected = false;
+  let anyFoamDerated = false;
+  let anyStokesReExceeded = false;
+  let anySettlingShort = false;
+
   for (const c of cases) {
     if (c.gasDensity <= 0) throw new Error(`Case "${c.name}": Gas density must be positive`);
     if (c.liquidDensity <= 0) throw new Error(`Case "${c.name}": Liquid density must be positive`);
@@ -846,23 +1036,35 @@ export function calculateConventionalSeparator(
 
     const { Qg_m3s, steps: flowSteps } = computeActualGasFlow(c);
 
+    const { K_eff, steps: kSteps, pressureCorrected, foamDerated } = computeEffectiveK(
+      config.kValue, config, c.gasPressure, c.flagFoam,
+    );
+    if (pressureCorrected) anyPressureCorrected = true;
+    if (foamDerated) anyFoamDerated = true;
+
     let D_req_mm: number;
     let v_s_max: number;
     let A_req: number;
-    const allSteps = [...flowSteps];
+    const allSteps = [...flowSteps, ...kSteps];
 
     if (isHorizontal) {
-      const res = solveHorizontalDiameter(config.kValue, c.liquidDensity, c.gasDensity, Qg_m3s, config.levelFraction);
+      const res = solveHorizontalDiameter(K_eff, c.liquidDensity, c.gasDensity, Qg_m3s, config.levelFraction);
       D_req_mm = res.D_m * 1000;
-      v_s_max = config.kValue * Math.sqrt((c.liquidDensity - c.gasDensity) / c.gasDensity);
+      v_s_max = K_eff * Math.sqrt((c.liquidDensity - c.gasDensity) / c.gasDensity);
       A_req = Qg_m3s / v_s_max;
       allSteps.push(...res.steps);
     } else {
-      const res = computeSoudersBrown(config.kValue, c.liquidDensity, c.gasDensity, Qg_m3s, 1.0, c.name);
+      const res = computeSoudersBrown(K_eff, c.liquidDensity, c.gasDensity, Qg_m3s, 1.0, c.name);
       D_req_mm = res.D_req_m * 1000;
       v_s_max = res.v_s_max;
       A_req = res.A_req;
       allSteps.push(...res.steps);
+    }
+
+    if (c.gasViscosity > 0 && c.dropletBasis > 0) {
+      const stokes = computeStokesSettling(c.liquidDensity, c.gasDensity, c.gasViscosity, c.dropletBasis);
+      allSteps.push(...stokes.steps);
+      if (stokes.Re_p > 1) anyStokesReExceeded = true;
     }
 
     caseResults.push({
@@ -893,7 +1095,52 @@ export function calculateConventionalSeparator(
   const govCaseResult = caseResults[governingIdx];
   const geometry = assembleGeometry(maxD, totalVolume_m3, config, govCaseResult.Qg_actual_m3s);
 
-  const flags = collectFlags(cases, config, geometry, govCaseResult.v_s_max);
+  if (isHorizontal) {
+    const govCase = cases.find(c => c.id === governingCaseId) || cases[0];
+    if (govCase.gasViscosity > 0 && govCase.dropletBasis > 0) {
+      const stokes = computeStokesSettling(govCase.liquidDensity, govCase.gasDensity, govCase.gasViscosity, govCase.dropletBasis);
+      const v_t = stokes.v_t;
+      const D_m = geometry.D_m;
+      const h_gas = D_m * (1 - config.levelFraction);
+      const t_settle = h_gas > 0 && v_t > 0 ? h_gas / v_t : 0;
+
+      const gasAreaFrac = gasAreaFractionForLevel(config.levelFraction);
+      const A_gas = gasAreaFrac * (PI / 4) * D_m * D_m;
+      const v_gas = A_gas > 0 ? govCaseResult.Qg_actual_m3s / A_gas : 0;
+
+      const allow = config.allowances;
+      const L_eff = Math.max(0, geometry.L_m - allow.inletZone - allow.nozzleZone);
+      const t_gas = (v_gas > 0 && L_eff > 0) ? L_eff / v_gas : 0;
+
+      geometry.steps.push({
+        label: "Settling time (droplet to liquid surface)",
+        equation: "t_settle = h_gas / v_t",
+        substitution: `t_settle = ${h_gas.toFixed(3)} / ${v_t.toFixed(6)}`,
+        result: t_settle,
+        unit: "s",
+      });
+      geometry.steps.push({
+        label: "Gas residence time in effective length",
+        equation: "t_gas = L_eff / v_gas",
+        substitution: `t_gas = ${L_eff.toFixed(3)} / ${v_gas.toFixed(4)}`,
+        result: t_gas,
+        unit: "s",
+      });
+
+      if (t_settle > t_gas && t_gas > 0) {
+        anySettlingShort = true;
+        geometry.steps.push({
+          label: "Settling length check",
+          equation: "t_settle > t_gas \u2014 settling length insufficient",
+          substitution: `${t_settle.toFixed(2)} s > ${t_gas.toFixed(2)} s`,
+          result: t_settle / t_gas,
+          unit: "ratio",
+        });
+      }
+    }
+  }
+
+  const flags = collectFlags(cases, config, geometry, govCaseResult.v_s_max, anyPressureCorrected, anyFoamDerated, anyStokesReExceeded, anySettlingShort);
   const { recs, nextSteps } = buildRecommendations(flags, config, geometry);
   const assumptions = buildAssumptions(config, holdup);
 
@@ -958,6 +1205,8 @@ export const TEST_CASES: { name: string; project: ProjectSetup; cases: Operating
       mistEliminator: "wire_mesh",
       kValue: 0.07,
       kMode: "typical",
+      foamFactor: 0.7,
+      applyPressureCorrection: true,
     },
     holdup: {
       ...DEFAULT_HOLDUP,
@@ -1009,6 +1258,8 @@ export const TEST_CASES: { name: string; project: ProjectSetup; cases: Operating
       kValue: 0.12,
       kMode: "typical",
       levelFraction: 0.5,
+      foamFactor: 0.7,
+      applyPressureCorrection: true,
     },
     holdup: {
       ...DEFAULT_HOLDUP,

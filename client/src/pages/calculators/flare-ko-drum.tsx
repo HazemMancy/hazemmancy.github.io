@@ -434,6 +434,14 @@ export default function FlareKODrumPage() {
               </div>
 
               <div className="pt-2 border-t space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">K-Factor Corrections</p>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="chk-pressure-corr" checked={config.applyPressureCorrection} onCheckedChange={v => updateConfig("applyPressureCorrection", !!v)} data-testid="chk-pressure-correction" />
+                  <Label htmlFor="chk-pressure-corr" className="text-xs">Apply GPSA Fig 7-9 pressure correction (typically disabled for near-atmospheric KO drums)</Label>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t space-y-3">
                 <p className="text-xs font-medium text-muted-foreground">Drain System</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Drain Line Nominal Size (in)</Label>

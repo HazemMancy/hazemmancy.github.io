@@ -509,6 +509,20 @@ export default function ConventionalSeparatorPage() {
                 )}
               </div>
 
+              <div className="pt-2 border-t space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">GPSA K-Factor Corrections</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="chk-pressure-corr" checked={config.applyPressureCorrection} onCheckedChange={v => updateConfig("applyPressureCorrection", !!v)} data-testid="chk-pressure-correction" />
+                    <Label htmlFor="chk-pressure-corr" className="text-xs">Apply GPSA Fig 7-9 pressure correction</Label>
+                  </div>
+                  <div><Label className="text-xs mb-1.5 block">Foam Derating Factor (0.5\u20131.0)</Label>
+                    <Input type="number" step="0.05" min={0.5} max={1} value={config.foamFactor} onChange={e => updateConfig("foamFactor", Math.max(0.5, Math.min(1, parseFloat(e.target.value) || 0.7)))} data-testid="input-foam-factor" />
+                    <p className="text-xs text-muted-foreground mt-1">Applied when foam is flagged on any case (typical 0.5\u20130.7)</p>
+                  </div>
+                </div>
+              </div>
+
               {config.orientation === "horizontal" && (
                 <div className="pt-2 border-t space-y-3">
                   <p className="text-xs font-medium text-muted-foreground">Horizontal Vessel Parameters</p>

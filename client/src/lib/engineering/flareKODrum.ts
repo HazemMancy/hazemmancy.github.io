@@ -40,6 +40,7 @@ export interface KODrumConfig {
   drainLineSize: number;
   drainRate: number;
   allowances: KODrumAllowances;
+  applyPressureCorrection: boolean;
 }
 
 export interface KODrumAllowances {
@@ -98,6 +99,7 @@ export interface GeometryResult {
   liquidLevelPercent: number;
   LD_ratio: number;
   mistFaceVelocity: number;
+  minimumDiameterApplied: boolean;
   steps: CalcStep[];
 }
 
@@ -114,7 +116,8 @@ export type EngFlag =
   | "LD_OUT_OF_RANGE"
   | "GAS_VELOCITY_EXCEEDED"
   | "HIGH_LIQUID_LEVEL"
-  | "HIGH_PRESSURE";
+  | "HIGH_PRESSURE"
+  | "MINIMUM_DIAMETER_APPLIED";
 
 export const FLAG_LABELS: Record<EngFlag, string> = {
   TRANSIENT_REVIEW: "Flare KO drum service — transient loads may govern; dynamic simulation review required",
@@ -130,6 +133,7 @@ export const FLAG_LABELS: Record<EngFlag, string> = {
   GAS_VELOCITY_EXCEEDED: "Actual gas velocity exceeds Souders-Brown limit",
   HIGH_LIQUID_LEVEL: "Liquid level exceeds 75% — increase vessel size or drain capacity",
   HIGH_PRESSURE: "High pressure service — wall thickness and weight may govern",
+  MINIMUM_DIAMETER_APPLIED: "API 521 minimum diameter of 1500 mm applied — calculated diameter was smaller",
 };
 
 export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
@@ -146,6 +150,7 @@ export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
   GAS_VELOCITY_EXCEEDED: "error",
   HIGH_LIQUID_LEVEL: "error",
   HIGH_PRESSURE: "info",
+  MINIMUM_DIAMETER_APPLIED: "info",
 };
 
 export interface FlareKODrumFullResult {
@@ -209,6 +214,7 @@ export const DEFAULT_CONFIG: KODrumConfig = {
   drainLineSize: 4,
   drainRate: 0,
   allowances: { ...DEFAULT_ALLOWANCES },
+  applyPressureCorrection: false,
 };
 
 export const DEFAULT_HOLDUP: HoldupBasis = {
@@ -220,6 +226,28 @@ export const K_GUIDANCE_KO: Record<string, { range: [number, number]; typical: n
   "Bare vessel (no internals)": { range: [0.02, 0.05], typical: 0.035, notes: "Conservative gravity settling per API 521" },
   "With wire mesh pad": { range: [0.04, 0.08], typical: 0.061, notes: "Mist eliminator installed — confirm with vendor" },
 };
+
+function computeKPressureCorrection(P_barg: number): { Cp: number; steps: CalcStep[] } {
+  const steps: CalcStep[] = [];
+  let Cp: number;
+  if (P_barg <= 6.9) {
+    Cp = 1.0;
+  } else {
+    Cp = Math.max(0.5, 1.0 - 0.00483 * (P_barg - 6.9));
+  }
+  steps.push({
+    label: "Pressure correction (GPSA Fig 7-9)",
+    equation: P_barg <= 6.9
+      ? "Cp = 1.0 (P \u2264 6.9 barg)"
+      : "Cp = max(0.5, 1.0 \u2212 0.00483 \u00D7 (P \u2212 6.9))",
+    substitution: P_barg <= 6.9
+      ? `Cp = 1.0 (P = ${P_barg.toFixed(2)} barg)`
+      : `Cp = max(0.5, 1.0 \u2212 0.00483 \u00D7 (${P_barg.toFixed(2)} \u2212 6.9))`,
+    result: Cp,
+    unit: "-",
+  });
+  return { Cp, steps };
+}
 
 function segmentAreaFraction(h_over_D: number): number {
   if (h_over_D <= 0) return 0;
@@ -504,6 +532,20 @@ function assembleGeometry(
     unit: "mm",
   });
 
+  const API_521_MIN_DIAMETER_MM = 1500;
+  let minimumDiameterApplied = false;
+  if (D_mm < API_521_MIN_DIAMETER_MM) {
+    minimumDiameterApplied = true;
+    steps.push({
+      label: "API 521 minimum diameter",
+      equation: "D = max(D_calc, 1500 mm)",
+      substitution: `D = max(${D_mm}, ${API_521_MIN_DIAMETER_MM})`,
+      result: API_521_MIN_DIAMETER_MM,
+      unit: "mm",
+    });
+    D_mm = API_521_MIN_DIAMETER_MM;
+  }
+
   const D_m = D_mm / 1000;
   const A_vessel = (PI / 4) * D_m * D_m;
   let L_mm: number;
@@ -634,6 +676,7 @@ function assembleGeometry(
     liquidLevelPercent,
     LD_ratio,
     mistFaceVelocity,
+    minimumDiameterApplied,
     steps,
   };
 }
@@ -667,6 +710,8 @@ function collectFlags(
   const anyHighPressure = scenarios.some(s => s.gasPressure > 30);
   if (anyHighPressure) flags.push("HIGH_PRESSURE");
 
+  if (geometry.minimumDiameterApplied) flags.push("MINIMUM_DIAMETER_APPLIED");
+
   return flags;
 }
 
@@ -699,6 +744,9 @@ function generateRecommendations(flags: EngFlag[], config: KODrumConfig): string
   }
   if (config.internals === "wire_mesh") {
     recs.push("Confirm mist eliminator specification with vendor — pressure drop and capacity to be verified.");
+  }
+  if (flags.includes("MINIMUM_DIAMETER_APPLIED")) {
+    recs.push("API 521 minimum diameter of 1500 mm was applied — calculated gas-capacity diameter was smaller. Verify if project-specific requirements allow a smaller vessel.");
   }
 
   return recs;
@@ -735,6 +783,8 @@ function generateAssumptions(config: KODrumConfig, holdup: HoldupBasis): string[
     "Steady-state sizing — transient peaks may require additional verification.",
     "Vessel heads (2:1 ellipsoidal assumed) not included in volume calculation.",
     "Corrosion allowance, insulation, and weight not included in preliminary sizing.",
+    "API 521 minimum vessel diameter of 1500 mm enforced for flare KO drum service.",
+    `Pressure correction on K-factor: ${config.applyPressureCorrection ? "enabled" : "disabled (typical for near-atmospheric flare KO service)"}.`,
   ];
 
   if (holdup.rainoutFraction > 0) {
@@ -774,16 +824,31 @@ export function calculateFlareKODrum(
     let A_req: number;
     let allSteps: CalcStep[] = [...flowSteps];
 
+    let K_eff = config.kValue;
+    if (config.applyPressureCorrection) {
+      const P_barg = s.gasPressure - 1.01325;
+      const { Cp, steps: cpSteps } = computeKPressureCorrection(P_barg);
+      K_eff = config.kValue * Cp;
+      allSteps = [...allSteps, ...cpSteps];
+      allSteps.push({
+        label: "Effective K (pressure-corrected)",
+        equation: "K_eff = K_base \u00D7 Cp",
+        substitution: `K_eff = ${config.kValue} \u00D7 ${Cp.toFixed(4)}`,
+        result: K_eff,
+        unit: "-",
+      });
+    }
+
     if (isVertical) {
-      const sb = computeSoudersBrown(config.kValue, s.liquidDensity, s.gasDensity, Qg_m3s, gasAreaFrac, s.name);
+      const sb = computeSoudersBrown(K_eff, s.liquidDensity, s.gasDensity, Qg_m3s, gasAreaFrac, s.name);
       D_req_mm = sb.D_req_m * 1000;
       v_s_max = sb.v_s_max;
       A_req = sb.A_req;
       allSteps = [...allSteps, ...sb.steps];
     } else {
-      const hz = solveHorizontalDiameter(config.kValue, s.liquidDensity, s.gasDensity, Qg_m3s, config.levelFraction);
+      const hz = solveHorizontalDiameter(K_eff, s.liquidDensity, s.gasDensity, Qg_m3s, config.levelFraction);
       D_req_mm = hz.D_m * 1000;
-      v_s_max = config.kValue * Math.sqrt((s.liquidDensity - s.gasDensity) / s.gasDensity);
+      v_s_max = K_eff * Math.sqrt((s.liquidDensity - s.gasDensity) / s.gasDensity);
       A_req = Qg_m3s / v_s_max;
       allSteps = [...allSteps, ...hz.steps];
     }
