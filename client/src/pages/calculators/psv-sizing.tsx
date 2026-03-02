@@ -11,6 +11,7 @@ import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import { AiChatButton } from "@/components/engineering/ai-chat-button";
 import { COMMON_GASES, COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
@@ -333,6 +334,7 @@ export default function PSVSizingPage() {
           <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
+              <AiChatButton variant="relief" />
           <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
         </div>
       </div>

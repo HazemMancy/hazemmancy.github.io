@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { calculateSafeSpan, type SafeSpanInput, type SafeSpanResult } from "@/lib/engineering/piping/safeSpans";
 import { exportToExcel, exportToPDF, exportToJSON, type ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import { AiChatButton } from "@/components/engineering/ai-chat-button";
 
 export default function SafeSpansPage() {
   const [pipeOD, setPipeOD] = useState(219.1);
@@ -158,6 +159,7 @@ export default function SafeSpansPage() {
                 <div className="flex gap-2">
                   <Button onClick={handleCalculate} size="sm" data-testid="button-calculate"><Calculator className="w-3.5 h-3.5 mr-1.5" />Calculate</Button>
                   <Button onClick={handleReset} variant="outline" size="sm" data-testid="button-reset"><RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset</Button>
+              <AiChatButton />
                 </div>
               </CardContent>
             </Card>

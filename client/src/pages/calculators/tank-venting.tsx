@@ -10,6 +10,7 @@ import { UnitSelector } from "@/components/engineering/unit-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import { AiChatButton } from "@/components/engineering/ai-chat-button";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import {
@@ -263,6 +264,7 @@ export default function TankVentingPage() {
               <Button variant="outline" size="sm" onClick={handleReset} data-testid="button-reset">
                 <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset
               </Button>
+              <AiChatButton />
             </div>
           </div>
 

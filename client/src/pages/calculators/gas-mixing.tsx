@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import { AiChatButton } from "@/components/engineering/ai-chat-button";
 import { COMMON_GASES, type GasCategory } from "@/lib/engineering/constants";
 import {
   type GasMixProject, type GasMixComponent, type GasMixStream,
@@ -318,6 +319,7 @@ export default function GasMixingPage() {
           <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
+              <AiChatButton />
         </div>
       </div>
 

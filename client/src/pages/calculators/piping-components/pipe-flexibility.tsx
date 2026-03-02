@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { calculateFlexibility, MATERIAL_PROPERTIES, type FlexibilityInput, type FlexibilityResult } from "@/lib/engineering/piping/flexibility";
 import { exportToExcel, exportToPDF, exportToJSON, type ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
+import { AiChatButton } from "@/components/engineering/ai-chat-button";
 
 export default function PipeFlexibilityPage() {
   const [material, setMaterial] = useState("CS_A106B");
@@ -163,6 +164,7 @@ export default function PipeFlexibilityPage() {
                 <div className="flex gap-2">
                   <Button onClick={handleCalculate} size="sm" data-testid="button-calculate"><Calculator className="w-3.5 h-3.5 mr-1.5" />Calculate</Button>
                   <Button onClick={handleReset} variant="outline" size="sm" data-testid="button-reset"><RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset</Button>
+              <AiChatButton />
                 </div>
               </CardContent>
             </Card>
