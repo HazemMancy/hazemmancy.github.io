@@ -163,16 +163,25 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
     result: `n = ${n.toFixed(6)}`,
   });
 
-  const massFlowRate_kgs = (input.gasFlowRate * MW) / (3600 * 1000);
+  const V_molar = (GAS_CONSTANT * STANDARD_TEMPERATURE) / STANDARD_PRESSURE;
+  const massFlowRate_kgs = (input.gasFlowRate * MW) / (V_molar * 3600);
   const massFlowRate_kgh = massFlowRate_kgs * 3600;
   intermediateValues["massFlowRate_kg_s"] = massFlowRate_kgs;
   intermediateValues["massFlowRate_kg_h"] = massFlowRate_kgh;
+  intermediateValues["V_molar"] = V_molar;
+
+  traceSteps.push({
+    name: "Molar Volume at Standard Conditions",
+    equation: "V_m = R \u00D7 T_std / P_std",
+    substitution: `V_m = ${GAS_CONSTANT.toFixed(2)} \u00D7 ${STANDARD_TEMPERATURE.toFixed(2)} / ${STANDARD_PRESSURE.toFixed(0)}`,
+    result: `V_m = ${V_molar.toFixed(4)} m\u00B3/kmol`,
+  });
 
   traceSteps.push({
     name: "Mass Flow Rate",
-    equation: "\u1E41 = (Q_std * MW) / (3600 * 1000)",
-    substitution: `\u1E41 = (${input.gasFlowRate.toFixed(2)} * ${MW.toFixed(4)}) / (3600 * 1000)`,
-    result: `\u1E41 = ${massFlowRate_kgs.toFixed(6)} kg/s (${massFlowRate_kgh.toFixed(4)} kg/h)`,
+    equation: "\u1E41 = (Q_std \u00D7 MW) / (V_m \u00D7 3600)",
+    substitution: `\u1E41 = (${input.gasFlowRate.toFixed(2)} \u00D7 ${MW.toFixed(4)}) / (${V_molar.toFixed(4)} \u00D7 3600)`,
+    result: `\u1E41 = ${massFlowRate_kgs.toFixed(6)} kg/s (${massFlowRate_kgh.toFixed(2)} kg/h)`,
   });
 
   const volumetricFlowRate_std = input.gasFlowRate;

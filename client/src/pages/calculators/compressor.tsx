@@ -406,7 +406,12 @@ export default function CompressorPage() {
                       <Button
                         size="sm"
                         variant={compressorType === "centrifugal" ? "default" : "outline"}
-                        onClick={() => { setCompressorType("centrifugal"); setResult(null); setError(null); }}
+                        onClick={() => {
+                          setCompressorType("centrifugal");
+                          setCompressionModel("polytropic");
+                          setForm(p => ({ ...p, polytropicEfficiency: "78", mechanicalEfficiency: "98", maxDischargeTemperature: "200" }));
+                          setResult(null); setError(null);
+                        }}
                         data-testid="button-type-centrifugal"
                       >
                         Centrifugal
@@ -414,7 +419,12 @@ export default function CompressorPage() {
                       <Button
                         size="sm"
                         variant={compressorType === "reciprocating" ? "default" : "outline"}
-                        onClick={() => { setCompressorType("reciprocating"); setResult(null); setError(null); }}
+                        onClick={() => {
+                          setCompressorType("reciprocating");
+                          setCompressionModel("isentropic");
+                          setForm(p => ({ ...p, polytropicEfficiency: "85", mechanicalEfficiency: "95", maxDischargeTemperature: "150" }));
+                          setResult(null); setError(null);
+                        }}
                         data-testid="button-type-reciprocating"
                       >
                         Reciprocating
