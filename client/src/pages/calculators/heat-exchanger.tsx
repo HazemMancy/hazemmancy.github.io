@@ -36,21 +36,18 @@ import {
   Thermometer, ClipboardList, Droplets, Settings2, BarChart3,
   ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  Calculator, Gauge, Box, FileText, FileSpreadsheet,
+  Calculator, Gauge, Box, FileText, FileSpreadsheet, Zap,
 } from "lucide-react";
 
 const TABS = [
-  { id: "project", label: "Project", icon: ClipboardList, step: 1 },
-  { id: "streams", label: "Streams", icon: Droplets, step: 2 },
-  { id: "config", label: "Config", icon: Settings2, step: 3 },
-  { id: "lmtd", label: "LMTD", icon: Calculator, step: 4 },
-  { id: "u_area", label: "U & Area", icon: Gauge, step: 5 },
-  { id: "geometry", label: "Geometry", icon: Box, step: 6 },
-  { id: "results", label: "Results", icon: BarChart3, step: 7 },
+  { id: "basis", label: "Basis", icon: ClipboardList, step: 1, desc: "Project info & stream data" },
+  { id: "config", label: "Configuration", icon: Settings2, step: 2, desc: "Exchanger type, U & fouling" },
+  { id: "thermal", label: "Thermal Design", icon: Calculator, step: 3, desc: "Calculate duty, LMTD & area" },
+  { id: "geometry", label: "Geometry", icon: Box, step: 4, desc: "Tube sizing & TEMA guidance" },
+  { id: "summary", label: "Summary", icon: BarChart3, step: 5, desc: "Results, export & review" },
 ];
 
 const pU = (param: string, us: UnitSystem) => getUnit(param, us);
-
 const numVal = (v: number): string | number => (v === 0 ? "" : v);
 const tempVal = (v: number): number => v;
 
@@ -62,7 +59,7 @@ function fmtN(n: number, d = 2): string {
 }
 
 export default function HeatExchangerPage() {
-  const [activeTab, setActiveTab] = useState("project");
+  const [activeTab, setActiveTab] = useState("basis");
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
   const [project, setProject] = useState<HXProject>({ ...DEFAULT_PROJECT });
   const [cases, setCases] = useState<OperatingCase[]>([{ ...DEFAULT_CASE }]);
@@ -92,10 +89,7 @@ export default function HeatExchangerPage() {
   const addCase = () => {
     const id = `case_${Date.now()}`;
     setCases(prev => [...prev, {
-      ...DEFAULT_CASE,
-      id,
-      name: `Case ${prev.length + 1}`,
-      caseType: "maximum",
+      ...DEFAULT_CASE, id, name: `Case ${prev.length + 1}`, caseType: "maximum",
       hotSide: { ...DEFAULT_STREAM, name: "Hot Side" },
       coldSide: { ...DEFAULT_STREAM, name: "Cold Side" },
     }]);
@@ -148,8 +142,6 @@ export default function HeatExchangerPage() {
           setTubeGeoResult(tgr);
         }
       }
-
-      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);
@@ -173,7 +165,7 @@ export default function HeatExchangerPage() {
     setGeoArea("");
     setTubeGeoResult(null); setTemaGuidance(null);
     setResult(null); setError(null);
-    setActiveTab("project");
+    setActiveTab("basis");
   };
 
   const handleExportPDF = () => {
@@ -184,107 +176,90 @@ export default function HeatExchangerPage() {
     if (!printWindow) return;
     printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.print();
-    };
+    printWindow.onload = () => { printWindow.print(); };
   };
 
   const buildExportData = (): ExportDatasheet | null => {
     if (!result || !result.governingCase) return null;
     const gc = result.governingCase;
-
     const inputs: ExportDatasheet["inputs"] = [
       { label: "Flow Arrangement", value: config.arrangement.replace(/_/g, " ") },
       { label: "Shell Passes", value: config.shellPasses },
       { label: "Tube Passes", value: config.tubePasses },
-      { label: "Min Approach Temp", value: config.approachTempMin, unit: "\u00B0C" },
+      { label: "Min Approach Temp", value: config.approachTempMin, unit: "°C" },
       { label: "F-Factor Value", value: config.fValue },
       { label: "U Mode", value: uInput.mode.replace(/_/g, " ") },
     ];
-
     if (uInput.mode === "clean_plus_fouling") {
       inputs.push(
-        { label: "U_clean", value: uInput.uClean, unit: "W/(m\u00B2\u00B7K)" },
-        { label: "Rf_hot", value: uInput.rfHot, unit: "m\u00B2\u00B7K/W" },
-        { label: "Rf_cold", value: uInput.rfCold, unit: "m\u00B2\u00B7K/W" },
+        { label: "U_clean", value: uInput.uClean, unit: "W/(m²·K)" },
+        { label: "Rf_hot", value: uInput.rfHot, unit: "m²·K/W" },
+        { label: "Rf_cold", value: uInput.rfCold, unit: "m²·K/W" },
       );
     } else if (uInput.mode === "fouled_direct") {
-      inputs.push({ label: "U_fouled", value: uInput.uFouled, unit: "W/(m\u00B2\u00B7K)" });
+      inputs.push({ label: "U_fouled", value: uInput.uFouled, unit: "W/(m²·K)" });
     } else if (uInput.mode === "estimated") {
       inputs.push({ label: "Service Category", value: uInput.serviceCategory || "-" });
     }
     inputs.push({ label: "Design Margin", value: uInput.designMargin, unit: "%" });
-
     cases.forEach((c, i) => {
       inputs.push(
         { label: `Case ${i + 1} Name`, value: c.name },
         { label: `Case ${i + 1} Type`, value: c.caseType },
-        { label: `Case ${i + 1} Hot T_in`, value: c.hotSide.tIn, unit: "\u00B0C" },
-        { label: `Case ${i + 1} Hot T_out`, value: c.hotSide.tOut, unit: "\u00B0C" },
+        { label: `Case ${i + 1} Hot T_in`, value: c.hotSide.tIn, unit: "°C" },
+        { label: `Case ${i + 1} Hot T_out`, value: c.hotSide.tOut, unit: "°C" },
         { label: `Case ${i + 1} Hot Flow`, value: c.hotSide.mDot, unit: "kg/h" },
-        { label: `Case ${i + 1} Hot Cp`, value: c.hotSide.cp, unit: "kJ/(kg\u00B7K)" },
-        { label: `Case ${i + 1} Cold T_in`, value: c.coldSide.tIn, unit: "\u00B0C" },
-        { label: `Case ${i + 1} Cold T_out`, value: c.coldSide.tOut, unit: "\u00B0C" },
+        { label: `Case ${i + 1} Hot Cp`, value: c.hotSide.cp, unit: "kJ/(kg·K)" },
+        { label: `Case ${i + 1} Cold T_in`, value: c.coldSide.tIn, unit: "°C" },
+        { label: `Case ${i + 1} Cold T_out`, value: c.coldSide.tOut, unit: "°C" },
         { label: `Case ${i + 1} Cold Flow`, value: c.coldSide.mDot, unit: "kg/h" },
-        { label: `Case ${i + 1} Cold Cp`, value: c.coldSide.cp, unit: "kJ/(kg\u00B7K)" },
+        { label: `Case ${i + 1} Cold Cp`, value: c.coldSide.cp, unit: "kJ/(kg·K)" },
       );
     });
-
     const results: ExportDatasheet["results"] = [
       { label: "Heat Duty", value: gc.dutyKW, unit: "kW", highlight: true },
       { label: "Hot Side Duty", value: gc.hotDutyKW, unit: "kW" },
       { label: "Cold Side Duty", value: gc.coldDutyKW, unit: "kW" },
-      { label: "\u0394T1", value: gc.dT1, unit: "\u00B0C" },
-      { label: "\u0394T2", value: gc.dT2, unit: "\u00B0C" },
-      { label: "LMTD", value: gc.lmtd, unit: "\u00B0C" },
+      { label: "ΔT1", value: gc.dT1, unit: "°C" },
+      { label: "ΔT2", value: gc.dT2, unit: "°C" },
+      { label: "LMTD", value: gc.lmtd, unit: "°C" },
       { label: "R (capacity ratio)", value: gc.R, unit: "-" },
       { label: "P (effectiveness)", value: gc.P, unit: "-" },
       { label: "F (correction factor)", value: gc.F, unit: "-" },
-      { label: "Corrected LMTD", value: gc.correctedLMTD, unit: "\u00B0C", highlight: true },
-      { label: "U_clean", value: gc.uClean, unit: "W/(m\u00B2\u00B7K)" },
-      { label: "U_fouled", value: gc.uFouled, unit: "W/(m\u00B2\u00B7K)" },
-      { label: "Total Rf", value: gc.totalFoulingResistance, unit: "m\u00B2\u00B7K/W" },
+      { label: "Corrected LMTD", value: gc.correctedLMTD, unit: "°C", highlight: true },
+      { label: "U_clean", value: gc.uClean, unit: "W/(m²·K)" },
+      { label: "U_fouled", value: gc.uFouled, unit: "W/(m²·K)" },
+      { label: "Total Rf", value: gc.totalFoulingResistance, unit: "m²·K/W" },
       { label: "UA_req", value: gc.uaReq, unit: "W/K" },
-      { label: "A_req", value: gc.aReq, unit: "m\u00B2" },
-      { label: "A_design", value: gc.aDesign, unit: "m\u00B2", highlight: true },
+      { label: "A_req", value: gc.aReq, unit: "m²" },
+      { label: "A_design", value: gc.aDesign, unit: "m²", highlight: true },
       { label: "Overdesign", value: gc.overdesignPct, unit: "%" },
       { label: "Cleanliness Factor", value: gc.cleanlinessFactor * 100, unit: "%" },
-      { label: "Approach Temp", value: gc.approachTemp, unit: "\u00B0C" },
-      { label: "\u03B5 (effectiveness)", value: gc.effectiveness * 100, unit: "%" },
+      { label: "Approach Temp", value: gc.approachTemp, unit: "°C" },
+      { label: "ε (effectiveness)", value: gc.effectiveness * 100, unit: "%" },
       { label: "NTU", value: gc.ntu, unit: "-" },
       { label: "C_r (capacity ratio)", value: gc.capacityRatio, unit: "-" },
     ];
-
     const calcSteps: ExportDatasheet["calcSteps"] = gc.trace.steps.map(s => ({
-      label: s.name,
-      equation: s.equation,
-      value: s.result,
-      unit: "",
+      label: s.name, equation: s.equation, value: s.result, unit: "",
     }));
-
     const additionalSections: ExportDatasheet["additionalSections"] = [];
     if (result.cases.length > 1) {
       additionalSections.push({
         title: "Case Comparison — A_design",
-        items: result.cases.map(cr => ({
-          label: cr.caseName,
-          value: cr.aDesign,
-          unit: "m\u00B2",
-        })),
+        items: result.cases.map(cr => ({ label: cr.caseName, value: cr.aDesign, unit: "m²" })),
       });
     }
-
     if (result.geometry) {
       additionalSections.push({
         title: "Geometry Check",
         items: [
-          { label: "A selected", value: result.geometry.aSelected, unit: "m\u00B2" },
+          { label: "A selected", value: result.geometry.aSelected, unit: "m²" },
           { label: "Q achieved", value: result.geometry.qAchieved, unit: "kW" },
           { label: "Excess area", value: result.geometry.excessArea, unit: "%" },
         ],
       });
     }
-
     return {
       calculatorName: "Heat Exchanger Sizing (LMTD)",
       projectInfo: [
@@ -293,12 +268,11 @@ export default function HeatExchangerPage() {
         { label: "Engineer", value: project.engineer || "-" },
         { label: "Date", value: project.date || "-" },
       ],
-      inputs,
-      results,
+      inputs, results,
       calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
       additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
       methodology: [
-        "LMTD method: Q = U \u00D7 A \u00D7 F \u00D7 LMTD",
+        "LMTD method: Q = U × A × F × LMTD",
         "F-correction factor for multi-pass configurations (Bowman et al.)",
         "U_fouled = 1 / (1/U_clean + Rf_hot + Rf_cold)",
         "Design area includes user-specified margin percentage",
@@ -332,7 +306,7 @@ export default function HeatExchangerPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-calc-title">Heat Exchanger Sizing</h1>
-            <p className="text-sm text-muted-foreground">LMTD method with F-correction factor</p>
+            <p className="text-sm text-muted-foreground">LMTD method · F-correction · TEMA guidance</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -343,89 +317,121 @@ export default function HeatExchangerPage() {
           <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
-              <AiChatButton />
+          <AiChatButton />
         </div>
+      </div>
+
+      <div className="flex items-center gap-1 mb-6 overflow-x-auto pb-1">
+        {TABS.map((t, i) => {
+          const isCurrent = activeTab === t.id;
+          const isCompleted = tabIdx > i;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap
+                ${isCurrent ? "bg-primary/15 text-primary border border-primary/30" :
+                  isCompleted ? "bg-muted/50 text-foreground hover:bg-muted/80" :
+                  "text-muted-foreground hover:bg-muted/30"}`}
+              data-testid={`step-${t.id}`}
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0
+                ${isCurrent ? "bg-primary text-primary-foreground" :
+                  isCompleted ? "bg-primary/40 text-primary-foreground" :
+                  "bg-muted text-muted-foreground"}`}>
+                {isCompleted ? "✓" : t.step}
+              </span>
+              <span className="hidden sm:inline">{t.label}</span>
+              {i < TABS.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground/40 ml-1" />}
+            </button>
+          );
+        })}
       </div>
 
       {result && result.globalFlags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-4" data-testid="flags-banner">
           {result.globalFlags.map(f => (
             <Badge key={f} variant={FLAG_SEVERITY[f] === "error" ? "destructive" : "secondary"} className="text-xs" data-testid={`flag-${f}`}>
-              {FLAG_SEVERITY[f] === "error" ? <AlertTriangle className="w-3 h-3 mr-1" /> :
-               FLAG_SEVERITY[f] === "warning" ? <AlertTriangle className="w-3 h-3 mr-1" /> :
-               <Info className="w-3 h-3 mr-1" />}
+              {FLAG_SEVERITY[f] === "error" || FLAG_SEVERITY[f] === "warning"
+                ? <AlertTriangle className="w-3 h-3 mr-1" />
+                : <Info className="w-3 h-3 mr-1" />}
               {f.replace(/_/g, " ")}
             </Badge>
           ))}
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${TABS.length}, 1fr)` }}>
-          {TABS.map(t => (
-            <TabsTrigger key={t.id} value={t.id} className="text-xs gap-1" data-testid={`tab-${t.id}`}>
-              <t.icon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t.label}</span>
-              <span className="sm:hidden">{t.step}</span>
-            </TabsTrigger>
-          ))}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+        <TabsList className="hidden">
+          {TABS.map(t => <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>)}
         </TabsList>
 
-        <TabsContent value="project">
-          <Card>
-            <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Project Setup</h3></CardHeader>
-            <CardContent className="space-y-4 pt-0">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div><Label className="text-xs mb-1.5 block">Case Name / ID</Label>
-                  <Input value={project.name} onChange={e => updateProject("name", e.target.value)} data-testid="input-case-name" /></div>
-                <div><Label className="text-xs mb-1.5 block">Case Number</Label>
-                  <Input value={project.caseId} onChange={e => updateProject("caseId", e.target.value)} data-testid="input-case-id" /></div>
-                <div><Label className="text-xs mb-1.5 block">Engineer</Label>
-                  <Input value={project.engineer} onChange={e => updateProject("engineer", e.target.value)} data-testid="input-engineer" /></div>
-                <div><Label className="text-xs mb-1.5 block">Date</Label>
-                  <Input type="date" value={project.date} onChange={e => updateProject("date", e.target.value)} data-testid="input-date" /></div>
-              </div>
-              <div className="pt-2 border-t space-y-3">
-                <p className="text-xs font-medium text-muted-foreground">Calculation Options</p>
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={project.strictEnergyBalance} onCheckedChange={v => updateProject("strictEnergyBalance", v)} id="strict-eb" data-testid="check-strict-eb" />
-                  <Label htmlFor="strict-eb" className="text-xs">Strict energy balance enforcement</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={project.allowApproxF} onCheckedChange={v => updateProject("allowApproxF", v)} id="approx-f" data-testid="check-approx-f" />
-                  <Label htmlFor="approx-f" className="text-xs">Allow approximate F correlation</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={project.allowEstimatedU} onCheckedChange={v => updateProject("allowEstimatedU", v)} id="est-u" data-testid="check-est-u" />
-                  <Label htmlFor="est-u" className="text-xs">Allow approximate U estimation</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={project.showSteps} onCheckedChange={v => updateProject("showSteps", v)} id="show-steps" data-testid="check-show-steps" />
-                  <Label htmlFor="show-steps" className="text-xs">Show step-by-step calculation trace</Label>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Label className="text-xs whitespace-nowrap">Energy balance tolerance (%)</Label>
-                  <Input type="number" className="w-20" value={project.balanceTolerance} onChange={e => updateProject("balanceTolerance", parseFloat(e.target.value) || 5)} data-testid="input-balance-tol" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="streams">
+        {/* ─── TAB 1: BASIS ─── */}
+        <TabsContent value="basis">
           <div className="space-y-4">
+            <StepHeader step={1} title="Define Basis of Design" desc="Enter project information and operating conditions for hot and cold streams." />
+
+            <Card>
+              <CardHeader className="pb-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-primary/70" /> Project Setup
+                </h3>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-0">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div><Label className="text-xs mb-1.5 block">Case Name / ID</Label>
+                    <Input value={project.name} onChange={e => updateProject("name", e.target.value)} data-testid="input-case-name" /></div>
+                  <div><Label className="text-xs mb-1.5 block">Case Number</Label>
+                    <Input value={project.caseId} onChange={e => updateProject("caseId", e.target.value)} data-testid="input-case-id" /></div>
+                  <div><Label className="text-xs mb-1.5 block">Engineer</Label>
+                    <Input value={project.engineer} onChange={e => updateProject("engineer", e.target.value)} data-testid="input-engineer" /></div>
+                  <div><Label className="text-xs mb-1.5 block">Date</Label>
+                    <Input type="date" value={project.date} onChange={e => updateProject("date", e.target.value)} data-testid="input-date" /></div>
+                </div>
+                <div className="pt-3 border-t">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Options</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={project.strictEnergyBalance} onCheckedChange={v => updateProject("strictEnergyBalance", v)} id="strict-eb" data-testid="check-strict-eb" />
+                      <Label htmlFor="strict-eb" className="text-xs">Strict energy balance enforcement</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={project.allowApproxF} onCheckedChange={v => updateProject("allowApproxF", v)} id="approx-f" data-testid="check-approx-f" />
+                      <Label htmlFor="approx-f" className="text-xs">Allow approximate F correlation</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={project.allowEstimatedU} onCheckedChange={v => updateProject("allowEstimatedU", v)} id="est-u" data-testid="check-est-u" />
+                      <Label htmlFor="est-u" className="text-xs">Allow approximate U estimation</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={project.showSteps} onCheckedChange={v => updateProject("showSteps", v)} id="show-steps" data-testid="check-show-steps" />
+                      <Label htmlFor="show-steps" className="text-xs">Show step-by-step calculation trace</Label>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Label className="text-xs whitespace-nowrap">Energy balance tolerance (%)</Label>
+                      <Input type="number" className="w-20 h-8 text-xs" value={project.balanceTolerance} onChange={e => updateProject("balanceTolerance", parseFloat(e.target.value) || 5)} data-testid="input-balance-tol" />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold text-sm">Operating Cases & Stream Data</h3>
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Droplets className="w-4 h-4 text-primary/70" /> Operating Cases & Stream Data
+              </h3>
               <Button size="sm" variant="outline" onClick={addCase} data-testid="button-add-case">
                 <Plus className="w-3.5 h-3.5 mr-1" /> Add Case
               </Button>
             </div>
+
             {unitSystem === "Field" && (
               <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded-md">
                 <Info className="w-3 h-3 inline mr-1" />
-                Temperatures in {pU("temperature", unitSystem)}, flows in {pU("flowMass", unitSystem)}. Cp is always in kJ/(kg·K) per industry convention.
+                Temperatures in {pU("temperature", unitSystem)}, flows in {pU("flowMass", unitSystem)}. Cp always in kJ/(kg·K).
               </p>
             )}
+
             {cases.map((c, idx) => (
               <Card key={c.id}>
                 <CardHeader className="pb-2">
@@ -464,9 +470,9 @@ export default function HeatExchangerPage() {
                       <Input type="number" className="w-32 h-8 text-xs" value={c.dutyKW || ""} onChange={e => updateCase(idx, "dutyKW", parseFloat(e.target.value) || 0)} data-testid={`input-duty-${idx}`} />
                     </div>
                   )}
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-red-400/80">Hot Side</p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 p-3 rounded-lg border border-red-500/15 bg-red-950/5">
+                      <p className="text-xs font-semibold text-red-400/90 uppercase tracking-wider">Hot Side</p>
                       <div className="grid gap-2 grid-cols-2">
                         <div><Label className="text-xs mb-1 block">T_in ({pU("temperature", unitSystem)})</Label>
                           <Input type="number" className="h-8 text-xs" value={tempVal(c.hotSide.tIn)} onChange={e => updateCaseHot(idx, "tIn", parseFloat(e.target.value) || 0)} data-testid={`input-thi-${idx}`} /></div>
@@ -489,8 +495,8 @@ export default function HeatExchangerPage() {
                         </div>
                       )}
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-blue-400/80">Cold Side</p>
+                    <div className="space-y-2 p-3 rounded-lg border border-blue-500/15 bg-blue-950/5">
+                      <p className="text-xs font-semibold text-blue-400/90 uppercase tracking-wider">Cold Side</p>
                       <div className="grid gap-2 grid-cols-2">
                         <div><Label className="text-xs mb-1 block">T_in ({pU("temperature", unitSystem)})</Label>
                           <Input type="number" className="h-8 text-xs" value={tempVal(c.coldSide.tIn)} onChange={e => updateCaseCold(idx, "tIn", parseFloat(e.target.value) || 0)} data-testid={`input-tci-${idx}`} /></div>
@@ -520,54 +526,58 @@ export default function HeatExchangerPage() {
           </div>
         </TabsContent>
 
+        {/* ─── TAB 2: CONFIGURATION ─── */}
         <TabsContent value="config">
-          <Card>
-            <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Exchanger Configuration</h3></CardHeader>
-            <CardContent className="space-y-4 pt-0">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label className="text-xs mb-1.5 block">Flow Arrangement</Label>
-                  <Select value={config.arrangement} onValueChange={v => updateConfig("arrangement", v as FlowArrangement)}>
-                    <SelectTrigger data-testid="select-arrangement"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="counter_current">Counter-Current (F = 1)</SelectItem>
-                      <SelectItem value="co_current">Co-Current (F = 1)</SelectItem>
-                      <SelectItem value="1_2_pass">1-2 Shell & Tube (F &lt; 1)</SelectItem>
-                      <SelectItem value="custom_F">Custom (user-entered F)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {(config.arrangement === "1_2_pass") && (
+          <div className="space-y-4">
+            <StepHeader step={2} title="Exchanger Configuration" desc="Set flow arrangement, shell/tube passes, overall heat transfer coefficient, and fouling resistances." />
+
+            <Card>
+              <CardHeader className="pb-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Settings2 className="w-4 h-4 text-primary/70" /> Flow Arrangement & Passes
+                </h3>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-0">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label className="text-xs mb-1.5 block">F-Factor Mode</Label>
-                    <Select value={config.fMode} onValueChange={v => updateConfig("fMode", v as FMode)}>
-                      <SelectTrigger data-testid="select-f-mode"><SelectValue /></SelectTrigger>
+                    <Label className="text-xs mb-1.5 block">Flow Arrangement</Label>
+                    <Select value={config.arrangement} onValueChange={v => updateConfig("arrangement", v as FlowArrangement)}>
+                      <SelectTrigger data-testid="select-arrangement"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="user_entered">User-entered F</SelectItem>
-                        {project.allowApproxF && (
-                          <SelectItem value="approximate_correlation">Approximate correlation</SelectItem>
-                        )}
+                        <SelectItem value="counter_current">Counter-Current (F = 1)</SelectItem>
+                        <SelectItem value="co_current">Co-Current (F = 1)</SelectItem>
+                        <SelectItem value="1_2_pass">1-2 Shell & Tube (F &lt; 1)</SelectItem>
+                        <SelectItem value="custom_F">Custom (user-entered F)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                )}
-                {(config.arrangement === "custom_F" || (config.arrangement === "1_2_pass" && config.fMode === "user_entered")) && (
-                  <div>
-                    <Label className="text-xs mb-1.5 block">F-Factor Value (0.5–1.0)</Label>
-                    <Input type="number" min={0.5} max={1} step={0.01} value={config.fValue} onChange={e => updateConfig("fValue", parseFloat(e.target.value) || 1)} data-testid="input-f-value" />
-                    <p className="text-xs text-muted-foreground mt-1">Typical range: 0.75–1.0. Below 0.75 indicates inefficient configuration.</p>
-                  </div>
-                )}
-                {config.arrangement === "1_2_pass" && config.fMode === "approximate_correlation" && (
-                  <div className="sm:col-span-2 p-3 rounded-md bg-amber-950/30 text-amber-200 text-xs">
-                    <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />
-                    F-factor will be computed from an approximate correlation (Bowman et al.) — verify with TEMA charts or vendor data for final design.
-                  </div>
-                )}
-              </div>
-              <div className="pt-2 border-t">
-                <p className="text-xs font-medium text-muted-foreground mb-3">Pass Information</p>
-                <div className="grid gap-4 sm:grid-cols-2">
+                  {config.arrangement === "1_2_pass" && (
+                    <div>
+                      <Label className="text-xs mb-1.5 block">F-Factor Mode</Label>
+                      <Select value={config.fMode} onValueChange={v => updateConfig("fMode", v as FMode)}>
+                        <SelectTrigger data-testid="select-f-mode"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user_entered">User-entered F</SelectItem>
+                          {project.allowApproxF && <SelectItem value="approximate_correlation">Approximate correlation</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {(config.arrangement === "custom_F" || (config.arrangement === "1_2_pass" && config.fMode === "user_entered")) && (
+                    <div>
+                      <Label className="text-xs mb-1.5 block">F-Factor Value (0.5–1.0)</Label>
+                      <Input type="number" min={0.5} max={1} step={0.01} value={config.fValue} onChange={e => updateConfig("fValue", parseFloat(e.target.value) || 1)} data-testid="input-f-value" />
+                      <p className="text-xs text-muted-foreground mt-1">Typical: 0.75–1.0. Below 0.75 = inefficient configuration.</p>
+                    </div>
+                  )}
+                  {config.arrangement === "1_2_pass" && config.fMode === "approximate_correlation" && (
+                    <div className="sm:col-span-2 p-3 rounded-md bg-amber-950/30 text-amber-200 text-xs">
+                      <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />
+                      F computed from approximate correlation — verify with TEMA charts for final design.
+                    </div>
+                  )}
+                </div>
+                <div className="pt-3 border-t grid gap-4 sm:grid-cols-3">
                   <div><Label className="text-xs mb-1.5 block">Shell Passes</Label>
                     <Input type="number" min={1} value={config.shellPasses} onChange={e => updateConfig("shellPasses", parseInt(e.target.value) || 1)} data-testid="input-shell-passes" /></div>
                   <div><Label className="text-xs mb-1.5 block">Tube Passes</Label>
@@ -575,86 +585,16 @@ export default function HeatExchangerPage() {
                   <div><Label className="text-xs mb-1.5 block">Min Approach Temp ({pU("temperature", unitSystem)})</Label>
                     <Input type="number" value={config.approachTempMin} onChange={e => updateConfig("approachTempMin", parseFloat(e.target.value) || 5)} data-testid="input-approach" /></div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardContent>
+            </Card>
 
-        <TabsContent value="lmtd">
-          <div className="space-y-4">
-            {!result && (
-              <Card><CardContent className="py-8 text-center">
-                <Calculator className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-4">Configure streams and click Calculate to see LMTD results</p>
-                <Button onClick={handleCalculate} data-testid="button-calculate-lmtd">Calculate</Button>
-              </CardContent></Card>
-            )}
-            {result && result.cases.map((cr, idx) => (
-              <Card key={idx}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <h3 className="font-semibold text-sm">{cr.caseName} — LMTD Analysis</h3>
-                    <Badge variant="secondary" className="text-xs">{cr.caseType}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-0">
-                  <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-                    <ResultBox label="Duty" value={`${fmtN(cr.dutyKW)} kW`} />
-                    <ResultBox label="ΔT1" value={`${fmtN(cr.dT1)} °C`} />
-                    <ResultBox label="ΔT2" value={`${fmtN(cr.dT2)} °C`} />
-                    <ResultBox label="LMTD" value={`${fmtN(cr.lmtd)} °C`} highlight />
-                  </div>
-                  <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-                    <ResultBox label="R" value={fmtN(cr.R, 4)} />
-                    <ResultBox label="P" value={fmtN(cr.P, 4)} />
-                    <ResultBox label="F" value={fmtN(cr.F, 4)} highlight={cr.F < 0.8} />
-                    <ResultBox label="F × LMTD" value={`${fmtN(cr.correctedLMTD)} °C`} highlight />
-                  </div>
-                  {project.showSteps && cr.trace.steps.length > 0 && (
-                    <div className="pt-2 border-t">
-                      <p className="text-xs font-medium text-muted-foreground mb-2">Calculation Trace</p>
-                      <div className="space-y-1 max-h-64 overflow-y-auto">
-                        {cr.trace.steps.filter(s =>
-                          s.name.includes("ΔT") || s.name.includes("LMTD") || s.name.includes("F-factor") || s.name.includes("R and P") || s.name.includes("Corrected") || s.name.includes("Duty") || s.name.includes("capacity") || s.name.includes("outlet")
-                        ).map((step, si) => (
-                          <div key={si} className="text-xs bg-muted/30 p-2 rounded-md font-mono">
-                            <span className="text-muted-foreground">{step.name}:</span>{" "}
-                            <span className="text-primary/80">{step.equation}</span>
-                            <br />
-                            <span className="text-muted-foreground/70">{step.substitution}</span>
-                            <span className="text-foreground font-medium"> = {step.result}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {cr.trace.warnings.length > 0 && (
-                    <div className="space-y-1 pt-2 border-t">
-                      {cr.trace.warnings.map((w, wi) => (
-                        <div key={wi} className="flex items-start gap-2 text-xs text-amber-200 bg-amber-950/30 p-2 rounded-md">
-                          <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                          <span>{w}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="u_area">
-          <div className="space-y-4">
             <Card>
-              <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Overall U & Fouling</h3></CardHeader>
+              <CardHeader className="pb-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Gauge className="w-4 h-4 text-primary/70" /> Overall U & Fouling Resistances
+                </h3>
+              </CardHeader>
               <CardContent className="space-y-4 pt-0">
-                {unitSystem === "Field" && (
-                  <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded-md">
-                    <Info className="w-3 h-3 inline mr-1" />
-                    U values in W/(m²·K), fouling in m²·K/W, area in m² — SI standard per TEMA convention.
-                  </p>
-                )}
                 <div>
                   <Label className="text-xs mb-1.5 block">U Handling Mode</Label>
                   <Select value={uInput.mode} onValueChange={v => updateUInput("mode", v as UMode)}>
@@ -662,12 +602,11 @@ export default function HeatExchangerPage() {
                     <SelectContent>
                       <SelectItem value="clean_plus_fouling">U_clean + Fouling Resistances</SelectItem>
                       <SelectItem value="fouled_direct">U_fouled (direct entry)</SelectItem>
-                      {project.allowEstimatedU && (
-                        <SelectItem value="estimated">Estimate from service category</SelectItem>
-                      )}
+                      {project.allowEstimatedU && <SelectItem value="estimated">Estimate from service category</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
+
                 {uInput.mode === "clean_plus_fouling" && (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">U_clean (W/(m²·K))</Label>
@@ -707,17 +646,19 @@ export default function HeatExchangerPage() {
                     </div>
                   </div>
                 )}
+
                 {uInput.mode === "fouled_direct" && (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">U_fouled (W/(m²·K))</Label>
                       <Input type="number" value={uInput.uFouled || ""} onChange={e => updateUInput("uFouled", parseFloat(e.target.value) || 0)} data-testid="input-u-fouled" /></div>
                   </div>
                 )}
+
                 {uInput.mode === "estimated" && (
                   <div className="space-y-3">
                     <div className="p-3 rounded-md bg-amber-950/30 text-amber-200 text-xs">
                       <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />
-                      U estimated from service category — HIGH UNCERTAINTY. Verify with vendor or detailed analysis.
+                      U estimated from service category — HIGH UNCERTAINTY. Verify with vendor data.
                     </div>
                     <div><Label className="text-xs mb-1.5 block">Service Category</Label>
                       <Select value={uInput.serviceCategory} onValueChange={v => updateUInput("serviceCategory", v)}>
@@ -728,158 +669,155 @@ export default function HeatExchangerPage() {
                     </div>
                   </div>
                 )}
-                <div className="pt-2 border-t">
+
+                <div className="pt-3 border-t">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Design Margin (%)</Label>
                       <Input type="number" value={uInput.designMargin} onChange={e => updateUInput("designMargin", parseFloat(e.target.value) || 0)} data-testid="input-margin" /></div>
                   </div>
                 </div>
+
+                <div className="p-3 rounded-md border border-dashed border-muted-foreground/20 bg-muted/20">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Governing Equation</p>
+                  <p className="text-xs font-mono text-primary/80">U_fouled = 1 / (1/U_clean + R_f,hot + R_f,cold)</p>
+                </div>
               </CardContent>
             </Card>
-
-            {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">{error}</div>}
-            <Button className="w-full" onClick={handleCalculate} data-testid="button-calculate">
-              Calculate Heat Exchanger
-            </Button>
-
-            {result && result.cases.map((cr, idx) => (
-              <Card key={idx}>
-                <CardHeader className="pb-2">
-                  <h3 className="font-semibold text-sm">{cr.caseName} — Area Results</h3>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-                    <ResultBox label="U_fouled" value={`${fmtN(cr.uFouled)} W/(m²·K)`} />
-                    <ResultBox label="UA_req" value={`${fmtN(cr.uaReq)} W/K`} />
-                    <ResultBox label="A_req" value={`${fmtN(cr.aReq)} m²`} />
-                    <ResultBox label="A_design" value={`${fmtN(cr.aDesign)} m²`} highlight />
-                    <ResultBox label="Fouling Rf" value={`${cr.totalFoulingResistance.toExponential(3)} m²·K/W`} />
-                    <ResultBox label="CF" value={`${(cr.cleanlinessFactor * 100).toFixed(1)}%`} />
-                    <ResultBox label="Approach" value={`${fmtN(cr.approachTemp)} °C`} highlight={cr.approachTemp < 5} />
-                    <ResultBox label="ε (effectiveness)" value={`${(cr.effectiveness * 100).toFixed(1)}%`} />
-                    <ResultBox label="NTU" value={fmtN(cr.ntu, 3)} highlight={cr.ntu > 3} />
-                  </div>
-                  {project.showSteps && (
-                    <div className="pt-2 mt-2 border-t space-y-1 max-h-48 overflow-y-auto">
-                      {cr.trace.steps.filter(s =>
-                        s.name.includes("U_fouled") || s.name.includes("Fouling") || s.name.includes("UA") || s.name.includes("area") || s.name.includes("Area")
-                      ).map((step, si) => (
-                        <div key={si} className="text-xs bg-muted/30 p-2 rounded-md font-mono">
-                          <span className="text-muted-foreground">{step.name}:</span>{" "}
-                          <span className="text-primary/80">{step.equation}</span>
-                          <br />
-                          <span className="text-muted-foreground/70">{step.substitution}</span>
-                          <span className="text-foreground font-medium"> = {step.result}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
           </div>
         </TabsContent>
 
-        <TabsContent value="geometry">
+        {/* ─── TAB 3: THERMAL DESIGN ─── */}
+        <TabsContent value="thermal">
           <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Tube Sizing (Preliminary)</h3></CardHeader>
-              <CardContent className="space-y-4 pt-0">
-                <p className="text-xs text-muted-foreground">
-                  Select tube dimensions to estimate tube count, bundle/shell diameter, and tube-side velocity. Per reference design steps 5-6.
-                </p>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Tube OD × BWG</Label>
-                    <Select value={`${tubeGeo.tubeOD_mm}_${tubeGeo.tubeWT_mm}`} onValueChange={v => {
-                      const [od, wt] = v.split("_").map(Number);
-                      setTubeGeo(g => ({ ...g, tubeOD_mm: od, tubeWT_mm: wt }));
-                    }}>
-                      <SelectTrigger className="text-xs" data-testid="select-tube-size"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {STANDARD_TUBE_SIZES.map(t => (
-                          <SelectItem key={`${t.od_mm}_${t.wt_mm}`} value={`${t.od_mm}_${t.wt_mm}`} className="text-xs">
-                            {t.od_mm} mm OD × BWG {t.bwg} (WT {t.wt_mm}, ID {t.id_mm} mm)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Tube Length (m)</Label>
-                    <Select value={String(tubeGeo.tubeLength_m)} onValueChange={v => setTubeGeo(g => ({ ...g, tubeLength_m: parseFloat(v) }))}>
-                      <SelectTrigger className="text-xs" data-testid="select-tube-length"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[2.44, 3.05, 3.66, 4.88, 6.10].map(l => (
-                          <SelectItem key={l} value={String(l)} className="text-xs">{l} m ({(l * 3.281).toFixed(0)} ft)</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Tube Pitch</Label>
-                    <Select value={tubeGeo.tubePitch} onValueChange={v => setTubeGeo(g => ({ ...g, tubePitch: v as "triangular" | "square" }))}>
-                      <SelectTrigger className="text-xs" data-testid="select-tube-pitch"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="triangular">Triangular (30°) — higher HTC, compact</SelectItem>
-                        <SelectItem value="square">Square (90°) — easier cleaning</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Pitch Ratio (Pt/OD)</Label>
-                    <Input type="number" step={0.05} min={1.1} max={1.5} className="text-xs" value={tubeGeo.pitchRatio}
-                      onChange={e => setTubeGeo(g => ({ ...g, pitchRatio: parseFloat(e.target.value) || 1.25 }))} data-testid="input-pitch-ratio" />
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Typical: 1.25 (triangular), 1.25–1.33 (square)</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Tube Passes</Label>
-                    <Select value={String(tubeGeo.tubePasses)} onValueChange={v => setTubeGeo(g => ({ ...g, tubePasses: parseInt(v) }))}>
-                      <SelectTrigger className="text-xs" data-testid="select-geo-tube-passes"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 4, 6, 8].map(n => (
-                          <SelectItem key={n} value={String(n)} className="text-xs">{n}-pass</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Tube-Side Density (kg/m³)</Label>
-                    <Input type="number" className="text-xs" value={tubeGeo.tubeSideDensity || ""}
-                      onChange={e => setTubeGeo(g => ({ ...g, tubeSideDensity: parseFloat(e.target.value) || 0 }))} data-testid="input-tube-density" />
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Water ≈ 1000, light HC ≈ 700, heavy oil ≈ 850</p>
-                  </div>
-                </div>
+            <StepHeader step={3} title="Thermal Design Calculation" desc="Calculate heat duty, LMTD, F-correction factor, and required heat transfer area." />
 
-                {result?.governingCase && (
-                  <Button size="sm" variant="outline" onClick={recomputeTubeGeo} data-testid="button-recompute-tube-geo">
-                    Recalculate Tube Layout
+            <Card className="border-primary/20">
+              <CardContent className="py-6">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center">
+                    <Zap className="w-6 h-6 text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center max-w-md">
+                    {result ? "Results computed. Modify inputs and recalculate, or proceed to Geometry."
+                      : "Configure basis and settings in the previous tabs, then run the thermal design calculation."}
+                  </p>
+                  <Button size="lg" onClick={handleCalculate} data-testid="button-calculate" className="min-w-[220px]">
+                    <Calculator className="w-4 h-4 mr-2" />
+                    {result ? "Recalculate" : "Calculate Heat Exchanger"}
                   </Button>
-                )}
+                </div>
+              </CardContent>
+            </Card>
 
-                {tubeGeoResult && (
-                  <div className="pt-3 border-t space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground">Preliminary Tube Layout</p>
-                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-                      <ResultBox label="Tube ID" value={`${tubeGeoResult.tubeID_mm.toFixed(1)} mm`} />
-                      <ResultBox label="Tubes/Area" value={`${tubeGeoResult.singleTubeArea_m2.toFixed(4)} m²/tube`} />
-                      <ResultBox label="No. Tubes" value={`${tubeGeoResult.numberOfTubes}`} highlight />
-                      <ResultBox label="Bundle Ø" value={`${tubeGeoResult.bundleDiameter_mm.toFixed(0)} mm`} />
-                      <ResultBox label="Shell ID" value={`${tubeGeoResult.shellID_mm.toFixed(0)} mm`} highlight />
-                      <ResultBox label="Tube Velocity" value={`${tubeGeoResult.tubeSideVelocity_ms.toFixed(2)} m/s`}
-                        highlight={tubeGeoResult.velocityCheck !== "ok"} />
+            {error && (
+              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md flex items-start gap-2" data-testid="text-error">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />{error}
+              </div>
+            )}
+
+            {result && result.cases.map((cr, idx) => (
+              <div key={idx} className="space-y-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2 pt-2">
+                  <Thermometer className="w-4 h-4 text-primary/70" />
+                  {cr.caseName}
+                  <Badge variant="secondary" className="text-[10px]">{cr.caseType}</Badge>
+                  {result.governingCase?.caseName === cr.caseName && (
+                    <Badge className="text-[10px] bg-primary/20 text-primary border-primary/30">Governing</Badge>
+                  )}
+                </h3>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center text-primary text-[10px] font-bold">1</span>
+                      Energy Balance
+                    </h4>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    <div className="space-y-1">
+                      <EqLine eq="Q_hot = ṁ_hot × Cp_hot × (T_h,in − T_h,out)" val={`${fmtN(cr.hotDutyKW)} kW`} />
+                      <EqLine eq="Q_cold = ṁ_cold × Cp_cold × (T_c,out − T_c,in)" val={`${fmtN(cr.coldDutyKW)} kW`} />
+                      <EqLine eq="Q_design (governing)" val={`${fmtN(cr.dutyKW)} kW`} highlight />
                     </div>
-                    <div className={`text-xs p-2 rounded-md ${
-                      tubeGeoResult.velocityCheck === "ok" ? "bg-green-950/30 text-green-300" :
-                      tubeGeoResult.velocityCheck === "low" ? "bg-amber-950/30 text-amber-200" :
-                      "bg-red-950/30 text-red-300"
-                    }`}>
-                      {tubeGeoResult.velocityCheck === "ok" ? <CheckCircle2 className="w-3 h-3 inline mr-1" /> : <AlertTriangle className="w-3 h-3 inline mr-1" />}
-                      {tubeGeoResult.velocityNote}
+                    {Math.abs(cr.hotDutyKW - cr.coldDutyKW) / Math.max(cr.hotDutyKW, cr.coldDutyKW) > 0.01 && (
+                      <p className="text-[10px] text-amber-300 mt-1">
+                        <AlertTriangle className="w-3 h-3 inline mr-1" />
+                        Energy imbalance: {((Math.abs(cr.hotDutyKW - cr.coldDutyKW) / Math.max(cr.hotDutyKW, cr.coldDutyKW)) * 100).toFixed(1)}%
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center text-primary text-[10px] font-bold">2</span>
+                      Log Mean Temperature Difference
+                    </h4>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    <div className="space-y-1">
+                      <EqLine eq="ΔT₁ = T_h,in − T_c,out" val={`${fmtN(cr.dT1)} °C`} />
+                      <EqLine eq="ΔT₂ = T_h,out − T_c,in" val={`${fmtN(cr.dT2)} °C`} />
+                      <EqLine eq="LMTD = (ΔT₁ − ΔT₂) / ln(ΔT₁ / ΔT₂)" val={`${fmtN(cr.lmtd)} °C`} highlight />
                     </div>
-                    {project.showSteps && (
-                      <div className="space-y-1 max-h-48 overflow-y-auto">
-                        {tubeGeoResult.steps.map((step, si) => (
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center text-primary text-[10px] font-bold">3</span>
+                      F-Factor Correction
+                    </h4>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    <div className="space-y-1">
+                      <EqLine eq="R = (T_h,in − T_h,out) / (T_c,out − T_c,in)" val={fmtN(cr.R, 4)} />
+                      <EqLine eq="P = (T_c,out − T_c,in) / (T_h,in − T_c,in)" val={fmtN(cr.P, 4)} />
+                      <EqLine eq={`F = ${cr.F === 1 ? "1.0 (pure counter/co-current)" : "f(R, P)"}`} val={fmtN(cr.F, 4)} highlight={cr.F < 0.8} />
+                      <EqLine eq="LMTD_corrected = F × LMTD" val={`${fmtN(cr.correctedLMTD)} °C`} highlight />
+                    </div>
+                    {cr.F < 0.8 && (
+                      <p className="text-[10px] text-amber-300 mt-1">
+                        <AlertTriangle className="w-3 h-3 inline mr-1" />
+                        F &lt; 0.80 — consider additional shell passes or different arrangement.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center text-primary text-[10px] font-bold">4</span>
+                      Heat Transfer Area
+                    </h4>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    <div className="space-y-1">
+                      <EqLine eq="U_fouled = 1 / (1/U_clean + Rf_hot + Rf_cold)" val={`${fmtN(cr.uFouled)} W/(m²·K)`} />
+                      <EqLine eq="A_required = Q / (U_fouled × F × LMTD)" val={`${fmtN(cr.aReq)} m²`} />
+                      <EqLine eq={`A_design = A_req × (1 + ${uInput.designMargin}%)`} val={`${fmtN(cr.aDesign)} m²`} highlight />
+                    </div>
+                    <div className="grid gap-2 grid-cols-3 sm:grid-cols-5 mt-3">
+                      <ResultBox label="U_clean" value={`${fmtN(cr.uClean)}`} sub="W/(m²·K)" />
+                      <ResultBox label="Rf total" value={cr.totalFoulingResistance.toExponential(2)} sub="m²·K/W" />
+                      <ResultBox label="CF" value={`${(cr.cleanlinessFactor * 100).toFixed(0)}%`} />
+                      <ResultBox label="Approach" value={`${fmtN(cr.approachTemp)} °C`} highlight={cr.approachTemp < 5} />
+                      <ResultBox label="ε" value={`${(cr.effectiveness * 100).toFixed(1)}%`} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {project.showSteps && cr.trace.steps.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Full Calculation Trace</h4>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                        {cr.trace.steps.map((step, si) => (
                           <div key={si} className="text-xs bg-muted/30 p-2 rounded-md font-mono">
                             <span className="text-muted-foreground">{step.name}:</span>{" "}
                             <span className="text-primary/80">{step.equation}</span>
@@ -889,115 +827,264 @@ export default function HeatExchangerPage() {
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
+                    </CardContent>
+                  </Card>
                 )}
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader className="pb-3"><h3 className="font-semibold text-sm">Area Verification</h3></CardHeader>
-              <CardContent className="space-y-4 pt-0">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div><Label className="text-xs mb-1.5 block">Selected Area A (m²)</Label>
-                    <Input type="number" value={geoArea} onChange={e => setGeoArea(e.target.value)} placeholder="e.g. 50" data-testid="input-geo-area" /></div>
-                </div>
-                {geoArea && result?.governingCase && (
-                  <div className="space-y-2">
-                    <Button size="sm" onClick={handleCalculate} data-testid="button-check-geometry">Check Area</Button>
-                    {result.geometry && (
-                      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-                        <ResultBox label="A selected" value={`${fmtN(result.geometry.aSelected)} m²`} />
-                        <ResultBox label="Q achieved" value={`${fmtN(result.geometry.qAchieved)} kW`} />
-                        <ResultBox label="Excess area" value={`${fmtN(result.geometry.excessArea)}%`} highlight={result.geometry.excessArea < 0} />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {temaGuidance && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <Settings2 className="w-4 h-4 text-primary" />
-                    <h3 className="font-semibold text-sm">TEMA Type & Fluid Allocation Guidance</h3>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4 pt-0">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="p-3 rounded-md border border-primary/30 bg-primary/5">
-                      <p className="text-xs font-semibold text-primary mb-1">Recommended: {temaGuidance.recommended}</p>
-                      <p className="text-xs text-muted-foreground">{TEMA_TYPES[temaGuidance.recommended].name}</p>
-                      <p className="text-[10px] text-muted-foreground/70 mt-1">{TEMA_TYPES[temaGuidance.recommended].description}</p>
-                      <div className="mt-2 space-y-0.5">
-                        {TEMA_TYPES[temaGuidance.recommended].pros.map((p, i) => (
-                          <p key={i} className="text-[10px] text-green-400/80">+ {p}</p>
-                        ))}
-                        {TEMA_TYPES[temaGuidance.recommended].cons.map((c, i) => (
-                          <p key={i} className="text-[10px] text-red-400/60">− {c}</p>
-                        ))}
-                      </div>
-                    </div>
-                    {temaGuidance.alternatives.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Alternatives</p>
-                        {temaGuidance.alternatives.slice(0, 2).map(alt => (
-                          <div key={alt} className="p-2 rounded-md border border-border/50 bg-muted/20">
-                            <p className="text-xs font-medium">{alt} — {TEMA_TYPES[alt].name}</p>
-                            <p className="text-[10px] text-muted-foreground">{TEMA_TYPES[alt].description}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                {cr.trace.warnings.length > 0 && (
                   <div className="space-y-1">
-                    {temaGuidance.reasoning.map((r, i) => (
-                      <p key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                        <Info className="w-3 h-3 mt-0.5 shrink-0 text-primary/60" />{r}
-                      </p>
+                    {cr.trace.warnings.map((w, wi) => (
+                      <div key={wi} className="flex items-start gap-2 text-xs text-amber-200 bg-amber-950/30 p-2 rounded-md">
+                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /><span>{w}</span>
+                      </div>
                     ))}
                   </div>
-                  <div className="pt-2 border-t">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Fluid Allocation</p>
-                    <div className="grid gap-2 grid-cols-2">
-                      <div className="p-2 rounded-md bg-blue-950/20 border border-blue-500/20">
-                        <p className="text-[10px] font-semibold text-blue-400 mb-0.5">TUBE SIDE</p>
-                        <p className="text-xs">{temaGuidance.fluidAllocation.tubeSide}</p>
-                      </div>
-                      <div className="p-2 rounded-md bg-amber-950/20 border border-amber-500/20">
-                        <p className="text-[10px] font-semibold text-amber-400 mb-0.5">SHELL SIDE</p>
-                        <p className="text-xs">{temaGuidance.fluidAllocation.shellSide}</p>
-                      </div>
-                    </div>
-                    <div className="mt-2 space-y-0.5">
-                      {temaGuidance.fluidAllocation.reasons.map((r, i) => (
-                        <p key={i} className="text-[10px] text-muted-foreground/70">• {r}</p>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="text-xs text-muted-foreground p-3 bg-muted/30 rounded-md">
-              <Info className="w-3 h-3 inline mr-1" />
-              Tube count and shell diameter are preliminary estimates. Baffle design, nozzle sizing, and detailed thermal-hydraulic analysis require vendor rating software (e.g., HTRI, Aspen EDR).
-            </div>
+                )}
+              </div>
+            ))}
           </div>
         </TabsContent>
 
-        <TabsContent value="results">
+        {/* ─── TAB 4: GEOMETRY ─── */}
+        <TabsContent value="geometry">
           <div className="space-y-4">
-            {!result && (
-              <Card><CardContent className="py-12 text-center">
-                <Thermometer className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-4">Enter parameters and click Calculate</p>
-                <Button onClick={handleCalculate} data-testid="button-calculate-results">Calculate</Button>
+            <StepHeader step={4} title="Mechanical Layout & TEMA Guidance" desc="Select tube geometry, estimate tube count and shell diameter, verify area, and review TEMA type recommendations." />
+
+            {!result?.governingCase ? (
+              <Card><CardContent className="py-10 text-center">
+                <Box className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">Run the thermal design calculation first (Step 3).</p>
+                <Button variant="outline" size="sm" onClick={() => setActiveTab("thermal")} data-testid="button-go-thermal">
+                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Go to Thermal Design
+                </Button>
               </CardContent></Card>
+            ) : (
+              <>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <Box className="w-4 h-4 text-primary/70" /> Tube Sizing (Preliminary)
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Select tube dimensions to estimate tube count, bundle/shell diameter, and tube-side velocity.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4 pt-0">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Tube OD × BWG</Label>
+                        <Select value={`${tubeGeo.tubeOD_mm}_${tubeGeo.tubeWT_mm}`} onValueChange={v => {
+                          const [od, wt] = v.split("_").map(Number);
+                          setTubeGeo(g => ({ ...g, tubeOD_mm: od, tubeWT_mm: wt }));
+                        }}>
+                          <SelectTrigger className="text-xs" data-testid="select-tube-size"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {STANDARD_TUBE_SIZES.map(t => (
+                              <SelectItem key={`${t.od_mm}_${t.wt_mm}`} value={`${t.od_mm}_${t.wt_mm}`} className="text-xs">
+                                {t.od_mm} mm OD × BWG {t.bwg} (WT {t.wt_mm}, ID {t.id_mm} mm)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Tube Length (m)</Label>
+                        <Select value={String(tubeGeo.tubeLength_m)} onValueChange={v => setTubeGeo(g => ({ ...g, tubeLength_m: parseFloat(v) }))}>
+                          <SelectTrigger className="text-xs" data-testid="select-tube-length"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {[2.44, 3.05, 3.66, 4.88, 6.10].map(l => (
+                              <SelectItem key={l} value={String(l)} className="text-xs">{l} m ({(l * 3.281).toFixed(0)} ft)</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Tube Pitch</Label>
+                        <Select value={tubeGeo.tubePitch} onValueChange={v => setTubeGeo(g => ({ ...g, tubePitch: v as "triangular" | "square" }))}>
+                          <SelectTrigger className="text-xs" data-testid="select-tube-pitch"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="triangular">Triangular (30°) — higher HTC</SelectItem>
+                            <SelectItem value="square">Square (90°) — easier cleaning</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Pitch Ratio (Pt/OD)</Label>
+                        <Input type="number" step={0.05} min={1.1} max={1.5} className="text-xs" value={tubeGeo.pitchRatio}
+                          onChange={e => setTubeGeo(g => ({ ...g, pitchRatio: parseFloat(e.target.value) || 1.25 }))} data-testid="input-pitch-ratio" />
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Typical: 1.25 (tri), 1.25–1.33 (sq)</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Tube Passes</Label>
+                        <Select value={String(tubeGeo.tubePasses)} onValueChange={v => setTubeGeo(g => ({ ...g, tubePasses: parseInt(v) }))}>
+                          <SelectTrigger className="text-xs" data-testid="select-geo-tube-passes"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {[1, 2, 4, 6, 8].map(n => (
+                              <SelectItem key={n} value={String(n)} className="text-xs">{n}-pass</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Tube-Side Density (kg/m³)</Label>
+                        <Input type="number" className="text-xs" value={tubeGeo.tubeSideDensity || ""}
+                          onChange={e => setTubeGeo(g => ({ ...g, tubeSideDensity: parseFloat(e.target.value) || 0 }))} data-testid="input-tube-density" />
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Water ≈ 1000, light HC ≈ 700</p>
+                      </div>
+                    </div>
+
+                    <Button size="sm" variant="outline" onClick={recomputeTubeGeo} data-testid="button-recompute-tube-geo">
+                      Recalculate Tube Layout
+                    </Button>
+
+                    {tubeGeoResult && (
+                      <div className="pt-3 border-t space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground">Preliminary Tube Layout</p>
+                        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+                          <ResultBox label="Tube ID" value={`${tubeGeoResult.tubeID_mm.toFixed(1)} mm`} />
+                          <ResultBox label="m²/tube" value={tubeGeoResult.singleTubeArea_m2.toFixed(4)} />
+                          <ResultBox label="No. Tubes" value={`${tubeGeoResult.numberOfTubes}`} highlight />
+                          <ResultBox label="Bundle Ø" value={`${tubeGeoResult.bundleDiameter_mm.toFixed(0)} mm`} />
+                          <ResultBox label="Shell ID" value={`${tubeGeoResult.shellID_mm.toFixed(0)} mm`} highlight />
+                          <ResultBox label="Tube Vel." value={`${tubeGeoResult.tubeSideVelocity_ms.toFixed(2)} m/s`}
+                            highlight={tubeGeoResult.velocityCheck !== "ok"} />
+                        </div>
+                        <div className={`text-xs p-2 rounded-md ${
+                          tubeGeoResult.velocityCheck === "ok" ? "bg-green-950/30 text-green-300" :
+                          tubeGeoResult.velocityCheck === "low" ? "bg-amber-950/30 text-amber-200" :
+                          "bg-red-950/30 text-red-300"
+                        }`}>
+                          {tubeGeoResult.velocityCheck === "ok" ? <CheckCircle2 className="w-3 h-3 inline mr-1" /> : <AlertTriangle className="w-3 h-3 inline mr-1" />}
+                          {tubeGeoResult.velocityNote}
+                        </div>
+                        {project.showSteps && (
+                          <div className="space-y-1 max-h-48 overflow-y-auto">
+                            {tubeGeoResult.steps.map((step, si) => (
+                              <div key={si} className="text-xs bg-muted/30 p-2 rounded-md font-mono">
+                                <span className="text-muted-foreground">{step.name}:</span>{" "}
+                                <span className="text-primary/80">{step.equation}</span>
+                                <br />
+                                <span className="text-muted-foreground/70">{step.substitution}</span>
+                                <span className="text-foreground font-medium"> = {step.result}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <h3 className="font-semibold text-sm">Area Verification</h3>
+                  </CardHeader>
+                  <CardContent className="space-y-4 pt-0">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div><Label className="text-xs mb-1.5 block">Selected Area A (m²)</Label>
+                        <Input type="number" value={geoArea} onChange={e => setGeoArea(e.target.value)} placeholder="e.g. 50" data-testid="input-geo-area" /></div>
+                    </div>
+                    {geoArea && (
+                      <div className="space-y-2">
+                        <Button size="sm" onClick={handleCalculate} data-testid="button-check-geometry">Check Area</Button>
+                        {result?.geometry && (
+                          <div className="grid gap-2 grid-cols-3">
+                            <ResultBox label="A selected" value={`${fmtN(result.geometry.aSelected)} m²`} />
+                            <ResultBox label="Q achieved" value={`${fmtN(result.geometry.qAchieved)} kW`} />
+                            <ResultBox label="Excess area" value={`${fmtN(result.geometry.excessArea)}%`} highlight={result.geometry.excessArea < 0} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {temaGuidance && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <h3 className="font-semibold text-sm flex items-center gap-2">
+                        <Settings2 className="w-4 h-4 text-primary" /> TEMA Type & Fluid Allocation
+                      </h3>
+                    </CardHeader>
+                    <CardContent className="space-y-4 pt-0">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="p-3 rounded-md border border-primary/30 bg-primary/5">
+                          <p className="text-xs font-semibold text-primary mb-1">Recommended: {temaGuidance.recommended}</p>
+                          <p className="text-xs text-muted-foreground">{TEMA_TYPES[temaGuidance.recommended].name}</p>
+                          <p className="text-[10px] text-muted-foreground/70 mt-1">{TEMA_TYPES[temaGuidance.recommended].description}</p>
+                          <div className="mt-2 space-y-0.5">
+                            {TEMA_TYPES[temaGuidance.recommended].pros.map((p, i) => (
+                              <p key={i} className="text-[10px] text-green-400/80">+ {p}</p>
+                            ))}
+                            {TEMA_TYPES[temaGuidance.recommended].cons.map((c, i) => (
+                              <p key={i} className="text-[10px] text-red-400/60">- {c}</p>
+                            ))}
+                          </div>
+                        </div>
+                        {temaGuidance.alternatives.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">Alternatives</p>
+                            {temaGuidance.alternatives.slice(0, 2).map(alt => (
+                              <div key={alt} className="p-2 rounded-md border border-border/50 bg-muted/20">
+                                <p className="text-xs font-medium">{alt} — {TEMA_TYPES[alt].name}</p>
+                                <p className="text-[10px] text-muted-foreground">{TEMA_TYPES[alt].description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        {temaGuidance.reasoning.map((r, i) => (
+                          <p key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                            <Info className="w-3 h-3 mt-0.5 shrink-0 text-primary/60" />{r}
+                          </p>
+                        ))}
+                      </div>
+                      <div className="pt-2 border-t">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Fluid Allocation</p>
+                        <div className="grid gap-2 grid-cols-2">
+                          <div className="p-2 rounded-md bg-blue-950/20 border border-blue-500/20">
+                            <p className="text-[10px] font-semibold text-blue-400 mb-0.5">TUBE SIDE</p>
+                            <p className="text-xs">{temaGuidance.fluidAllocation.tubeSide}</p>
+                          </div>
+                          <div className="p-2 rounded-md bg-amber-950/20 border border-amber-500/20">
+                            <p className="text-[10px] font-semibold text-amber-400 mb-0.5">SHELL SIDE</p>
+                            <p className="text-xs">{temaGuidance.fluidAllocation.shellSide}</p>
+                          </div>
+                        </div>
+                        <div className="mt-2 space-y-0.5">
+                          {temaGuidance.fluidAllocation.reasons.map((r, i) => (
+                            <p key={i} className="text-[10px] text-muted-foreground/70">- {r}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <div className="text-xs text-muted-foreground p-3 bg-muted/30 rounded-md">
+                  <Info className="w-3 h-3 inline mr-1" />
+                  Tube count and shell diameter are preliminary. Detailed thermal-hydraulic analysis requires vendor software (HTRI, Aspen EDR).
+                </div>
+              </>
             )}
-            {result && (
+          </div>
+        </TabsContent>
+
+        {/* ─── TAB 5: SUMMARY ─── */}
+        <TabsContent value="summary">
+          <div className="space-y-4">
+            <StepHeader step={5} title="Design Summary & Export" desc="Review complete results, compare cases, and export the calculation report." />
+
+            {!result ? (
+              <Card><CardContent className="py-10 text-center">
+                <BarChart3 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">Run the thermal design calculation first (Step 3).</p>
+                <Button variant="outline" size="sm" onClick={() => setActiveTab("thermal")} data-testid="button-go-thermal-2">
+                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Go to Thermal Design
+                </Button>
+              </CardContent></Card>
+            ) : (
               <>
                 {result.governingCase && (
                   <Card>
@@ -1005,31 +1092,26 @@ export default function HeatExchangerPage() {
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
                           <CheckCircle2 className="w-5 h-5 text-green-400" />
-                          <h3 className="font-semibold">Results Summary — {result.governingCase.caseName} (Governing)</h3>
+                          <h3 className="font-semibold">Results — {result.governingCase.caseName} (Governing)</h3>
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button size="sm" variant="outline" data-testid="button-export-results">
-                              <Download className="w-3.5 h-3.5 mr-1.5" />
-                              Export
+                              <Download className="w-3.5 h-3.5 mr-1.5" /> Export
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={handleExportPDF} data-testid="button-export-calc-note">
-                              <FileText className="w-4 h-4 mr-2 text-red-400" />
-                              Calc Note (Print/PDF)
+                              <FileText className="w-4 h-4 mr-2 text-red-400" /> Calc Note (Print/PDF)
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDFUtil(d); }} data-testid="button-export-pdf">
-                              <FileText className="w-4 h-4 mr-2 text-red-400" />
-                              Export as PDF
+                              <FileText className="w-4 h-4 mr-2 text-red-400" /> Export as PDF
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
-                              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
-                              Export as Excel
+                              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" /> Export as Excel
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }} data-testid="button-export-json">
-                              <Download className="w-4 h-4 mr-2 text-blue-400" />
-                              Export as JSON
+                              <Download className="w-4 h-4 mr-2 text-blue-400" /> Export as JSON
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1070,10 +1152,11 @@ export default function HeatExchangerPage() {
                               {result.cases.map((cr, i) => {
                                 const val = (cr as unknown as Record<string, number>)[row.key];
                                 return (
-                                <td key={i} className="py-1.5 px-2 text-right font-mono tabular-nums">
-                                  {row.pct ? fmtN(val * 100) : fmtN(val)}
-                                </td>
-                                ); })}
+                                  <td key={i} className="py-1.5 px-2 text-right font-mono tabular-nums">
+                                    {row.pct ? fmtN(val * 100) : fmtN(val)}
+                                  </td>
+                                );
+                              })}
                             </tr>
                           ))}
                         </tbody>
@@ -1094,8 +1177,7 @@ export default function HeatExchangerPage() {
                       <ul className="space-y-1.5">
                         {result.recommendations.map((r, i) => (
                           <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                            <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
-                            {r}
+                            <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-primary" />{r}
                           </li>
                         ))}
                       </ul>
@@ -1126,23 +1208,40 @@ export default function HeatExchangerPage() {
         </TabsContent>
       </Tabs>
 
-      {error && (
+      {error && activeTab !== "thermal" && (
         <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md mt-4" data-testid="text-error-global">
           <AlertTriangle className="w-4 h-4 inline mr-2" />{error}
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 mt-4">
+      <div className="flex items-center justify-between gap-2 mt-6 pt-4 border-t border-muted/30">
         <Button size="sm" variant="outline" onClick={goPrev} disabled={tabIdx <= 0} data-testid="button-prev">
           <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Back
         </Button>
+        <div className="text-xs text-muted-foreground">
+          Step {tabIdx + 1} of {TABS.length}
+        </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="default" onClick={handleCalculate} data-testid="button-calculate-main">
-            <Calculator className="w-3.5 h-3.5 mr-1" /> Calculate
-          </Button>
-          {activeTab !== "results" && tabIdx < TABS.length - 1 && (
-            <Button size="sm" variant="outline" onClick={goNext} data-testid="button-next">
+          {activeTab !== "thermal" && activeTab !== "summary" && (
+            <Button size="sm" variant="outline" onClick={goNext} disabled={tabIdx >= TABS.length - 1} data-testid="button-next">
               Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          )}
+          {activeTab === "thermal" && (
+            <>
+              <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-main">
+                <Calculator className="w-3.5 h-3.5 mr-1" /> {result ? "Recalculate" : "Calculate"}
+              </Button>
+              {result && (
+                <Button size="sm" variant="outline" onClick={goNext} data-testid="button-next">
+                  Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              )}
+            </>
+          )}
+          {activeTab === "summary" && result && (
+            <Button size="sm" variant="outline" onClick={() => setActiveTab("thermal")} data-testid="button-back-to-calc">
+              <RotateCcw className="w-3.5 h-3.5 mr-1" /> Recalculate
             </Button>
           )}
         </div>
@@ -1151,46 +1250,102 @@ export default function HeatExchangerPage() {
   );
 }
 
-function ResultBox({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function StepHeader({ step, title, desc }: { step: number; title: string; desc: string }) {
   return (
-    <div className={`p-2 rounded-md text-center ${highlight ? "bg-primary/10" : "bg-muted/30"}`}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-sm font-mono font-medium tabular-nums">{value}</div>
+    <div className="flex items-start gap-3 mb-1">
+      <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+        {step}
+      </div>
+      <div>
+        <h2 className="font-semibold text-base">{title}</h2>
+        <p className="text-xs text-muted-foreground">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+function EqLine({ eq, val, highlight, sub }: { eq: string; val: string; highlight?: boolean; sub?: string }) {
+  return (
+    <div className={`flex items-baseline justify-between gap-3 px-3 py-1.5 rounded-md font-mono text-xs
+      ${highlight ? "bg-primary/10 border border-primary/20" : "bg-muted/30"}`}>
+      <span className="text-muted-foreground">{eq}</span>
+      <span className={`font-semibold tabular-nums shrink-0 ${highlight ? "text-primary" : ""}`}>
+        = {val}
+        {sub && <span className="text-muted-foreground/60 font-normal ml-1">{sub}</span>}
+      </span>
+    </div>
+  );
+}
+
+function ResultBox({ label, value, highlight, sub }: { label: string; value: string; highlight?: boolean; sub?: string }) {
+  return (
+    <div className={`p-2 rounded-md text-center ${highlight ? "bg-primary/10 border border-primary/20" : "bg-muted/30"}`}>
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className={`text-sm font-mono font-medium tabular-nums ${highlight ? "text-primary" : ""}`}>{value}</div>
+      {sub && <div className="text-[9px] text-muted-foreground/60">{sub}</div>}
     </div>
   );
 }
 
 function SummaryTable({ cr }: { cr: CaseResult }) {
-  const rows = [
-    { label: "Heat Duty", value: `${fmtN(cr.dutyKW)} kW`, hl: false },
-    { label: "Hot Side Duty", value: `${fmtN(cr.hotDutyKW)} kW`, hl: false },
-    { label: "Cold Side Duty", value: `${fmtN(cr.coldDutyKW)} kW`, hl: false },
-    { label: "ΔT1", value: `${fmtN(cr.dT1)} °C`, hl: false },
-    { label: "ΔT2", value: `${fmtN(cr.dT2)} °C`, hl: false },
-    { label: "LMTD", value: `${fmtN(cr.lmtd)} °C`, hl: false },
-    { label: "R (capacity ratio)", value: fmtN(cr.R, 4), hl: false },
-    { label: "P (thermal effectiveness)", value: fmtN(cr.P, 4), hl: false },
-    { label: "F (correction factor)", value: fmtN(cr.F, 4), hl: cr.F < 0.8 },
-    { label: "Corrected LMTD", value: `${fmtN(cr.correctedLMTD)} °C`, hl: true },
-    { label: "U_clean", value: `${fmtN(cr.uClean)} W/(m²·K)`, hl: false },
-    { label: "U_fouled", value: `${fmtN(cr.uFouled)} W/(m²·K)`, hl: false },
-    { label: "Total Rf", value: `${cr.totalFoulingResistance.toExponential(3)} m²·K/W`, hl: false },
-    { label: "Cleanliness Factor", value: `${(cr.cleanlinessFactor * 100).toFixed(1)}%`, hl: false },
-    { label: "UA_req", value: `${fmtN(cr.uaReq)} W/K`, hl: false },
-    { label: "A_req", value: `${fmtN(cr.aReq)} m²`, hl: false },
-    { label: "A_design", value: `${fmtN(cr.aDesign)} m²`, hl: true },
-    { label: "Overdesign", value: `${fmtN(cr.overdesignPct)}%`, hl: false },
-    { label: "Approach Temp", value: `${fmtN(cr.approachTemp)} °C`, hl: cr.approachTemp < 5 },
-    { label: "ε (effectiveness)", value: `${(cr.effectiveness * 100).toFixed(1)}%`, hl: false },
-    { label: "NTU", value: fmtN(cr.ntu, 3), hl: cr.ntu > 3 },
-    { label: "C_r (capacity ratio)", value: fmtN(cr.capacityRatio, 4), hl: false },
+  const sections = [
+    {
+      title: "Energy Balance",
+      rows: [
+        { label: "Heat Duty", value: `${fmtN(cr.dutyKW)} kW`, hl: true },
+        { label: "Hot Side Duty", value: `${fmtN(cr.hotDutyKW)} kW`, hl: false },
+        { label: "Cold Side Duty", value: `${fmtN(cr.coldDutyKW)} kW`, hl: false },
+      ],
+    },
+    {
+      title: "Temperature Analysis",
+      rows: [
+        { label: "ΔT₁", value: `${fmtN(cr.dT1)} °C`, hl: false },
+        { label: "ΔT₂", value: `${fmtN(cr.dT2)} °C`, hl: false },
+        { label: "LMTD", value: `${fmtN(cr.lmtd)} °C`, hl: false },
+        { label: "R (capacity ratio)", value: fmtN(cr.R, 4), hl: false },
+        { label: "P (thermal effectiveness)", value: fmtN(cr.P, 4), hl: false },
+        { label: "F (correction factor)", value: fmtN(cr.F, 4), hl: cr.F < 0.8 },
+        { label: "Corrected LMTD", value: `${fmtN(cr.correctedLMTD)} °C`, hl: true },
+        { label: "Approach Temp", value: `${fmtN(cr.approachTemp)} °C`, hl: cr.approachTemp < 5 },
+      ],
+    },
+    {
+      title: "Heat Transfer & Area",
+      rows: [
+        { label: "U_clean", value: `${fmtN(cr.uClean)} W/(m²·K)`, hl: false },
+        { label: "U_fouled", value: `${fmtN(cr.uFouled)} W/(m²·K)`, hl: false },
+        { label: "Total Rf", value: `${cr.totalFoulingResistance.toExponential(3)} m²·K/W`, hl: false },
+        { label: "Cleanliness Factor", value: `${(cr.cleanlinessFactor * 100).toFixed(1)}%`, hl: false },
+        { label: "UA_req", value: `${fmtN(cr.uaReq)} W/K`, hl: false },
+        { label: "A_req", value: `${fmtN(cr.aReq)} m²`, hl: false },
+        { label: "A_design", value: `${fmtN(cr.aDesign)} m²`, hl: true },
+        { label: "Overdesign", value: `${fmtN(cr.overdesignPct)}%`, hl: false },
+      ],
+    },
+    {
+      title: "Performance",
+      rows: [
+        { label: "ε (effectiveness)", value: `${(cr.effectiveness * 100).toFixed(1)}%`, hl: false },
+        { label: "NTU", value: fmtN(cr.ntu, 3), hl: cr.ntu > 3 },
+        { label: "C_r (capacity ratio)", value: fmtN(cr.capacityRatio, 4), hl: false },
+      ],
+    },
   ];
+
   return (
-    <div className="grid gap-1">
-      {rows.map((r, i) => (
-        <div key={i} className={`flex items-center justify-between py-1.5 px-3 rounded-md ${r.hl ? "bg-primary/10" : i % 2 === 0 ? "bg-muted/50" : ""}`} data-testid={`result-row-${i}`}>
-          <span className="text-xs text-muted-foreground">{r.label}</span>
-          <span className="text-xs font-mono font-medium tabular-nums">{r.value}</span>
+    <div className="space-y-4">
+      {sections.map((section, si) => (
+        <div key={si}>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{section.title}</p>
+          <div className="grid gap-0.5">
+            {section.rows.map((r, i) => (
+              <div key={i} className={`flex items-center justify-between py-1.5 px-3 rounded-md ${r.hl ? "bg-primary/10" : i % 2 === 0 ? "bg-muted/40" : ""}`} data-testid={`result-row-${si}-${i}`}>
+                <span className="text-xs text-muted-foreground">{r.label}</span>
+                <span className={`text-xs font-mono font-medium tabular-nums ${r.hl ? "text-primary" : ""}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>
@@ -1201,11 +1356,9 @@ function buildCalcNoteHTML(result: HXFullResult, gc: CaseResult, project: HXProj
   const traceHTML = gc.trace.steps.map(s =>
     `<tr><td>${s.name}</td><td><code>${s.equation}</code></td><td>${s.substitution}</td><td><strong>${s.result}</strong></td></tr>`
   ).join("\n");
-
   const flagsHTML = gc.trace.flags.map(f =>
     `<li style="color: ${FLAG_SEVERITY[f] === "error" ? "#e74c3c" : "#f39c12"}">${FLAG_LABELS[f]}</li>`
   ).join("\n");
-
   const warningsHTML = gc.trace.warnings.map(w => `<li>${w}</li>`).join("\n");
   const assumptionsHTML = gc.trace.assumptions.map(a => `<li>${a}</li>`).join("\n");
 
@@ -1221,12 +1374,7 @@ function buildCalcNoteHTML(result: HXFullResult, gc: CaseResult, project: HXProj
   code { background: #f0f0f0; padding: 1px 4px; font-size: 10px; }
   .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; }
   .disclaimer { margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; font-size: 11px; }
-  @media print {
-    body { margin: 0; padding: 10px; }
-    h1 { font-size: 16px; }
-    table { page-break-inside: auto; }
-    tr { page-break-inside: avoid; }
-  }
+  @media print { body { margin: 0; padding: 10px; } h1 { font-size: 16px; } table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
 </style></head><body>
 <h1>Heat Exchanger Sizing — Calculation Note</h1>
 <div class="summary-row"><span>Case: ${project.name} (${project.caseId})</span><span>Engineer: ${project.engineer}</span><span>Date: ${project.date}</span></div>
