@@ -10,7 +10,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UnitSelector } from "@/components/engineering/unit-selector";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
-import { AiChatButton } from "@/components/engineering/ai-chat-button";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI } from "@/lib/engineering/unitConversion";
 import {
@@ -317,7 +316,6 @@ export default function HeatExchangerPage() {
           <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
-          <AiChatButton />
         </div>
       </div>
 

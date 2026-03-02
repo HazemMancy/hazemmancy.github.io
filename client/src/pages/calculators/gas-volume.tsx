@@ -22,7 +22,6 @@ import {
 } from "@/lib/engineering/gasVolume";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
-import { AiChatButton } from "@/components/engineering/ai-chat-button";
 import { ArrowLeftRight, FlaskConical, RotateCcw, ArrowDown, CheckCircle2, Download, FileSpreadsheet, FileText } from "lucide-react";
 import {
   DropdownMenu,
@@ -398,7 +397,6 @@ export default function GasVolumePage() {
                   <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
                     <RotateCcw className="w-3.5 h-3.5" />
                   </Button>
-              <AiChatButton />
                 </div>
               </div>
             </CardHeader>

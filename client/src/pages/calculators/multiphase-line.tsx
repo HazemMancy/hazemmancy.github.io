@@ -22,7 +22,6 @@ import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConve
 import { MIXED_PHASE_SERVICE_LIMITS, type MixedPhaseServiceLimit } from "@/lib/engineering/constants";
 import { checkMixedPhaseLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
-import { AiChatButton } from "@/components/engineering/ai-chat-button";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { Gauge, FlaskConical, RotateCcw } from "lucide-react";
 
@@ -171,7 +170,6 @@ export default function MultiphaseLinePage() {
                   <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
                     <RotateCcw className="w-3.5 h-3.5" />
                   </Button>
-              <AiChatButton />
                 </div>
               </div>
             </CardHeader>

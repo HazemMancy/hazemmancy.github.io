@@ -27,7 +27,6 @@ import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
-import { AiChatButton } from "@/components/engineering/ai-chat-button";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { Wind, FlaskConical, RotateCcw } from "lucide-react";
 
@@ -197,7 +196,6 @@ export default function GasLineSizingPage() {
                   <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
                     <RotateCcw className="w-3.5 h-3.5" />
                   </Button>
-              <AiChatButton />
                 </div>
               </div>
             </CardHeader>
