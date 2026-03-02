@@ -2,6 +2,20 @@ import { GRAVITY, PI } from "./constants";
 
 export type PumpType = "centrifugal" | "positive_displacement";
 
+export interface PumpCalcStep {
+  name: string;
+  equation: string;
+  substitution: string;
+  result: string;
+}
+
+export interface PumpCalcTrace {
+  steps: PumpCalcStep[];
+  intermediateValues: Record<string, number>;
+  assumptions: string[];
+  warnings: string[];
+}
+
 export interface PipingInput {
   flowRate: number;
   liquidDensity: number;
@@ -57,6 +71,7 @@ export interface PumpSizingResult extends PipingResult {
   brakePower: number;
   motorPower: number;
   warnings: string[];
+  trace: PumpCalcTrace;
 }
 
 export interface PDPumpSizingResult extends PipingResult {
@@ -76,6 +91,7 @@ export interface PDPumpSizingResult extends PipingResult {
   reliefValvePressure: number;
   dischargePressure: number;
   warnings: string[];
+  trace: PumpCalcTrace;
 }
 
 function swameeJainFriction(re: number, relativeRoughness: number): number {
@@ -232,6 +248,8 @@ export function calculatePumpSizing(input: PumpSizingInput): PumpSizingResult {
     warnings.push("Low pump efficiency \u2014 verify pump selection");
   }
 
+  const trace = buildCentrifugalTrace(input, piping, flowRate_m3s, totalDynamicHead, hydraulicPower, brakePower, motorPower, warnings);
+
   return {
     pumpType: "centrifugal",
     totalDynamicHead,
@@ -240,6 +258,7 @@ export function calculatePumpSizing(input: PumpSizingInput): PumpSizingResult {
     brakePower,
     motorPower,
     warnings,
+    trace,
   };
 }
 
@@ -310,6 +329,8 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
     warnings.push("Negative TDH \u2014 liquid may flow by gravity, pump not required");
   }
 
+  const trace = buildPDTrace(input, piping, flowRate_m3s, totalDynamicHead, differentialPressure, theoreticalFlow, slip, hydraulicPower, shaftPower, motorPower, npipAvailable, warnings);
+
   return {
     pumpType: "positive_displacement",
     totalDynamicHead,
@@ -328,6 +349,304 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
     reliefValvePressure: input.reliefValvePressure,
     dischargePressure: input.dischargePressure,
     warnings,
+    trace,
+  };
+}
+
+function buildPipingTraceSteps(
+  input: PipingInput,
+  piping: PipingResult,
+  flowRate_m3s: number,
+  side: "Suction" | "Discharge"
+): PumpCalcStep[] {
+  const steps: PumpCalcStep[] = [];
+  const isSuction = side === "Suction";
+  const dia_mm = isSuction ? input.suctionPipeDiameter : input.dischargePipeDiameter;
+  const dia_m = dia_mm / 1000;
+  const length = isSuction ? input.suctionPipeLength : input.dischargePipeLength;
+  const roughness_mm = isSuction ? input.suctionRoughness : input.dischargeRoughness;
+  const roughness_m = roughness_mm / 1000;
+  const fittingsK = isSuction ? input.suctionFittingsK : input.dischargeFittingsK;
+  const velocity = isSuction ? piping.suctionVelocity : piping.dischargeVelocity;
+  const reynolds = isSuction ? piping.suctionReynolds : piping.dischargeReynolds;
+  const frictionFactor = isSuction ? piping.suctionFrictionFactor : piping.dischargeFrictionFactor;
+  const frictionLoss = isSuction ? piping.suctionFrictionLoss : piping.dischargeFrictionLoss;
+  const velocityHead = isSuction ? piping.suctionVelocityHead : piping.dischargeVelocityHead;
+  const area = (PI / 4) * dia_m * dia_m;
+  const relativeRoughness = roughness_m / dia_m;
+
+  steps.push({
+    name: `${side} Velocity`,
+    equation: "v = Q / A = Q / (\u03C0/4 \u00D7 D\u00B2)",
+    substitution: `${flowRate_m3s.toFixed(6)} / (\u03C0/4 \u00D7 ${dia_m.toFixed(5)}\u00B2) = ${flowRate_m3s.toFixed(6)} / ${area.toFixed(6)}`,
+    result: `${velocity.toFixed(4)} m/s`,
+  });
+
+  steps.push({
+    name: `${side} Reynolds Number`,
+    equation: "Re = \u03C1 \u00D7 v \u00D7 D / \u03BC",
+    substitution: `${input.liquidDensity.toFixed(1)} \u00D7 ${velocity.toFixed(4)} \u00D7 ${dia_m.toFixed(5)} / ${(input.viscosity / 1000).toFixed(6)}`,
+    result: `${reynolds.toFixed(0)}`,
+  });
+
+  if (reynolds < 2300) {
+    steps.push({
+      name: `${side} Friction Factor (Laminar)`,
+      equation: "f = 64 / Re",
+      substitution: `64 / ${reynolds.toFixed(0)}`,
+      result: `${frictionFactor.toFixed(6)}`,
+    });
+  } else {
+    steps.push({
+      name: `${side} Friction Factor (Swamee-Jain)`,
+      equation: "f = 0.25 / [log\u2081\u2080(\u03B5/3.7D + 5.74/Re\u2070\u00B7\u2079)]\u00B2",
+      substitution: `0.25 / [log\u2081\u2080(${relativeRoughness.toFixed(8)}/3.7 + 5.74/${reynolds.toFixed(0)}\u2070\u00B7\u2079)]\u00B2`,
+      result: `${frictionFactor.toFixed(6)}`,
+    });
+  }
+
+  steps.push({
+    name: `${side} Friction Head (Darcy-Weisbach)`,
+    equation: "h_f = f \u00D7 (L/D) \u00D7 v\u00B2/(2g) + K \u00D7 v\u00B2/(2g)",
+    substitution: `${frictionFactor.toFixed(6)} \u00D7 (${length.toFixed(1)}/${dia_m.toFixed(5)}) \u00D7 ${velocity.toFixed(4)}\u00B2/(2\u00D7${GRAVITY}) + ${fittingsK.toFixed(1)} \u00D7 ${velocity.toFixed(4)}\u00B2/(2\u00D7${GRAVITY})`,
+    result: `${frictionLoss.toFixed(4)} m`,
+  });
+
+  steps.push({
+    name: `${side} Velocity Head`,
+    equation: "h_v = v\u00B2 / (2g)",
+    substitution: `${velocity.toFixed(4)}\u00B2 / (2 \u00D7 ${GRAVITY})`,
+    result: `${velocityHead.toFixed(4)} m`,
+  });
+
+  return steps;
+}
+
+function buildCentrifugalTrace(
+  input: PumpSizingInput,
+  piping: PipingResult,
+  flowRate_m3s: number,
+  totalDynamicHead: number,
+  hydraulicPower: number,
+  brakePower: number,
+  motorPower: number,
+  warnings: string[]
+): PumpCalcTrace {
+  const steps: PumpCalcStep[] = [];
+  const assumptions: string[] = [
+    "Steady-state, incompressible flow",
+    "Pipe is full (no two-phase flow)",
+    "Friction factor per Swamee-Jain (turbulent) or 64/Re (laminar)",
+    "Darcy-Weisbach equation for friction head loss",
+    "Fittings losses modeled via equivalent K-factor method",
+  ];
+
+  steps.push(...buildPipingTraceSteps(input, piping, flowRate_m3s, "Suction"));
+  steps.push(...buildPipingTraceSteps(input, piping, flowRate_m3s, "Discharge"));
+
+  steps.push({
+    name: "Static Head",
+    equation: "H_static = z_discharge - z_suction",
+    substitution: `${input.dischargeStaticHead.toFixed(2)} - ${input.suctionStaticHead.toFixed(2)}`,
+    result: `${piping.staticHead.toFixed(4)} m`,
+  });
+
+  const velocityHeadDiff = piping.dischargeVelocityHead - piping.suctionVelocityHead;
+  steps.push({
+    name: "Total Dynamic Head (TDH)",
+    equation: "TDH = H_static + h_f_total + (h_v_discharge - h_v_suction)",
+    substitution: `${piping.staticHead.toFixed(4)} + ${piping.totalFrictionLoss.toFixed(4)} + (${piping.dischargeVelocityHead.toFixed(4)} - ${piping.suctionVelocityHead.toFixed(4)})`,
+    result: `${totalDynamicHead.toFixed(4)} m`,
+  });
+
+  const suctionPressureHead = (input.suctionVesselPressure * 1e5) / (input.liquidDensity * GRAVITY);
+  const atmosphericHead = (input.atmosphericPressure * 1e5) / (input.liquidDensity * GRAVITY);
+  const vaporPressureHead = (input.vaporPressure * 1e3) / (input.liquidDensity * GRAVITY);
+  steps.push({
+    name: "NPSHa (Net Positive Suction Head Available)",
+    equation: "NPSHa = P_atm/(\u03C1g) + P_vessel/(\u03C1g) + z_suction - h_f_suction - P_vap/(\u03C1g)",
+    substitution: `${atmosphericHead.toFixed(4)} + ${suctionPressureHead.toFixed(4)} + ${input.suctionStaticHead.toFixed(2)} - ${piping.suctionFrictionLoss.toFixed(4)} - ${vaporPressureHead.toFixed(4)}`,
+    result: `${piping.npshaAvailable.toFixed(4)} m`,
+  });
+
+  steps.push({
+    name: "Hydraulic Power",
+    equation: "P_hyd = \u03C1 \u00D7 g \u00D7 TDH \u00D7 Q / 1000",
+    substitution: `${input.liquidDensity.toFixed(1)} \u00D7 ${GRAVITY} \u00D7 ${totalDynamicHead.toFixed(4)} \u00D7 ${flowRate_m3s.toFixed(6)} / 1000`,
+    result: `${hydraulicPower.toFixed(4)} kW`,
+  });
+
+  steps.push({
+    name: "Brake Power",
+    equation: "P_brake = P_hyd / \u03B7_pump",
+    substitution: `${hydraulicPower.toFixed(4)} / ${(input.pumpEfficiency / 100).toFixed(4)}`,
+    result: `${brakePower.toFixed(4)} kW`,
+  });
+
+  steps.push({
+    name: "Motor Power",
+    equation: "P_motor = P_brake / \u03B7_motor",
+    substitution: `${brakePower.toFixed(4)} / ${(input.motorEfficiency / 100).toFixed(4)}`,
+    result: `${motorPower.toFixed(4)} kW`,
+  });
+
+  return {
+    steps,
+    intermediateValues: {
+      flowRate_m3s,
+      suctionVelocity: piping.suctionVelocity,
+      dischargeVelocity: piping.dischargeVelocity,
+      suctionReynolds: piping.suctionReynolds,
+      dischargeReynolds: piping.dischargeReynolds,
+      suctionFrictionFactor: piping.suctionFrictionFactor,
+      dischargeFrictionFactor: piping.dischargeFrictionFactor,
+      suctionFrictionLoss: piping.suctionFrictionLoss,
+      dischargeFrictionLoss: piping.dischargeFrictionLoss,
+      staticHead: piping.staticHead,
+      totalFrictionLoss: piping.totalFrictionLoss,
+      totalDynamicHead,
+      npshaAvailable: piping.npshaAvailable,
+      hydraulicPower,
+      brakePower,
+      motorPower,
+    },
+    assumptions,
+    warnings: [...warnings],
+  };
+}
+
+function buildPDTrace(
+  input: PDPumpSizingInput,
+  piping: PipingResult,
+  flowRate_m3s: number,
+  totalDynamicHead: number,
+  differentialPressure: number,
+  theoreticalFlow: number,
+  slip: number,
+  hydraulicPower: number,
+  shaftPower: number,
+  motorPower: number,
+  npipAvailable: number,
+  warnings: string[]
+): PumpCalcTrace {
+  const steps: PumpCalcStep[] = [];
+  const assumptions: string[] = [
+    "Steady-state, incompressible flow",
+    "Pipe is full (no two-phase flow)",
+    "Friction factor per Swamee-Jain (turbulent) or 64/Re (laminar)",
+    "Darcy-Weisbach equation for friction head loss",
+    "Fittings losses modeled via equivalent K-factor method",
+    "Positive displacement pump with internal slip losses",
+  ];
+
+  steps.push(...buildPipingTraceSteps(input, piping, flowRate_m3s, "Suction"));
+  steps.push(...buildPipingTraceSteps(input, piping, flowRate_m3s, "Discharge"));
+
+  steps.push({
+    name: "Static Head",
+    equation: "H_static = z_discharge - z_suction",
+    substitution: `${input.dischargeStaticHead.toFixed(2)} - ${input.suctionStaticHead.toFixed(2)}`,
+    result: `${piping.staticHead.toFixed(4)} m`,
+  });
+
+  const velocityHeadDiff = piping.dischargeVelocityHead - piping.suctionVelocityHead;
+  steps.push({
+    name: "Total Dynamic Head (TDH)",
+    equation: "TDH = H_static + h_f_total + (h_v_discharge - h_v_suction)",
+    substitution: `${piping.staticHead.toFixed(4)} + ${piping.totalFrictionLoss.toFixed(4)} + (${piping.dischargeVelocityHead.toFixed(4)} - ${piping.suctionVelocityHead.toFixed(4)})`,
+    result: `${totalDynamicHead.toFixed(4)} m`,
+  });
+
+  const volEff = input.volumetricEfficiency / 100;
+  steps.push({
+    name: "Slip (Volumetric Loss)",
+    equation: "Q_slip = Q_theoretical - Q_actual = Q_actual/\u03B7_vol - Q_actual",
+    substitution: `${input.flowRate.toFixed(2)}/${volEff.toFixed(4)} - ${input.flowRate.toFixed(2)} = ${theoreticalFlow.toFixed(4)} - ${input.flowRate.toFixed(2)}`,
+    result: `${slip.toFixed(4)} m\u00B3/h`,
+  });
+
+  if (input.dischargePressure > 0) {
+    steps.push({
+      name: "Differential Pressure (specified)",
+      equation: "\u0394P = P_discharge (user-specified)",
+      substitution: `${input.dischargePressure.toFixed(2)}`,
+      result: `${differentialPressure.toFixed(4)} bar`,
+    });
+  } else {
+    steps.push({
+      name: "Differential Pressure (from TDH)",
+      equation: "\u0394P = \u03C1 \u00D7 g \u00D7 TDH / 1\u00D710\u2075",
+      substitution: `${input.liquidDensity.toFixed(1)} \u00D7 ${GRAVITY} \u00D7 ${totalDynamicHead.toFixed(4)} / 100000`,
+      result: `${differentialPressure.toFixed(4)} bar`,
+    });
+  }
+
+  const suctionPressureHead = (input.suctionVesselPressure * 1e5) / (input.liquidDensity * GRAVITY);
+  const atmosphericHead = (input.atmosphericPressure * 1e5) / (input.liquidDensity * GRAVITY);
+  const vaporPressureHead = (input.vaporPressure * 1e3) / (input.liquidDensity * GRAVITY);
+  steps.push({
+    name: "NPSHa",
+    equation: "NPSHa = P_atm/(\u03C1g) + P_vessel/(\u03C1g) + z_suction - h_f_suction - P_vap/(\u03C1g)",
+    substitution: `${atmosphericHead.toFixed(4)} + ${suctionPressureHead.toFixed(4)} + ${input.suctionStaticHead.toFixed(2)} - ${piping.suctionFrictionLoss.toFixed(4)} - ${vaporPressureHead.toFixed(4)}`,
+    result: `${piping.npshaAvailable.toFixed(4)} m`,
+  });
+
+  steps.push({
+    name: "NPIP (Net Positive Inlet Pressure)",
+    equation: "NPIP = NPSHa \u00D7 \u03C1 \u00D7 g / 1000",
+    substitution: `${piping.npshaAvailable.toFixed(4)} \u00D7 ${input.liquidDensity.toFixed(1)} \u00D7 ${GRAVITY} / 1000`,
+    result: `${npipAvailable.toFixed(4)} kPa`,
+  });
+
+  steps.push({
+    name: "Hydraulic Power",
+    equation: "P_hyd = \u0394P \u00D7 10\u2075 \u00D7 Q / 1000",
+    substitution: `${differentialPressure.toFixed(4)} \u00D7 100000 \u00D7 ${flowRate_m3s.toFixed(6)} / 1000`,
+    result: `${hydraulicPower.toFixed(4)} kW`,
+  });
+
+  const mechEff = input.mechanicalEfficiency / 100;
+  const motorEff = input.motorEfficiency / 100;
+  steps.push({
+    name: "Shaft Power",
+    equation: "P_shaft = P_hyd / \u03B7_mech",
+    substitution: `${hydraulicPower.toFixed(4)} / ${mechEff.toFixed(4)}`,
+    result: `${shaftPower.toFixed(4)} kW`,
+  });
+
+  steps.push({
+    name: "Motor Power",
+    equation: "P_motor = P_shaft / \u03B7_motor",
+    substitution: `${shaftPower.toFixed(4)} / ${motorEff.toFixed(4)}`,
+    result: `${motorPower.toFixed(4)} kW`,
+  });
+
+  return {
+    steps,
+    intermediateValues: {
+      flowRate_m3s,
+      suctionVelocity: piping.suctionVelocity,
+      dischargeVelocity: piping.dischargeVelocity,
+      suctionReynolds: piping.suctionReynolds,
+      dischargeReynolds: piping.dischargeReynolds,
+      suctionFrictionFactor: piping.suctionFrictionFactor,
+      dischargeFrictionFactor: piping.dischargeFrictionFactor,
+      suctionFrictionLoss: piping.suctionFrictionLoss,
+      dischargeFrictionLoss: piping.dischargeFrictionLoss,
+      staticHead: piping.staticHead,
+      totalFrictionLoss: piping.totalFrictionLoss,
+      totalDynamicHead,
+      differentialPressure,
+      theoreticalFlow,
+      slip,
+      npshaAvailable: piping.npshaAvailable,
+      npipAvailable,
+      hydraulicPower,
+      shaftPower,
+      motorPower,
+    },
+    assumptions,
+    warnings: [...warnings],
   };
 }
 
