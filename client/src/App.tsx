@@ -18,6 +18,7 @@ import RestrictionOrificePage from "@/pages/calculators/restriction-orifice";
 import ControlValvePage from "@/pages/calculators/control-valve";
 import ConventionalSeparatorPage from "@/pages/calculators/conventional-separator";
 import TwoPhaseSeparatorPage from "@/pages/calculators/two-phase-separator";
+import SeparatorSizingPage from "@/pages/calculators/separator-sizing";
 import FlareKODrumPage from "@/pages/calculators/flare-ko-drum";
 import HeatExchangerPage from "@/pages/calculators/heat-exchanger";
 import PSVSizingPage from "@/pages/calculators/psv-sizing";
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/calculators/pump-sizing" component={PumpSizingPage} />
       <Route path="/calculators/restriction-orifice" component={RestrictionOrificePage} />
       <Route path="/calculators/control-valve" component={ControlValvePage} />
+      <Route path="/calculators/separator-sizing" component={SeparatorSizingPage} />
       <Route path="/calculators/conventional-separator" component={ConventionalSeparatorPage} />
       <Route path="/calculators/two-phase-separator" component={TwoPhaseSeparatorPage} />
       <Route path="/calculators/flare-ko-drum" component={FlareKODrumPage} />

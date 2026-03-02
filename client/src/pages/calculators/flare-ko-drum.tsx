@@ -270,7 +270,7 @@ export default function FlareKODrumPage() {
             <Flame className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-calc-title">Flare KO Drum</h1>
+            <h1 className="text-2xl font-bold" data-testid="text-calc-title">Flare Knock Out Drum Sizing</h1>
             <p className="text-sm text-muted-foreground">Knockout drum sizing per API 521</p>
           </div>
         </div>

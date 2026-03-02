@@ -1,33 +1,8 @@
 import { PI } from "./constants";
 
-/**
- * Separator / KO Drum Sizing — Souders–Brown Method
- *
- * Core equations (symbolic):
- *   v_s,max = K × sqrt( (ρ_l − ρ_g) / ρ_g )
- *   A_req   = Q_g / v_s,max
- *   D_req   = sqrt( 4 × A_req / π )
- *
- * For horizontal vessels with liquid level fraction f_L:
- *   A_gas,avail = (1 − f_L_area) × (π D² / 4)
- *   Solve iteratively for D such that A_gas,avail ≥ A_req
- *
- * Liquid holdup:
- *   V_hold = Q_l × t_res
- *
- * References:
- * - API 12J: Specification for Oil and Gas Separators
- * - GPSA Engineering Data Book, Section 7: Separation Equipment
- * - Arnold & Stewart: Surface Production Operations, Vol. 1
- * - Stewart & Arnold: Gas-Liquid and Liquid-Liquid Separators
- *
- * Separator/KO drum sizing per Souders–Brown method with holdup and geometry assembly.
- * Covers vertical, horizontal, KO drum, and 3-phase configurations.
- */
-
-// ─── DATA MODEL ─────────────────────────────────────────────────────────────────
-
-export type SeparatorType = "vertical" | "horizontal" | "ko_drum" | "three_phase";
+export type SeparatorOrientation = "vertical" | "horizontal";
+export type ServiceType = "production" | "gas_scrubber" | "inlet_separator" | "slug_catcher" | "test_separator";
+export type PhaseMode = "two_phase" | "three_phase";
 export type InletDeviceType = "diverter" | "half_pipe" | "cyclone" | "none";
 export type MistEliminatorType = "none" | "wire_mesh" | "vane_pack" | "high_efficiency";
 export type CaseType = "normal" | "maximum" | "fire" | "upset" | "startup" | "blowdown" | "turndown" | "custom";
@@ -35,7 +10,8 @@ export type CaseType = "normal" | "maximum" | "fire" | "upset" | "startup" | "bl
 export interface CalcStep {
   label: string;
   equation: string;
-  value: string;
+  substitution: string;
+  result: number;
   unit: string;
 }
 
@@ -61,18 +37,11 @@ export interface OperatingCase {
   flagHydrate: boolean;
   flagEmulsion: boolean;
   dropletBasis: number;
-}
-
-export interface SeparatorConfig {
-  separatorType: SeparatorType;
-  inletDevice: InletDeviceType;
-  mistEliminator: MistEliminatorType;
-  kValue: number;
-  kMode: "user" | "typical";
-  levelFraction: number;
-  maxDiameter: number;
-  maxLD: number;
-  allowances: VesselAllowances;
+  oilDensity?: number;
+  waterDensity?: number;
+  oilViscosity?: number;
+  waterViscosity?: number;
+  waterCut?: number;
 }
 
 export interface VesselAllowances {
@@ -81,6 +50,24 @@ export interface VesselAllowances {
   mistEliminatorZone: number;
   sumpZone: number;
   nozzleZone: number;
+}
+
+export interface SeparatorConfig {
+  orientation: SeparatorOrientation;
+  serviceType: ServiceType;
+  phaseMode: PhaseMode;
+  inletDevice: InletDeviceType;
+  mistEliminator: MistEliminatorType;
+  kValue: number;
+  kMode: "user" | "typical";
+  levelFraction: number;
+  maxDiameter: number;
+  maxLD: number;
+  allowances: VesselAllowances;
+  enableDropletCheck: boolean;
+  dropletDiameter_um: number;
+  foamFactor: number;
+  applyPressureCorrection: boolean;
 }
 
 export interface HoldupBasis {
@@ -107,6 +94,10 @@ export interface CaseGasResult {
   v_s_max: number;
   A_req: number;
   D_req_mm: number;
+  dropletSettlingVelocity?: number;
+  actualGasVelocity?: number;
+  dropletCarryoverRisk?: boolean;
+  dropletRe_p?: number;
   steps: CalcStep[];
 }
 
@@ -132,59 +123,77 @@ export type EngFlag =
   | "FOAM_RISK"
   | "SLUGGING_RISK"
   | "SOLIDS_SAND"
-  | "HYDRATE_WAX"
   | "EMULSION_RISK"
-  | "PROPERTY_UNCERTAINTY"
-  | "HIGH_LIQUID_LOAD"
-  | "K_USER_ASSUMED"
-  | "K_TYPICAL_MODE"
-  | "THREE_PHASE_PRELIM"
-  | "VENDOR_MIST_CONFIRM"
-  | "HIGH_PRESSURE"
+  | "HYDRATE_WAX"
+  | "HIGH_LIQUID_LEVEL"
   | "LD_OUT_OF_RANGE"
   | "GAS_VELOCITY_EXCEEDED"
-  | "HIGH_LIQUID_LEVEL"
+  | "HIGH_GAS_VELOCITY"
+  | "HIGH_LIQUID_LOAD"
+  | "HIGH_PRESSURE"
+  | "K_USER_ASSUMED"
+  | "K_TYPICAL_MODE"
+  | "VENDOR_MIST_CONFIRM"
+  | "THREE_PHASE_PRELIM"
   | "SPECIALIST_REQUIRED"
-  | "TRANSIENT_REVIEW";
+  | "FOAM_K_DERATED"
+  | "PRESSURE_K_CORRECTED"
+  | "SETTLING_LENGTH_SHORT"
+  | "STOKES_RE_EXCEEDED"
+  | "PROPERTY_UNCERTAINTY"
+  | "SLUG_CATCHER_REQUIRED"
+  | "DROPLET_CARRYOVER_RISK";
 
 export const FLAG_LABELS: Record<EngFlag, string> = {
-  FOAM_RISK: "Foam risk identified — consider antifoam and reduced K",
-  SLUGGING_RISK: "Slugging risk — consider slug catcher or dedicated surge drum",
-  SOLIDS_SAND: "Solids/sand present — sand jetting and desanding required",
-  HYDRATE_WAX: "Hydrate/wax risk — inhibitor injection and heat tracing required",
-  EMULSION_RISK: "Emulsion risk — coalescers or chemical treatment may be needed",
-  PROPERTY_UNCERTAINTY: "Fluid property uncertainty — validate with PVT data",
-  HIGH_LIQUID_LOAD: "High liquid load — gas area reduced, verify gas capacity",
-  K_USER_ASSUMED: "K value is user-assumed — confirm with vendor/internals data",
-  K_TYPICAL_MODE: "K value from typical guidance — confirm for specific service",
-  THREE_PHASE_PRELIM: "3-phase sizing is preliminary — detailed design required (weirs, coalescers, emulsions)",
-  VENDOR_MIST_CONFIRM: "Mist eliminator selection requires vendor confirmation",
-  HIGH_PRESSURE: "High pressure service — wall thickness and weight may govern",
+  FOAM_RISK: "Foam risk identified \u2014 consider antifoam and reduced K",
+  SLUGGING_RISK: "Slugging risk \u2014 consider slug catcher or dedicated surge drum",
+  SOLIDS_SAND: "Solids/sand present \u2014 sand jetting and desanding required",
+  EMULSION_RISK: "Emulsion risk \u2014 coalescers or chemical treatment may be needed",
+  HYDRATE_WAX: "Hydrate/wax risk \u2014 inhibitor injection and heat tracing required",
+  HIGH_LIQUID_LEVEL: "Liquid level exceeds 75% \u2014 increase vessel size or reduce retention",
   LD_OUT_OF_RANGE: "L/D ratio outside typical range",
-  GAS_VELOCITY_EXCEEDED: "Actual gas velocity exceeds Souders–Brown limit",
-  HIGH_LIQUID_LEVEL: "Liquid level exceeds 75% — increase vessel size or reduce retention",
-  SPECIALIST_REQUIRED: "Non-standard conditions — specialist design review required",
-  TRANSIENT_REVIEW: "KO drum / blowdown — transient loads may govern; dynamic review required",
+  GAS_VELOCITY_EXCEEDED: "Actual gas velocity exceeds Souders\u2013Brown limit",
+  HIGH_GAS_VELOCITY: "Gas velocity approaching Souders\u2013Brown limit",
+  HIGH_LIQUID_LOAD: "High liquid load \u2014 gas area reduced, verify gas capacity",
+  HIGH_PRESSURE: "High pressure service \u2014 wall thickness and weight may govern",
+  K_USER_ASSUMED: "K value is user-assumed \u2014 confirm with vendor/internals data",
+  K_TYPICAL_MODE: "K value from typical guidance \u2014 confirm for specific service",
+  VENDOR_MIST_CONFIRM: "Mist eliminator selection requires vendor confirmation",
+  THREE_PHASE_PRELIM: "3-phase sizing is preliminary \u2014 detailed design required (weirs, coalescers, emulsions)",
+  SPECIALIST_REQUIRED: "Non-standard conditions \u2014 specialist design review required",
+  FOAM_K_DERATED: "K value derated for foam tendency (GPSA guidance)",
+  PRESSURE_K_CORRECTED: "K value corrected for high pressure per GPSA Fig 7-9",
+  SETTLING_LENGTH_SHORT: "Horizontal settling length may be insufficient for droplet removal",
+  STOKES_RE_EXCEEDED: "Particle Reynolds number exceeds 1 \u2014 Stokes law may underestimate terminal velocity",
+  PROPERTY_UNCERTAINTY: "Fluid property uncertainty \u2014 validate with PVT data or lab analysis",
+  SLUG_CATCHER_REQUIRED: "Slug catcher service \u2014 ensure slug volume is adequately accommodated",
+  DROPLET_CARRYOVER_RISK: "Droplet settling velocity < actual gas velocity \u2014 carryover risk",
 };
 
 export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
   FOAM_RISK: "warning",
   SLUGGING_RISK: "warning",
   SOLIDS_SAND: "warning",
-  HYDRATE_WAX: "warning",
   EMULSION_RISK: "warning",
-  PROPERTY_UNCERTAINTY: "info",
-  HIGH_LIQUID_LOAD: "warning",
-  K_USER_ASSUMED: "info",
-  K_TYPICAL_MODE: "info",
-  THREE_PHASE_PRELIM: "warning",
-  VENDOR_MIST_CONFIRM: "info",
-  HIGH_PRESSURE: "info",
+  HYDRATE_WAX: "warning",
+  HIGH_LIQUID_LEVEL: "error",
   LD_OUT_OF_RANGE: "warning",
   GAS_VELOCITY_EXCEEDED: "error",
-  HIGH_LIQUID_LEVEL: "error",
+  HIGH_GAS_VELOCITY: "warning",
+  HIGH_LIQUID_LOAD: "warning",
+  HIGH_PRESSURE: "info",
+  K_USER_ASSUMED: "info",
+  K_TYPICAL_MODE: "info",
+  VENDOR_MIST_CONFIRM: "info",
+  THREE_PHASE_PRELIM: "warning",
   SPECIALIST_REQUIRED: "error",
-  TRANSIENT_REVIEW: "warning",
+  FOAM_K_DERATED: "info",
+  PRESSURE_K_CORRECTED: "info",
+  SETTLING_LENGTH_SHORT: "warning",
+  STOKES_RE_EXCEEDED: "warning",
+  PROPERTY_UNCERTAINTY: "info",
+  SLUG_CATCHER_REQUIRED: "warning",
+  DROPLET_CARRYOVER_RISK: "warning",
 };
 
 export interface SeparatorFullResult {
@@ -203,8 +212,6 @@ export interface SeparatorFullResult {
   nextSteps: string[];
   assumptions: string[];
 }
-
-// ─── DEFAULTS ───────────────────────────────────────────────────────────────────
 
 export const DEFAULT_PROJECT: ProjectSetup = {
   caseName: "",
@@ -247,7 +254,9 @@ export const DEFAULT_ALLOWANCES: VesselAllowances = {
 };
 
 export const DEFAULT_CONFIG: SeparatorConfig = {
-  separatorType: "vertical",
+  orientation: "vertical",
+  serviceType: "production",
+  phaseMode: "two_phase",
   inletDevice: "diverter",
   mistEliminator: "wire_mesh",
   kValue: 0.07,
@@ -256,6 +265,10 @@ export const DEFAULT_CONFIG: SeparatorConfig = {
   maxDiameter: 0,
   maxLD: 0,
   allowances: { ...DEFAULT_ALLOWANCES },
+  enableDropletCheck: false,
+  dropletDiameter_um: 150,
+  foamFactor: 0.7,
+  applyPressureCorrection: true,
 };
 
 export const DEFAULT_HOLDUP: HoldupBasis = {
@@ -267,27 +280,40 @@ export const DEFAULT_HOLDUP: HoldupBasis = {
   waterRetentionTime: 10,
 };
 
-// ─── K-VALUE GUIDANCE ───────────────────────────────────────────────────────────
-
-export const K_GUIDANCE: Record<string, { range: [number, number]; typical: number; notes: string }> = {
-  "Vertical — No internals": { range: [0.03, 0.06], typical: 0.04, notes: "Gravity settling only" },
-  "Vertical — Wire mesh pad": { range: [0.05, 0.10], typical: 0.07, notes: "Most common for gas scrubbers" },
-  "Vertical — Vane pack": { range: [0.07, 0.12], typical: 0.10, notes: "Higher throughput, larger DP" },
-  "Horizontal — No internals": { range: [0.04, 0.08], typical: 0.06, notes: "Gravity settling only" },
-  "Horizontal — Wire mesh pad": { range: [0.07, 0.12], typical: 0.10, notes: "Common production separator" },
-  "Horizontal — Vane pack": { range: [0.10, 0.15], typical: 0.12, notes: "Higher throughput" },
-  "KO Drum — Bare": { range: [0.02, 0.05], typical: 0.035, notes: "Conservative for flare KO" },
-  "KO Drum — Wire mesh pad": { range: [0.04, 0.08], typical: 0.061, notes: "With mist eliminator" },
+export const K_GUIDANCE_API12J: Record<string, { range: [number, number]; typical: number; notes: string }> = {
+  "Vertical \u2014 No internals": { range: [0.03, 0.06], typical: 0.04, notes: "Gravity settling only, API 12J" },
+  "Vertical \u2014 Wire mesh pad": { range: [0.05, 0.10], typical: 0.07, notes: "Most common for production separators, API 12J" },
+  "Vertical \u2014 Vane pack": { range: [0.07, 0.12], typical: 0.10, notes: "Higher throughput, larger \u0394P" },
+  "Vertical \u2014 High efficiency": { range: [0.10, 0.15], typical: 0.12, notes: "Multi-cyclone / high-efficiency demister" },
+  "Horizontal \u2014 No internals": { range: [0.04, 0.08], typical: 0.06, notes: "Gravity settling only" },
+  "Horizontal \u2014 Wire mesh pad": { range: [0.07, 0.12], typical: 0.10, notes: "Common production separator, API 12J" },
+  "Horizontal \u2014 Vane pack": { range: [0.10, 0.15], typical: 0.12, notes: "Higher throughput" },
+  "Horizontal \u2014 High efficiency": { range: [0.12, 0.18], typical: 0.15, notes: "Multi-cyclone demister" },
 };
 
-// ─── HORIZONTAL LEVEL FRACTION HELPERS ──────────────────────────────────────────
+export const K_GUIDANCE_GPSA: Record<string, { range: [number, number]; typical: number; notes: string }> = {
+  "Vertical \u2014 No internals": { range: [0.03, 0.06], typical: 0.04, notes: "Gravity settling only (GPSA Sec 7)" },
+  "Vertical \u2014 Wire mesh pad": { range: [0.05, 0.10], typical: 0.07, notes: "Most common for gas scrubbers (GPSA)" },
+  "Vertical \u2014 Vane pack": { range: [0.07, 0.12], typical: 0.10, notes: "Higher throughput, larger \u0394P (GPSA)" },
+  "Horizontal \u2014 No internals": { range: [0.04, 0.08], typical: 0.06, notes: "Gravity settling only (GPSA)" },
+  "Horizontal \u2014 Wire mesh pad": { range: [0.07, 0.12], typical: 0.10, notes: "Common inlet separator (GPSA)" },
+  "Horizontal \u2014 Vane pack": { range: [0.10, 0.15], typical: 0.12, notes: "Higher throughput (GPSA)" },
+};
+
+export function getKGuidance(serviceType: ServiceType): Record<string, { range: [number, number]; typical: number; notes: string }> {
+  if (serviceType === "production") return K_GUIDANCE_API12J;
+  return K_GUIDANCE_GPSA;
+}
+
+export function getStandardReference(serviceType: ServiceType): string {
+  if (serviceType === "production") return "API 12J";
+  return "GPSA Section 7";
+}
 
 function segmentAreaFraction(h_over_D: number): number {
   if (h_over_D <= 0) return 0;
   if (h_over_D >= 1) return 1;
-  const r = 0.5;
-  const h = h_over_D;
-  const theta = 2 * Math.acos(1 - 2 * h);
+  const theta = 2 * Math.acos(1 - 2 * h_over_D);
   return (theta - Math.sin(theta)) / (2 * PI);
 }
 
@@ -295,7 +321,53 @@ function gasAreaFractionForLevel(levelFraction: number): number {
   return 1 - segmentAreaFraction(levelFraction);
 }
 
-// ─── SOUDERS-BROWN CORE ─────────────────────────────────────────────────────────
+export function computeKPressureCorrection(P_barg: number): { Cp: number; steps: CalcStep[] } {
+  const steps: CalcStep[] = [];
+  let Cp: number;
+  if (P_barg <= 6.9) {
+    Cp = 1.0;
+    steps.push({ label: "Pressure correction factor (GPSA Fig 7-9)", equation: "Cp = 1.0 (P \u2264 6.9 barg)", substitution: `Cp = 1.0 (P = ${P_barg.toFixed(1)} barg)`, result: Cp, unit: "-" });
+  } else {
+    Cp = Math.max(0.5, 1.0 - 0.00483 * (P_barg - 6.9));
+    steps.push({ label: "Pressure correction factor (GPSA Fig 7-9)", equation: "Cp = max(0.5, 1.0 \u2212 0.00483 \u00D7 (P \u2212 6.9))", substitution: `Cp = max(0.5, 1.0 \u2212 0.00483 \u00D7 (${P_barg.toFixed(1)} \u2212 6.9))`, result: Cp, unit: "-" });
+  }
+  return { Cp, steps };
+}
+
+export function computeEffectiveK(
+  K_base: number,
+  P_barg: number,
+  foamFactor: number,
+  applyPressureCorrection: boolean,
+  anyFoamCase: boolean,
+): { K_eff: number; pressureCorrected: boolean; foamDerated: boolean; steps: CalcStep[] } {
+  const steps: CalcStep[] = [];
+  let K_eff = K_base;
+  let pressureCorrected = false;
+  let foamDerated = false;
+
+  steps.push({ label: "K base value", equation: "K_base", substitution: `K_base = ${K_base}`, result: K_base, unit: "m/s" });
+
+  if (applyPressureCorrection) {
+    const { Cp, steps: cpSteps } = computeKPressureCorrection(P_barg);
+    steps.push(...cpSteps);
+    if (Cp < 1.0) {
+      K_eff = K_eff * Cp;
+      pressureCorrected = true;
+      steps.push({ label: "K after pressure correction", equation: "K_p = K_base \u00D7 Cp", substitution: `K_p = ${K_base} \u00D7 ${Cp.toFixed(4)}`, result: K_eff, unit: "m/s" });
+    }
+  }
+
+  if (anyFoamCase && foamFactor > 0 && foamFactor < 1.0) {
+    const K_before = K_eff;
+    K_eff = K_eff * foamFactor;
+    foamDerated = true;
+    steps.push({ label: "K after foam derating", equation: "K_foam = K_p \u00D7 F_foam", substitution: `K_foam = ${K_before.toFixed(4)} \u00D7 ${foamFactor}`, result: K_eff, unit: "m/s" });
+  }
+
+  steps.push({ label: "Effective K value", equation: "K_eff", substitution: `K_eff = ${K_eff.toFixed(4)}`, result: K_eff, unit: "m/s" });
+  return { K_eff, pressureCorrected, foamDerated, steps };
+}
 
 function computeActualGasFlow(c: OperatingCase): { Qg_m3s: number; steps: CalcStep[] } {
   const steps: CalcStep[] = [];
@@ -303,7 +375,7 @@ function computeActualGasFlow(c: OperatingCase): { Qg_m3s: number; steps: CalcSt
 
   if (c.gasFlowBasis === "actual") {
     Qg_m3s = c.gasFlowRate / 3600;
-    steps.push({ label: "Gas flow (actual)", equation: "Q_g = Q_input / 3600", value: Qg_m3s.toFixed(6), unit: "m\u00B3/s" });
+    steps.push({ label: "Gas flow (actual)", equation: "Q_g = Q_input / 3600", substitution: `Q_g = ${c.gasFlowRate} / 3600`, result: Qg_m3s, unit: "m\u00B3/s" });
   } else {
     if (c.gasPressure <= 0 || c.gasTemperature <= 0 || c.gasMW <= 0) {
       throw new Error(`Case "${c.name}": P, T, and MW required to convert standard to actual gas flow`);
@@ -315,11 +387,11 @@ function computeActualGasFlow(c: OperatingCase): { Qg_m3s: number; steps: CalcSt
     const P_std = 101325;
     const T_std = 288.15;
     Qg_m3s = Qstd_m3s * (P_std / P_Pa) * (T_K / T_std) * Z;
-    steps.push({ label: "Standard to actual", equation: "Q_act = Q_std × (P_std/P) × (T/T_std) × Z", value: Qg_m3s.toFixed(6), unit: "m\u00B3/s" });
+    steps.push({ label: "Standard to actual", equation: "Q_act = Q_std \u00D7 (P_std/P) \u00D7 (T/T_std) \u00D7 Z", substitution: `Q_act = ${Qstd_m3s.toFixed(6)} \u00D7 (${P_std}/${P_Pa.toFixed(0)}) \u00D7 (${T_K.toFixed(2)}/${T_std}) \u00D7 ${Z}`, result: Qg_m3s, unit: "m\u00B3/s" });
 
     const rho_calc = (P_Pa * c.gasMW) / (8314.46 * T_K * Z);
     if (c.gasDensity <= 0 || Math.abs(c.gasDensity - rho_calc) / rho_calc > 0.2) {
-      steps.push({ label: "Density cross-check", equation: "\u03C1_calc = P\u00B7MW / (R\u00B7T\u00B7Z)", value: rho_calc.toFixed(2), unit: "kg/m\u00B3" });
+      steps.push({ label: "Density cross-check", equation: "\u03C1_calc = P\u00B7MW / (R\u00B7T\u00B7Z)", substitution: `\u03C1_calc = ${P_Pa.toFixed(0)} \u00D7 ${c.gasMW} / (8314.46 \u00D7 ${T_K.toFixed(2)} \u00D7 ${Z})`, result: rho_calc, unit: "kg/m\u00B3" });
     }
   }
 
@@ -337,19 +409,50 @@ function computeSoudersBrown(
   if (K <= 0) throw new Error("K value must be positive");
 
   const v_s_max = K * Math.sqrt((rhoL - rhoG) / rhoG);
-  steps.push({ label: `${label}: v_s,max`, equation: "v_s,max = K \u00D7 \u221A((\u03C1_l \u2212 \u03C1_g) / \u03C1_g)", value: v_s_max.toFixed(4), unit: "m/s" });
+  steps.push({ label: `${label}: v_s,max`, equation: "v_s,max = K \u00D7 \u221A((\u03C1_l \u2212 \u03C1_g) / \u03C1_g)", substitution: `v_s,max = ${K} \u00D7 \u221A((${rhoL} \u2212 ${rhoG}) / ${rhoG})`, result: v_s_max, unit: "m/s" });
 
   const A_req = Qg_m3s / v_s_max;
-  steps.push({ label: `${label}: A_req (total)`, equation: "A_req = Q_g / v_s,max", value: A_req.toFixed(6), unit: "m\u00B2" });
+  steps.push({ label: `${label}: A_req (total)`, equation: "A_req = Q_g / v_s,max", substitution: `A_req = ${Qg_m3s.toFixed(6)} / ${v_s_max.toFixed(4)}`, result: A_req, unit: "m\u00B2" });
 
   const A_vessel = A_req / gasAreaFrac;
   const D_req_m = Math.sqrt(4 * A_vessel / PI);
-  steps.push({ label: `${label}: D_req`, equation: "D = \u221A(4 \u00D7 A_vessel / \u03C0)", value: (D_req_m * 1000).toFixed(0), unit: "mm" });
+  steps.push({ label: `${label}: D_req`, equation: "D = \u221A(4 \u00D7 A_vessel / \u03C0)", substitution: `D = \u221A(4 \u00D7 ${A_vessel.toFixed(6)} / ${PI.toFixed(4)})`, result: D_req_m * 1000, unit: "mm" });
 
   return { v_s_max, A_req, D_req_m, steps };
 }
 
-// ─── HORIZONTAL ITERATIVE SOLVER ────────────────────────────────────────────────
+function computeDropletSettling(
+  rhoL: number, rhoG: number, gasViscosity_cP: number, dropletDiam_um: number,
+  Qg_m3s: number, D_m: number
+): { v_t: number; v_actual: number; carryoverRisk: boolean; Re_p: number; steps: CalcStep[] } {
+  const steps: CalcStep[] = [];
+  const g = 9.80665;
+  const d_m = dropletDiam_um * 1e-6;
+  const mu_g = gasViscosity_cP * 1e-3;
+
+  const v_t = ((rhoL - rhoG) * g * d_m * d_m) / (18 * mu_g);
+  steps.push({ label: "Droplet settling velocity (Stokes)", equation: "v_t = (\u03C1_l \u2212 \u03C1_g) \u00D7 g \u00D7 d\u00B2 / (18 \u00D7 \u03BC_g)", substitution: `v_t = (${rhoL} \u2212 ${rhoG}) \u00D7 ${g} \u00D7 (${d_m.toExponential(3)})\u00B2 / (18 \u00D7 ${mu_g.toExponential(3)})`, result: v_t, unit: "m/s" });
+
+  const A_vessel = (PI / 4) * D_m * D_m;
+  const v_actual = Qg_m3s / A_vessel;
+  steps.push({ label: "Actual gas velocity", equation: "v_gas = Q_g / A_vessel", substitution: `v_gas = ${Qg_m3s.toFixed(6)} / ${A_vessel.toFixed(6)}`, result: v_actual, unit: "m/s" });
+
+  const Re_p = (rhoG * v_t * d_m) / mu_g;
+  steps.push({ label: "Particle Reynolds number", equation: "Re_p = \u03C1_g \u00D7 v_t \u00D7 d / \u03BC_g", substitution: `Re_p = ${rhoG} \u00D7 ${v_t.toFixed(6)} \u00D7 ${d_m.toExponential(3)} / ${mu_g.toExponential(3)}`, result: Re_p, unit: "-" });
+
+  if (Re_p > 1) {
+    steps.push({ label: "Stokes regime check", equation: "Re_p > 1 \u2192 Stokes law may overpredict v_t", substitution: `Re_p = ${Re_p.toFixed(3)} > 1`, result: Re_p, unit: "-" });
+  }
+
+  const carryoverRisk = v_actual > v_t;
+  if (carryoverRisk) {
+    steps.push({ label: "Droplet check", equation: "v_gas > v_t \u2192 CARRYOVER RISK", substitution: `${v_actual.toFixed(4)} > ${v_t.toFixed(4)}`, result: v_actual, unit: "-" });
+  } else {
+    steps.push({ label: "Droplet check", equation: "v_gas \u2264 v_t \u2192 OK", substitution: `${v_actual.toFixed(4)} \u2264 ${v_t.toFixed(4)}`, result: v_actual, unit: "-" });
+  }
+
+  return { v_t, v_actual, carryoverRisk, Re_p, steps };
+}
 
 function solveHorizontalDiameter(
   K: number, rhoL: number, rhoG: number, Qg_m3s: number, levelFraction: number
@@ -358,11 +461,11 @@ function solveHorizontalDiameter(
   const v_s_max = K * Math.sqrt((rhoL - rhoG) / rhoG);
   const A_req = Qg_m3s / v_s_max;
 
-  steps.push({ label: "Horizontal: v_s,max", equation: "v_s,max = K \u00D7 \u221A((\u03C1_l \u2212 \u03C1_g) / \u03C1_g)", value: v_s_max.toFixed(4), unit: "m/s" });
-  steps.push({ label: "Horizontal: A_req (gas)", equation: "A_req = Q_g / v_s,max", value: A_req.toFixed(6), unit: "m\u00B2" });
+  steps.push({ label: "Horizontal: v_s,max", equation: "v_s,max = K \u00D7 \u221A((\u03C1_l \u2212 \u03C1_g) / \u03C1_g)", substitution: `v_s,max = ${K} \u00D7 \u221A((${rhoL} \u2212 ${rhoG}) / ${rhoG})`, result: v_s_max, unit: "m/s" });
+  steps.push({ label: "Horizontal: A_req (gas)", equation: "A_req = Q_g / v_s,max", substitution: `A_req = ${Qg_m3s.toFixed(6)} / ${v_s_max.toFixed(4)}`, result: A_req, unit: "m\u00B2" });
 
   const gasAreaFrac = gasAreaFractionForLevel(levelFraction);
-  steps.push({ label: "Gas area fraction", equation: "f_gas = 1 \u2212 f_segment(h/D)", value: gasAreaFrac.toFixed(4), unit: "-" });
+  steps.push({ label: "Gas area fraction", equation: "f_gas = 1 \u2212 f_segment(h/D)", substitution: `f_gas = 1 \u2212 f_segment(${levelFraction})`, result: gasAreaFrac, unit: "-" });
 
   let D_lo = 0.1;
   let D_hi = 20;
@@ -371,11 +474,7 @@ function solveHorizontalDiameter(
     D_m = (D_lo + D_hi) / 2;
     const A_total = (PI / 4) * D_m * D_m;
     const A_gas_avail = gasAreaFrac * A_total;
-    if (A_gas_avail >= A_req) {
-      D_hi = D_m;
-    } else {
-      D_lo = D_m;
-    }
+    if (A_gas_avail >= A_req) D_hi = D_m; else D_lo = D_m;
     if ((D_hi - D_lo) < 0.0001) break;
   }
 
@@ -383,19 +482,17 @@ function solveHorizontalDiameter(
   const A_gas_avail = gasAreaFrac * A_total;
   const v_actual = Qg_m3s / A_gas_avail;
 
-  steps.push({ label: "Horizontal: D_req (iterative)", equation: "Solve D: f_gas \u00D7 \u03C0D\u00B2/4 \u2265 A_req", value: (D_m * 1000).toFixed(0), unit: "mm" });
-  steps.push({ label: "Gas area available", equation: "A_gas = f_gas \u00D7 \u03C0D\u00B2/4", value: A_gas_avail.toFixed(6), unit: "m\u00B2" });
+  steps.push({ label: "Horizontal: D_req (iterative)", equation: "Solve D: f_gas \u00D7 \u03C0D\u00B2/4 \u2265 A_req", substitution: `${gasAreaFrac.toFixed(4)} \u00D7 \u03C0\u00D7${D_m.toFixed(4)}\u00B2/4 = ${A_gas_avail.toFixed(6)} \u2265 ${A_req.toFixed(6)}`, result: D_m * 1000, unit: "mm" });
+  steps.push({ label: "Gas area available", equation: "A_gas = f_gas \u00D7 \u03C0D\u00B2/4", substitution: `A_gas = ${gasAreaFrac.toFixed(4)} \u00D7 \u03C0\u00D7${D_m.toFixed(4)}\u00B2/4`, result: A_gas_avail, unit: "m\u00B2" });
 
   return { D_m, gasAreaFrac, v_actual, steps };
 }
 
-// ─── LIQUID HOLDUP & RETENTION ──────────────────────────────────────────────────
-
 function computeHoldup(
   cases: OperatingCase[],
   holdup: HoldupBasis,
-  separatorType: SeparatorType,
   governingCaseId: string,
+  config: SeparatorConfig,
 ): { totalVolume_m3: number; holdupVolume_m3: number; surgeVolume_m3: number; slugVolume_m3: number; steps: CalcStep[] } {
   const steps: CalcStep[] = [];
   const govCase = cases.find(c => c.id === governingCaseId) || cases[0];
@@ -403,40 +500,56 @@ function computeHoldup(
   let Ql_m3s = govCase.liquidFlowRate / 3600;
   if (govCase.liquidFlowBasis === "mass" && govCase.liquidDensity > 0) {
     Ql_m3s = (govCase.liquidFlowRate / govCase.liquidDensity) / 3600;
-    steps.push({ label: "Liquid vol flow", equation: "Q_l = W_l / \u03C1_l / 3600", value: Ql_m3s.toFixed(6), unit: "m\u00B3/s" });
+    steps.push({ label: "Liquid vol flow", equation: "Q_l = W_l / \u03C1_l / 3600", substitution: `Q_l = ${govCase.liquidFlowRate} / ${govCase.liquidDensity} / 3600`, result: Ql_m3s, unit: "m\u00B3/s" });
   } else {
-    steps.push({ label: "Liquid vol flow", equation: "Q_l = Q_input / 3600", value: Ql_m3s.toFixed(6), unit: "m\u00B3/s" });
+    steps.push({ label: "Liquid vol flow", equation: "Q_l = Q_input / 3600", substitution: `Q_l = ${govCase.liquidFlowRate} / 3600`, result: Ql_m3s, unit: "m\u00B3/s" });
   }
 
   const holdupVolume = Ql_m3s * holdup.residenceTime * 60;
-  steps.push({ label: "Holdup volume", equation: "V_hold = Q_l \u00D7 t_res \u00D7 60", value: holdupVolume.toFixed(4), unit: "m\u00B3" });
+  steps.push({ label: "Holdup volume", equation: "V_hold = Q_l \u00D7 t_res \u00D7 60", substitution: `V_hold = ${Ql_m3s.toFixed(6)} \u00D7 ${holdup.residenceTime} \u00D7 60`, result: holdupVolume, unit: "m\u00B3" });
 
   const surgeVolume = Ql_m3s * holdup.surgeTime * 60;
-  steps.push({ label: "Surge volume", equation: "V_surge = Q_l \u00D7 t_surge \u00D7 60", value: surgeVolume.toFixed(4), unit: "m\u00B3" });
+  steps.push({ label: "Surge volume", equation: "V_surge = Q_l \u00D7 t_surge \u00D7 60", substitution: `V_surge = ${Ql_m3s.toFixed(6)} \u00D7 ${holdup.surgeTime} \u00D7 60`, result: surgeVolume, unit: "m\u00B3" });
 
   const slugVolume = holdup.slugVolume;
   if (slugVolume > 0) {
-    steps.push({ label: "Slug volume (user)", equation: "V_slug (direct input)", value: slugVolume.toFixed(4), unit: "m\u00B3" });
+    steps.push({ label: "Slug volume (user)", equation: "V_slug (direct input)", substitution: `V_slug = ${slugVolume}`, result: slugVolume, unit: "m\u00B3" });
   }
 
   let totalVolume = holdupVolume + surgeVolume + slugVolume;
 
-  if (separatorType === "three_phase") {
-    const Ql_oil_m3s = Ql_m3s * 0.7;
-    const Ql_water_m3s = Ql_m3s * 0.3;
-    const oilVol = Ql_oil_m3s * holdup.oilRetentionTime * 60;
-    const waterVol = Ql_water_m3s * holdup.waterRetentionTime * 60;
-    steps.push({ label: "Oil phase volume", equation: "V_oil = Q_oil \u00D7 t_oil \u00D7 60", value: oilVol.toFixed(4), unit: "m\u00B3" });
-    steps.push({ label: "Water phase volume", equation: "V_water = Q_water \u00D7 t_water \u00D7 60", value: waterVol.toFixed(4), unit: "m\u00B3" });
-    totalVolume = Math.max(totalVolume, oilVol + waterVol + surgeVolume);
+  if (config.phaseMode === "three_phase") {
+    const waterCut = govCase.waterCut ?? 0.5;
+    const oilRetTime = holdup.oilRetentionTime;
+    const waterRetTime = holdup.waterRetentionTime;
+    const Ql_oil_m3s = Ql_m3s * (1 - waterCut);
+    const Ql_water_m3s = Ql_m3s * waterCut;
+
+    steps.push({ label: "Water cut fraction", equation: "WC", substitution: `WC = ${waterCut}`, result: waterCut, unit: "-" });
+    steps.push({ label: "Oil flow rate", equation: "Q_oil = Q_l \u00D7 (1 \u2212 WC)", substitution: `Q_oil = ${Ql_m3s.toFixed(6)} \u00D7 (1 \u2212 ${waterCut})`, result: Ql_oil_m3s, unit: "m\u00B3/s" });
+    steps.push({ label: "Water flow rate", equation: "Q_water = Q_l \u00D7 WC", substitution: `Q_water = ${Ql_m3s.toFixed(6)} \u00D7 ${waterCut}`, result: Ql_water_m3s, unit: "m\u00B3/s" });
+
+    const oilVol = Ql_oil_m3s * oilRetTime * 60;
+    const waterVol = Ql_water_m3s * waterRetTime * 60;
+
+    steps.push({ label: "Oil phase volume", equation: "V_oil = Q_oil \u00D7 t_oil \u00D7 60", substitution: `V_oil = ${Ql_oil_m3s.toFixed(6)} \u00D7 ${oilRetTime} \u00D7 60`, result: oilVol, unit: "m\u00B3" });
+    steps.push({ label: "Water phase volume", equation: "V_water = Q_water \u00D7 t_water \u00D7 60", substitution: `V_water = ${Ql_water_m3s.toFixed(6)} \u00D7 ${waterRetTime} \u00D7 60`, result: waterVol, unit: "m\u00B3" });
+
+    totalVolume = Math.max(holdupVolume + surgeVolume + slugVolume, oilVol + waterVol + surgeVolume + slugVolume);
   }
 
-  steps.push({ label: "Total liquid volume", equation: "V_total = V_hold + V_surge + V_slug", value: totalVolume.toFixed(4), unit: "m\u00B3" });
+  steps.push({
+    label: "Total liquid volume",
+    equation: config.phaseMode === "three_phase"
+      ? "V_total = max(V_hold+V_surge+V_slug, V_oil+V_water+V_surge+V_slug)"
+      : "V_total = V_hold + V_surge + V_slug",
+    substitution: `V_total = ${totalVolume.toFixed(4)}`,
+    result: totalVolume,
+    unit: "m\u00B3",
+  });
 
   return { totalVolume_m3: totalVolume, holdupVolume_m3: holdupVolume, surgeVolume_m3: surgeVolume, slugVolume_m3: slugVolume, steps };
 }
-
-// ─── GEOMETRY ASSEMBLY ──────────────────────────────────────────────────────────
 
 function assembleGeometry(
   D_gas_mm: number,
@@ -445,8 +558,8 @@ function assembleGeometry(
   Qg_m3s: number,
 ): GeometryResult {
   const steps: CalcStep[] = [];
-  const isVertical = config.separatorType === "vertical" || (config.separatorType === "ko_drum");
-  const isHorizontal = config.separatorType === "horizontal" || config.separatorType === "three_phase";
+  const isVertical = config.orientation === "vertical";
+  const isProduction = config.serviceType === "production";
 
   let D_mm = Math.max(D_gas_mm, 500);
   D_mm = Math.ceil(D_mm / 50) * 50;
@@ -455,7 +568,7 @@ function assembleGeometry(
     D_mm = config.maxDiameter;
   }
 
-  steps.push({ label: "Gas-capacity diameter", equation: "D_gas (rounded to 50mm)", value: D_mm.toFixed(0), unit: "mm" });
+  steps.push({ label: "Gas-capacity diameter", equation: "D_gas (rounded to 50mm)", substitution: `D = ceil(${D_gas_mm.toFixed(0)} / 50) \u00D7 50`, result: D_mm, unit: "mm" });
 
   const D_m = D_mm / 1000;
   const A_vessel = (PI / 4) * D_m * D_m;
@@ -477,9 +590,16 @@ function assembleGeometry(
     holdupCapacity = totalLiquidVol;
     surgeCapacity = 0;
 
-    steps.push({ label: "Liquid height", equation: "h_liq = V_liq / A_vessel", value: liquidHeight.toFixed(3), unit: "m" });
-    steps.push({ label: "Allowances total", equation: "h_allow = inlet + disengage + mist + sump + nozzle", value: (allow.inletZone + allow.disengagementZone + allow.mistEliminatorZone + allow.sumpZone + allow.nozzleZone).toFixed(3), unit: "m" });
-    steps.push({ label: "Total vessel height", equation: "H = h_liq + h_allow", value: (L_mm / 1000).toFixed(3), unit: "m" });
+    const allowTotal = allow.inletZone + allow.disengagementZone + allow.mistEliminatorZone + allow.sumpZone + allow.nozzleZone;
+    const seamLabel = isProduction ? "API 12J Seam-to-Seam" : "Seam-to-Seam";
+    steps.push({ label: `${seamLabel} buildup: Sump zone`, equation: "h_sump", substitution: `h_sump = ${allow.sumpZone}`, result: allow.sumpZone, unit: "m" });
+    steps.push({ label: `${seamLabel} buildup: Liquid height`, equation: "h_liq = V_liq / A_vessel", substitution: `h_liq = ${totalLiquidVol.toFixed(4)} / ${A_vessel.toFixed(6)}`, result: liquidHeight, unit: "m" });
+    steps.push({ label: `${seamLabel} buildup: Inlet zone`, equation: "h_inlet", substitution: `h_inlet = ${allow.inletZone}`, result: allow.inletZone, unit: "m" });
+    steps.push({ label: `${seamLabel} buildup: Disengagement zone`, equation: "h_disengage", substitution: `h_disengage = ${allow.disengagementZone}`, result: allow.disengagementZone, unit: "m" });
+    steps.push({ label: `${seamLabel} buildup: Mist eliminator zone`, equation: "h_mist", substitution: `h_mist = ${allow.mistEliminatorZone}`, result: allow.mistEliminatorZone, unit: "m" });
+    steps.push({ label: `${seamLabel} buildup: Nozzle zone`, equation: "h_nozzle", substitution: `h_nozzle = ${allow.nozzleZone}`, result: allow.nozzleZone, unit: "m" });
+    steps.push({ label: "Total vessel height (seam-to-seam)", equation: "H = h_sump + h_liq + h_inlet + h_disengage + h_mist + h_nozzle", substitution: `H = ${allow.sumpZone} + ${liquidHeight.toFixed(3)} + ${allow.inletZone} + ${allow.disengagementZone} + ${allow.mistEliminatorZone} + ${allow.nozzleZone}`, result: L_mm / 1000, unit: "m" });
+    steps.push({ label: "Allowances total", equation: "h_allow", substitution: `h_allow = ${allowTotal.toFixed(3)}`, result: allowTotal, unit: "m" });
   } else {
     const levelFrac = config.levelFraction;
     const liquidAreaFrac = segmentAreaFraction(levelFrac);
@@ -520,36 +640,28 @@ function assembleGeometry(
     surgeCapacity = 0;
     liquidLevelPercent = levelFrac * 100;
 
-    steps.push({ label: "Liquid area fraction", equation: "f_liq = segment_area(h/D)", value: liquidAreaFrac.toFixed(4), unit: "-" });
-    steps.push({ label: "Diameter (liquid check)", equation: "D_liq = \u221A(V_liq / (f_liq \u00D7 \u03C0/4))", value: D_liq_mm.toFixed(0), unit: "mm" });
-    steps.push({ label: "Selected diameter", equation: "D = max(D_gas, D_liq, 500mm)", value: D_mm.toFixed(0), unit: "mm" });
-    steps.push({ label: "Vessel length", equation: "L = max(D \u00D7 L/D, L_liq_req + allowances)", value: (L_mm / 1000).toFixed(3), unit: "m" });
+    steps.push({ label: "Liquid area fraction", equation: "f_liq = segment_area(h/D)", substitution: `f_liq = segment_area(${levelFrac})`, result: liquidAreaFrac, unit: "-" });
+    steps.push({ label: "Diameter (liquid check)", equation: "D_liq = \u221A(V_liq / (f_liq \u00D7 \u03C0/4))", substitution: `D_liq = \u221A(${totalLiquidVol.toFixed(4)} / (${liquidAreaFrac.toFixed(4)} \u00D7 ${(PI / 4).toFixed(4)}))`, result: D_liq_mm, unit: "mm" });
+    steps.push({ label: "Selected diameter", equation: "D = max(D_gas, D_liq, 500mm)", substitution: `D = max(${D_gas_mm.toFixed(0)}, ${D_liq_mm.toFixed(0)}, 500)`, result: D_mm, unit: "mm" });
+    steps.push({ label: "Vessel length", equation: "L = max(D \u00D7 L/D, L_liq_req + allowances)", substitution: `L = max(${D_mm} \u00D7 ${targetLD}, ...)`, result: L_mm / 1000, unit: "m" });
   }
 
   const L_m = L_mm / 1000;
-  const vesselVolume = A_vessel * L_m * (D_mm / 1000 / D_m) ** 2;
   const vesselVol_corrected = (PI / 4) * (D_mm / 1000) ** 2 * L_m;
-
   const actualGasVelocity = gasAreaFraction > 0 ? Qg_m3s / (gasAreaFraction * (PI / 4) * (D_mm / 1000) ** 2) : 0;
   const mistFaceVelocity = Qg_m3s / ((PI / 4) * (D_mm / 1000) ** 2);
-
   const LD_ratio = D_mm > 0 ? L_mm / D_mm : 0;
 
-  steps.push({ label: "Vessel volume", equation: "V = \u03C0D\u00B2/4 \u00D7 L", value: vesselVol_corrected.toFixed(3), unit: "m\u00B3" });
-  steps.push({ label: "L/D ratio", equation: "L/D", value: LD_ratio.toFixed(2), unit: "-" });
-  steps.push({ label: "Actual gas velocity", equation: "v_gas = Q_g / A_gas", value: actualGasVelocity.toFixed(3), unit: "m/s" });
-  steps.push({ label: "Mist eliminator face velocity", equation: "v_face = Q_g / A_vessel", value: mistFaceVelocity.toFixed(3), unit: "m/s" });
+  steps.push({ label: "Vessel volume", equation: "V = \u03C0D\u00B2/4 \u00D7 L", substitution: `V = \u03C0\u00D7${(D_mm / 1000).toFixed(3)}\u00B2/4 \u00D7 ${L_m.toFixed(3)}`, result: vesselVol_corrected, unit: "m\u00B3" });
+  steps.push({ label: "L/D ratio", equation: "L/D", substitution: `${L_mm} / ${D_mm}`, result: LD_ratio, unit: "-" });
+  steps.push({ label: "Actual gas velocity", equation: "v_gas = Q_g / A_gas", substitution: `v_gas = ${Qg_m3s.toFixed(6)} / ${(gasAreaFraction * (PI / 4) * (D_mm / 1000) ** 2).toFixed(6)}`, result: actualGasVelocity, unit: "m/s" });
+  steps.push({ label: "Mist eliminator face velocity", equation: "v_face = Q_g / A_vessel", substitution: `v_face = ${Qg_m3s.toFixed(6)} / ${((PI / 4) * (D_mm / 1000) ** 2).toFixed(6)}`, result: mistFaceVelocity, unit: "m/s" });
 
   return {
-    D_mm,
-    L_mm,
-    D_m: D_mm / 1000,
-    L_m,
+    D_mm, L_mm, D_m: D_mm / 1000, L_m,
     vesselVolume_m3: vesselVol_corrected,
     liquidVolume_m3: totalLiquidVol,
-    gasAreaFraction,
-    actualGasVelocity,
-    liquidLevelPercent,
+    gasAreaFraction, actualGasVelocity, liquidLevelPercent,
     LD_ratio,
     holdupCapacity_m3: holdupCapacity,
     surgeCapacity_m3: surgeCapacity,
@@ -559,13 +671,14 @@ function assembleGeometry(
   };
 }
 
-// ─── FLAGS & RECOMMENDATIONS ────────────────────────────────────────────────────
-
 function collectFlags(
   cases: OperatingCase[],
   config: SeparatorConfig,
   geometry: GeometryResult,
   v_s_max: number,
+  caseResults: CaseGasResult[],
+  pressureCorrected: boolean,
+  foamDerated: boolean,
 ): EngFlag[] {
   const flags: EngFlag[] = [];
 
@@ -586,23 +699,58 @@ function collectFlags(
   if (config.kMode === "user") flags.push("K_USER_ASSUMED");
   if (config.kMode === "typical") flags.push("K_TYPICAL_MODE");
 
-  if (config.mistEliminator !== "none") flags.push("VENDOR_MIST_CONFIRM");
-  if (config.separatorType === "three_phase") flags.push("THREE_PHASE_PRELIM");
+  if (pressureCorrected) flags.push("PRESSURE_K_CORRECTED");
+  if (foamDerated) flags.push("FOAM_K_DERATED");
 
-  if (config.separatorType === "ko_drum") flags.push("TRANSIENT_REVIEW");
+  if (config.mistEliminator !== "none") flags.push("VENDOR_MIST_CONFIRM");
+  if (config.serviceType === "slug_catcher") flags.push("SLUG_CATCHER_REQUIRED");
+  if (config.phaseMode === "three_phase") flags.push("THREE_PHASE_PRELIM");
 
   if (geometry.actualGasVelocity > v_s_max && v_s_max > 0) flags.push("GAS_VELOCITY_EXCEEDED");
+  if (v_s_max > 0 && geometry.actualGasVelocity > v_s_max * 0.85 && geometry.actualGasVelocity <= v_s_max) flags.push("HIGH_GAS_VELOCITY");
   if (geometry.liquidLevelPercent > 75) flags.push("HIGH_LIQUID_LEVEL");
 
-  const isHoriz = config.separatorType === "horizontal" || config.separatorType === "three_phase";
-  const isVert = config.separatorType === "vertical" || config.separatorType === "ko_drum";
+  const isHoriz = config.orientation === "horizontal";
   if (isHoriz && (geometry.LD_ratio < 2.5 || geometry.LD_ratio > 6)) flags.push("LD_OUT_OF_RANGE");
-  if (isVert && (geometry.LD_ratio < 2 || geometry.LD_ratio > 5)) flags.push("LD_OUT_OF_RANGE");
-
+  if (!isHoriz && (geometry.LD_ratio < 2 || geometry.LD_ratio > 5)) flags.push("LD_OUT_OF_RANGE");
   if (isHoriz && geometry.gasAreaFraction < 0.3) flags.push("HIGH_LIQUID_LOAD");
 
   const maxP = Math.max(...cases.map(c => c.gasPressure));
   if (maxP > 100) flags.push("HIGH_PRESSURE");
+
+  if (config.enableDropletCheck) {
+    const anyCarryover = caseResults.some(cr => cr.dropletCarryoverRisk);
+    if (anyCarryover) flags.push("DROPLET_CARRYOVER_RISK");
+    const anyReExceeded = caseResults.some(cr => cr.dropletRe_p !== undefined && cr.dropletRe_p > 1);
+    if (anyReExceeded) flags.push("STOKES_RE_EXCEEDED");
+  }
+
+  if (isHoriz && config.enableDropletCheck) {
+    for (const c of cases) {
+      if (c.gasViscosity <= 0) continue;
+      const cr = caseResults.find(r => r.caseId === c.id);
+      if (!cr || !cr.dropletSettlingVelocity) continue;
+      const v_t = cr.dropletSettlingVelocity;
+      const D_m = geometry.D_m;
+      const h_gas = D_m * (1 - config.levelFraction);
+      if (h_gas <= 0 || v_t <= 0) continue;
+      const t_settle = h_gas / v_t;
+      const gasAreaFrac = gasAreaFractionForLevel(config.levelFraction);
+      const A_gas = gasAreaFrac * (PI / 4) * D_m * D_m;
+      if (A_gas <= 0) continue;
+      const v_gas = cr.Qg_actual_m3s / A_gas;
+      const L_eff = Math.max(0, geometry.L_m - (config.allowances.inletZone + config.allowances.nozzleZone));
+      if (L_eff <= 0 || v_gas <= 0) continue;
+      const t_gas = L_eff / v_gas;
+      if (t_settle > t_gas) {
+        flags.push("SETTLING_LENGTH_SHORT");
+        break;
+      }
+    }
+  }
+
+  const anyUncertainty = cases.some(c => c.gasDensity <= 0 || c.liquidDensity <= 0);
+  if (anyUncertainty) flags.push("PROPERTY_UNCERTAINTY");
 
   const unique: EngFlag[] = [];
   const seen = new Set<EngFlag>();
@@ -617,7 +765,7 @@ function buildRecommendations(flags: EngFlag[], config: SeparatorConfig, geometr
   const nextSteps: string[] = [];
 
   if (flags.includes("FOAM_RISK")) {
-    recs.push("Consider antifoam injection strategy and reduce K value by 50-70%");
+    recs.push("Consider antifoam injection strategy and reduce K value by 50\u201370%");
     nextSteps.push("Review antifoam chemical compatibility and injection rates");
   }
   if (flags.includes("SLUGGING_RISK")) {
@@ -635,27 +783,54 @@ function buildRecommendations(flags: EngFlag[], config: SeparatorConfig, geometr
   if (flags.includes("GAS_VELOCITY_EXCEEDED")) {
     recs.push("Increase vessel diameter or improve internals (higher K) to meet gas capacity");
   }
+  if (flags.includes("HIGH_GAS_VELOCITY")) {
+    recs.push("Gas velocity approaching Souders\u2013Brown limit \u2014 consider larger diameter or better internals");
+  }
   if (flags.includes("HIGH_LIQUID_LEVEL")) {
     recs.push("Reduce retention time, increase diameter, or add dedicated liquid surge vessel");
   }
   if (flags.includes("LD_OUT_OF_RANGE")) {
-    const isHoriz = config.separatorType === "horizontal" || config.separatorType === "three_phase";
+    const isHoriz = config.orientation === "horizontal";
     recs.push(`L/D ratio ${geometry.LD_ratio.toFixed(1)} outside typical ${isHoriz ? "2.5\u20136.0" : "2\u20135"} range \u2014 adjust length or diameter`);
   }
   if (flags.includes("HIGH_LIQUID_LOAD")) {
     recs.push("Gas area fraction is low due to high liquid level \u2014 verify gas capacity is adequate");
   }
+  if (flags.includes("SLUG_CATCHER_REQUIRED")) {
+    recs.push("Slug catcher service \u2014 ensure slug volume is based on pipeline transient analysis");
+    nextSteps.push("Perform pipeline dynamic simulation (e.g. OLGA) to determine slug volumes");
+  }
+  if (flags.includes("DROPLET_CARRYOVER_RISK")) {
+    recs.push("Droplet carryover risk \u2014 consider larger vessel, higher-efficiency internals, or reducing droplet target size");
+    nextSteps.push("Review mist eliminator grade and efficiency curves with vendor");
+  }
   if (flags.includes("VENDOR_MIST_CONFIRM")) {
-    recs.push("Confirm mist eliminator type, face velocity limits, and DP with vendor");
+    recs.push("Confirm mist eliminator type, face velocity limits, and \u0394P with vendor");
     nextSteps.push("Submit process data sheet to mist eliminator vendor for selection");
   }
   if (flags.includes("THREE_PHASE_PRELIM")) {
     recs.push("3-phase sizing is preliminary \u2014 detailed design requires weir/baffle sizing, coalescer selection, and emulsion characterization");
     nextSteps.push("Perform bottle test for oil-water separation characteristics");
+    nextSteps.push("Perform detailed 3-phase separator design including weir placement and coalescer selection");
   }
-  if (flags.includes("TRANSIENT_REVIEW")) {
-    recs.push("KO drum / blowdown service \u2014 transient loads may govern sizing");
-    nextSteps.push("Perform dynamic blowdown simulation for peak liquid accumulation");
+  if (flags.includes("EMULSION_RISK")) {
+    recs.push("Consider chemical demulsifier injection and coalescing internals");
+  }
+  if (flags.includes("PRESSURE_K_CORRECTED")) {
+    recs.push("K value reduced for high-pressure operation per GPSA Fig 7-9 piecewise correlation");
+  }
+  if (flags.includes("FOAM_K_DERATED")) {
+    recs.push("K value derated for foam tendency \u2014 verify foam factor with field/lab data");
+  }
+  if (flags.includes("SETTLING_LENGTH_SHORT")) {
+    recs.push("Horizontal settling length insufficient for target droplet removal \u2014 increase L/D or vessel diameter");
+  }
+  if (flags.includes("STOKES_RE_EXCEEDED")) {
+    recs.push("Particle Re > 1 \u2014 Stokes law assumption may be non-conservative; consider drag-corrected settling");
+    nextSteps.push("Evaluate intermediate-law or iterative drag coefficient for droplet settling");
+  }
+  if (flags.includes("PROPERTY_UNCERTAINTY")) {
+    recs.push("Validate fluid properties with PVT analysis or lab data");
   }
 
   nextSteps.push("Validate fluid properties with PVT analysis at operating conditions");
@@ -666,38 +841,60 @@ function buildRecommendations(flags: EngFlag[], config: SeparatorConfig, geometr
   return { recs, nextSteps };
 }
 
-function buildAssumptions(config: SeparatorConfig, holdup: HoldupBasis): string[] {
+function buildAssumptions(config: SeparatorConfig, holdup: HoldupBasis, K_eff: number, pressureCorrected: boolean, foamDerated: boolean): string[] {
   const a: string[] = [];
-  a.push("Souders\u2013Brown equation for maximum allowable gas velocity");
-  a.push(`K value = ${config.kValue} m/s (${config.kMode === "typical" ? "from typical guidance" : "user-entered"})`);
+  const stdRef = getStandardReference(config.serviceType);
 
-  const typeLabels: Record<SeparatorType, string> = {
-    vertical: "Vertical gas\u2013liquid separator",
-    horizontal: "Horizontal gas\u2013liquid separator",
-    ko_drum: "KO drum (knockout drum)",
-    three_phase: "3-phase separator (preliminary)",
+  a.push(`Souders\u2013Brown equation for maximum allowable gas velocity (${stdRef})`);
+  a.push(`K base value = ${config.kValue} m/s (${config.kMode === "typical" ? "from typical guidance" : "user-entered"})`);
+
+  if (pressureCorrected) {
+    a.push("K value corrected for operating pressure per GPSA Fig 7-9");
+  }
+  if (foamDerated) {
+    a.push(`K value derated by foam factor = ${config.foamFactor}`);
+  }
+  if (pressureCorrected || foamDerated) {
+    a.push(`Effective K value = ${K_eff.toFixed(4)} m/s`);
+  }
+
+  const serviceLabels: Record<ServiceType, string> = {
+    production: "Production separator",
+    gas_scrubber: "Gas scrubber",
+    inlet_separator: "Inlet separator",
+    slug_catcher: "Slug catcher",
+    test_separator: "Test separator",
   };
-  a.push(`Separator type: ${typeLabels[config.separatorType]}`);
+  a.push(`Service type: ${serviceLabels[config.serviceType]}`);
+  a.push(`Orientation: ${config.orientation}`);
+  a.push(`Phase mode: ${config.phaseMode === "three_phase" ? "3-phase (gas/oil/water)" : "2-phase (gas/liquid)"}`);
 
-  if (config.separatorType === "horizontal" || config.separatorType === "three_phase") {
+  if (config.orientation === "horizontal") {
     a.push(`Normal liquid level fraction: ${(config.levelFraction * 100).toFixed(0)}% of diameter`);
   }
 
-  a.push(`Mist eliminator: ${config.mistEliminator.replace("_", " ")}`);
-  a.push(`Inlet device: ${config.inletDevice.replace("_", " ")}`);
+  a.push(`Mist eliminator: ${config.mistEliminator.replace(/_/g, " ")}`);
+  a.push(`Inlet device: ${config.inletDevice.replace(/_/g, " ")}`);
   a.push(`Liquid residence time: ${holdup.residenceTime} min`);
   a.push(`Surge time: ${holdup.surgeTime} min`);
+
+  if (config.phaseMode === "three_phase") {
+    a.push(`Oil retention time: ${holdup.oilRetentionTime} min`);
+    a.push(`Water retention time: ${holdup.waterRetentionTime} min`);
+  }
   if (holdup.slugVolume > 0) a.push(`Slug volume: ${holdup.slugVolume} m\u00B3`);
+  if (config.enableDropletCheck) {
+    a.push(`Droplet settling check enabled (Stokes' law, d = ${config.dropletDiameter_um} \u03BCm)`);
+  }
   a.push("Vessel diameter rounded up to nearest 50 mm");
   a.push("No mechanical design (wall thickness, weight, nozzles) considered");
   a.push("Head volumes not included \u2014 cylindrical shell volume only");
+  a.push(`Standard: ${stdRef}${config.serviceType === "production" ? " \u2014 Specification for Oil and Gas Separators" : ", API RP 14E"}`);
 
   return a;
 }
 
-// ─── MAIN CALCULATION ───────────────────────────────────────────────────────────
-
-export function calculateSeparatorFull(
+export function calculateSeparator(
   project: ProjectSetup,
   cases: OperatingCase[],
   config: SeparatorConfig,
@@ -707,14 +904,20 @@ export function calculateSeparatorFull(
 
   const warnings: string[] = [];
   const caseResults: CaseGasResult[] = [];
+  const isHorizontal = config.orientation === "horizontal";
 
-  const isHorizontal = config.separatorType === "horizontal" || config.separatorType === "three_phase";
+  const anyFoamCase = cases.some(c => c.flagFoam);
+  const maxPressure = Math.max(...cases.map(c => c.gasPressure));
+
+  const { K_eff, pressureCorrected, foamDerated, steps: kSteps } = computeEffectiveK(
+    config.kValue, maxPressure, config.foamFactor, config.applyPressureCorrection, anyFoamCase,
+  );
 
   for (const c of cases) {
     if (c.gasDensity <= 0) throw new Error(`Case "${c.name}": Gas density must be positive`);
     if (c.liquidDensity <= 0) throw new Error(`Case "${c.name}": Liquid density must be positive`);
     if (c.liquidDensity <= c.gasDensity) {
-      warnings.push(`Case "${c.name}": \u03C1_l (\u200B${c.liquidDensity}\u200B) \u2264 \u03C1_g (\u200B${c.gasDensity}\u200B) \u2014 check fluid properties`);
+      warnings.push(`Case "${c.name}": \u03C1_l (${c.liquidDensity}) \u2264 \u03C1_g (${c.gasDensity}) \u2014 check fluid properties`);
     }
     if (c.gasFlowRate <= 0 && c.liquidFlowRate <= 0) {
       throw new Error(`Case "${c.name}": At least one flow rate must be positive`);
@@ -725,29 +928,45 @@ export function calculateSeparatorFull(
     let D_req_mm: number;
     let v_s_max: number;
     let A_req: number;
-    const allSteps = [...flowSteps];
+    const allSteps = [...kSteps, ...flowSteps];
 
     if (isHorizontal) {
-      const res = solveHorizontalDiameter(config.kValue, c.liquidDensity, c.gasDensity, Qg_m3s, config.levelFraction);
+      const res = solveHorizontalDiameter(K_eff, c.liquidDensity, c.gasDensity, Qg_m3s, config.levelFraction);
       D_req_mm = res.D_m * 1000;
-      v_s_max = config.kValue * Math.sqrt((c.liquidDensity - c.gasDensity) / c.gasDensity);
+      v_s_max = K_eff * Math.sqrt((c.liquidDensity - c.gasDensity) / c.gasDensity);
       A_req = Qg_m3s / v_s_max;
       allSteps.push(...res.steps);
     } else {
-      const res = computeSoudersBrown(config.kValue, c.liquidDensity, c.gasDensity, Qg_m3s, 1.0, c.name);
+      const res = computeSoudersBrown(K_eff, c.liquidDensity, c.gasDensity, Qg_m3s, 1.0, c.name);
       D_req_mm = res.D_req_m * 1000;
       v_s_max = res.v_s_max;
       A_req = res.A_req;
       allSteps.push(...res.steps);
     }
 
+    let dropletSettlingVelocity: number | undefined;
+    let actualGasVelocityDroplet: number | undefined;
+    let dropletCarryoverRisk: boolean | undefined;
+    let dropletRe_p: number | undefined;
+
+    if (config.enableDropletCheck && c.gasViscosity > 0) {
+      const D_check_m = Math.max(D_req_mm / 1000, 0.5);
+      const dropletRes = computeDropletSettling(
+        c.liquidDensity, c.gasDensity, c.gasViscosity,
+        config.dropletDiameter_um, Qg_m3s, D_check_m
+      );
+      dropletSettlingVelocity = dropletRes.v_t;
+      actualGasVelocityDroplet = dropletRes.v_actual;
+      dropletCarryoverRisk = dropletRes.carryoverRisk;
+      dropletRe_p = dropletRes.Re_p;
+      allSteps.push(...dropletRes.steps);
+    }
+
     caseResults.push({
-      caseId: c.id,
-      caseName: c.name,
-      Qg_actual_m3s: Qg_m3s,
-      v_s_max,
-      A_req,
-      D_req_mm,
+      caseId: c.id, caseName: c.name, Qg_actual_m3s: Qg_m3s,
+      v_s_max, A_req, D_req_mm,
+      dropletSettlingVelocity, actualGasVelocity: actualGasVelocityDroplet,
+      dropletCarryoverRisk, dropletRe_p,
       steps: allSteps,
     });
   }
@@ -763,247 +982,210 @@ export function calculateSeparatorFull(
   const governingCaseId = caseResults[governingIdx].caseId;
   const governingReason = `Case "${caseResults[governingIdx].caseName}" requires largest diameter (${maxD.toFixed(0)} mm)`;
 
-  const { totalVolume_m3, holdupVolume_m3, surgeVolume_m3, slugVolume_m3, steps: holdupSteps } =
-    computeHoldup(cases, holdup, config.separatorType, governingCaseId);
+  const { totalVolume_m3, steps: holdupSteps } = computeHoldup(cases, holdup, governingCaseId, config);
 
   const govCaseResult = caseResults[governingIdx];
   const geometry = assembleGeometry(maxD, totalVolume_m3, config, govCaseResult.Qg_actual_m3s);
 
-  const flags = collectFlags(cases, config, geometry, govCaseResult.v_s_max);
+  const flags = collectFlags(cases, config, geometry, govCaseResult.v_s_max, caseResults, pressureCorrected, foamDerated);
   const { recs, nextSteps } = buildRecommendations(flags, config, geometry);
-  const assumptions = buildAssumptions(config, holdup);
+  const assumptions = buildAssumptions(config, holdup, K_eff, pressureCorrected, foamDerated);
 
   return {
-    project,
-    cases,
-    config,
-    holdup,
-    caseResults,
-    governingCaseId,
-    governingReason,
-    geometry,
-    holdupSteps,
-    flags,
-    warnings,
-    recommendations: recs,
-    nextSteps,
-    assumptions,
+    project, cases, config, holdup, caseResults,
+    governingCaseId, governingReason, geometry, holdupSteps,
+    flags, warnings, recommendations: recs, nextSteps, assumptions,
   };
 }
 
-// ─── LEGACY INTERFACE (backward compatibility) ──────────────────────────────────
-
-export type VesselOrientation = "vertical" | "horizontal";
-
-export interface SeparatorInput {
-  gasFlowRate: number;
-  gasMolecularWeight: number;
-  gasDensity: number;
-  liquidFlowRate: number;
-  liquidDensity: number;
-  operatingPressure: number;
-  operatingTemperature: number;
-  kFactor: number;
-  residenceTime: number;
-  orientation: VesselOrientation;
-  ldRatio: number;
-  surgeTime: number;
-  demisterPadDP: number;
+export interface ServiceRecommendation {
+  recommendedOrientation: SeparatorOrientation;
+  recommendedPhaseMode: PhaseMode;
+  orientationConfidence: "strong" | "moderate" | "advisory";
+  phaseConfidence: "strong" | "moderate" | "advisory";
+  orientationReasons: string[];
+  phaseReasons: string[];
 }
 
-export interface SeparatorResult {
-  maxGasVelocity: number;
-  minVesselDiameter: number;
-  liquidHoldupVolume: number;
-  surgeVolume: number;
-  totalLiquidVolume: number;
-  vesselDiameter: number;
-  vesselLength: number;
-  vesselVolume: number;
-  gasAreaFraction: number;
-  actualGasVelocity: number;
-  liquidLevelPercent: number;
-  warnings: string[];
-}
+export function recommendSeparatorConfig(params: {
+  serviceType: ServiceType;
+  hasFreeWater: boolean;
+  waterCutPercent: number;
+  gasLiquidRatio: "gas_dominant" | "liquid_dominant" | "mixed";
+  flagFoam: boolean;
+  flagSolids: boolean;
+  flagSlugging: boolean;
+  flagEmulsion: boolean;
+}): ServiceRecommendation {
+  const { serviceType, hasFreeWater, waterCutPercent, gasLiquidRatio, flagFoam, flagSolids, flagSlugging, flagEmulsion } = params;
 
-export function calculateSeparatorSizing(input: SeparatorInput): SeparatorResult {
-  const c: OperatingCase = {
-    ...DEFAULT_CASE,
-    id: "legacy",
-    name: "Legacy",
-    gasFlowRate: input.gasFlowRate,
-    gasFlowBasis: "standard",
-    gasDensity: input.gasDensity,
-    gasMW: input.gasMolecularWeight,
-    gasPressure: input.operatingPressure,
-    gasTemperature: input.operatingTemperature,
-    liquidFlowRate: input.liquidFlowRate,
-    liquidDensity: input.liquidDensity,
-  };
+  let recOrientation: SeparatorOrientation = "vertical";
+  let orientConf: "strong" | "moderate" | "advisory" = "moderate";
+  const orientReasons: string[] = [];
 
-  const cfg: SeparatorConfig = {
-    ...DEFAULT_CONFIG,
-    separatorType: input.orientation,
-    kValue: input.kFactor,
-    levelFraction: 0.5,
-    maxLD: input.ldRatio,
-  };
+  let recPhase: PhaseMode = "two_phase";
+  let phaseConf: "strong" | "moderate" | "advisory" = "moderate";
+  const phaseReasons: string[] = [];
 
-  const hld: HoldupBasis = {
-    ...DEFAULT_HOLDUP,
-    residenceTime: input.residenceTime,
-    surgeTime: input.surgeTime,
-  };
+  if (serviceType === "slug_catcher") {
+    recOrientation = "horizontal";
+    orientConf = "strong";
+    orientReasons.push("Slug catchers are horizontal by definition (pipeline slug accommodation)");
+  } else if (gasLiquidRatio === "gas_dominant") {
+    recOrientation = "vertical";
+    orientConf = "strong";
+    orientReasons.push("Gas-dominant service favors vertical orientation (GPSA Sec 7, API 12J)");
+    orientReasons.push("Vertical separators have smaller footprint for gas-rich streams");
+  } else if (gasLiquidRatio === "liquid_dominant") {
+    recOrientation = "horizontal";
+    orientConf = "strong";
+    orientReasons.push("Liquid-dominant service favors horizontal orientation");
+    orientReasons.push("Horizontal vessels provide more liquid residence time and interface area");
+  } else {
+    recOrientation = "horizontal";
+    orientConf = "moderate";
+    orientReasons.push("Mixed gas/liquid ratio \u2014 horizontal orientation provides versatility");
+  }
 
-  const res = calculateSeparatorFull(DEFAULT_PROJECT, [c], cfg, hld);
+  if (hasFreeWater && waterCutPercent > 2) {
+    recPhase = "three_phase";
+    phaseConf = waterCutPercent > 10 ? "strong" : "moderate";
+    phaseReasons.push(`Free water present (WC \u2248 ${waterCutPercent}%) \u2014 3-phase separation recommended`);
+    if (waterCutPercent > 10) {
+      phaseReasons.push("Water cut > 10% strongly indicates need for oil/water separation");
+    }
+
+    if (recOrientation === "vertical" && orientConf !== "strong") {
+      recOrientation = "horizontal";
+      orientConf = "moderate";
+      orientReasons.push("3-phase service generally favors horizontal orientation for oil/water interface");
+    }
+  } else if (hasFreeWater) {
+    recPhase = "three_phase";
+    phaseConf = "advisory";
+    phaseReasons.push("Small amount of free water present \u2014 consider 3-phase if water disposal is needed");
+  } else {
+    recPhase = "two_phase";
+    phaseConf = "strong";
+    phaseReasons.push("No free water expected \u2014 2-phase (gas/liquid) separation is appropriate");
+  }
+
+  if (flagFoam) {
+    if (recOrientation === "vertical") {
+      orientReasons.push("Foam tendency noted \u2014 horizontal may provide better foam handling");
+    }
+    orientReasons.push("Foam requires K-value derating (GPSA guidance: 50\u201370% of base K)");
+  }
+  if (flagSlugging) {
+    if (recOrientation === "vertical" && orientConf !== "strong") {
+      recOrientation = "horizontal";
+      orientConf = "moderate";
+    }
+    orientReasons.push("Slugging risk \u2014 horizontal provides better surge accommodation");
+  }
+  if (flagSolids) {
+    orientReasons.push("Solids present \u2014 vertical may facilitate sand drainage to sump");
+  }
+  if (flagEmulsion) {
+    if (recPhase === "three_phase") {
+      phaseReasons.push("Emulsion risk \u2014 consider coalescers and extended retention time");
+    }
+  }
+
+  if (serviceType === "gas_scrubber") {
+    recOrientation = "vertical";
+    orientConf = "strong";
+    orientReasons.length = 0;
+    orientReasons.push("Gas scrubbers are typically vertical (gas-dominated, minimal liquid)");
+    if (recPhase === "three_phase") {
+      recPhase = "two_phase";
+      phaseConf = "strong";
+      phaseReasons.length = 0;
+      phaseReasons.push("Gas scrubbers typically operate in 2-phase mode (gas/condensate)");
+    }
+  }
+
+  if (serviceType === "test_separator") {
+    orientReasons.push("Test separators often horizontal for accurate flow measurement");
+    if (recOrientation === "vertical" && orientConf !== "strong") {
+      recOrientation = "horizontal";
+      orientConf = "advisory";
+    }
+  }
 
   return {
-    maxGasVelocity: res.caseResults[0].v_s_max,
-    minVesselDiameter: res.caseResults[0].D_req_mm,
-    liquidHoldupVolume: res.holdupSteps.length > 0 ? parseFloat(res.holdupSteps.find(s => s.label === "Holdup volume")?.value || "0") : 0,
-    surgeVolume: parseFloat(res.holdupSteps.find(s => s.label === "Surge volume")?.value || "0"),
-    totalLiquidVolume: res.geometry.liquidVolume_m3,
-    vesselDiameter: res.geometry.D_mm,
-    vesselLength: res.geometry.L_mm,
-    vesselVolume: res.geometry.vesselVolume_m3,
-    gasAreaFraction: res.geometry.gasAreaFraction,
-    actualGasVelocity: res.geometry.actualGasVelocity,
-    liquidLevelPercent: res.geometry.liquidLevelPercent,
-    warnings: [...res.warnings, ...res.flags.map(f => FLAG_LABELS[f])],
+    recommendedOrientation: recOrientation,
+    recommendedPhaseMode: recPhase,
+    orientationConfidence: orientConf,
+    phaseConfidence: phaseConf,
+    orientationReasons: orientReasons,
+    phaseReasons: phaseReasons,
   };
 }
 
-// ─── TEST CASES ─────────────────────────────────────────────────────────────────
-
-export const SEPARATOR_VERTICAL_TEST_CASE: SeparatorInput = {
-  gasFlowRate: 5000,
-  gasMolecularWeight: 18.5,
-  gasDensity: 25,
-  liquidFlowRate: 10,
-  liquidDensity: 800,
-  operatingPressure: 30,
-  operatingTemperature: 40,
-  kFactor: 0.07,
-  residenceTime: 5,
-  orientation: "vertical",
-  ldRatio: 3,
-  surgeTime: 2,
-  demisterPadDP: 0.003,
+export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
+  production: "Production Separator",
+  gas_scrubber: "Gas Scrubber",
+  inlet_separator: "Inlet Separator",
+  slug_catcher: "Slug Catcher",
+  test_separator: "Test Separator",
 };
 
-export const SEPARATOR_HORIZONTAL_TEST_CASE: SeparatorInput = {
-  gasFlowRate: 15000,
-  gasMolecularWeight: 18.5,
-  gasDensity: 25,
-  liquidFlowRate: 50,
-  liquidDensity: 800,
-  operatingPressure: 30,
-  operatingTemperature: 40,
-  kFactor: 0.10,
-  residenceTime: 5,
-  orientation: "horizontal",
-  ldRatio: 4,
-  surgeTime: 3,
-  demisterPadDP: 0.003,
+export const SERVICE_TYPE_STANDARDS: Record<ServiceType, string> = {
+  production: "API 12J",
+  gas_scrubber: "GPSA Section 7",
+  inlet_separator: "GPSA Section 7",
+  slug_catcher: "GPSA Section 7",
+  test_separator: "GPSA Section 7 / API 12J",
 };
 
-export const TEST_CASES_FULL: { name: string; project: ProjectSetup; cases: OperatingCase[]; config: SeparatorConfig; holdup: HoldupBasis }[] = [
+export const SERVICE_TYPE_DESCRIPTIONS: Record<ServiceType, string> = {
+  production: "Wellhead/production separator for oil & gas separation. Typical 1st/2nd/3rd stage separation.",
+  gas_scrubber: "Gas-dominated service for removing liquid droplets from gas streams upstream of compressors, dehydration, etc.",
+  inlet_separator: "First vessel in a gas processing facility receiving pipeline flow. Handles slugs and condensate.",
+  slug_catcher: "Dedicated vessel for absorbing pipeline slugs. Sized primarily for transient liquid accumulation.",
+  test_separator: "Separator used for well testing and production allocation. Requires accurate flow measurement.",
+};
+
+export const TEST_CASES: { name: string; project: ProjectSetup; cases: OperatingCase[]; config: SeparatorConfig; holdup: HoldupBasis }[] = [
   {
-    name: "Vertical KO Drum — Flare System",
-    project: { ...DEFAULT_PROJECT, caseName: "Flare KO Drum V-1001" },
+    name: "Vertical 2-Phase Production Separator",
+    project: { ...DEFAULT_PROJECT, caseName: "1st Stage Separator V-1001" },
     cases: [
-      {
-        ...DEFAULT_CASE,
-        id: "normal",
-        name: "Normal",
-        caseType: "normal",
-        gasFlowRate: 2000,
-        gasFlowBasis: "actual",
-        gasDensity: 15,
-        gasMW: 22,
-        gasPressure: 2,
-        gasTemperature: 40,
-        gasZ: 0.95,
-        liquidFlowRate: 5,
-        liquidDensity: 750,
-      },
-      {
-        ...DEFAULT_CASE,
-        id: "blowdown",
-        name: "Blowdown",
-        caseType: "blowdown",
-        gasFlowRate: 8000,
-        gasFlowBasis: "actual",
-        gasDensity: 8,
-        gasMW: 22,
-        gasPressure: 1.5,
-        gasTemperature: 60,
-        gasZ: 0.98,
-        liquidFlowRate: 30,
-        liquidDensity: 700,
-      },
+      { ...DEFAULT_CASE, id: "normal", name: "Normal", caseType: "normal", gasFlowRate: 5000, gasFlowBasis: "actual", gasDensity: 25, gasMW: 18.5, gasPressure: 30, gasTemperature: 40, gasZ: 0.9, liquidFlowRate: 10, liquidDensity: 800 },
+      { ...DEFAULT_CASE, id: "max", name: "Maximum", caseType: "maximum", gasFlowRate: 7000, gasFlowBasis: "actual", gasDensity: 23, gasMW: 18.5, gasPressure: 28, gasTemperature: 45, gasZ: 0.9, liquidFlowRate: 15, liquidDensity: 790 },
     ],
-    config: {
-      ...DEFAULT_CONFIG,
-      separatorType: "ko_drum",
-      mistEliminator: "wire_mesh",
-      kValue: 0.061,
-      kMode: "typical",
-    },
-    holdup: {
-      ...DEFAULT_HOLDUP,
-      residenceTime: 3,
-      surgeTime: 5,
-      slugVolume: 2,
-    },
+    config: { ...DEFAULT_CONFIG, orientation: "vertical", serviceType: "production", phaseMode: "two_phase", mistEliminator: "wire_mesh", kValue: 0.07, kMode: "typical", foamFactor: 0.7, applyPressureCorrection: true },
+    holdup: { ...DEFAULT_HOLDUP, residenceTime: 5, surgeTime: 2 },
   },
   {
-    name: "Horizontal Production Separator",
-    project: { ...DEFAULT_PROJECT, caseName: "1st Stage Separator V-2001" },
+    name: "Horizontal 3-Phase Production Separator",
+    project: { ...DEFAULT_PROJECT, caseName: "3-Phase Separator V-2001" },
     cases: [
-      {
-        ...DEFAULT_CASE,
-        id: "normal",
-        name: "Normal",
-        caseType: "normal",
-        gasFlowRate: 5000,
-        gasFlowBasis: "actual",
-        gasDensity: 30,
-        gasMW: 20,
-        gasPressure: 35,
-        gasTemperature: 45,
-        gasZ: 0.88,
-        liquidFlowRate: 80,
-        liquidDensity: 820,
-      },
-      {
-        ...DEFAULT_CASE,
-        id: "max",
-        name: "Maximum",
-        caseType: "maximum",
-        gasFlowRate: 7500,
-        gasFlowBasis: "actual",
-        gasDensity: 28,
-        gasMW: 20,
-        gasPressure: 35,
-        gasTemperature: 50,
-        gasZ: 0.87,
-        liquidFlowRate: 120,
-        liquidDensity: 810,
-      },
+      { ...DEFAULT_CASE, id: "normal", name: "Normal", caseType: "normal", gasFlowRate: 5000, gasFlowBasis: "actual", gasDensity: 30, gasMW: 20, gasPressure: 35, gasTemperature: 45, gasZ: 0.88, liquidFlowRate: 80, liquidDensity: 820, waterCut: 0.3, flagEmulsion: true },
+      { ...DEFAULT_CASE, id: "max", name: "Maximum", caseType: "maximum", gasFlowRate: 7500, gasFlowBasis: "actual", gasDensity: 28, gasMW: 20, gasPressure: 35, gasTemperature: 50, gasZ: 0.87, liquidFlowRate: 120, liquidDensity: 810, waterCut: 0.35 },
     ],
-    config: {
-      ...DEFAULT_CONFIG,
-      separatorType: "horizontal",
-      mistEliminator: "vane_pack",
-      kValue: 0.12,
-      kMode: "typical",
-      levelFraction: 0.5,
-    },
-    holdup: {
-      ...DEFAULT_HOLDUP,
-      residenceTime: 5,
-      surgeTime: 3,
-    },
+    config: { ...DEFAULT_CONFIG, orientation: "horizontal", serviceType: "production", phaseMode: "three_phase", mistEliminator: "vane_pack", kValue: 0.12, kMode: "typical", levelFraction: 0.5, foamFactor: 0.7, applyPressureCorrection: true },
+    holdup: { ...DEFAULT_HOLDUP, residenceTime: 5, surgeTime: 3, oilRetentionTime: 5, waterRetentionTime: 10 },
+  },
+  {
+    name: "Vertical Gas Scrubber",
+    project: { ...DEFAULT_PROJECT, caseName: "Gas Scrubber V-3001" },
+    cases: [
+      { ...DEFAULT_CASE, id: "normal", name: "Normal", caseType: "normal", gasFlowRate: 8000, gasFlowBasis: "actual", gasDensity: 20, gasMW: 19, gasPressure: 25, gasTemperature: 35, gasZ: 0.92, gasViscosity: 0.013, liquidFlowRate: 3, liquidDensity: 700, liquidViscosity: 0.5 },
+      { ...DEFAULT_CASE, id: "max", name: "Maximum", caseType: "maximum", gasFlowRate: 12000, gasFlowBasis: "actual", gasDensity: 18, gasMW: 19, gasPressure: 25, gasTemperature: 40, gasZ: 0.91, gasViscosity: 0.013, liquidFlowRate: 5, liquidDensity: 680, liquidViscosity: 0.4 },
+    ],
+    config: { ...DEFAULT_CONFIG, orientation: "vertical", serviceType: "gas_scrubber", phaseMode: "two_phase", mistEliminator: "wire_mesh", kValue: 0.07, kMode: "typical", enableDropletCheck: true, dropletDiameter_um: 150 },
+    holdup: { ...DEFAULT_HOLDUP, residenceTime: 2, surgeTime: 1 },
+  },
+  {
+    name: "Horizontal Inlet Separator with Slug",
+    project: { ...DEFAULT_PROJECT, caseName: "Inlet Separator V-4001" },
+    cases: [
+      { ...DEFAULT_CASE, id: "normal", name: "Normal", caseType: "normal", gasFlowRate: 15000, gasFlowBasis: "actual", gasDensity: 25, gasMW: 20, gasPressure: 40, gasTemperature: 45, gasZ: 0.88, gasViscosity: 0.014, liquidFlowRate: 20, liquidDensity: 780, liquidViscosity: 0.8 },
+      { ...DEFAULT_CASE, id: "upset", name: "Upset / Slug", caseType: "upset", gasFlowRate: 18000, gasFlowBasis: "actual", gasDensity: 22, gasMW: 20, gasPressure: 38, gasTemperature: 50, gasZ: 0.87, gasViscosity: 0.014, liquidFlowRate: 40, liquidDensity: 760, liquidViscosity: 0.7, flagSlugging: true },
+    ],
+    config: { ...DEFAULT_CONFIG, orientation: "horizontal", serviceType: "inlet_separator", phaseMode: "two_phase", mistEliminator: "wire_mesh", kValue: 0.10, kMode: "typical", levelFraction: 0.5 },
+    holdup: { ...DEFAULT_HOLDUP, residenceTime: 3, surgeTime: 2, slugVolume: 5 },
   },
 ];
