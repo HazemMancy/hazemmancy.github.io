@@ -58,13 +58,13 @@ const calculators: CalculatorEntry[] = [
   },
   {
     title: "Pump Sizing",
-    description: "Comprehensive pump sizing for centrifugal and positive displacement pumps. Includes TDH, BHP, NPSH/NPIP analysis with API 674/676 compliance.",
+    description: "Centrifugal (API 610) and positive displacement (API 674/676) pump sizing. Darcy-Weisbach hydraulics, TDH, BHP, NPSH analysis for centrifugal, NPIP for PD pumps, with HI guidelines.",
     href: "/calculators/pump-sizing",
     icon: Gauge,
     category: "Hydraulics",
     categoryColor: "text-blue-400",
     tags: ["Centrifugal", "PD Pumps", "NPSH/NPIP"],
-    standards: ["API 610", "API 674", "API 676"],
+    standards: ["API 610", "API 674", "API 676", "HI"],
   },
   {
     title: "Gas Mixing",
@@ -138,13 +138,13 @@ const calculators: CalculatorEntry[] = [
   },
   {
     title: "Compressor Sizing",
-    description: "Centrifugal and reciprocating compressor sizing with polytropic/isentropic models. Calculates head, power, staging, and discharge temperature with auto-staging based on temperature limits.",
+    description: "Centrifugal (API 617) and reciprocating (API 618) compressor sizing with polytropic/isentropic models per GPSA Sec 13. Head, power, auto-staging, and discharge temperature limits.",
     href: "/calculators/compressor",
     icon: Cog,
     category: "Equipment",
     categoryColor: "text-amber-400",
-    tags: ["Polytropic/Isentropic", "Multi-Stage", "Intercooling"],
-    standards: ["API 617", "API 618", "GPSA"],
+    tags: ["Centrifugal/Reciprocating", "Multi-Stage", "Intercooling"],
+    standards: ["API 617", "API 618", "GPSA Sec 13"],
   },
   {
     title: "PRD / Flare Relief",

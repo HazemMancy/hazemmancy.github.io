@@ -194,6 +194,9 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
   }
   assumptions.push(`Compression model: ${model}`);
   assumptions.push(`Compressor type: ${input.compressorType}`);
+  assumptions.push(input.compressorType === "centrifugal"
+    ? "Standard: API 617 (Axial and Centrifugal Compressors), GPSA Section 13"
+    : "Standard: API 618 (Reciprocating Compressors), GPSA Section 13");
   assumptions.push(`Gas constant R = ${GAS_CONSTANT.toFixed(2)} J/(kmol\u00B7K)`);
   assumptions.push(`Standard conditions: T_std = ${STANDARD_TEMPERATURE.toFixed(2)} K, P_std = ${STANDARD_PRESSURE.toFixed(0)} Pa`);
 

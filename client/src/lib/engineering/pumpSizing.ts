@@ -437,8 +437,9 @@ function buildCentrifugalTrace(
     "Steady-state, incompressible flow",
     "Pipe is full (no two-phase flow)",
     "Friction factor per Swamee-Jain (turbulent) or 64/Re (laminar)",
-    "Darcy-Weisbach equation for friction head loss",
+    "Darcy-Weisbach equation for friction head loss (Crane TP-410)",
     "Fittings losses modeled via equivalent K-factor method",
+    "Standard: API 610 (Centrifugal Pumps for Petroleum), HI 14.6",
   ];
 
   steps.push(...buildPipingTraceSteps(input, piping, flowRate_m3s, "Suction"));
@@ -534,9 +535,10 @@ function buildPDTrace(
     "Steady-state, incompressible flow",
     "Pipe is full (no two-phase flow)",
     "Friction factor per Swamee-Jain (turbulent) or 64/Re (laminar)",
-    "Darcy-Weisbach equation for friction head loss",
+    "Darcy-Weisbach equation for friction head loss (Crane TP-410)",
     "Fittings losses modeled via equivalent K-factor method",
     "Positive displacement pump with internal slip losses",
+    "Standard: API 674 (Reciprocating PD Pumps) / API 676 (Rotary PD Pumps)",
   ];
 
   steps.push(...buildPipingTraceSteps(input, piping, flowRate_m3s, "Suction"));
