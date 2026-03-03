@@ -338,6 +338,20 @@ export default function PSVSizingPage() {
         </div>
       </div>
 
+      <Card className="mb-4 md:mb-6 border-amber-500/30 bg-amber-500/5" data-testid="banner-screening-disclaimer">
+        <CardContent className="p-3 flex items-start gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-amber-500 mb-1">Screening Tool Only</p>
+            <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+              This calculator is an engineering screening tool for preliminary relief device sizing per API 520/521/526.
+              It is not intended for final relief system design. Final sizing shall be validated with rigorous process simulation,
+              vendor-certified capacity data, and independent review per applicable codes and project specifications.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="overflow-x-auto -mx-4 px-4 mb-4 md:mb-6">
           <TabsList className="inline-flex w-max min-w-full md:w-full md:min-w-0 h-auto p-1" data-testid="tabs-prd">
