@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,46 +8,22 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { UnitSelector } from "@/components/engineering/unit-selector";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI } from "@/lib/engineering/unitConversion";
 import {
-  calculateSeparator,
-  recommendSeparatorConfig,
-  type ServiceType,
-  type SeparatorOrientation,
-  type PhaseMode,
-  type OperatingCase,
-  type SeparatorConfig,
-  type HoldupBasis,
-  type ProjectSetup,
-  type SeparatorFullResult,
-  type CaseGasResult,
-  type GeometryResult,
-  type EngFlag,
-  type CaseType,
-  type InletDeviceType,
-  type MistEliminatorType,
-  type CalcStep,
-  type ServiceRecommendation,
-  type VesselAllowances,
-  DEFAULT_PROJECT,
-  DEFAULT_CASE,
-  DEFAULT_CONFIG,
-  DEFAULT_HOLDUP,
-  DEFAULT_ALLOWANCES,
-  SERVICE_TYPE_LABELS,
-  SERVICE_TYPE_STANDARDS,
-  SERVICE_TYPE_DESCRIPTIONS,
-  FLAG_LABELS,
-  FLAG_SEVERITY,
-  getKGuidance,
-  getStandardReference,
-  TEST_CASES,
-  K_GUIDANCE_API12J,
-  K_GUIDANCE_GPSA,
+  type ProjectSetup, type OperatingCase, type SeparatorConfig, type HoldupBasis,
+  type SeparatorFullResult, type ServiceType, type PhaseMode,
+  type SeparatorOrientation, type InletDeviceType, type MistEliminatorType,
+  type CaseType, type EngFlag, type ServiceRecommendation,
+  DEFAULT_PROJECT, DEFAULT_CASE, DEFAULT_CONFIG, DEFAULT_HOLDUP,
+  FLAG_LABELS, FLAG_SEVERITY,
+  calculateSeparator, recommendSeparatorConfig, getKGuidance,
+  SERVICE_TYPE_LABELS, SERVICE_TYPE_DESCRIPTIONS, TEST_CASES,
 } from "@/lib/engineering/separatorSizing";
 import {
   DropdownMenu,
@@ -55,24 +31,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { exportToExcel, exportToPDF as exportToPDFUtil, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import {
   Container, ClipboardList, Droplets, Settings2, BarChart3, Gauge,
-  ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
+  Ruler, ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  FileText, FileSpreadsheet, Calculator, Wind, Box,
+  FileText, FileSpreadsheet, Compass, Calculator, Layers, Lightbulb,
 } from "lucide-react";
 
 const TABS = [
-  { id: "service", label: "Service", icon: Gauge, step: 1, desc: "Select service type & get recommendations" },
-  { id: "project", label: "Project", icon: ClipboardList, step: 2, desc: "Project info & options" },
-  { id: "cases", label: "Cases", icon: BarChart3, step: 3, desc: "Operating case data" },
-  { id: "design", label: "Design", icon: Settings2, step: 4, desc: "Orientation, K-value & internals" },
-  { id: "gas-sizing", label: "Gas Sizing", icon: Wind, step: 5, desc: "Souders-Brown capacity check" },
-  { id: "holdup", label: "Holdup", icon: Droplets, step: 6, desc: "Liquid residence & surge" },
-  { id: "geometry", label: "Geometry", icon: Box, step: 7, desc: "Vessel dimensions" },
-  { id: "results", label: "Results", icon: ShieldCheck, step: 8, desc: "Summary, flags & export" },
+  { id: "service", label: "Service", icon: Lightbulb, step: 1, desc: "Service type & questionnaire" },
+  { id: "project", label: "Project", icon: ClipboardList, step: 2, desc: "Project setup & options" },
+  { id: "cases", label: "Cases", icon: Droplets, step: 3, desc: "Operating case data" },
+  { id: "design", label: "Design", icon: Settings2, step: 4, desc: "Orientation, phase mode & K-value" },
+  { id: "gas", label: "Gas Sizing", icon: Gauge, step: 5, desc: "Souders-Brown gas capacity" },
+  { id: "holdup", label: "Holdup", icon: Ruler, step: 6, desc: "Liquid residence & surge" },
+  { id: "geometry", label: "Geometry", icon: Container, step: 7, desc: "Vessel dimensions & L/D" },
+  { id: "results", label: "Results", icon: BarChart3, step: 8, desc: "Summary, flags & export" },
 ];
 
 const CASE_TYPES: { value: CaseType; label: string }[] = [
@@ -86,37 +62,68 @@ const CASE_TYPES: { value: CaseType; label: string }[] = [
   { value: "custom", label: "Custom" },
 ];
 
-const pU = (param: string, us: UnitSystem) => getUnit(param, us);
+const ORIENTATIONS: { value: SeparatorOrientation; label: string }[] = [
+  { value: "vertical", label: "Vertical" },
+  { value: "horizontal", label: "Horizontal" },
+];
 
-function fmtN(n: number, d = 2): string {
-  if (Math.abs(n) >= 1e6 || (Math.abs(n) < 0.001 && n !== 0)) return n.toExponential(3);
-  if (Math.abs(n) >= 1000) return n.toFixed(1);
-  if (Math.abs(n) >= 1) return n.toFixed(d);
-  return n.toPrecision(4);
-}
+const PHASE_MODES: { value: PhaseMode; label: string }[] = [
+  { value: "two_phase", label: "2-Phase (Gas-Liquid)" },
+  { value: "three_phase", label: "3-Phase (Gas-Oil-Water)" },
+];
+
+const SERVICE_TYPES: { value: ServiceType; label: string }[] = [
+  { value: "production", label: "Production Separator" },
+  { value: "gas_scrubber", label: "Gas Scrubber" },
+  { value: "inlet_separator", label: "Inlet Separator" },
+  { value: "slug_catcher", label: "Slug Catcher" },
+  { value: "test_separator", label: "Test Separator" },
+];
+
+const GAS_LIQUID_RATIOS = [
+  { value: "gas_dominant", label: "Gas-Dominant (GVF > 0.85)" },
+  { value: "liquid_dominant", label: "Liquid-Dominant (GVF < 0.50)" },
+  { value: "mixed", label: "Mixed (0.50 - 0.85)" },
+];
+
+const pU = (param: string, us: UnitSystem) => getUnit(param, us);
 
 export default function SeparatorSizingPage() {
   const [activeTab, setActiveTab] = useState("service");
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
   const [project, setProject] = useState<ProjectSetup>({ ...DEFAULT_PROJECT });
   const [cases, setCases] = useState<OperatingCase[]>([{ ...DEFAULT_CASE }]);
-  const [config, setConfig] = useState<SeparatorConfig>({ ...DEFAULT_CONFIG, allowances: { ...DEFAULT_ALLOWANCES } });
+  const [config, setConfig] = useState<SeparatorConfig>({ ...DEFAULT_CONFIG, allowances: { ...DEFAULT_CONFIG.allowances } });
   const [holdup, setHoldup] = useState<HoldupBasis>({ ...DEFAULT_HOLDUP });
   const [result, setResult] = useState<SeparatorFullResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [serviceType, setServiceType] = useState<ServiceType>("production");
   const [hasFreeWater, setHasFreeWater] = useState(false);
   const [waterCutPercent, setWaterCutPercent] = useState(0);
   const [gasLiquidRatio, setGasLiquidRatio] = useState<"gas_dominant" | "liquid_dominant" | "mixed">("gas_dominant");
-  const [flagFoam, setFlagFoam] = useState(false);
-  const [flagSolids, setFlagSolids] = useState(false);
-  const [flagSlugging, setFlagSlugging] = useState(false);
-  const [flagEmulsion, setFlagEmulsion] = useState(false);
-  const [recommendation, setRecommendation] = useState<ServiceRecommendation | null>(null);
+  const [qFoam, setQFoam] = useState(false);
+  const [qSolids, setQSolids] = useState(false);
+  const [qSlugging, setQSlugging] = useState(false);
+  const [qEmulsion, setQEmulsion] = useState(false);
+
+  const serviceRec = useMemo<ServiceRecommendation>(() => {
+    return recommendSeparatorConfig({
+      serviceType: config.serviceType,
+      hasFreeWater,
+      waterCutPercent,
+      gasLiquidRatio,
+      flagFoam: qFoam,
+      flagSolids: qSolids,
+      flagSlugging: qSlugging,
+      flagEmulsion: qEmulsion,
+    });
+  }, [config.serviceType, hasFreeWater, waterCutPercent, gasLiquidRatio, qFoam, qSolids, qSlugging, qEmulsion]);
+
+  const kGuidance = useMemo(() => getKGuidance(config.serviceType), [config.serviceType]);
 
   const updateProject = (k: keyof ProjectSetup, v: string | boolean) => setProject(p => ({ ...p, [k]: v }));
   const updateConfig = (k: keyof SeparatorConfig, v: unknown) => setConfig(p => ({ ...p, [k]: v as never }));
+  const updateAllowance = (k: string, v: number) => setConfig(p => ({ ...p, allowances: { ...p.allowances, [k]: v } }));
   const updateHoldup = (k: keyof HoldupBasis, v: number) => setHoldup(p => ({ ...p, [k]: v }));
 
   const updateCase = (idx: number, k: keyof OperatingCase, v: unknown) => {
@@ -131,35 +138,6 @@ export default function SeparatorSizingPage() {
   const removeCase = (idx: number) => {
     if (cases.length <= 1) return;
     setCases(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const handleServiceTypeChange = (st: ServiceType) => {
-    setServiceType(st);
-    setConfig(p => ({ ...p, serviceType: st }));
-    setRecommendation(null);
-  };
-
-  const handleGetRecommendation = () => {
-    const rec = recommendSeparatorConfig({
-      serviceType,
-      hasFreeWater,
-      waterCutPercent,
-      gasLiquidRatio,
-      flagFoam,
-      flagSolids,
-      flagSlugging,
-      flagEmulsion,
-    });
-    setRecommendation(rec);
-  };
-
-  const handleApplyRecommendation = () => {
-    if (!recommendation) return;
-    setConfig(p => ({
-      ...p,
-      orientation: recommendation.recommendedOrientation,
-      phaseMode: recommendation.recommendedPhaseMode,
-    }));
   };
 
   const handleCalculate = () => {
@@ -190,54 +168,49 @@ export default function SeparatorSizingPage() {
 
       const r = calculateSeparator(project, convertedCases, config, holdup);
       setResult(r);
+      setActiveTab("gas");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);
     }
   };
 
-  const loadTestCase = () => {
+  const handleReset = () => {
+    setProject({ ...DEFAULT_PROJECT });
+    setCases([{ ...DEFAULT_CASE }]);
+    setConfig({ ...DEFAULT_CONFIG, allowances: { ...DEFAULT_CONFIG.allowances } });
+    setHoldup({ ...DEFAULT_HOLDUP });
+    setResult(null);
+    setError(null);
+    setHasFreeWater(false);
+    setWaterCutPercent(0);
+    setGasLiquidRatio("gas_dominant");
+    setQFoam(false);
+    setQSolids(false);
+    setQSlugging(false);
+    setQEmulsion(false);
+    setActiveTab("service");
+  };
+
+  const loadTestCase = (idx: number) => {
     setUnitSystem("SI");
     setError(null);
     setResult(null);
-    const tc = TEST_CASES[0];
+    const tc = TEST_CASES[idx];
     setProject({ ...tc.project });
     setCases(tc.cases.map(c => ({ ...c })));
     setConfig({ ...tc.config, allowances: { ...tc.config.allowances } });
     setHoldup({ ...tc.holdup });
-    setServiceType(tc.config.serviceType);
-    setRecommendation(null);
   };
 
-  const handleReset = () => {
-    setProject({ ...DEFAULT_PROJECT });
-    setCases([{ ...DEFAULT_CASE }]);
-    setConfig({ ...DEFAULT_CONFIG, allowances: { ...DEFAULT_ALLOWANCES } });
-    setHoldup({ ...DEFAULT_HOLDUP });
-    setResult(null);
-    setError(null);
-    setActiveTab("service");
-    setServiceType("production");
-    setHasFreeWater(false);
-    setWaterCutPercent(0);
-    setGasLiquidRatio("gas_dominant");
-    setFlagFoam(false);
-    setFlagSolids(false);
-    setFlagSlugging(false);
-    setFlagEmulsion(false);
-    setRecommendation(null);
+  const applyRecommendation = () => {
+    updateConfig("orientation", serviceRec.recommendedOrientation);
+    updateConfig("phaseMode", serviceRec.recommendedPhaseMode);
   };
 
-  const handleExportPDF = () => {
-    if (!result) return;
-    const gov = result.caseResults.find(c => c.caseId === result.governingCaseId);
-    const html = buildCalcNoteHTML(result, gov, project);
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.onload = () => { printWindow.print(); };
-  };
+  const tabIdx = TABS.findIndex(t => t.id === activeTab);
+  const goNext = () => { if (tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id); };
+  const goPrev = () => { if (tabIdx > 0) setActiveTab(TABS[tabIdx - 1].id); };
 
   const buildExportData = (): ExportDatasheet | null => {
     if (!result) return null;
@@ -250,24 +223,9 @@ export default function SeparatorSizingPage() {
       { label: "Inlet Device", value: config.inletDevice.replace(/_/g, " ") },
       { label: "Mist Eliminator", value: config.mistEliminator.replace(/_/g, " ") },
       { label: "K Value", value: config.kValue, unit: "m/s" },
-      { label: "K Mode", value: config.kMode },
-      { label: "Foam Factor", value: config.foamFactor },
       { label: "Liquid Residence Time", value: holdup.residenceTime, unit: "min" },
       { label: "Surge Time", value: holdup.surgeTime, unit: "min" },
     ];
-
-    if (config.phaseMode === "three_phase") {
-      inputs.push(
-        { label: "Oil Retention Time", value: holdup.oilRetentionTime, unit: "min" },
-        { label: "Water Retention Time", value: holdup.waterRetentionTime, unit: "min" },
-      );
-    }
-    if (holdup.slugVolume > 0) {
-      inputs.push({ label: "Slug Volume", value: holdup.slugVolume, unit: "m\u00B3" });
-    }
-    if (config.enableDropletCheck) {
-      inputs.push({ label: "Droplet Diameter", value: config.dropletDiameter_um, unit: "\u03BCm" });
-    }
 
     cases.forEach((c, i) => {
       inputs.push(
@@ -275,7 +233,10 @@ export default function SeparatorSizingPage() {
         { label: `Case ${i + 1} Type`, value: c.caseType },
         { label: `Case ${i + 1} Gas Flow`, value: c.gasFlowRate, unit: c.gasFlowBasis === "actual" ? "m\u00B3/h act" : "Sm\u00B3/h" },
         { label: `Case ${i + 1} Gas Density`, value: c.gasDensity, unit: "kg/m\u00B3" },
-        { label: `Case ${i + 1} Pressure`, value: c.gasPressure, unit: "bar abs" },
+        { label: `Case ${i + 1} Gas MW`, value: c.gasMW, unit: "kg/kmol" },
+        { label: `Case ${i + 1} Gas Pressure`, value: c.gasPressure, unit: "bar abs" },
+        { label: `Case ${i + 1} Gas Temperature`, value: c.gasTemperature, unit: "\u00B0C" },
+        { label: `Case ${i + 1} Gas Z`, value: c.gasZ },
         { label: `Case ${i + 1} Liquid Flow`, value: c.liquidFlowRate, unit: c.liquidFlowBasis === "volume" ? "m\u00B3/h" : "kg/h" },
         { label: `Case ${i + 1} Liquid Density`, value: c.liquidDensity, unit: "kg/m\u00B3" },
       );
@@ -312,12 +273,16 @@ export default function SeparatorSizingPage() {
     if (result.caseResults.length > 1) {
       additionalSections.push({
         title: "Case Comparison",
-        items: result.caseResults.map(cr => ({ label: `${cr.caseName} \u2014 D_req`, value: cr.D_req_mm, unit: "mm" })),
+        items: result.caseResults.map(cr => ({
+          label: `${cr.caseName} \u2014 D_req`,
+          value: cr.D_req_mm,
+          unit: "mm",
+        })),
       });
     }
 
     return {
-      calculatorName: "Separator Sizing (API 12J / GPSA)",
+      calculatorName: "Separator Sizing",
       projectInfo: [
         { label: "Case Name", value: project.caseName || "-" },
         { label: "Engineer", value: project.engineer || "-" },
@@ -328,17 +293,18 @@ export default function SeparatorSizingPage() {
       calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
       additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
       methodology: [
-        "Souders\u2013Brown correlation: v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G)",
-        "Gas capacity area: A = Q_actual / v_max",
-        "K-value pressure correction per GPSA Fig 7-9",
-        "Liquid holdup from residence time and surge time",
-        "Vessel geometry from gas capacity + liquid holdup + allowances",
+        "Souders\u2013Brown correlation for maximum allowable gas velocity: v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G)",
+        "Gas capacity area from continuity: A = Q_actual / v_max",
+        "Liquid holdup from residence time and surge time requirements",
+        "Vessel geometry assembled from gas capacity + liquid holdup + allowance zones",
+        "L/D ratio checked against typical design limits",
       ],
       assumptions: result.assumptions,
       references: [
         "API 12J: Specification for Oil and Gas Separators",
         "GPSA Engineering Data Book, Section 7: Separation Equipment",
         "Arnold & Stewart: Surface Production Operations, Vol. 1",
+        "Stewart & Arnold: Gas\u2013Liquid and Liquid\u2013Liquid Separators",
       ],
       warnings: [
         ...result.warnings,
@@ -347,35 +313,41 @@ export default function SeparatorSizingPage() {
     };
   };
 
-  const tabIdx = TABS.findIndex(t => t.id === activeTab);
-  const goNext = () => { if (tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id); };
-  const goPrev = () => { if (tabIdx > 0) setActiveTab(TABS[tabIdx - 1].id); };
-
-  const kGuidance = getKGuidance(config.serviceType);
-  const confColor = (c: string) => c === "strong" ? "text-green-500" : c === "moderate" ? "text-amber-500" : "text-blue-500";
-  const confBadgeVariant = (c: string): "default" | "secondary" | "destructive" | "outline" => c === "strong" ? "default" : "secondary";
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
-            <Container className="w-5 h-5 text-primary" />
+            <Layers className="w-5 h-5 text-primary" />
           </div>
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-calc-title">Separator Sizing</h1>
-            <p className="text-sm text-muted-foreground">API 12J · GPSA Sec 7 · Souders-Brown</p>
+            <p className="text-sm text-muted-foreground">Unified separator sizing (API 12J / GPSA)</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <UnitSelector value={unitSystem} onChange={setUnitSystem} />
-          <Button size="sm" variant="outline" onClick={loadTestCase} data-testid="button-load-test">
-            <FlaskConical className="w-3.5 h-3.5 mr-1" /> Test Case
-          </Button>
+          <UnitSelector value={unitSystem} onChange={ns => setUnitSystem(ns)} />
           <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1 mb-4">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" data-testid="button-load-test">
+              <FlaskConical className="w-3.5 h-3.5 mr-1" /> Load Test Case
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {TEST_CASES.map((tc, i) => (
+              <DropdownMenuItem key={i} onClick={() => loadTestCase(i)} data-testid={`button-test-${i}`}>
+                {tc.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="flex items-center gap-1 mb-6 overflow-x-auto pb-1">
@@ -425,136 +397,164 @@ export default function SeparatorSizingPage() {
 
         <TabsContent value="service">
           <div className="space-y-4">
-            <StepHeader step={1} title="Service Type & Recommendations" desc="Select the service type and answer the questionnaire to get design recommendations." />
+            <StepHeader step={1} title="Service Type & Questionnaire" desc="Select service type and answer questions to get a configuration recommendation." />
 
             <Card>
               <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2"><Gauge className="w-4 h-4" /> Service Type</h3>
+                <h3 className="font-semibold text-sm flex items-center gap-2"><Lightbulb className="w-4 h-4" /> Service Type</h3>
               </CardHeader>
               <CardContent className="space-y-4 pt-0">
                 <div>
                   <Label className="text-xs mb-1.5 block">Service Type</Label>
-                  <Select value={serviceType} onValueChange={(v) => handleServiceTypeChange(v as ServiceType)}>
+                  <Select value={config.serviceType} onValueChange={v => updateConfig("serviceType", v as ServiceType)}>
                     <SelectTrigger data-testid="select-service-type"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {(Object.keys(SERVICE_TYPE_LABELS) as ServiceType[]).map(st => (
-                        <SelectItem key={st} value={st}>{SERVICE_TYPE_LABELS[st]}</SelectItem>
+                      {SERVICE_TYPES.map(st => (
+                        <SelectItem key={st.value} value={st.value}>{st.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground mt-2" data-testid="text-service-desc">
+                    {SERVICE_TYPE_DESCRIPTIONS[config.serviceType]}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">{SERVICE_TYPE_DESCRIPTIONS[serviceType]}</p>
-                <Badge variant="outline" className="text-xs">{SERVICE_TYPE_STANDARDS[serviceType]}</Badge>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Questionnaire</h3>
+                <h3 className="font-semibold text-sm flex items-center gap-2"><Compass className="w-4 h-4" /> Configuration Questionnaire</h3>
               </CardHeader>
               <CardContent className="space-y-4 pt-0">
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={hasFreeWater} onCheckedChange={v => setHasFreeWater(!!v)} id="chk-free-water" data-testid="chk-free-water" />
-                  <Label htmlFor="chk-free-water" className="text-xs">Is free water present?</Label>
+                <div className="flex items-center justify-between gap-4 py-2 border-b">
+                  <div>
+                    <Label className="text-xs font-medium">Is free water present requiring separation?</Label>
+                    <p className="text-xs text-muted-foreground">Recommends 3-phase if water must be separated</p>
+                  </div>
+                  <Switch
+                    checked={hasFreeWater}
+                    onCheckedChange={setHasFreeWater}
+                    data-testid="switch-free-water"
+                  />
                 </div>
+
                 {hasFreeWater && (
                   <div>
-                    <Label className="text-xs mb-1 block">Water Cut (%)</Label>
+                    <Label className="text-xs mb-1.5 block">Estimated Water Cut (%)</Label>
                     <NumericInput value={waterCutPercent} onValueChange={setWaterCutPercent} min={0} max={100} data-testid="input-water-cut-pct" />
                   </div>
                 )}
+
                 <div>
                   <Label className="text-xs mb-1.5 block">Gas / Liquid Ratio</Label>
-                  <Select value={gasLiquidRatio} onValueChange={v => setGasLiquidRatio(v as "gas_dominant" | "liquid_dominant" | "mixed")}>
+                  <Select value={gasLiquidRatio} onValueChange={v => setGasLiquidRatio(v as typeof gasLiquidRatio)}>
                     <SelectTrigger data-testid="select-glr"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gas_dominant">Gas Dominant</SelectItem>
-                      <SelectItem value="liquid_dominant">Liquid Dominant</SelectItem>
-                      <SelectItem value="mixed">Mixed</SelectItem>
+                      {GAS_LIQUID_RATIOS.map(r => (
+                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-xs font-medium text-muted-foreground">Process Flags</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox checked={flagFoam} onCheckedChange={v => setFlagFoam(!!v)} id="chk-foam-svc" data-testid="chk-foam-svc" />
-                    <Label htmlFor="chk-foam-svc" className="text-xs">Foaming tendency</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox checked={flagSolids} onCheckedChange={v => setFlagSolids(!!v)} id="chk-solids-svc" data-testid="chk-solids-svc" />
-                    <Label htmlFor="chk-solids-svc" className="text-xs">Solids / sand</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox checked={flagSlugging} onCheckedChange={v => setFlagSlugging(!!v)} id="chk-slugging-svc" data-testid="chk-slugging-svc" />
-                    <Label htmlFor="chk-slugging-svc" className="text-xs">Slugging risk</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox checked={flagEmulsion} onCheckedChange={v => setFlagEmulsion(!!v)} id="chk-emulsion-svc" data-testid="chk-emulsion-svc" />
-                    <Label htmlFor="chk-emulsion-svc" className="text-xs">Emulsion risk</Label>
+
+                <div className="pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Process Flags</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={qFoam} onCheckedChange={v => setQFoam(!!v)} id="q-foam" data-testid="chk-q-foam" />
+                      <Label htmlFor="q-foam" className="text-xs">Foam tendency</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={qSolids} onCheckedChange={v => setQSolids(!!v)} id="q-solids" data-testid="chk-q-solids" />
+                      <Label htmlFor="q-solids" className="text-xs">Solids / Sand</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={qSlugging} onCheckedChange={v => setQSlugging(!!v)} id="q-slugging" data-testid="chk-q-slugging" />
+                      <Label htmlFor="q-slugging" className="text-xs">Slugging risk</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={qEmulsion} onCheckedChange={v => setQEmulsion(!!v)} id="q-emulsion" data-testid="chk-q-emulsion" />
+                      <Label htmlFor="q-emulsion" className="text-xs">Emulsion risk</Label>
+                    </div>
                   </div>
                 </div>
-                <Button size="sm" onClick={handleGetRecommendation} data-testid="button-get-recommendation">
-                  Get Recommendation
-                </Button>
               </CardContent>
             </Card>
 
-            {recommendation && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <h3 className="font-semibold text-sm flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-500" /> Recommendation
-                  </h3>
-                </CardHeader>
-                <CardContent className="space-y-4 pt-0">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="p-3 rounded-md border">
-                      <p className="text-xs text-muted-foreground mb-1">Orientation</p>
-                      <p className="text-sm font-semibold capitalize">{recommendation.recommendedOrientation}</p>
-                      <Badge variant={confBadgeVariant(recommendation.orientationConfidence)} className={`text-xs mt-1 ${confColor(recommendation.orientationConfidence)}`}>
-                        {recommendation.orientationConfidence}
+            <Card>
+              <CardHeader className="pb-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Recommendation</h3>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-0">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="p-3 rounded-md border">
+                    <p className="text-xs text-muted-foreground mb-1">Recommended Orientation</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium" data-testid="text-rec-orientation">
+                        {serviceRec.recommendedOrientation === "vertical" ? "Vertical" : "Horizontal"}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          serviceRec.orientationConfidence === "strong"
+                            ? "border-green-500/50 text-green-500"
+                            : serviceRec.orientationConfidence === "moderate"
+                              ? "border-amber-500/50 text-amber-500"
+                              : "border-blue-500/50 text-blue-500"
+                        }
+                        data-testid="badge-orient-confidence"
+                      >
+                        {serviceRec.orientationConfidence}
                       </Badge>
                     </div>
-                    <div className="p-3 rounded-md border">
-                      <p className="text-xs text-muted-foreground mb-1">Phase Mode</p>
-                      <p className="text-sm font-semibold">{recommendation.recommendedPhaseMode === "three_phase" ? "3-Phase" : "2-Phase"}</p>
-                      <Badge variant={confBadgeVariant(recommendation.phaseConfidence)} className={`text-xs mt-1 ${confColor(recommendation.phaseConfidence)}`}>
-                        {recommendation.phaseConfidence}
+                  </div>
+                  <div className="p-3 rounded-md border">
+                    <p className="text-xs text-muted-foreground mb-1">Recommended Phase Mode</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium" data-testid="text-rec-phase">
+                        {serviceRec.recommendedPhaseMode === "two_phase" ? "2-Phase" : "3-Phase"}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          serviceRec.phaseConfidence === "strong"
+                            ? "border-green-500/50 text-green-500"
+                            : serviceRec.phaseConfidence === "moderate"
+                              ? "border-amber-500/50 text-amber-500"
+                              : "border-blue-500/50 text-blue-500"
+                        }
+                        data-testid="badge-phase-confidence"
+                      >
+                        {serviceRec.phaseConfidence}
                       </Badge>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">Orientation Reasons</p>
-                    <ul className="space-y-1">
-                      {recommendation.orientationReasons.map((r, i) => (
-                        <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                          <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-primary" />{r}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">Phase Mode Reasons</p>
-                    <ul className="space-y-1">
-                      {recommendation.phaseReasons.map((r, i) => (
-                        <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                          <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-primary" />{r}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={handleApplyRecommendation} data-testid="button-apply-recommendation">
-                    Apply Recommendation
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Orientation Reasons</p>
+                  {serviceRec.orientationReasons.map((r, i) => (
+                    <p key={i} className="text-xs text-muted-foreground" data-testid={`text-orient-reason-${i}`}>{r}</p>
+                  ))}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Phase Mode Reasons</p>
+                  {serviceRec.phaseReasons.map((r, i) => (
+                    <p key={i} className="text-xs text-muted-foreground" data-testid={`text-phase-reason-${i}`}>{r}</p>
+                  ))}
+                </div>
+
+                <Button size="sm" onClick={applyRecommendation} data-testid="button-apply-recommendation">
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Apply Recommendation
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
         <TabsContent value="project">
           <div className="space-y-4">
-            <StepHeader step={2} title="Project Setup" desc="Enter project information." />
+            <StepHeader step={2} title="Project Setup" desc="Enter project info and calculation options." />
             <Card>
               <CardHeader className="pb-3">
                 <h3 className="font-semibold text-sm flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Project Setup</h3>
@@ -568,6 +568,17 @@ export default function SeparatorSizingPage() {
                   <div><Label className="text-xs mb-1.5 block">Date</Label>
                     <Input type="date" value={project.date} onChange={e => updateProject("date", e.target.value)} data-testid="input-date" /></div>
                 </div>
+                <div className="space-y-3 pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground">Calculation Options</p>
+                  <div className="flex items-center gap-2">
+                    <Checkbox checked={project.showIntermediateSteps} onCheckedChange={v => updateProject("showIntermediateSteps", !!v)} id="chk-steps" data-testid="chk-steps" />
+                    <Label htmlFor="chk-steps" className="text-xs">Show intermediate calculation steps</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox checked={project.showAssumptionsLog} onCheckedChange={v => updateProject("showAssumptionsLog", !!v)} id="chk-assumptions" data-testid="chk-assumptions" />
+                    <Label htmlFor="chk-assumptions" className="text-xs">Show assumptions log</Label>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -575,7 +586,7 @@ export default function SeparatorSizingPage() {
 
         <TabsContent value="cases">
           <div className="space-y-4">
-            <StepHeader step={3} title="Operating Cases" desc="Define gas and liquid stream data for each operating case." />
+            <StepHeader step={3} title="Operating Cases" desc="Define operating case data for each scenario." />
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -615,7 +626,7 @@ export default function SeparatorSizingPage() {
                           <SelectTrigger data-testid={`select-gas-basis-${idx}`}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="actual">Actual (at vessel P,T)</SelectItem>
-                            <SelectItem value="standard">Standard</SelectItem>
+                            <SelectItem value="standard">Standard (Sm\u00B3/h or MMSCFD)</SelectItem>
                           </SelectContent>
                         </Select></div>
                       <div><Label className="text-xs mb-1 block">Gas Density ({pU("density", unitSystem)})</Label>
@@ -640,7 +651,7 @@ export default function SeparatorSizingPage() {
                         <Select value={c.liquidFlowBasis} onValueChange={v => updateCase(idx, "liquidFlowBasis", v)}>
                           <SelectTrigger data-testid={`select-liq-basis-${idx}`}><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="volume">Volume</SelectItem>
+                            <SelectItem value="volume">Volumetric</SelectItem>
                             <SelectItem value="mass">Mass</SelectItem>
                           </SelectContent>
                         </Select></div>
@@ -652,10 +663,8 @@ export default function SeparatorSizingPage() {
 
                     {config.phaseMode === "three_phase" && (
                       <>
-                        <p className="text-xs font-medium text-muted-foreground">3-Phase Data</p>
+                        <p className="text-xs font-medium text-muted-foreground">3-Phase Properties</p>
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                          <div><Label className="text-xs mb-1 block">Water Cut (fraction)</Label>
-                            <NumericInput value={c.waterCut ?? 0} onValueChange={v => updateCase(idx, "waterCut", v)} data-testid={`input-water-cut-${idx}`} /></div>
                           <div><Label className="text-xs mb-1 block">Oil Density ({pU("density", unitSystem)})</Label>
                             <NumericInput value={c.oilDensity ?? 0} onValueChange={v => updateCase(idx, "oilDensity", v)} data-testid={`input-oil-density-${idx}`} /></div>
                           <div><Label className="text-xs mb-1 block">Water Density ({pU("density", unitSystem)})</Label>
@@ -664,40 +673,31 @@ export default function SeparatorSizingPage() {
                             <NumericInput value={c.oilViscosity ?? 0} onValueChange={v => updateCase(idx, "oilViscosity", v)} data-testid={`input-oil-visc-${idx}`} /></div>
                           <div><Label className="text-xs mb-1 block">Water Viscosity (cP)</Label>
                             <NumericInput value={c.waterViscosity ?? 0} onValueChange={v => updateCase(idx, "waterViscosity", v)} data-testid={`input-water-visc-${idx}`} /></div>
+                          <div><Label className="text-xs mb-1 block">Water Cut (fraction 0-1)</Label>
+                            <NumericInput step="0.01" min={0} max={1} value={c.waterCut ?? 0} onValueChange={v => updateCase(idx, "waterCut", v)} data-testid={`input-water-cut-${idx}`} /></div>
                         </div>
                       </>
                     )}
 
-                    <p className="text-xs font-medium text-muted-foreground">Process Flags</p>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={c.flagFoam} onCheckedChange={v => updateCase(idx, "flagFoam", !!v)} id={`chk-foam-${idx}`} data-testid={`chk-foam-${idx}`} />
-                        <Label htmlFor={`chk-foam-${idx}`} className="text-xs">Foam</Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={c.flagSolids} onCheckedChange={v => updateCase(idx, "flagSolids", !!v)} id={`chk-solids-${idx}`} data-testid={`chk-solids-${idx}`} />
-                        <Label htmlFor={`chk-solids-${idx}`} className="text-xs">Solids</Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={c.flagSlugging} onCheckedChange={v => updateCase(idx, "flagSlugging", !!v)} id={`chk-slugging-${idx}`} data-testid={`chk-slugging-${idx}`} />
-                        <Label htmlFor={`chk-slugging-${idx}`} className="text-xs">Slugging</Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={c.flagHydrate} onCheckedChange={v => updateCase(idx, "flagHydrate", !!v)} id={`chk-hydrate-${idx}`} data-testid={`chk-hydrate-${idx}`} />
-                        <Label htmlFor={`chk-hydrate-${idx}`} className="text-xs">Hydrate</Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={c.flagEmulsion} onCheckedChange={v => updateCase(idx, "flagEmulsion", !!v)} id={`chk-emulsion-${idx}`} data-testid={`chk-emulsion-${idx}`} />
-                        <Label htmlFor={`chk-emulsion-${idx}`} className="text-xs">Emulsion</Label>
-                      </div>
+                    <p className="text-xs font-medium text-muted-foreground">Flags & Conditions</p>
+                    <div className="flex flex-wrap gap-4">
+                      {[
+                        { key: "flagFoam", label: "Foam" },
+                        { key: "flagSolids", label: "Solids/Sand" },
+                        { key: "flagSlugging", label: "Slugging" },
+                        { key: "flagHydrate", label: "Hydrate/Wax" },
+                        { key: "flagEmulsion", label: "Emulsion" },
+                      ].map(f => (
+                        <div key={f.key} className="flex items-center gap-1.5">
+                          <Checkbox checked={c[f.key as keyof OperatingCase] as boolean} onCheckedChange={v => updateCase(idx, f.key as keyof OperatingCase, !!v)} id={`${f.key}-${idx}`} data-testid={`chk-${f.key}-${idx}`} />
+                          <Label htmlFor={`${f.key}-${idx}`} className="text-xs">{f.label}</Label>
+                        </div>
+                      ))}
                     </div>
-
-                    {config.enableDropletCheck && (
-                      <div>
-                        <Label className="text-xs mb-1 block">Droplet Basis (\u03BCm)</Label>
-                        <NumericInput value={c.dropletBasis} onValueChange={v => updateCase(idx, "dropletBasis", v)} data-testid={`input-droplet-${idx}`} />
-                      </div>
-                    )}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div><Label className="text-xs mb-1 block">Droplet Removal Basis (\u03BCm)</Label>
+                        <NumericInput value={c.dropletBasis} onValueChange={v => updateCase(idx, "dropletBasis", v)} data-testid={`input-droplet-${idx}`} /></div>
+                    </div>
                   </div>
                 ))}
               </CardContent>
@@ -707,511 +707,489 @@ export default function SeparatorSizingPage() {
 
         <TabsContent value="design">
           <div className="space-y-4">
-            <StepHeader step={4} title="Design Configuration" desc="Set orientation, K-value, internals and vessel constraints." />
+            <StepHeader step={4} title="Design Basis" desc="Set orientation, phase mode & K-value." />
 
             <Card>
               <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Orientation & Phase Mode</h3>
+                <h3 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Design Basis</h3>
               </CardHeader>
               <CardContent className="space-y-4 pt-0">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Orientation</Label>
-                    <Select value={config.orientation} onValueChange={v => updateConfig("orientation", v)}>
+                    <Select value={config.orientation} onValueChange={v => updateConfig("orientation", v as SeparatorOrientation)}>
                       <SelectTrigger data-testid="select-orientation"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="vertical">Vertical</SelectItem>
-                        <SelectItem value="horizontal">Horizontal</SelectItem>
-                      </SelectContent>
+                      <SelectContent>{ORIENTATIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                     </Select></div>
                   <div><Label className="text-xs mb-1.5 block">Phase Mode</Label>
-                    <Select value={config.phaseMode} onValueChange={v => updateConfig("phaseMode", v)}>
+                    <Select value={config.phaseMode} onValueChange={v => updateConfig("phaseMode", v as PhaseMode)}>
                       <SelectTrigger data-testid="select-phase-mode"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="two_phase">2-Phase (Gas\u2013Liquid)</SelectItem>
-                        <SelectItem value="three_phase">3-Phase (Gas\u2013Oil\u2013Water)</SelectItem>
-                      </SelectContent>
+                      <SelectContent>{PHASE_MODES.map(pm => <SelectItem key={pm.value} value={pm.value}>{pm.label}</SelectItem>)}</SelectContent>
                     </Select></div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2"><Calculator className="w-4 h-4" /> K-Value & Internals</h3>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-0">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div><Label className="text-xs mb-1.5 block">K Mode</Label>
-                    <Select value={config.kMode} onValueChange={v => updateConfig("kMode", v)}>
-                      <SelectTrigger data-testid="select-k-mode"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User-entered</SelectItem>
-                        <SelectItem value="typical">Typical (from guidance)</SelectItem>
-                      </SelectContent>
-                    </Select></div>
-                  <div><Label className="text-xs mb-1.5 block">K Value (m/s)</Label>
-                    <NumericInput value={config.kValue} onValueChange={v => updateConfig("kValue", v)} data-testid="input-k-value" /></div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">K Guidance ({getStandardReference(config.serviceType)})</p>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-1.5 px-2 text-muted-foreground">Configuration</th>
-                        <th className="text-right py-1.5 px-2 text-muted-foreground">Range</th>
-                        <th className="text-right py-1.5 px-2 text-muted-foreground">Typical</th>
-                        <th className="text-left py-1.5 px-2 text-muted-foreground">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(kGuidance).map(([key, val]) => (
-                        <tr key={key} className="border-b border-muted/30">
-                          <td className="py-1.5 px-2">{key}</td>
-                          <td className="py-1.5 px-2 text-right font-mono tabular-nums">{val.range[0]}\u2013{val.range[1]}</td>
-                          <td className="py-1.5 px-2 text-right font-mono tabular-nums">{val.typical}</td>
-                          <td className="py-1.5 px-2 text-muted-foreground">{val.notes}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label className="text-xs mb-1.5 block">Inlet Device</Label>
-                    <Select value={config.inletDevice} onValueChange={v => updateConfig("inletDevice", v)}>
-                      <SelectTrigger data-testid="select-inlet-device"><SelectValue /></SelectTrigger>
+                    <Select value={config.inletDevice} onValueChange={v => updateConfig("inletDevice", v as InletDeviceType)}>
+                      <SelectTrigger data-testid="select-inlet"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="diverter">Diverter Plate</SelectItem>
-                        <SelectItem value="half_pipe">Half Pipe</SelectItem>
+                        <SelectItem value="diverter">Simple Diverter</SelectItem>
+                        <SelectItem value="half_pipe">Half-open Pipe</SelectItem>
                         <SelectItem value="cyclone">Cyclone</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                       </SelectContent>
                     </Select></div>
                   <div><Label className="text-xs mb-1.5 block">Mist Eliminator</Label>
-                    <Select value={config.mistEliminator} onValueChange={v => updateConfig("mistEliminator", v)}>
-                      <SelectTrigger data-testid="select-mist-elim"><SelectValue /></SelectTrigger>
+                    <Select value={config.mistEliminator} onValueChange={v => updateConfig("mistEliminator", v as MistEliminatorType)}>
+                      <SelectTrigger data-testid="select-mist"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
                         <SelectItem value="wire_mesh">Wire Mesh Pad</SelectItem>
                         <SelectItem value="vane_pack">Vane Pack</SelectItem>
-                        <SelectItem value="high_efficiency">High Efficiency</SelectItem>
+                        <SelectItem value="high_efficiency">High-efficiency (vendor)</SelectItem>
                       </SelectContent>
                     </Select></div>
                 </div>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Options</h3>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-0">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox checked={config.applyPressureCorrection} onCheckedChange={v => updateConfig("applyPressureCorrection", !!v)} id="chk-pressure-corr" data-testid="chk-pressure-corr" />
-                    <Label htmlFor="chk-pressure-corr" className="text-xs">Apply pressure correction (GPSA Fig 7-9)</Label>
+                <div className="pt-2 border-t space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">Souders-Brown K Value</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div><Label className="text-xs mb-1.5 block">K Guidance (typical ranges)</Label>
+                      <Select onValueChange={v => {
+                        const g = kGuidance[v];
+                        if (g) { updateConfig("kValue", g.typical); updateConfig("kMode", "typical"); }
+                      }}>
+                        <SelectTrigger data-testid="select-k-guidance"><SelectValue placeholder="Select guidance..." /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(kGuidance).map(([k, v]) => (
+                            <SelectItem key={k} value={k}>{k} (K={v.typical})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div><Label className="text-xs mb-1.5 block">K Value (m/s)</Label>
+                      <NumericInput step="0.001" value={config.kValue} onValueChange={v => { updateConfig("kValue", v); updateConfig("kMode", "user"); }} data-testid="input-k-value" /></div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox checked={config.enableDropletCheck} onCheckedChange={v => updateConfig("enableDropletCheck", !!v)} id="chk-droplet" data-testid="chk-droplet" />
-                    <Label htmlFor="chk-droplet" className="text-xs">Enable droplet settling check</Label>
-                  </div>
-                </div>
-                {config.enableDropletCheck && (
-                  <div><Label className="text-xs mb-1 block">Droplet Diameter (\u03BCm)</Label>
-                    <NumericInput value={config.dropletDiameter_um} onValueChange={v => updateConfig("dropletDiameter_um", v)} data-testid="input-droplet-diam" /></div>
-                )}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div><Label className="text-xs mb-1 block">Foam Factor</Label>
-                    <NumericInput value={config.foamFactor} onValueChange={v => updateConfig("foamFactor", v)} data-testid="input-foam-factor" /></div>
-                  {config.orientation === "horizontal" && (
-                    <div><Label className="text-xs mb-1 block">Level Fraction (h/D)</Label>
-                      <NumericInput value={config.levelFraction} onValueChange={v => updateConfig("levelFraction", v)} min={0.1} max={0.9} data-testid="input-level-frac" /></div>
+                  {config.kMode === "typical" && (
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-2">
+                      <p className="text-xs text-blue-400"><Info className="w-3 h-3 inline mr-1" />K value from typical guidance. Confirm suitability for your specific service.</p>
+                    </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2"><Box className="w-4 h-4" /> Vessel Constraints</h3>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-0">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div><Label className="text-xs mb-1 block">Max Diameter (mm, 0 = no limit)</Label>
-                    <NumericInput value={config.maxDiameter} onValueChange={v => updateConfig("maxDiameter", v)} data-testid="input-max-diam" /></div>
-                  <div><Label className="text-xs mb-1 block">Max L/D (0 = no limit)</Label>
-                    <NumericInput value={config.maxLD} onValueChange={v => updateConfig("maxLD", v)} data-testid="input-max-ld" /></div>
+                <div className="pt-2 border-t space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">GPSA K-Factor Corrections</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox id="chk-pressure-corr" checked={config.applyPressureCorrection} onCheckedChange={v => updateConfig("applyPressureCorrection", !!v)} data-testid="chk-pressure-correction" />
+                      <Label htmlFor="chk-pressure-corr" className="text-xs">Apply GPSA Fig 7-9 pressure correction</Label>
+                    </div>
+                    <div><Label className="text-xs mb-1.5 block">Foam Derating Factor (0.5-1.0)</Label>
+                      <NumericInput step="0.05" min={0.5} max={1} value={config.foamFactor} onValueChange={v => updateConfig("foamFactor", v)} data-testid="input-foam-factor" />
+                      <p className="text-xs text-muted-foreground mt-1">Applied when foam is flagged on any case (typical 0.5-0.7)</p>
+                    </div>
+                  </div>
+                </div>
+
+                {config.orientation === "horizontal" && (
+                  <div className="pt-2 border-t space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground">Horizontal Vessel Parameters</p>
+                    <div><Label className="text-xs mb-1.5 block">Normal Liquid Level Fraction: {(config.levelFraction * 100).toFixed(0)}%</Label>
+                      <Slider value={[config.levelFraction * 100]} onValueChange={v => updateConfig("levelFraction", v[0] / 100)} min={20} max={70} step={5} data-testid="slider-level" />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1"><span>20%</span><span>70%</span></div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">Droplet Settling Check</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox id="chk-droplet" checked={config.enableDropletCheck} onCheckedChange={v => updateConfig("enableDropletCheck", !!v)} data-testid="chk-droplet-check" />
+                      <Label htmlFor="chk-droplet" className="text-xs">Enable droplet settling check (Stokes' law)</Label>
+                    </div>
+                    {config.enableDropletCheck && (
+                      <div><Label className="text-xs mb-1.5 block">Target Droplet Diameter (\u03BCm)</Label>
+                        <NumericInput value={config.dropletDiameter_um} onValueChange={v => updateConfig("dropletDiameter_um", v)} data-testid="input-droplet-dia" /></div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">Constraints (optional)</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div><Label className="text-xs mb-1.5 block">Max Vessel Diameter (mm) - 0 = no limit</Label>
+                      <NumericInput value={config.maxDiameter} onValueChange={v => updateConfig("maxDiameter", v)} data-testid="input-max-dia" /></div>
+                    <div><Label className="text-xs mb-1.5 block">Max L/D - 0 = default</Label>
+                      <NumericInput value={config.maxLD} onValueChange={v => updateConfig("maxLD", v)} data-testid="input-max-ld" /></div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">Allowance Heights (m)</p>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {[
+                      { key: "inletZone", label: "Inlet Zone" },
+                      { key: "disengagementZone", label: "Disengagement Zone" },
+                      { key: "mistEliminatorZone", label: "Mist Eliminator" },
+                      { key: "sumpZone", label: "Sump / Bottom" },
+                      { key: "nozzleZone", label: "Nozzle / Top" },
+                    ].map(a => (
+                      <div key={a.key}><Label className="text-xs mb-1 block">{a.label}</Label>
+                        <NumericInput step="0.05" value={config.allowances[a.key as keyof typeof config.allowances]} onValueChange={v => updateAllowance(a.key, v)} data-testid={`input-allow-${a.key}`} /></div>
+                    ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="gas-sizing">
+        <TabsContent value="gas">
           <div className="space-y-4">
-            <StepHeader step={5} title="Gas Sizing Results" desc="Souders-Brown gas capacity check for each operating case." />
-
+            <StepHeader step={5} title="Gas Capacity Sizing" desc="Souders-Brown gas capacity results." />
             {!result ? (
-              <Card><CardContent className="py-10 text-center">
-                <Wind className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">Complete Holdup tab and calculate first.</p>
-                <Button variant="outline" size="sm" onClick={() => setActiveTab("holdup")} data-testid="button-go-holdup">
-                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Go to Holdup
-                </Button>
+              <Card><CardContent className="py-12 text-center">
+                <Gauge className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-4">Click Calculate on the Holdup tab to run sizing</p>
               </CardContent></Card>
             ) : (
-              <>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <h3 className="font-semibold text-sm flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500" /> Governing Case
-                    </h3>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <p className="text-xs text-muted-foreground">{result.governingReason}</p>
-                  </CardContent>
-                </Card>
-
-                {result.caseResults.length > 0 && result.caseResults[0].steps.length > 0 && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <h3 className="font-semibold text-sm">Effective K Value</h3>
-                    </CardHeader>
-                    <CardContent className="space-y-1 pt-0">
-                      {result.caseResults[0].steps
-                        .filter(s => s.label.toLowerCase().includes("k ") || s.label.toLowerCase().includes("k_") || s.label.toLowerCase().includes("pressure correction") || s.label.toLowerCase().includes("foam"))
-                        .map((s, i) => (
-                          <EqLine key={i} eq={s.label} val={`${fmtN(s.result)} ${s.unit}`} highlight={s.label.includes("Effective")} />
-                        ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <h3 className="font-semibold text-sm">Per-Case Results</h3>
-                  </CardHeader>
-                  <CardContent className="pt-0 overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-1.5 px-2 text-muted-foreground">Case</th>
-                          <th className="text-right py-1.5 px-2 text-muted-foreground">Q_g (m\u00B3/s)</th>
-                          <th className="text-right py-1.5 px-2 text-muted-foreground">v_s,max (m/s)</th>
-                          <th className="text-right py-1.5 px-2 text-muted-foreground">A_req (m\u00B2)</th>
-                          <th className="text-right py-1.5 px-2 text-muted-foreground">D_req (mm)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.caseResults.map((cr, i) => (
-                          <tr key={i} className={`border-b border-muted/30 ${cr.caseId === result.governingCaseId ? "bg-primary/5" : ""}`}>
-                            <td className="py-1.5 px-2">{cr.caseName} {cr.caseId === result.governingCaseId && <Badge variant="outline" className="text-[10px] ml-1">Gov.</Badge>}</td>
-                            <td className="py-1.5 px-2 text-right font-mono tabular-nums">{fmtN(cr.Qg_actual_m3s, 4)}</td>
-                            <td className="py-1.5 px-2 text-right font-mono tabular-nums">{fmtN(cr.v_s_max, 4)}</td>
-                            <td className="py-1.5 px-2 text-right font-mono tabular-nums">{fmtN(cr.A_req, 4)}</td>
-                            <td className="py-1.5 px-2 text-right font-mono tabular-nums">{fmtN(cr.D_req_mm, 0)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </CardContent>
-                </Card>
-
-                {config.enableDropletCheck && result.caseResults.some(cr => cr.dropletSettlingVelocity !== undefined) && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <h3 className="font-semibold text-sm">Droplet Settling Check</h3>
-                    </CardHeader>
-                    <CardContent className="pt-0 overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-left py-1.5 px-2 text-muted-foreground">Case</th>
-                            <th className="text-right py-1.5 px-2 text-muted-foreground">v_t (m/s)</th>
-                            <th className="text-right py-1.5 px-2 text-muted-foreground">v_gas (m/s)</th>
-                            <th className="text-right py-1.5 px-2 text-muted-foreground">Re_p</th>
-                            <th className="text-center py-1.5 px-2 text-muted-foreground">Risk</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {result.caseResults.filter(cr => cr.dropletSettlingVelocity !== undefined).map((cr, i) => (
-                            <tr key={i} className="border-b border-muted/30">
-                              <td className="py-1.5 px-2">{cr.caseName}</td>
-                              <td className="py-1.5 px-2 text-right font-mono tabular-nums">{fmtN(cr.dropletSettlingVelocity!, 4)}</td>
-                              <td className="py-1.5 px-2 text-right font-mono tabular-nums">{fmtN(cr.actualGasVelocity!, 4)}</td>
-                              <td className="py-1.5 px-2 text-right font-mono tabular-nums">{fmtN(cr.dropletRe_p!, 3)}</td>
-                              <td className="py-1.5 px-2 text-center">
-                                {cr.dropletCarryoverRisk
-                                  ? <Badge variant="destructive" className="text-[10px]">Carryover</Badge>
-                                  : <Badge variant="secondary" className="text-[10px]">OK</Badge>}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </CardContent>
-                  </Card>
-                )}
-              </>
+              <Card>
+                <CardHeader className="pb-3">
+                  <h3 className="font-semibold text-sm flex items-center gap-2"><Gauge className="w-4 h-4" /> Gas Capacity Sizing (Souders-Brown)</h3>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-0">
+                  {result.caseResults.map((cr) => (
+                    <div key={cr.caseId} className={`border rounded-md p-3 space-y-2 ${cr.caseId === result.governingCaseId ? "border-primary/50 bg-primary/5" : ""}`}>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-sm font-medium" data-testid={`text-case-name-${cr.caseId}`}>{cr.caseName}</span>
+                        {cr.caseId === result.governingCaseId && <Badge variant="default" className="text-xs" data-testid="badge-governing">Governing</Badge>}
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-3 text-xs">
+                        <div data-testid={`text-vsmax-${cr.caseId}`}><span className="text-muted-foreground">v_s,max:</span> <span className="font-mono">{cr.v_s_max.toFixed(3)} m/s</span></div>
+                        <div data-testid={`text-areq-${cr.caseId}`}><span className="text-muted-foreground">A_req:</span> <span className="font-mono">{cr.A_req.toFixed(4)} m\u00B2</span></div>
+                        <div data-testid={`text-dreq-${cr.caseId}`}><span className="text-muted-foreground">D_req:</span> <span className="font-mono">{cr.D_req_mm.toFixed(0)} mm</span></div>
+                      </div>
+                      {cr.dropletSettlingVelocity !== undefined && (
+                        <div className="grid gap-2 sm:grid-cols-3 text-xs pt-1 border-t">
+                          <div><span className="text-muted-foreground">v_t (settling):</span> <span className="font-mono">{cr.dropletSettlingVelocity.toFixed(4)} m/s</span></div>
+                          <div><span className="text-muted-foreground">v_gas (actual):</span> <span className="font-mono">{cr.actualGasVelocity?.toFixed(4)} m/s</span></div>
+                          <div>
+                            <span className="text-muted-foreground">Carryover:</span>{" "}
+                            <Badge variant={cr.dropletCarryoverRisk ? "destructive" : "secondary"} className="text-xs">
+                              {cr.dropletCarryoverRisk ? "RISK" : "OK"}
+                            </Badge>
+                          </div>
+                        </div>
+                      )}
+                      {project.showIntermediateSteps && cr.steps.length > 0 && (
+                        <div className="mt-2 overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead><tr className="border-b"><th className="text-left py-1 pr-2">Step</th><th className="text-left py-1 pr-2">Equation</th><th className="text-left py-1 pr-2">Substitution</th><th className="text-right py-1 pr-2">Value</th><th className="text-left py-1">Unit</th></tr></thead>
+                            <tbody>{cr.steps.map((s, si) => (
+                              <tr key={si} className="border-b border-border/30">
+                                <td className="py-1 pr-2 text-muted-foreground">{s.label}</td>
+                                <td className="py-1 pr-2 font-mono text-muted-foreground">{s.equation}</td>
+                                <td className="py-1 pr-2 font-mono text-muted-foreground text-xs">{s.substitution}</td>
+                                <td className="py-1 pr-2 text-right font-mono">{typeof s.result === "number" ? s.result.toFixed(4) : s.result}</td>
+                                <td className="py-1">{s.unit}</td>
+                              </tr>
+                            ))}</tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <div className="bg-primary/10 rounded-md p-3 text-sm" data-testid="text-governing-reason">
+                    <CheckCircle2 className="w-4 h-4 inline mr-1 text-primary" />
+                    <strong>Governing case:</strong> {result.governingReason}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
         </TabsContent>
 
         <TabsContent value="holdup">
           <div className="space-y-4">
-            <StepHeader step={6} title="Liquid Holdup & Surge" desc="Define residence time, surge time and slug volume requirements." />
-
+            <StepHeader step={6} title="Liquid Holdup & Surge" desc="Define liquid residence and surge time requirements." />
             <Card>
               <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2"><Droplets className="w-4 h-4" /> Residence Time</h3>
+                <h3 className="font-semibold text-sm flex items-center gap-2"><Ruler className="w-4 h-4" /> Liquid Holdup / Surge / Retention</h3>
               </CardHeader>
               <CardContent className="space-y-4 pt-0">
+                <p className="text-xs text-muted-foreground">Define retention times and surge volumes. Typical values shown as guidance only.</p>
+
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><Label className="text-xs mb-1 block">Residence Time (min)</Label>
-                    <NumericInput value={holdup.residenceTime} onValueChange={v => updateHoldup("residenceTime", v)} data-testid="input-res-time" /></div>
-                  <div><Label className="text-xs mb-1 block">Surge Time (min)</Label>
-                    <NumericInput value={holdup.surgeTime} onValueChange={v => updateHoldup("surgeTime", v)} data-testid="input-surge-time" /></div>
+                  <div><Label className="text-xs mb-1.5 block">Liquid Residence Time (min)</Label>
+                    <NumericInput value={holdup.residenceTime} onValueChange={v => updateHoldup("residenceTime", v)} data-testid="input-res-time" />
+                    <p className="text-xs text-muted-foreground mt-1">Typical: 2-5 min (GPSA)</p></div>
+                  <div><Label className="text-xs mb-1.5 block">Surge Time (min)</Label>
+                    <NumericInput value={holdup.surgeTime} onValueChange={v => updateHoldup("surgeTime", v)} data-testid="input-surge-time" />
+                    <p className="text-xs text-muted-foreground mt-1">Typical: 2-3 min (process upset)</p></div>
                 </div>
-                {config.phaseMode === "three_phase" && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div><Label className="text-xs mb-1 block">Oil Retention Time (min)</Label>
-                      <NumericInput value={holdup.oilRetentionTime} onValueChange={v => updateHoldup("oilRetentionTime", v)} data-testid="input-oil-ret" /></div>
-                    <div><Label className="text-xs mb-1 block">Water Retention Time (min)</Label>
-                      <NumericInput value={holdup.waterRetentionTime} onValueChange={v => updateHoldup("waterRetentionTime", v)} data-testid="input-water-ret" /></div>
-                  </div>
-                )}
+
                 {(config.serviceType === "slug_catcher" || config.serviceType === "inlet_separator") && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div><Label className="text-xs mb-1 block">Slug Volume (m\u00B3)</Label>
-                      <NumericInput value={holdup.slugVolume} onValueChange={v => updateHoldup("slugVolume", v)} data-testid="input-slug-vol" /></div>
-                    <div><Label className="text-xs mb-1 block">Drain Rate (m\u00B3/h)</Label>
-                      <NumericInput value={holdup.drainRate} onValueChange={v => updateHoldup("drainRate", v)} data-testid="input-drain-rate" /></div>
+                  <div className="pt-2 border-t space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground">Slug Volume</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div><Label className="text-xs mb-1.5 block">Slug Volume (m\u00B3)</Label>
+                        <NumericInput value={holdup.slugVolume} onValueChange={v => updateHoldup("slugVolume", v)} data-testid="input-slug-vol" />
+                        <p className="text-xs text-muted-foreground mt-1">From pipeline dynamic simulation</p></div>
+                      <div><Label className="text-xs mb-1.5 block">Drain Rate (m\u00B3/h)</Label>
+                        <NumericInput value={holdup.drainRate} onValueChange={v => updateHoldup("drainRate", v)} data-testid="input-drain-rate" /></div>
+                    </div>
                   </div>
                 )}
+
+                {config.phaseMode === "three_phase" && (
+                  <div className="pt-2 border-t space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground">3-Phase Retention (Preliminary)</p>
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-2 mb-2">
+                      <p className="text-xs text-amber-400"><AlertTriangle className="w-3 h-3 inline mr-1" />3-phase requires detailed design (weirs, coalescers, emulsions). Values here are for preliminary volume estimation only.</p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div><Label className="text-xs mb-1.5 block">Oil Retention Time (min)</Label>
+                        <NumericInput value={holdup.oilRetentionTime} onValueChange={v => updateHoldup("oilRetentionTime", v)} data-testid="input-oil-ret" />
+                        <p className="text-xs text-muted-foreground mt-1">Typical: 3-8 min</p></div>
+                      <div><Label className="text-xs mb-1.5 block">Water Retention Time (min)</Label>
+                        <NumericInput value={holdup.waterRetentionTime} onValueChange={v => updateHoldup("waterRetentionTime", v)} data-testid="input-water-ret" />
+                        <p className="text-xs text-muted-foreground mt-1">Typical: 5-15 min</p></div>
+                    </div>
+                  </div>
+                )}
+
+                {result && result.holdupSteps.length > 0 && project.showIntermediateSteps && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Holdup Calculation Steps</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead><tr className="border-b"><th className="text-left py-1 pr-2">Step</th><th className="text-left py-1 pr-2">Equation</th><th className="text-left py-1 pr-2">Substitution</th><th className="text-right py-1 pr-2">Value</th><th className="text-left py-1">Unit</th></tr></thead>
+                        <tbody>{result.holdupSteps.map((s, si) => (
+                          <tr key={si} className="border-b border-border/30">
+                            <td className="py-1 pr-2 text-muted-foreground">{s.label}</td>
+                            <td className="py-1 pr-2 font-mono text-muted-foreground">{s.equation}</td>
+                            <td className="py-1 pr-2 font-mono text-muted-foreground text-xs">{s.substitution}</td>
+                            <td className="py-1 pr-2 text-right font-mono">{typeof s.result === "number" ? s.result.toFixed(4) : s.result}</td>
+                            <td className="py-1">{s.unit}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">{error}</div>}
               </CardContent>
             </Card>
-
-            <div className="flex items-center gap-3">
-              <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-main">
-                <Calculator className="w-3.5 h-3.5 mr-1" /> {result ? "Recalculate" : "Calculate"}
-              </Button>
-            </div>
-
-            {error && (
-              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">
-                <AlertTriangle className="w-4 h-4 inline mr-2" />{error}
-              </div>
-            )}
           </div>
         </TabsContent>
 
         <TabsContent value="geometry">
           <div className="space-y-4">
-            <StepHeader step={7} title="Vessel Geometry" desc="Vessel dimensions and geometry breakdown." />
-
+            <StepHeader step={7} title="Geometry Assembly" desc="Vessel dimensions & L/D ratio checks." />
             {!result ? (
-              <Card><CardContent className="py-10 text-center">
-                <Box className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">Complete Holdup tab and calculate first.</p>
-                <Button variant="outline" size="sm" onClick={() => setActiveTab("holdup")} data-testid="button-go-holdup-2">
-                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Go to Holdup
-                </Button>
+              <Card><CardContent className="py-12 text-center">
+                <Container className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-4">Run calculation first (Calculate button on Holdup tab)</p>
               </CardContent></Card>
             ) : (
-              <>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <h3 className="font-semibold text-sm">Geometry Steps</h3>
-                  </CardHeader>
-                  <CardContent className="space-y-1 pt-0">
-                    {result.geometry.steps.map((s, i) => (
-                      <EqLine key={i} eq={s.label} val={`${fmtN(s.result)} ${s.unit}`} sub={s.equation} />
+              <Card>
+                <CardHeader className="pb-3">
+                  <h3 className="font-semibold text-sm flex items-center gap-2"><Container className="w-4 h-4" /> Geometry Assembly & Checks</h3>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-0">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {[
+                      { label: "Vessel Diameter", value: `${result.geometry.D_mm.toFixed(0)} mm`, highlight: true },
+                      { label: config.orientation === "vertical" ? "Vessel Height (T-T)" : "Vessel Length (T-T)", value: `${result.geometry.L_mm.toFixed(0)} mm`, highlight: true },
+                      { label: "L/D Ratio", value: result.geometry.LD_ratio.toFixed(2) },
+                      { label: "Vessel Volume", value: `${result.geometry.vesselVolume_m3.toFixed(3)} m\u00B3` },
+                      { label: "Liquid Volume Required", value: `${result.geometry.liquidVolume_m3.toFixed(3)} m\u00B3` },
+                      { label: "Gas Area Fraction", value: `${(result.geometry.gasAreaFraction * 100).toFixed(1)}%` },
+                      { label: "Actual Gas Velocity", value: `${result.geometry.actualGasVelocity.toFixed(3)} m/s` },
+                      { label: "Mist Face Velocity", value: `${result.geometry.mistFaceVelocity.toFixed(3)} m/s` },
+                      { label: "Liquid Level", value: `${result.geometry.liquidLevelPercent.toFixed(1)}%` },
+                    ].map((r, i) => (
+                      <div key={i} className={`p-3 rounded-md border ${r.highlight ? "border-primary/40 bg-primary/5" : ""}`}>
+                        <p className="text-xs text-muted-foreground">{r.label}</p>
+                        <p className={`font-mono text-sm ${r.highlight ? "font-bold" : ""}`} data-testid={`text-geo-${i}`}>{r.value}</p>
+                      </div>
                     ))}
-                  </CardContent>
-                </Card>
+                  </div>
 
-                <Card>
-                  <CardHeader className="pb-3">
-                    <h3 className="font-semibold text-sm">Vessel Dimensions</h3>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="grid gap-0.5">
-                      {[
-                        { label: "Diameter", value: `${fmtN(result.geometry.D_mm, 0)} mm`, hl: true },
-                        { label: config.orientation === "vertical" ? "Height (T-T)" : "Length (T-T)", value: `${fmtN(result.geometry.L_mm, 0)} mm`, hl: true },
-                        { label: "L/D Ratio", value: fmtN(result.geometry.LD_ratio), hl: false },
-                        { label: "Vessel Volume", value: `${fmtN(result.geometry.vesselVolume_m3)} m\u00B3`, hl: false },
-                        { label: "Liquid Level", value: `${fmtN(result.geometry.liquidLevelPercent)}%`, hl: false },
-                        { label: "Actual Gas Velocity", value: `${fmtN(result.geometry.actualGasVelocity, 4)} m/s`, hl: false },
-                        { label: "Mist Face Velocity", value: `${fmtN(result.geometry.mistFaceVelocity, 4)} m/s`, hl: false },
-                      ].map((r, i) => (
-                        <div key={i} className={`flex items-center justify-between py-1.5 px-3 rounded-md ${r.hl ? "bg-primary/10" : i % 2 === 0 ? "bg-muted/40" : ""}`} data-testid={`geo-row-${i}`}>
-                          <span className="text-xs text-muted-foreground">{r.label}</span>
-                          <span className={`text-xs font-mono font-medium tabular-nums ${r.hl ? "text-primary" : ""}`}>{r.value}</span>
+                  {project.showIntermediateSteps && result.geometry.steps.length > 0 && (
+                    <div className="pt-2 border-t">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Geometry Calculation Steps</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead><tr className="border-b"><th className="text-left py-1 pr-2">Step</th><th className="text-left py-1 pr-2">Equation</th><th className="text-left py-1 pr-2">Substitution</th><th className="text-right py-1 pr-2">Value</th><th className="text-left py-1">Unit</th></tr></thead>
+                          <tbody>{result.geometry.steps.map((s, si) => (
+                            <tr key={si} className="border-b border-border/30">
+                              <td className="py-1 pr-2 text-muted-foreground">{s.label}</td>
+                              <td className="py-1 pr-2 font-mono text-muted-foreground">{s.equation}</td>
+                              <td className="py-1 pr-2 font-mono text-muted-foreground text-xs">{s.substitution}</td>
+                              <td className="py-1 pr-2 text-right font-mono">{typeof s.result === "number" ? s.result.toFixed(4) : s.result}</td>
+                              <td className="py-1">{s.unit}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {result.warnings.length > 0 && (
+                    <div className="space-y-1">
+                      {result.warnings.map((w, i) => (
+                        <div key={i} className="text-xs text-amber-400 bg-amber-500/10 p-2 rounded-md" data-testid={`text-warning-${i}`}>
+                          <AlertTriangle className="w-3 h-3 inline mr-1" />{w}
                         </div>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
-              </>
+                  )}
+                </CardContent>
+              </Card>
             )}
           </div>
         </TabsContent>
 
         <TabsContent value="results">
           <div className="space-y-4">
-            <StepHeader step={8} title="Results & Export" desc="Review complete results, engineering flags, and export the calculation." />
-
+            <StepHeader step={8} title="Results Summary" desc="Review results, flags & export." />
             {!result ? (
-              <Card><CardContent className="py-10 text-center">
-                <ShieldCheck className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">Complete Holdup tab and calculate first.</p>
-                <Button variant="outline" size="sm" onClick={() => setActiveTab("holdup")} data-testid="button-go-holdup-3">
-                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Go to Holdup
-                </Button>
+              <Card><CardContent className="py-12 text-center">
+                <BarChart3 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-4">Run calculation first (Calculate button on Holdup tab)</p>
               </CardContent></Card>
             ) : (
-              <>
+              <div className="space-y-4">
                 <Card>
-                  <CardHeader className="pb-2">
+                  <CardHeader className="pb-3">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-green-500" />
-                        <h3 className="font-semibold">Summary</h3>
-                      </div>
+                      <h3 className="font-semibold text-sm flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Results Summary</h3>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button size="sm" variant="outline" data-testid="button-export-results">
-                            <Download className="w-3.5 h-3.5 mr-1.5" /> Export
+                            <Download className="w-3.5 h-3.5 mr-1.5" />
+                            Export
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={handleExportPDF} data-testid="button-export-calc-note">
-                            <FileText className="w-4 h-4 mr-2 text-red-400" /> Calc Note (Print/PDF)
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDFUtil(d); }} data-testid="button-export-pdf">
-                            <FileText className="w-4 h-4 mr-2 text-red-400" /> Export as PDF
+                          <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
+                            <FileText className="w-4 h-4 mr-2 text-red-400" />
+                            Export as PDF
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
-                            <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" /> Export as Excel
+                            <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                            Export as Excel
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }} data-testid="button-export-json">
-                            <Download className="w-4 h-4 mr-2 text-blue-400" /> Export as JSON
+                            <Download className="w-4 h-4 mr-2 text-blue-400" />
+                            Export as JSON
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-0 space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="p-3 rounded-md border">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Governing Case</p>
-                        <p className="text-sm font-semibold">{result.caseResults.find(c => c.caseId === result.governingCaseId)?.caseName}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{result.governingReason}</p>
+                  <CardContent className="space-y-4 pt-0">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="p-3 rounded-md border border-primary/40 bg-primary/5 text-center">
+                        <p className="text-xs text-muted-foreground">Vessel Diameter</p>
+                        <p className="text-xl font-bold font-mono" data-testid="text-result-dia">{result.geometry.D_mm.toFixed(0)} mm</p>
                       </div>
-                      <div className="p-3 rounded-md border bg-primary/5">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Diameter</p>
-                        <p className="text-lg font-bold text-primary">{fmtN(result.geometry.D_mm, 0)} mm</p>
+                      <div className="p-3 rounded-md border border-primary/40 bg-primary/5 text-center">
+                        <p className="text-xs text-muted-foreground">{config.orientation === "vertical" ? "Vessel Height" : "Vessel Length"} (T-T)</p>
+                        <p className="text-xl font-bold font-mono" data-testid="text-result-len">{result.geometry.L_mm.toFixed(0)} mm</p>
                       </div>
-                      <div className="p-3 rounded-md border bg-primary/5">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{config.orientation === "vertical" ? "Height (T-T)" : "Length (T-T)"}</p>
-                        <p className="text-lg font-bold text-primary">{fmtN(result.geometry.L_mm, 0)} mm</p>
+                      <div className="p-3 rounded-md border text-center">
+                        <p className="text-xs text-muted-foreground">Vessel Volume</p>
+                        <p className="text-lg font-mono" data-testid="text-result-vol">{result.geometry.vesselVolume_m3.toFixed(2)} m\u00B3</p>
+                      </div>
+                      <div className="p-3 rounded-md border text-center">
+                        <p className="text-xs text-muted-foreground">L/D Ratio</p>
+                        <p className="text-lg font-mono" data-testid="text-result-ld">{result.geometry.LD_ratio.toFixed(2)}</p>
                       </div>
                     </div>
 
-                    <div className="grid gap-0.5">
-                      {[
-                        { label: "L/D Ratio", value: fmtN(result.geometry.LD_ratio) },
-                        { label: "Vessel Volume", value: `${fmtN(result.geometry.vesselVolume_m3)} m\u00B3` },
-                        { label: "Liquid Volume Required", value: `${fmtN(result.geometry.liquidVolume_m3)} m\u00B3` },
-                        { label: "Gas Area Fraction", value: `${fmtN(result.geometry.gasAreaFraction * 100)}%` },
-                        { label: "Actual Gas Velocity", value: `${fmtN(result.geometry.actualGasVelocity, 4)} m/s` },
-                        { label: "Mist Face Velocity", value: `${fmtN(result.geometry.mistFaceVelocity, 4)} m/s` },
-                        { label: "Liquid Level", value: `${fmtN(result.geometry.liquidLevelPercent)}%` },
-                      ].map((r, i) => (
-                        <div key={i} className={`flex items-center justify-between py-1.5 px-3 rounded-md ${i % 2 === 0 ? "bg-muted/40" : ""}`}>
-                          <span className="text-xs text-muted-foreground">{r.label}</span>
-                          <span className="text-xs font-mono font-medium tabular-nums">{r.value}</span>
-                        </div>
-                      ))}
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                      <div className="p-2 rounded-md border" data-testid="text-result-governing">
+                        <span className="text-muted-foreground">Governing Case:</span> <span className="font-medium">{result.caseResults.find(c => c.caseId === result.governingCaseId)?.caseName}</span>
+                      </div>
+                      <div className="p-2 rounded-md border">
+                        <span className="text-muted-foreground">v_s,max:</span> <span className="font-mono">{result.caseResults.find(c => c.caseId === result.governingCaseId)?.v_s_max.toFixed(3)} m/s</span>
+                      </div>
+                      <div className="p-2 rounded-md border">
+                        <span className="text-muted-foreground">Actual Gas Velocity:</span> <span className="font-mono">{result.geometry.actualGasVelocity.toFixed(3)} m/s</span>
+                      </div>
+                      <div className="p-2 rounded-md border">
+                        <span className="text-muted-foreground">Liquid Level:</span> <span className="font-mono">{result.geometry.liquidLevelPercent.toFixed(1)}%</span>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
 
                 {result.flags.length > 0 && (
                   <Card>
-                    <CardHeader className="pb-2">
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-500" /> Engineering Flags
-                      </h3>
+                    <CardHeader className="pb-3">
+                      <h3 className="font-semibold text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Engineering Flags</h3>
                     </CardHeader>
-                    <CardContent className="pt-0">
-                      <ul className="space-y-1.5">
-                        {result.flags.map(f => (
-                          <li key={f} className="text-xs flex items-start gap-2" data-testid={`result-flag-${f}`}>
-                            <Badge
-                              variant={FLAG_SEVERITY[f] === "error" ? "destructive" : FLAG_SEVERITY[f] === "warning" ? "secondary" : "outline"}
-                              className="text-[10px] shrink-0 mt-0.5"
-                            >
-                              {FLAG_SEVERITY[f]}
-                            </Badge>
-                            <span className="text-muted-foreground">{FLAG_LABELS[f]}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    <CardContent className="space-y-2 pt-0">
+                      {result.flags.map((f, i) => {
+                        const severity = FLAG_SEVERITY[f];
+                        const colors = severity === "error" ? "bg-destructive/10 text-destructive border-destructive/30"
+                          : severity === "warning" ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                          : "bg-blue-500/10 text-blue-400 border-blue-500/30";
+                        return (
+                          <div key={i} className={`text-xs p-2 rounded-md border ${colors}`} data-testid={`result-flag-${f}`}>
+                            <Badge variant="outline" className="mr-2 text-xs no-default-hover-elevate no-default-active-elevate">{f.replace(/_/g, " ")}</Badge>
+                            {FLAG_LABELS[f]}
+                          </div>
+                        );
+                      })}
                     </CardContent>
                   </Card>
                 )}
 
                 {result.recommendations.length > 0 && (
                   <Card>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-primary" />
-                        <h3 className="font-semibold text-sm">Recommendations</h3>
+                    <CardHeader className="pb-3">
+                      <h3 className="font-semibold text-sm flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Recommendations</h3>
+                    </CardHeader>
+                    <CardContent className="space-y-2 pt-0">
+                      {result.recommendations.map((r, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs" data-testid={`text-rec-${i}`}>
+                          <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-primary shrink-0" />
+                          <span>{r}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <h3 className="font-semibold text-sm flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Next Steps Checklist</h3>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    {result.nextSteps.map((ns, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <Checkbox id={`ns-${i}`} data-testid={`chk-next-${i}`} />
+                        <Label htmlFor={`ns-${i}`} className="text-xs leading-relaxed">{ns}</Label>
                       </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <ul className="space-y-1.5">
-                        {result.recommendations.map((r, i) => (
-                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                            <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-primary" />{r}
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                {project.showAssumptionsLog && (
+                  <AssumptionsPanel
+                    assumptions={result.assumptions}
+                    references={[
+                      "API 12J: Specification for Oil and Gas Separators",
+                      "GPSA Engineering Data Book, Section 7: Separation Equipment",
+                      "Arnold & Stewart: Surface Production Operations, Vol. 1",
+                      "Stewart & Arnold: Gas-Liquid and Liquid-Liquid Separators",
+                    ]}
+                  />
                 )}
 
-                {result.nextSteps.length > 0 && (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <h3 className="font-semibold text-sm">Next Steps</h3>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <ul className="space-y-1.5">
-                        {result.nextSteps.map((ns, i) => (
-                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                            <span className="text-muted-foreground/60 mt-px shrink-0">{i + 1}.</span>{ns}
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                )}
-
-                <AssumptionsPanel
-                  assumptions={result.assumptions}
-                  references={[
-                    "API 12J: Specification for Oil and Gas Separators",
-                    "GPSA Engineering Data Book, Section 7: Separation Equipment",
-                    "Arnold & Stewart: Surface Production Operations, Vol. 1",
-                    "Stewart & Arnold: Gas\u2013Liquid and Liquid\u2013Liquid Separators",
-                  ]}
-                />
                 <FeedbackSection calculatorName="Separator Sizing" />
-              </>
+              </div>
             )}
           </div>
         </TabsContent>
@@ -1227,29 +1205,30 @@ export default function SeparatorSizingPage() {
         <Button size="sm" variant="outline" onClick={goPrev} disabled={tabIdx <= 0} data-testid="button-prev">
           <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Back
         </Button>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground" data-testid="text-step-counter">
           Step {tabIdx + 1} of {TABS.length}
         </div>
         <div className="flex items-center gap-2">
-          {activeTab !== "holdup" && activeTab !== "results" && (
-            <Button size="sm" variant="outline" onClick={goNext} disabled={tabIdx >= TABS.length - 1} data-testid="button-next">
-              Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
-            </Button>
-          )}
-          {activeTab === "holdup" && (
+          {activeTab === "holdup" ? (
             <>
+              <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-main">
+                <Calculator className="w-3.5 h-3.5 mr-1" /> {result ? "Recalculate" : "Calculate"}
+              </Button>
               {result && (
                 <Button size="sm" variant="outline" onClick={goNext} data-testid="button-next">
                   Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
                 </Button>
               )}
             </>
-          )}
-          {activeTab === "results" && result && (
+          ) : activeTab !== "results" ? (
+            <Button size="sm" variant="outline" onClick={goNext} disabled={tabIdx >= TABS.length - 1} data-testid="button-next">
+              Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          ) : result ? (
             <Button size="sm" variant="outline" onClick={() => setActiveTab("holdup")} data-testid="button-back-to-calc">
               <RotateCcw className="w-3.5 h-3.5 mr-1" /> Recalculate
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
@@ -1268,83 +1247,4 @@ function StepHeader({ step, title, desc }: { step: number; title: string; desc: 
       </div>
     </div>
   );
-}
-
-function EqLine({ eq, val, highlight, sub }: { eq: string; val: string; highlight?: boolean; sub?: string }) {
-  return (
-    <div className={`flex items-baseline justify-between gap-3 px-3 py-1.5 rounded-md font-mono text-xs
-      ${highlight ? "bg-primary/10 border border-primary/20" : "bg-muted/30"}`}>
-      <span className="text-muted-foreground">{eq}</span>
-      <span className={`font-semibold tabular-nums shrink-0 ${highlight ? "text-primary" : ""}`}>
-        = {val}
-        {sub && <span className="text-muted-foreground/60 font-normal ml-1">{sub}</span>}
-      </span>
-    </div>
-  );
-}
-
-function buildCalcNoteHTML(result: SeparatorFullResult, gov: CaseGasResult | undefined, project: ProjectSetup): string {
-  const stepsHTML = gov ? gov.steps.map(s =>
-    `<tr><td>${s.label}</td><td><code>${s.equation}</code></td><td>${s.substitution}</td><td><strong>${typeof s.result === "number" ? s.result.toFixed(4) : s.result}</strong> ${s.unit}</td></tr>`
-  ).join("\n") : "";
-
-  const holdupHTML = result.holdupSteps.map(s =>
-    `<tr><td>${s.label}</td><td><code>${s.equation}</code></td><td>${s.substitution}</td><td><strong>${typeof s.result === "number" ? s.result.toFixed(4) : s.result}</strong> ${s.unit}</td></tr>`
-  ).join("\n");
-
-  const geoHTML = result.geometry.steps.map(s =>
-    `<tr><td>${s.label}</td><td><code>${s.equation}</code></td><td>${s.substitution}</td><td><strong>${typeof s.result === "number" ? s.result.toFixed(4) : s.result}</strong> ${s.unit}</td></tr>`
-  ).join("\n");
-
-  const flagsHTML = result.flags.map(f =>
-    `<li style="color: ${FLAG_SEVERITY[f] === "error" ? "#e74c3c" : FLAG_SEVERITY[f] === "warning" ? "#f39c12" : "#3498db"}">${FLAG_LABELS[f]}</li>`
-  ).join("\n");
-
-  const assumptionsHTML = result.assumptions.map(a => `<li>${a}</li>`).join("\n");
-  const recsHTML = result.recommendations.map(r => `<li>${r}</li>`).join("\n");
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Separator Calc Note \u2014 ${project.caseName || "Untitled"}</title>
-<style>
-  body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; font-size: 12px; color: #222; }
-  h1 { font-size: 18px; border-bottom: 2px solid #333; padding-bottom: 8px; }
-  h2 { font-size: 14px; margin-top: 20px; color: #555; }
-  table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-  th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; font-size: 11px; }
-  th { background: #f5f5f5; }
-  code { background: #f0f0f0; padding: 1px 4px; font-size: 10px; }
-  .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; }
-  .disclaimer { margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; font-size: 11px; }
-  @media print { body { margin: 0; padding: 10px; } h1 { font-size: 16px; } table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
-</style></head><body>
-<h1>Separator Sizing \u2014 Calculation Note</h1>
-<div class="summary-row"><span>Case: ${project.caseName}</span><span>Engineer: ${project.engineer}</span><span>Date: ${project.date}</span></div>
-<div class="summary-row"><span>Service: ${SERVICE_TYPE_LABELS[result.config.serviceType]}</span><span>Orientation: ${result.config.orientation}</span><span>Phase: ${result.config.phaseMode.replace(/_/g, " ")}</span></div>
-
-<h2>Results Summary</h2>
-<table>
-<tr><td>Governing Case</td><td>${result.governingReason}</td></tr>
-<tr><td>Vessel Diameter</td><td>${result.geometry.D_mm} mm</td></tr>
-<tr><td>${result.config.orientation === "vertical" ? "Height" : "Length"} (T-T)</td><td>${result.geometry.L_mm} mm</td></tr>
-<tr><td>L/D Ratio</td><td>${result.geometry.LD_ratio.toFixed(2)}</td></tr>
-<tr><td>Vessel Volume</td><td>${result.geometry.vesselVolume_m3.toFixed(3)} m\u00B3</td></tr>
-<tr><td>Gas Velocity</td><td>${result.geometry.actualGasVelocity.toFixed(4)} m/s</td></tr>
-<tr><td>Liquid Level</td><td>${result.geometry.liquidLevelPercent.toFixed(1)}%</td></tr>
-</table>
-
-${stepsHTML ? `<h2>Gas Sizing Steps</h2><table><tr><th>Step</th><th>Equation</th><th>Substitution</th><th>Result</th></tr>${stepsHTML}</table>` : ""}
-
-<h2>Holdup Steps</h2>
-<table><tr><th>Step</th><th>Equation</th><th>Substitution</th><th>Result</th></tr>${holdupHTML}</table>
-
-<h2>Geometry Steps</h2>
-<table><tr><th>Step</th><th>Equation</th><th>Substitution</th><th>Result</th></tr>${geoHTML}</table>
-
-<h2>Assumptions</h2><ul>${assumptionsHTML}</ul>
-
-${result.flags.length > 0 ? `<h2>Engineering Flags</h2><ul>${flagsHTML}</ul>` : ""}
-${result.recommendations.length > 0 ? `<h2>Recommendations</h2><ul>${recsHTML}</ul>` : ""}
-
-<div class="disclaimer">DISCLAIMER: This document is generated for preliminary screening purposes only. For project-critical applications, verify against licensed standards and detailed engineering.</div>
-</body></html>`;
 }

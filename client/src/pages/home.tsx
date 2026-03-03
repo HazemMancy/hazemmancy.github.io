@@ -29,6 +29,8 @@ import {
   Flame,
   Cog,
   CloudRain,
+  AlertTriangle,
+  BookOpen,
 } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 
@@ -205,7 +207,7 @@ const calculatorCategories = [
     items: [
       { title: "Restriction Orifice", description: "Liquid and gas orifice sizing with choked flow detection and beta ratio check", icon: CircleDot, href: "/calculators/restriction-orifice" },
       { title: "Control Valve Cv", description: "Required Cv per IEC 60534 with choked flow, piping geometry, and expansion factor", icon: Gauge, href: "/calculators/control-valve" },
-      { title: "Separator / KO Drum", description: "Souders-Brown sizing for vertical and horizontal separators with holdup calculation", icon: Container, href: "/calculators/separator" },
+      { title: "Separator Sizing", description: "Unified separator sizing for production, gas scrubber, inlet, slug catcher and test separators per API 12J / GPSA Sec 7", icon: Container, href: "/calculators/separator-sizing" },
       { title: "Heat Exchanger", description: "LMTD-based area estimation with F-factor correction and fouling allowance", icon: Thermometer, href: "/calculators/heat-exchanger" },
       { title: "Compressor Sizing", description: "Polytropic/isentropic compressor sizing with multi-stage and intercooling support", icon: Cog, href: "/calculators/compressor" },
     ],
@@ -544,14 +546,29 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="text-center mt-8">
+          <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
             <Link href="/calculators">
               <Button variant="outline" data-testid="button-view-all-calcs">
                 <Calculator className="w-4 h-4 mr-2" />
                 View All Calculators
               </Button>
             </Link>
+            <Link href="/engineering-basis">
+              <Button variant="ghost" data-testid="button-eng-basis">
+                <BookOpen className="w-4 h-4 mr-2" />
+                Engineering Basis & Standards
+              </Button>
+            </Link>
           </div>
+
+          <Card className="mt-8 border-amber-500/20 bg-amber-500/5">
+            <CardContent className="p-4 flex items-start gap-3">
+              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed" data-testid="text-disclaimer">
+                These calculators are engineering screening tools developed for preliminary design, FEED studies, and educational engineering workflows. Final design shall be validated against project specifications, licensed software, and applicable international codes and standards.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
