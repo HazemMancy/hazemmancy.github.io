@@ -36,6 +36,7 @@ import LineBlanksPage from "@/pages/calculators/piping-components/line-blanks";
 import OletsPage from "@/pages/calculators/piping-components/olets";
 import PipeFlexibilityPage from "@/pages/calculators/piping-components/pipe-flexibility";
 import SafeSpansPage from "@/pages/calculators/piping-components/safe-spans";
+import EngineeringBasisPage from "@/pages/engineering-basis";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -70,6 +71,7 @@ function Router() {
       <Route path="/calculators/piping-components/olets" component={OletsPage} />
       <Route path="/calculators/piping-components/pipe-flexibility" component={PipeFlexibilityPage} />
       <Route path="/calculators/piping-components/safe-spans" component={SafeSpansPage} />
+      <Route path="/engineering-basis" component={EngineeringBasisPage} />
       <Route component={NotFound} />
     </Switch>
   );
