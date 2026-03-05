@@ -340,28 +340,63 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
   intermediateValues["adiabaticEfficiency"] = adiabaticEff * 100;
 
   if (overallRatio > 10) {
-    warnings.push(`High overall compression ratio (${overallRatio.toFixed(1)}) \u2014 verify mechanical feasibility`);
+    warnings.push(`High overall compression ratio (${overallRatio.toFixed(1)}) — verify mechanical feasibility and consider additional staging per GPSA Section 13.`);
   }
-  if (finalDischargeTemp > 200) {
-    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)}\u00B0C exceeds 200\u00B0C \u2014 consider additional intercooling`);
+  if (finalDischargeTemp > input.maxDischargeTemperature) {
+    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)}°C exceeds specified limit (${input.maxDischargeTemperature}°C) — additional intercooling required or special materials needed. Verify material suitability per API 617/618 and project specifications.`);
+  } else if (finalDischargeTemp > input.maxDischargeTemperature * 0.9) {
+    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)}°C approaching specified limit (${input.maxDischargeTemperature}°C) — verify material suitability and consider intercooling.`);
   }
   if (finalDischargeTemp > 150 && input.compressorType === "reciprocating") {
-    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)}\u00B0C may damage packing and valves in reciprocating compressor`);
+    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)}°C exceeds 150°C — API 618 recommends max 150°C for packing and valve life. Add intercooling stage.`);
   }
   if (numStages > 1) {
-    warnings.push(`${numStages} compression stages required \u2014 intercooling assumed back to suction temperature between stages`);
+    warnings.push(`${numStages} compression stages required — intercooling assumed back to suction temperature between stages. Actual intercooler approach is typically 5–10°C above cooling medium. Allow 0.3–0.5 bar pressure drop per intercooler in system design.`);
   }
+
+  for (let s = 0; s < stages.length; s++) {
+    if (stages[s].dischargeTemperature > input.maxDischargeTemperature) {
+      warnings.push(`Stage ${s + 1}: discharge temperature ${stages[s].dischargeTemperature.toFixed(0)}°C exceeds limit (${input.maxDischargeTemperature}°C) — intercooling inadequate or ratio too high for single stage.`);
+    }
+    if (stages[s].compressionRatio > 3.5 && input.compressorType === "centrifugal") {
+      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds typical centrifugal limit of 3.5:1 per GPSA Section 13. Consider adding stages.`);
+    }
+    if (stages[s].compressionRatio > 4.0 && input.compressorType === "reciprocating") {
+      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds typical reciprocating limit of 4.0:1 per GPSA Section 13.`);
+    }
+  }
+
   if (input.compressorType === "centrifugal" && MW > 50) {
-    warnings.push("High molecular weight gas \u2014 verify centrifugal compressor is suitable (consider reciprocating)");
+    warnings.push(`High molecular weight (${MW}) — centrifugal impeller tip speed may be limiting. Consider reciprocating for heavy gases per GPSA Section 13.`);
+  }
+  if (input.compressorType === "centrifugal" && MW < 5) {
+    warnings.push(`Low molecular weight (${MW.toFixed(1)}) — very high polytropic head per stage. Centrifugal may require many stages. Verify feasibility per API 617.`);
   }
   if (input.compressorType === "centrifugal" && actualVolumetricFlowRate < 500) {
-    warnings.push("Low actual inlet volume flow \u2014 centrifugal compressor may not be economical, consider reciprocating");
+    warnings.push(`Low actual inlet volume flow (${actualVolumetricFlowRate.toFixed(0)} m³/h) — centrifugal compressor may not be economical below 500 m³/h. Consider reciprocating per GPSA.`);
+  }
+  if (input.compressorType === "centrifugal" && actualVolumetricFlowRate > 200000) {
+    warnings.push(`Very high actual inlet volume flow (${actualVolumetricFlowRate.toFixed(0)} m³/h) — verify single-casing capacity. May require parallel units per API 617.`);
   }
   if (input.compressorType === "reciprocating" && actualVolumetricFlowRate > 10000) {
-    warnings.push("High actual inlet volume flow \u2014 consider centrifugal compressor for better efficiency");
+    warnings.push(`High actual inlet volume flow (${actualVolumetricFlowRate.toFixed(0)} m³/h) — consider centrifugal compressor for better efficiency and lower maintenance per GPSA Section 13.`);
   }
   if (input.polytropicEfficiency < 70) {
-    warnings.push("Low efficiency \u2014 verify compressor selection");
+    warnings.push(`Low efficiency (${input.polytropicEfficiency}%) — verify compressor selection. Typical: centrifugal 75–85%, reciprocating 80–90% (GPSA Table 13-2/3).`);
+  }
+
+  const driverMarginPower = totalShaftPower * 1.10;
+  if (totalMotorPower < driverMarginPower) {
+    warnings.push(`Motor power ${totalMotorPower.toFixed(1)} kW — API 617/618 recommends driver rated ≥ 110% of maximum shaft power (${driverMarginPower.toFixed(1)} kW). Verify motor nameplate.`);
+  }
+
+  warnings.push(`Z-factor used: ${Z.toFixed(3)} (suction conditions). For multi-stage, actual Z varies per stage — average Z may improve accuracy. Verify with EOS at discharge conditions.`);
+
+  if (input.compressorType === "reciprocating" && numStages > 1) {
+    warnings.push("Reciprocating multi-stage: verify rod load, pin reversal, and pulsation dampener sizing per API 618. Settling-out pressure (SOP) should be checked for emergency shutdown.");
+  }
+  if (input.compressorType === "centrifugal") {
+    warnings.push("Centrifugal: verify surge margin ≥ 10% from operating point to surge line. Anti-surge control system required per API 617.");
   }
 
   const trace: CalcTrace = {

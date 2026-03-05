@@ -199,16 +199,20 @@ export function calculatePiping(input: PipingInput): PipingResult {
 
 function addVelocityWarnings(warnings: string[], suctionVelocity: number, dischargeVelocity: number) {
   if (suctionVelocity > 2.0) {
-    warnings.push("Suction velocity exceeds 2.0 m/s \u2014 may cause cavitation issues");
+    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s exceeds 2.0 m/s — cavitation risk per HI/API 610. Increase suction pipe size or reduce fittings.`);
+  } else if (suctionVelocity > 1.5) {
+    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s exceeds 1.5 m/s — approaching HI recommended limit. Verify NPSHa margin is adequate.`);
   }
-  if (suctionVelocity < 0.5) {
-    warnings.push("Suction velocity below 0.5 m/s \u2014 may cause settling");
+  if (suctionVelocity > 0 && suctionVelocity < 0.5) {
+    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s below 0.5 m/s — settling/deposition risk for slurries or fluids with solids.`);
   }
   if (dischargeVelocity > 5.0) {
-    warnings.push("Discharge velocity exceeds 5.0 m/s \u2014 excessive pipe erosion risk");
+    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s exceeds 5.0 m/s — erosion risk. Increase discharge pipe size.`);
+  } else if (dischargeVelocity > 3.5) {
+    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s — verify pipe supports for hydraulic forces at elevated velocity.`);
   }
-  if (dischargeVelocity < 1.0) {
-    warnings.push("Discharge velocity below 1.0 m/s \u2014 may cause settling");
+  if (dischargeVelocity > 0 && dischargeVelocity < 1.0) {
+    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s below 1.0 m/s — settling/deposition risk.`);
   }
 }
 
@@ -237,15 +241,44 @@ export function calculatePumpSizing(input: PumpSizingInput): PumpSizingResult {
   addVelocityWarnings(warnings, piping.suctionVelocity, piping.dischargeVelocity);
 
   if (piping.npshaAvailable < 0) {
-    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m \u2014 NEGATIVE! Severe cavitation \u2014 pump cannot operate under these conditions`);
+    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m — NEGATIVE! Pump cannot operate. Increase suction head, reduce suction losses, or lower fluid temperature.`);
+  } else if (piping.npshaAvailable < 1.0) {
+    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m — critically low. API 610 requires NPSHa ≥ NPSHr + margin (typically 0.6–1.0 m). Pump will likely cavitate.`);
   } else if (piping.npshaAvailable < 3.0) {
-    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m \u2014 risk of cavitation (typically NPSH margin > 1.0 m required)`);
+    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m — low. Verify NPSHr from vendor curve and ensure margin ≥ 1.0 m per API 610 Table 8. Consider inducer for low-NPSH service.`);
   }
   if (totalDynamicHead < 0) {
-    warnings.push("Negative TDH \u2014 liquid may flow by gravity, pump not required");
+    warnings.push("Negative TDH — liquid may flow by gravity. Pump not required unless flow control is needed.");
   }
   if (input.pumpEfficiency < 50) {
-    warnings.push("Low pump efficiency \u2014 verify pump selection");
+    warnings.push(`Low pump efficiency (${input.pumpEfficiency}%) — verify pump selection. Typical centrifugal efficiency is 60–85% at BEP per API 610.`);
+  }
+  if (input.pumpEfficiency > 85) {
+    warnings.push(`High pump efficiency (${input.pumpEfficiency}%) — verify this is achievable for the selected pump type and size. Typical BEP efficiency is 60–85%.`);
+  }
+
+  const motorMarginPct = brakePower <= 22 ? 25 : (brakePower <= 55 ? 15 : 10);
+  const requiredMotorMin = brakePower * (1 + motorMarginPct / 100) / motorEff;
+  if (motorPower < requiredMotorMin) {
+    warnings.push(`Motor power ${motorPower.toFixed(1)} kW may be undersized. Common practice (per API 610 / project specs): motor nameplate ≥ ${motorMarginPct}% margin over rated brake power at end-of-curve (min ${requiredMotorMin.toFixed(1)} kW). Confirm with project motor sizing philosophy.`);
+  }
+
+  if (input.viscosity > 200) {
+    warnings.push(`High viscosity (${input.viscosity.toFixed(0)} cP) — centrifugal pump performance significantly degraded. Positive displacement pump strongly recommended per HI guidelines.`);
+  } else if (input.viscosity > 50) {
+    warnings.push(`Elevated viscosity (${input.viscosity.toFixed(0)} cP) — apply HI viscosity correction factors to centrifugal performance. Consider PD pump for better efficiency.`);
+  }
+
+  if (totalDynamicHead > 0 && flowRate_m3s > 0) {
+    const Ns = 1450 * Math.sqrt(flowRate_m3s * 3600) / Math.pow(totalDynamicHead, 0.75);
+    if (Ns > 0) {
+      let pumpTypeNote = "";
+      if (Ns < 1000) pumpTypeNote = "low Ns — radial impeller (high head / low flow), verify efficiency";
+      else if (Ns < 3000) pumpTypeNote = "radial impeller range — standard centrifugal pump";
+      else if (Ns < 8000) pumpTypeNote = "mixed-flow impeller range";
+      else pumpTypeNote = "axial flow range — verify pump type suitability";
+      warnings.push(`Specific speed Ns ≈ ${Ns.toFixed(0)} (at 1450 rpm) — ${pumpTypeNote}.`);
+    }
   }
 
   const trace = buildCentrifugalTrace(input, piping, flowRate_m3s, totalDynamicHead, hydraulicPower, brakePower, motorPower, warnings);
@@ -302,31 +335,41 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
   addVelocityWarnings(warnings, piping.suctionVelocity, piping.dischargeVelocity);
 
   if (piping.npshaAvailable < 0) {
-    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m (NPIP = ${npipAvailable.toFixed(1)} kPa) \u2014 NEGATIVE! Pump cannot operate`);
+    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m (NPIP = ${npipAvailable.toFixed(1)} kPa) — NEGATIVE! Pump cannot operate. Increase suction head or reduce suction losses.`);
+  } else if (piping.npshaAvailable < 1.0) {
+    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m (NPIP = ${npipAvailable.toFixed(1)} kPa) — critically low. Pump will likely cavitate. Consider flooded suction or booster pump.`);
   } else if (piping.npshaAvailable < 3.0) {
-    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m (NPIP = ${npipAvailable.toFixed(1)} kPa) \u2014 risk of cavitation`);
+    warnings.push(`NPSHa = ${piping.npshaAvailable.toFixed(2)} m (NPIP = ${npipAvailable.toFixed(1)} kPa) — low. Verify against vendor NPIPR. API 674/676 requires adequate margin for pulsation effects.`);
   }
 
   if (input.reliefValvePressure > 0) {
     const reliefBar = input.reliefValvePressure;
     const dpBar = differentialPressure;
     if (reliefBar < dpBar * 1.1) {
-      warnings.push(`Relief valve set pressure (${reliefBar.toFixed(1)} bar) is less than 110% of differential pressure (${(dpBar * 1.1).toFixed(1)} bar) \u2014 pump may not reach required discharge pressure`);
+      warnings.push(`Relief valve set pressure (${reliefBar.toFixed(1)} bar) < 110% of differential pressure (${(dpBar * 1.1).toFixed(1)} bar) — relief may lift during normal operation. Set relief ≥ 110% of max discharge per API 674/676.`);
+    }
+    if (reliefBar > dpBar * 1.5) {
+      warnings.push(`Relief valve set pressure (${reliefBar.toFixed(1)} bar) is ${((reliefBar / dpBar) * 100).toFixed(0)}% of operating ΔP — verify piping and vessel ratings can withstand relief pressure.`);
     }
   } else {
-    warnings.push("No relief valve specified \u2014 relief valve is mandatory for positive displacement pumps to prevent overpressure");
+    warnings.push("No relief valve specified — relief valve is MANDATORY for positive displacement pumps to prevent deadhead overpressure per API 674/676.");
   }
 
   if (differentialPressure > 100) {
-    warnings.push(`High differential pressure (${differentialPressure.toFixed(1)} bar) \u2014 verify pump pressure rating`);
+    warnings.push(`High differential pressure (${differentialPressure.toFixed(1)} bar) — verify pump pressure rating, shaft/packing design, and piping class per API 674/676.`);
   }
 
   if (input.volumetricEfficiency < 80) {
-    warnings.push("Low volumetric efficiency \u2014 excessive internal leakage, verify pump condition");
+    warnings.push(`Low volumetric efficiency (${input.volumetricEfficiency}%) — excessive internal leakage. Verify wear rings, clearances, and pump condition.`);
   }
 
   if (totalDynamicHead < 0) {
-    warnings.push("Negative TDH \u2014 liquid may flow by gravity, pump not required");
+    warnings.push("Negative TDH — liquid may flow by gravity. Pump not required unless flow control is needed.");
+  }
+
+  warnings.push("PD pumps: verify acceleration head in suction piping for pulsation effects per API 674. Use pulsation dampeners on suction and discharge.");
+  if (input.viscosity > 500) {
+    warnings.push(`Very high viscosity (${input.viscosity.toFixed(0)} cP) — PD pump is appropriate but verify that driver is sized for viscous power requirement. Heating/tracing may reduce viscosity.`);
   }
 
   const trace = buildPDTrace(input, piping, flowRate_m3s, totalDynamicHead, differentialPressure, theoreticalFlow, slip, hydraulicPower, shaftPower, motorPower, npipAvailable, warnings);

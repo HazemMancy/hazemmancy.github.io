@@ -764,7 +764,9 @@ function computeFactor(
 
   if (F < 0.75) {
     trace.flags.push("VERY_LOW_F");
-    trace.warnings.push(`F = ${F.toFixed(3)} < 0.75 — consider more shells in series or different pass arrangement`);
+    trace.warnings.push(`F = ${F.toFixed(3)} < 0.75 — inefficient thermal configuration per TEMA/Bowman. Consider more shells in series, different pass arrangement, or pure counter-current flow.`);
+  } else if (F < 0.80) {
+    trace.warnings.push(`F = ${F.toFixed(3)} < 0.80 — approaching TEMA minimum. Review pass arrangement; additional shells in series would improve F. Typical minimum for design is F ≥ 0.80.`);
   }
 
   trace.intermediateValues["F"] = F;
@@ -1115,13 +1117,32 @@ function computeCaseResult(
 
   const approachTemp = Math.min(dT1, dT2);
   const approachMin = config.approachTempMin > 0 ? config.approachTempMin : 5;
-  if (approachTemp < approachMin) {
+  if (approachTemp < 3) {
     trace.flags.push("SMALL_APPROACH_TEMP");
-    trace.warnings.push(`Approach temperature = ${approachTemp.toFixed(1)}°C < ${approachMin}°C minimum — very tight, expect large area`);
+    trace.warnings.push(`Approach temperature = ${approachTemp.toFixed(1)}°C < 3°C — extremely tight, impractical for most shell-and-tube exchangers. Consider plate HX or adjust utility conditions.`);
+  } else if (approachTemp < approachMin) {
+    trace.flags.push("SMALL_APPROACH_TEMP");
+    trace.warnings.push(`Approach temperature = ${approachTemp.toFixed(1)}°C < ${approachMin}°C minimum — tight approach results in large area. Per Kern/TEMA, minimum 5°C approach is typical for hydrocarbon service.`);
+  } else if (approachTemp < 10) {
+    trace.warnings.push(`Approach temperature = ${approachTemp.toFixed(1)}°C — moderate approach. Verify that area and cost are acceptable. Plate HX may be more economical below 10°C approach.`);
   }
-  if (aDesign > 1000) {
+  if (aDesign > 5000) {
     trace.flags.push("HIGH_AREA");
-    trace.warnings.push(`Large area (${aDesign.toFixed(0)} m²) — consider multiple shells or plate HX`);
+    trace.warnings.push(`Very large area (${aDesign.toFixed(0)} m²) — exceeds typical single-shell limits. Multiple shells in series/parallel or plate HX strongly recommended per TEMA.`);
+  } else if (aDesign > 1000) {
+    trace.flags.push("HIGH_AREA");
+    trace.warnings.push(`Large area (${aDesign.toFixed(0)} m²) — consider multiple shells or plate HX for compact design per TEMA RCB-4.`);
+  } else if (aDesign > 500) {
+    trace.warnings.push(`Area ${aDesign.toFixed(0)} m² — verify single-shell feasibility. Typical TEMA shell diameters accommodate up to ~500 m² per shell.`);
+  }
+
+  if (uFouled > 0) {
+    if (uInput.mode === "clean_plus_fouling" && rfTotal > 0.001) {
+      trace.warnings.push(`High total fouling resistance Rf = ${(rfTotal * 1000).toFixed(2)} × 10⁻³ m²K/W — verify against TEMA Table RGP-T-2.4 for the fluid pair. Excessive fouling allowance increases exchanger cost.`);
+    }
+    if (uInput.mode === "clean_plus_fouling" && rfTotal < 0.0001 && rfTotal > 0) {
+      trace.warnings.push(`Low total fouling resistance Rf = ${(rfTotal * 1000).toFixed(3)} × 10⁻³ m²K/W — may be optimistic for process service. Verify against TEMA Table RGP-T-2.4.`);
+    }
   }
 
   const Ch = (hot.mDot / 3600) * hot.cp;
@@ -1245,10 +1266,22 @@ export function calculateHeatExchangerFull(
     recommendations.push("Multi-shell configuration applied — confirm TEMA F-factor chart for the selected N-shell arrangement");
   }
 
-  if (geometry && geometry.excessArea > 30) {
-    if (!globalFlags.includes("HIGH_OVERDESIGN")) globalFlags.push("HIGH_OVERDESIGN");
-    recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% — verify overdesign is intentional (fouling allowance, future capacity)`);
+  if (geometry) {
+    if (geometry.excessArea < 0) {
+      recommendations.push(`Selected area is ${Math.abs(geometry.excessArea).toFixed(0)}% UNDERSIZED vs required — exchanger will not meet duty. Increase tube count, length, or add shells.`);
+    } else if (geometry.excessArea > 40) {
+      if (!globalFlags.includes("HIGH_OVERDESIGN")) globalFlags.push("HIGH_OVERDESIGN");
+      recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% — significantly over-designed. Verify this is intentional (fouling margin, future debottleneck). Typical overdesign is 10–25% per TEMA.`);
+    } else if (geometry.excessArea > 25) {
+      recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% — acceptable if intended for fouling or future capacity. Optimal range is 10–25%.`);
+    } else if (geometry.excessArea >= 0 && geometry.excessArea < 10) {
+      recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% — tight margin. Consider whether fouling growth will reduce effective area below required. Minimum 10% recommended.`);
+    }
   }
+
+  recommendations.push("Confirm U-value with detailed methods (Bell-Delaware for shell-side, Dittus-Boelter for tube-side) or vendor thermal design software");
+  recommendations.push("Verify pressure drop on both tube and shell sides is within allowable limits (typically 0.5–1.0 bar per side)");
+  recommendations.push("Check tube vibration risk for large exchangers with long unsupported spans (TEMA RCB-4.6) — particularly for gas/vapor on shell side");
 
   return {
     cases: caseResults,
