@@ -308,10 +308,18 @@ export function computeLiquidPoint(
     }
   }
 
-  if (isChoked) warnings.push("Flow is CHOKED — valve at maximum capacity for this ΔP");
-  if (P2 < Pv_bar) warnings.push("Downstream P < Pv — flashing will occur downstream");
-  if (FL < 0.5) warnings.push("Low FL — high recovery valve. Verify cavitation limits.");
-  if (Cv > 10000) warnings.push(`Very large Cv (${Cv.toFixed(0)})`);
+  if (isChoked) warnings.push("Flow is CHOKED — valve at maximum capacity for this ΔP. Increasing ΔP will not increase flow. Consider a larger valve or higher upstream pressure.");
+  if (P2 < Pv_bar) warnings.push(`Downstream P (${P2.toFixed(2)} bar) < Pv (${Pv_bar.toFixed(2)} bar) — flashing will occur downstream. Use hardened trim and consider downstream pipe sizing for two-phase flow.`);
+  if (FL < 0.5) warnings.push(`Low FL (${FL.toFixed(2)}) — high recovery valve (e.g., butterfly/ball). Verify cavitation limits per IEC 60534-2-2 and consider globe valve for better control.`);
+  if (Cv > 10000) warnings.push(`Very large Cv (${Cv.toFixed(0)}) — verify valve can be sourced. Consider parallel valves or larger body size.`);
+
+  const dpRatio = dP / P1;
+  if (dpRatio > 0.5 && !isChoked) warnings.push(`High ΔP/P1 ratio (${(dpRatio * 100).toFixed(0)}%) — approaching choked conditions. Review system ΔP budget.`);
+  if (dpRatio < 0.02) warnings.push(`Very low ΔP/P1 ratio (${(dpRatio * 100).toFixed(1)}%) — valve may have poor control authority. Consider whether a control valve is appropriate.`);
+
+  const sigma = P1 > Pv_bar ? (P1 - Pv_bar) / (P1 - P2) : 0;
+  const FL2 = FL * FL;
+  if (sigma > 0 && sigma < FL2 * 1.1 && !isChoked) warnings.push(`Cavitation index σ = ${sigma.toFixed(3)} is near FL² = ${FL2.toFixed(3)} — incipient cavitation risk per IEC 60534-2-2. Consider anti-cavitation trim.`);
 
   return {
     label: point.label, cvRequired: Cv, deltaPActual: dP, deltaPChoked: dP_choked,
@@ -347,13 +355,17 @@ export function computeGasPoint(
   const W = point.flowUnit === "mass" ? point.flowRate : point.flowRate * props.molecularWeight / 22.414;
   const Cv = W / (N8_SI * fp * Y * Math.sqrt(x_sizing * props.molecularWeight * P1 / (T_K * props.compressibilityFactor)));
 
-  if (isChoked) warnings.push("Flow is CHOKED — critical flow reached");
-  if (Y < 0.667) warnings.push(`Expansion factor Y = ${Y.toFixed(3)} near choked limit`);
-  if (Cv > 10000) warnings.push(`Very large Cv (${Cv.toFixed(0)})`);
-  if (x > 0.8) warnings.push("Very high pressure ratio — verify sonic velocity and noise");
+  if (isChoked) warnings.push("Flow is CHOKED — critical (sonic) flow at vena contracta. Reducing downstream pressure will not increase flow. Consider multi-stage trim or a larger valve.");
+  if (Y < 0.667) warnings.push(`Expansion factor Y = ${Y.toFixed(3)} — valve operating at or near choked limit (Y_min = 0.667 per IEC 60534). Sizing uses choked ΔP.`);
+  if (Cv > 10000) warnings.push(`Very large Cv (${Cv.toFixed(0)}) — verify valve availability at this capacity. Consider parallel valve arrangement.`);
+  if (x > 0.8) warnings.push(`Very high pressure ratio x = ${x.toFixed(3)} (x/xT = ${(x / (Fk * xt)).toFixed(2)}) — sonic velocity and aerodynamic noise likely. Request vendor noise prediction per IEC 60534-8-3.`);
+  if (x > 0.5 && x <= 0.8 && !isChoked) warnings.push(`Elevated pressure ratio x = ${x.toFixed(3)} — verify noise levels per IEC 60534-8-3, especially near personnel areas.`);
+  if (x < 0.05) warnings.push(`Very low pressure ratio x = ${x.toFixed(3)} — valve may have poor control resolution. Verify turndown and controllability.`);
+  if (props.compressibilityFactor < 0.7) warnings.push(`Low compressibility factor Z = ${props.compressibilityFactor.toFixed(3)} — gas significantly non-ideal. Verify Z with EOS calculation (Peng-Robinson or similar).`);
 
+  const dP_choked_equiv = x > 0 ? dP * x_choked / Math.max(x, 0.001) : 0;
   return {
-    label: point.label, cvRequired: Cv, deltaPActual: dP, deltaPChoked: dP * x_choked / x,
+    label: point.label, cvRequired: Cv, deltaPActual: dP, deltaPChoked: dP_choked_equiv,
     isChoked, flowRegime: isChoked ? "Choked (Critical)" : "Subcritical",
     fpFactor: fp, ffFactor: 0, fkFactor: Fk, xActual: x, xChoked: x_choked, yFactor: Y,
     viscosityCorrection: 1.0, openingPercent: 0, velocity: 0, warnings,
@@ -482,7 +494,7 @@ export function computeRiskAssessment(
 ): CVRiskAssessment {
   const warnings: string[] = [];
   const mitigations: string[] = [];
-  let cavitationRisk: CVRiskAssessment["cavitationRisk"] = "none";
+  let cavitationRisk = "none" as CVRiskAssessment["cavitationRisk"];
   let flashingRisk = false;
   let chokedGas = false;
   let highNoiseRisk = false;
@@ -493,6 +505,7 @@ export function computeRiskAssessment(
     const lp = serviceData.liquidProps;
     const Pv_bar = lp.vaporPressure / 100;
     const FL = valveData.fl;
+    const FL2 = FL * FL;
 
     for (const pr of sizingResult.pointResults) {
       const P1 = pr.deltaPActual + (serviceData.operatingPoints.find(p => p.label === pr.label)?.downstreamPressure || 0);
@@ -500,35 +513,37 @@ export function computeRiskAssessment(
 
       if (P2 < Pv_bar) {
         flashingRisk = true;
-        warnings.push(`${pr.label}: Flashing likely — P2 (${P2.toFixed(2)} bar) < Pv (${Pv_bar.toFixed(2)} bar)`);
-        mitigations.push("Use hardened trim materials resistant to flashing erosion");
-        mitigations.push("Consider relocating valve to increase downstream pressure");
+        warnings.push(`${pr.label}: Flashing likely — P2 (${P2.toFixed(2)} bar) < Pv (${Pv_bar.toFixed(2)} bar). Downstream piping must be sized for two-phase flow.`);
+        mitigations.push("Use hardened trim materials (stellite, tungsten carbide) resistant to flashing erosion per IEC 60534-2-4");
+        mitigations.push("Consider relocating valve to increase downstream backpressure");
+        mitigations.push("Size downstream piping for two-phase (flashing) service with velocity limits");
       }
 
-      const sigma = P1 > Pv_bar ? (P1 - P2) / (P1 - Pv_bar) : 0;
-      cavitationIndex = sigma;
-      const FL2 = FL * FL;
+      const sigma = (P1 > Pv_bar && P1 > P2) ? (P1 - Pv_bar) / (P1 - P2) : 0;
+      if (sigma > 0) cavitationIndex = sigma;
 
-      if (sigma > FL2 * 0.9 && sigma <= FL2) {
-        cavitationRisk = "incipient";
-        warnings.push(`${pr.label}: Incipient cavitation risk (σ=${sigma.toFixed(3)}, FL²=${FL2.toFixed(3)})`);
-        mitigations.push("Monitor vibration and noise; consider anti-cavitation trim");
-      } else if (sigma > FL2) {
-        if (sigma > FL2 * 1.5) {
+      if (sigma > 0 && sigma < FL2 * 1.1 && sigma >= FL2 * 0.9) {
+        cavitationRisk = cavitationRisk === "severe" || cavitationRisk === "likely" ? cavitationRisk : "incipient";
+        warnings.push(`${pr.label}: Incipient cavitation risk — σ = ${sigma.toFixed(3)} near FL² = ${FL2.toFixed(3)} per IEC 60534-2-2`);
+        mitigations.push("Monitor vibration and noise during commissioning; consider anti-cavitation trim");
+      } else if (sigma > 0 && sigma < FL2 * 0.9) {
+        if (sigma < FL2 * 0.5) {
           cavitationRisk = "severe";
-          warnings.push(`${pr.label}: SEVERE cavitation risk — multi-stage trim or different approach required`);
-          mitigations.push("Use multi-stage anti-cavitation trim");
-          mitigations.push("Increase downstream pressure (install restriction orifice downstream)");
-          mitigations.push("Reduce pressure drop per stage with cascaded valves");
+          warnings.push(`${pr.label}: SEVERE cavitation — σ = ${sigma.toFixed(3)} well below FL² = ${FL2.toFixed(3)}. Multi-stage trim or cascaded valves required.`);
+          mitigations.push("Use multi-stage anti-cavitation trim (cage-guided, labyrinth) per vendor selection");
+          mitigations.push("Install restriction orifice downstream to increase backpressure and raise σ");
+          mitigations.push("Consider cascaded valves (two valves in series) to split pressure drop");
+          mitigations.push("Evaluate alternative valve type with higher FL (e.g., globe with characterized trim)");
         } else {
           cavitationRisk = cavitationRisk === "severe" ? "severe" : "likely";
-          warnings.push(`${pr.label}: Cavitation likely (σ=${sigma.toFixed(3)} > FL²=${FL2.toFixed(3)})`);
-          mitigations.push("Use anti-cavitation trim (cage-guided, multi-stage)");
+          warnings.push(`${pr.label}: Cavitation likely — σ = ${sigma.toFixed(3)} < FL² = ${FL2.toFixed(3)} per IEC 60534-2-2`);
+          mitigations.push("Use anti-cavitation trim (cage-guided, multi-stage) — obtain vendor σ_mr and σ_id values");
         }
       }
 
       if (pr.isChoked) {
         twoPhaseRisk = true;
+        mitigations.push("Choked liquid flow may produce two-phase conditions downstream — verify pipe supports for vibration");
       }
     }
   }
@@ -538,14 +553,19 @@ export function computeRiskAssessment(
       if (pr.isChoked) {
         chokedGas = true;
         highNoiseRisk = true;
-        warnings.push(`${pr.label}: Gas flow choked — sonic velocity at vena contracta`);
-        mitigations.push("Consider diffuser/silencer for noise reduction");
-        mitigations.push("Multi-stage trim to reduce per-stage pressure ratio");
+        warnings.push(`${pr.label}: Gas flow choked — sonic velocity at vena contracta. Noise prediction mandatory per IEC 60534-8-3.`);
+        mitigations.push("Install diffuser/silencer downstream for noise attenuation");
+        mitigations.push("Use multi-stage low-noise trim to reduce per-stage pressure ratio below xT");
+        mitigations.push("Verify pipe wall thickness for acoustic fatigue if noise >110 dBA per IEC 60534-8-4");
       }
-      if (pr.xActual > 0.5) {
+      if (pr.xActual > 0.5 && !pr.isChoked) {
         highNoiseRisk = true;
-        warnings.push(`${pr.label}: High pressure ratio x=${pr.xActual.toFixed(3)} — aerodynamic noise risk`);
-        mitigations.push("Vendor noise calculation required (IEC 60534-8-3)");
+        warnings.push(`${pr.label}: Elevated pressure ratio x = ${pr.xActual.toFixed(3)} — aerodynamic noise risk. Vendor noise calculation recommended per IEC 60534-8-3.`);
+        mitigations.push("Request vendor noise prediction per IEC 60534-8-3");
+        mitigations.push("Consider low-noise trim (multi-path, multi-stage) if predicted noise >85 dBA");
+      }
+      if (pr.xActual > 0.3 && pr.xActual <= 0.5) {
+        warnings.push(`${pr.label}: Moderate pressure ratio x = ${pr.xActual.toFixed(3)} — standard noise assessment recommended.`);
       }
     }
   }
@@ -578,14 +598,34 @@ export function buildFinalResult(
   const actionItems: string[] = [];
   actionItems.push(`Governing operating point: ${sizingResult.governingPoint} (Cv = ${sizingResult.governingCv.toFixed(1)})`);
   if (valveData.ratedCv > 0) {
-    actionItems.push(`Selected valve rated Cv: ${valveData.ratedCv} (ratio: ${(selectionResult.cvRatio * 100).toFixed(0)}%)`);
+    actionItems.push(`Selected valve rated Cv: ${valveData.ratedCv} (utilization: ${(selectionResult.cvRatio * 100).toFixed(0)}%)`);
+    if (selectionResult.cvRatio > 0.9) actionItems.push("Valve near full capacity — confirm with vendor that rated Cv includes appropriate safety margin");
+    if (selectionResult.cvRatio < 0.15) actionItems.push("Valve significantly oversized — review body size selection to improve controllability");
   } else {
-    actionItems.push("Select valve with rated Cv > " + (sizingResult.governingCv * 1.25).toFixed(0) + " (25% margin)");
+    actionItems.push("Select valve with rated Cv ≥ " + (sizingResult.governingCv * 1.25).toFixed(0) + " (recommended 25% margin over governing Cv)");
   }
-  actionItems.push("Obtain vendor FL, xT, Fd values for final sizing confirmation");
-  actionItems.push("Confirm fluid properties at operating conditions");
-  if (riskAssessment.cavitationRisk !== "none") actionItems.push("Evaluate anti-cavitation trim options");
-  if (riskAssessment.highNoiseRisk) actionItems.push("Request vendor noise prediction (IEC 60534-8-3)");
+  actionItems.push("Obtain confirmed vendor FL, xT, Fd values and re-run sizing for final design");
+  actionItems.push("Confirm fluid physical properties at actual operating conditions (density, viscosity, Pv, Pc, k, Z, MW)");
+
+  if (serviceData.fluidType === "liquid") {
+    actionItems.push("Verify vapor pressure (Pv) and critical pressure (Pc) at operating temperature for accurate choked flow / cavitation assessment");
+    if (riskAssessment.flashingRisk) actionItems.push("Flashing service: specify hardened trim materials and size downstream piping for two-phase flow");
+    if (riskAssessment.cavitationRisk === "incipient") actionItems.push("Incipient cavitation: request vendor cavitation coefficients (σ_mr, σ_id) and evaluate anti-cavitation trim");
+    if (riskAssessment.cavitationRisk === "likely" || riskAssessment.cavitationRisk === "severe") actionItems.push("Cavitation service: specify anti-cavitation trim (multi-stage cage) or evaluate cascaded valve arrangement");
+    if (riskAssessment.twoPhaseRisk) actionItems.push("Two-phase risk downstream: verify pipe supports for vibration and check downstream erosion allowance");
+  }
+
+  if (serviceData.fluidType === "gas" || serviceData.fluidType === "steam") {
+    if (riskAssessment.highNoiseRisk) actionItems.push("Request vendor noise prediction per IEC 60534-8-3. If >85 dBA, specify low-noise trim or downstream silencer.");
+    if (riskAssessment.chokedGas) actionItems.push("Choked gas flow: evaluate multi-stage trim to reduce per-stage pressure ratio below xT. Check pipe wall for acoustic fatigue per IEC 60534-8-4.");
+    actionItems.push("Verify compressibility factor (Z) with rigorous EOS at operating conditions");
+  }
+
+  if (serviceData.fluidType === "steam") {
+    actionItems.push("Verify steam properties (superheat, wetness) with steam tables — this tool uses approximate values");
+  }
+
+  if (project.dataQuality === "preliminary") actionItems.push("Data quality is preliminary — re-run sizing when confirmed process data is available");
 
   return { project, serviceData, valveData, sizingResult, selectionResult, riskAssessment, flags, actionItems };
 }
@@ -614,10 +654,18 @@ export function calculateCVLiquid(input: CVLiquidInput): CVLiquidResult {
   const Gf = input.liquidDensity / RHO_REF;
   const Cv = Q / (N1_SI * Fp * Math.sqrt(dP_sizing / Gf));
 
-  if (isChoked) warnings.push("Flow is CHOKED — valve is at maximum capacity for this ΔP. Increasing ΔP will not increase flow.");
-  if (Cv > 10000) warnings.push(`Very large Cv (${Cv.toFixed(0)}) — verify valve can be sourced at this capacity`);
-  if (P2 < Pv_bar) warnings.push("Downstream pressure is below fluid vapor pressure — flashing will occur downstream");
-  if (FL < 0.5) warnings.push("Low FL factor — high pressure recovery valve (e.g., butterfly/ball). Verify cavitation limits.");
+  if (isChoked) warnings.push("Flow is CHOKED — valve at maximum capacity for this ΔP. Increasing ΔP will not increase flow. Consider a larger valve or higher upstream pressure.");
+  if (Cv > 10000) warnings.push(`Very large Cv (${Cv.toFixed(0)}) — verify valve can be sourced. Consider parallel valves or larger body size.`);
+  if (P2 < Pv_bar) warnings.push(`Downstream P (${P2.toFixed(2)} bar) < Pv (${Pv_bar.toFixed(2)} bar) — flashing will occur downstream. Use hardened trim and consider downstream pipe sizing for two-phase flow.`);
+  if (FL < 0.5) warnings.push(`Low FL (${FL.toFixed(2)}) — high recovery valve (e.g., butterfly/ball). Verify cavitation limits per IEC 60534-2-2 and consider globe valve for better control.`);
+
+  const dpRatio = dP / P1;
+  if (dpRatio > 0.5 && !isChoked) warnings.push(`High ΔP/P1 ratio (${(dpRatio * 100).toFixed(0)}%) — approaching choked conditions. Review system ΔP budget.`);
+  if (dpRatio < 0.02) warnings.push(`Very low ΔP/P1 ratio (${(dpRatio * 100).toFixed(1)}%) — valve may have poor control authority. Consider whether a control valve is appropriate.`);
+
+  const sigma = P1 > Pv_bar ? (P1 - Pv_bar) / (P1 - P2) : 0;
+  const FL2 = FL * FL;
+  if (sigma > 0 && sigma < FL2 * 1.1 && !isChoked) warnings.push(`Cavitation index σ = ${sigma.toFixed(3)} is near FL² = ${FL2.toFixed(3)} — incipient cavitation risk per IEC 60534-2-2. Consider anti-cavitation trim.`);
 
   const Cv_choked = Q / (N1_SI * Fp * Math.sqrt(dP_choked / Gf));
 
@@ -653,9 +701,13 @@ export function calculateCVGas(input: CVGasInput): CVGasResult {
   const W = input.massFlowRate;
   const Cv = W / (N8_SI * Fp * Y * Math.sqrt(x_sizing * MW * P1 / (T_K * Z)));
 
-  if (isChoked) warnings.push("Flow is CHOKED — valve is at critical flow. Reducing downstream pressure will not increase flow.");
-  if (Y < 0.667) warnings.push(`Expansion factor Y = ${Y.toFixed(3)} — valve operating near choked condition`);
-  if (Cv > 10000) warnings.push(`Very large Cv (${Cv.toFixed(0)}) — verify valve availability`);
+  if (isChoked) warnings.push("Flow is CHOKED — critical (sonic) flow at vena contracta. Reducing downstream pressure will not increase flow. Consider multi-stage trim or a larger valve.");
+  if (Y < 0.667) warnings.push(`Expansion factor Y = ${Y.toFixed(3)} — valve operating at or near choked limit (Y_min = 0.667 per IEC 60534). Sizing uses choked ΔP.`);
+  if (Cv > 10000) warnings.push(`Very large Cv (${Cv.toFixed(0)}) — verify valve availability. Consider parallel valve arrangement.`);
+  if (x > 0.8) warnings.push(`Very high pressure ratio x = ${x.toFixed(3)} (x/xT = ${(x / (Fk * xT)).toFixed(2)}) — sonic velocity and aerodynamic noise likely. Request vendor noise prediction per IEC 60534-8-3.`);
+  if (x > 0.5 && x <= 0.8 && !isChoked) warnings.push(`Elevated pressure ratio x = ${x.toFixed(3)} — verify noise levels per IEC 60534-8-3, especially near personnel areas.`);
+  if (x < 0.05) warnings.push(`Very low pressure ratio x = ${x.toFixed(3)} — valve may have poor control resolution. Verify turndown and controllability.`);
+  if (Z < 0.7) warnings.push(`Low compressibility factor Z = ${Z.toFixed(3)} — gas significantly non-ideal. Verify Z with EOS calculation (Peng-Robinson or similar).`);
 
   return { cvRequired: Cv, xActual: x, xChoked: x_choked, yFactor: Y, fkFactor: Fk, fpFactor: Fp, isChoked, warnings };
 }
