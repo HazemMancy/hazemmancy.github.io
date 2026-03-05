@@ -359,49 +359,68 @@ export default function Home() {
             <h2 className="text-3xl md:text-4xl font-bold">Professional Experience</h2>
           </div>
 
-          <Card>
-            <CardContent className="p-6 md:p-8">
-              <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
-                <div>
-                  <h3 className="text-xl font-bold" data-testid="text-company-name">
-                    United Engineers for Petroleum Projects
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Cairo, Egypt
+          <div className="space-y-6">
+            <Card>
+              <CardContent className="p-6 md:p-8">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold" data-testid="text-company-name-dg">
+                      DG Impianti Industriali S.P.A.
+                    </h3>
+                    <p className="text-sm text-primary font-medium mt-0.5">Process Engineer</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs" data-testid="badge-period-dg">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 mr-1.5" />
+                    March 2026 - Present
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6 md:p-8">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold" data-testid="text-company-name">
+                      United Engineers for Petroleum Projects
+                    </h3>
+                    <p className="text-sm text-primary font-medium mt-0.5">Process Engineer</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Cairo, Egypt
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs" data-testid="badge-period">
+                    March 2023 - March 2026
+                  </Badge>
+                </div>
+
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-0.5 bg-primary" />
+                    <h4 className="font-semibold text-sm">Job Purpose</h4>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    As a Process Engineer, my primary responsibility is to contribute to the design, analysis, and optimization of processes within the petroleum industry. By leveraging my expertise in process engineering, hydraulic calculations, and equipment sizing, I ensure the efficient and safe operation of various systems. I actively participate in developing process models, creating detailed process drawings, and preparing technical documents and specifications.
                   </p>
                 </div>
-                <Badge variant="outline" className="text-xs" data-testid="badge-period">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 mr-1.5" />
-                  March 2023 - Present
-                </Badge>
-              </div>
 
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-0.5 bg-primary" />
-                  <h4 className="font-semibold text-sm">Job Purpose</h4>
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-6 h-0.5 bg-primary" />
+                    <h4 className="font-semibold text-sm">Roles & Responsibilities</h4>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {responsibilities.map((resp, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                        <p className="text-sm text-muted-foreground">{resp}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  As a Process Engineer, my primary responsibility is to contribute to the design, analysis, and optimization of processes within the petroleum industry. By leveraging my expertise in process engineering, hydraulic calculations, and equipment sizing, I ensure the efficient and safe operation of various systems. I actively participate in developing process models, creating detailed process drawings, and preparing technical documents and specifications.
-                </p>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-6 h-0.5 bg-primary" />
-                  <h4 className="font-semibold text-sm">Roles & Responsibilities</h4>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {responsibilities.map((resp, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                      <p className="text-sm text-muted-foreground">{resp}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 
