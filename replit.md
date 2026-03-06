@@ -55,7 +55,15 @@ Every solver/calc must return a structured trace object containing:
 - Stamp reports with engine version where available
 
 ## System Architecture
-The application features a modern, responsive single-page React frontend, styled with Tailwind CSS and shadcn/ui, adopting a dark navy and golden amber theme. Client-side routing is managed by `wouter`. A minimal Express.js server primarily serves the frontend, as there is no database; all portfolio content is hardcoded, and all calculator logic and data processing are client-side. Engineering calculations are strictly modularized into pure functions within `client/src/lib/engineering/`, ensuring clear separation from UI components.
+The application is a **pure static single-page application (SPA)** — no backend server. It is built with React, Vite, Tailwind CSS, and shadcn/ui, using a dark navy and golden amber theme. Client-side routing is managed by `wouter`. There is no database; all portfolio content is hardcoded, and all calculator logic and data processing run entirely in the browser. Engineering calculations are strictly modularized into pure functions within `client/src/lib/engineering/`, ensuring clear separation from UI components.
+
+**Build & Hosting:**
+- `npx vite` — development server (port 5000 on Replit)
+- `npx vite build` — produces static output in `dist/` (HTML, CSS, JS)
+- `dist/404.html` — copy of index.html for GitHub Pages SPA routing
+- `dist/.nojekyll` — prevents Jekyll processing on GitHub Pages
+- The `dist/` folder can be deployed to GitHub Pages, Netlify, Vercel, or any static host
+- No Express server, no server-side code, no API endpoints
 
 Key architectural features and implementations include:
 - **Calculator Suite**: Comprises 16 discipline-specific calculators, featuring complex multi-tab wizard interfaces for guided input (e.g., Separator Sizing, Heat Exchanger, Compressor, Pump Sizing, API 2000 Tank Venting). These wizards include progress bars, step headers, and bottom navigation.
@@ -73,12 +81,18 @@ Key architectural features and implementations include:
 ## External Dependencies
 - **React**: Frontend UI library.
 - **TypeScript**: For type safety in JavaScript.
-- **Vite**: Frontend build tool.
+- **Vite**: Frontend build tool and dev server.
 - **Tailwind CSS**: Utility-first CSS framework.
 - **shadcn/ui**: Reusable UI components.
-- **Express.js**: Backend web framework.
 - **wouter**: Client-side routing.
 - **jsPDF & jspdf-autotable**: For PDF report generation.
 - **xlsx**: For Excel data export.
 - **Zod**: For schema validation.
-- **FormSubmit.co**: For calculator feedback submission.
+- **FormSubmit.co**: For calculator feedback submission (client-side POST).
+
+## GitHub Pages Deployment
+To deploy to GitHub Pages:
+1. Run `npx vite build` — generates `dist/` with static files
+2. The build automatically includes `404.html` (SPA routing fallback) and `.nojekyll`
+3. Push the `dist/` folder to the `gh-pages` branch, or configure GitHub Actions to build and deploy
+4. If using a repository subpath (e.g., `username.github.io/repo-name`), set `base: '/repo-name/'` in `vite.config.ts`
