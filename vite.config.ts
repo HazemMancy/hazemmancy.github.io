@@ -45,6 +45,18 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/jspdf") || id.includes("node_modules/jspdf-autotable")) return "vendor-pdf";
+          if (id.includes("node_modules/xlsx")) return "vendor-xlsx";
+          if (id.includes("node_modules/zod")) return "vendor-zod";
+          if (id.includes("node_modules/dompurify")) return "vendor-dompurify";
+          if (id.includes("node_modules/recharts") || id.includes("node_modules/d3-") || id.includes("node_modules/victory")) return "vendor-charts";
+        },
+      },
+    },
   },
   server: {
     host: "0.0.0.0",
