@@ -17,10 +17,10 @@ externalPort = 3001
 PORT = "5000"
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "static"
 run = ["node", "./dist/index.cjs"]
-build = ["npm", "run", "build"]
-publicDir = "dist/public"
+build = ["npx", "vite", "build"]
+publicDir = "dist"
 
 [workflows]
 runButton = "Project"
