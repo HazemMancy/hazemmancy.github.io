@@ -1,12 +1,76 @@
+/**
+ * Restriction Orifice Sizing Engine
+ *
+ * Standards:
+ *   ISO 5167-2:2003 — Measurement of fluid flow, Orifice plates
+ *   Crane Technical Paper 410 (TP-410) — Flow of Fluids
+ *   API RP 14E — Design of Offshore Production Platform Piping Systems (erosional velocity)
+ *   ISA-RP75.23 — Considerations for the application of control valve body styles (cavitation)
+ *
+ * Sizing Modes:
+ *   sizeForFlow  — Given flow + ΔP, solve for orifice diameter d
+ *   checkOrifice — Given d, P1, P2, compute actual flow
+ *   predictDP    — Given d + flow, compute required ΔP
+ *
+ * Key Equations:
+ *
+ *   LIQUID (incompressible):
+ *     W  = Cd · (π/4)·d² · √(2·ρ·ΔP / (1−β⁴))        [ISO 5167-2 Eq. 1]
+ *     or equivalently: W = Cd · E · A · √(2·ρ·ΔP)       E = 1/√(1−β⁴)
+ *
+ *   GAS — subcritical:
+ *     W  = Cd · E · A · Y · √(2·ρ₁·ΔP)                 [ISO 5167 / ISA approach]
+ *     Y  = 1 − (0.351 + 0.256β⁴ + 0.93β⁸)·(1−(P2/P1)^(1/k))   [ISO 5167-2 expansion factor]
+ *
+ *   GAS — choked (critical):
+ *     W  = Cd · E · A · P₁ · C(k) · √(MW / (Z·Ru·T₁))
+ *     C(k) = √(k · (2/(k+1))^((k+1)/(k-1)))            [critical flow function]
+ *     r_crit = (2/(k+1))^(k/(k-1))                      [critical pressure ratio]
+ *
+ *   DISCHARGE COEFFICIENT — ISO 5167-2:2003 Reader-Harris/Gallagher (corner taps, simplified):
+ *     Cd = 0.5961 + 0.0261β² − 0.216β⁸
+ *          + 0.000521·(10⁶·β/Re_D)^0.7
+ *          + (0.0188 + 0.0063·(19000β/Re_D)^0.8)·β^3.5·(10⁶/Re_D)^0.3
+ *          + 0.011·(0.75−β)·(2.8 − D/25.4)             [D-correction for D<71.12 mm]
+ *     Valid: 0.1 ≤ β ≤ 0.75, Re_D ≥ 5000, D ≥ 50 mm
+ *     For sharp-edged thin orifice in turbulent flow: Cd ≈ 0.61 (β~0.5)
+ *
+ *   PLATE THICKNESS CORRECTION (ISO 5167 / Lienhard 2005):
+ *     Thin:  e/d < 0.5  → no correction (Cd sharp-edged)
+ *     Thick: 0.5 ≤ e/d ≤ 2.5 → Cd_thick = Cd_thin × (1 + 0.023·(e/d − 0.5))
+ *     Very thick: e/d > 2.5 → Cd ≈ 0.80 (long-tube approach)
+ *
+ *   PERMANENT PRESSURE LOSS (ISO 5167-2 Annex D):
+ *     ΔP_perm / ΔP_total = (√(1−β⁴·Cd²) − Cd·β²) / (√(1−β⁴·Cd²) + Cd·β²)
+ *
+ *   CAVITATION (ISA-RP75.23 / Tullis 1993):
+ *     σ = (P1 − Pv) / ΔP               (service cavitation index)
+ *     σi ≈ 2.7  (incipient cavitation, sharp-edged orifice)
+ *     σch ≈ 1.5 (constant/developed cavitation)
+ *     σfl: when P2 ≤ Pv → flashing
+ *
+ *   EROSIONAL VELOCITY (API RP 14E, §2.4):
+ *     Ve = C / √ρ [field]  →  Ve = 122 / √ρ [m/s, ρ in kg/m³]
+ *     C = 100 (continuous service), 125 (intermittent)
+ *
+ *   UPSTREAM STRAIGHT-PIPE LENGTH (ISO 5167-2:2003 Table 3, β=0.4−0.6):
+ *     Single 90° elbow:      ≥ 14D upstream, 5D downstream
+ *     Gate valve (fully open):≥ 12D upstream, 5D downstream
+ *     Two 90° elbows (2-plane):≥ 34D upstream, 5D downstream
+ *     No upstream fitting:    ≥ 6D upstream, 4D downstream
+ */
+
 import { PI, GAS_CONSTANT } from "./constants";
 
 export const R_UNIVERSAL = GAS_CONSTANT;
 
-export type Phase = "liquid" | "gas";
-export type SizingMode = "sizeForFlow" | "checkOrifice" | "predictDP";
-export type CdMode = "user" | "estimated";
-export type EdgeType = "sharp" | "rounded";
-export type BasisMode = "inPipe" | "freeDischarge";
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type Phase       = "liquid" | "gas";
+export type SizingMode  = "sizeForFlow" | "checkOrifice" | "predictDP";
+export type CdMode      = "user" | "estimated";
+export type EdgeType    = "sharp" | "rounded";
+export type BasisMode   = "inPipe" | "freeDischarge";
 
 export interface ROProject {
   name: string;
@@ -61,6 +125,7 @@ export interface ROServiceInput {
   betaMin: number;
   betaMax: number;
   numStages: number;
+  stageDistribution: "equal_dp" | "geometric";
 }
 
 export const DEFAULT_SERVICE: ROServiceInput = {
@@ -71,8 +136,8 @@ export const DEFAULT_SERVICE: ROServiceInput = {
   pipeDiameter: 154.08, orificeDiameter: 0,
   liquidProps: { density: 998.2, viscosity: 1.0, vaporPressure: 0 },
   gasProps: { molecularWeight: 18.5, specificHeatRatio: 1.27, compressibilityFactor: 0.92, viscosity: 0.012 },
-  orifice: { cdMode: "user", cdValue: 0.61, edgeType: "sharp", basisMode: "inPipe", thickness: 3 },
-  betaMin: 0.20, betaMax: 0.75, numStages: 1,
+  orifice: { cdMode: "user", cdValue: 0.61, edgeType: "sharp", basisMode: "inPipe", thickness: 6 },
+  betaMin: 0.20, betaMax: 0.75, numStages: 1, stageDistribution: "geometric",
 };
 
 export interface CalcStep {
@@ -97,7 +162,8 @@ export type ROFlag =
   | "CHOKED_FLOW"
   | "HIGH_NOISE_RISK"
   | "FLASHING_LIKELY"
-  | "CAVITATION_RISK"
+  | "CAVITATION_INCIPIENT"
+  | "CAVITATION_SEVERE"
   | "TWO_PHASE_SUSPECTED"
   | "BETA_OUT_OF_RANGE"
   | "CD_ESTIMATED"
@@ -106,7 +172,10 @@ export type ROFlag =
   | "NEAR_CHOKED"
   | "HIGH_MACH"
   | "HIGH_ORIFICE_VELOCITY"
-  | "MULTI_STAGE_RECOMMENDED";
+  | "EROSIONAL_VELOCITY_EXCEEDED"
+  | "MULTI_STAGE_RECOMMENDED"
+  | "THICK_ORIFICE"
+  | "LOW_REYNOLDS";
 
 export interface StageResult {
   stageNumber: number;
@@ -116,6 +185,14 @@ export interface StageResult {
   orificeDiameter: number;
   betaRatio: number;
   orificeVelocity: number;
+  pressureRatioDP: number;
+  isChoked: boolean;
+}
+
+export interface StraightPipeRec {
+  fitting: string;
+  upstreamLD: number;
+  downstreamLD: number;
 }
 
 export interface ROResult {
@@ -126,6 +203,7 @@ export interface ROResult {
   betaRatio: number;
   pressureDrop: number;
   permanentPressureLoss: number;
+  permanentPressureLossFraction: number;
   recoveryFactor: number;
   orificeVelocity: number;
   pipeVelocity: number;
@@ -146,16 +224,22 @@ export interface ROResult {
   reynoldsNumberPipe: number;
   machNumber: number;
   sigma: number;
+  sigmaIncipient: number;
   noiseLevelEstimate: number;
   cdEffective: number;
+  erosionalVelocity: number;
+  erosionalVelocityRatio: number;
   numStages: number;
   stages: StageResult[];
+  straightPipeRecs: StraightPipeRec[];
   calcSteps: CalcStep[];
   solverInfo: SolverInfo | null;
   flags: ROFlag[];
   warnings: string[];
   recommendations: string[];
 }
+
+// ─── Internal Types ───────────────────────────────────────────────────────────
 
 interface BisectionResult {
   root: number;
@@ -165,6 +249,8 @@ interface BisectionResult {
   bracketLow: number;
   bracketHigh: number;
 }
+
+// ─── Solver ───────────────────────────────────────────────────────────────────
 
 function bisectionSolve(
   fn: (x: number) => number,
@@ -176,7 +262,7 @@ function bisectionSolve(
 
   if (fLo * fHi > 0) {
     let bestX = lo; let bestF = Math.abs(fLo);
-    const steps = 40;
+    const steps = 60;
     for (let i = 0; i <= steps; i++) {
       const x = lo + (hi - lo) * i / steps;
       const fx = fn(x);
@@ -189,8 +275,7 @@ function bisectionSolve(
     }
   }
 
-  let mid = lo;
-  let iter = 0;
+  let mid = lo; let iter = 0;
   for (; iter < maxIter; iter++) {
     mid = (lo + hi) / 2;
     const fMid = fn(mid);
@@ -203,90 +288,351 @@ function bisectionSolve(
   return { root: mid, iterations: iter, error: Math.abs(fn(mid)), converged: Math.abs(fn(mid)) < tol * 100, bracketLow: lo, bracketHigh: hi };
 }
 
-function roundToStandardBore(d_mm: number): number {
-  if (d_mm <= 3) return Math.ceil(d_mm * 10) / 10;
-  if (d_mm <= 10) return Math.ceil(d_mm * 4) / 4;
-  if (d_mm <= 50) return Math.ceil(d_mm * 2) / 2;
-  return Math.ceil(d_mm);
+// ─── ISO Standard Bore Sizes ──────────────────────────────────────────────────
+
+/**
+ * Round up to the nearest standard drill/bore size.
+ * Uses common metric drill series (≤6mm = 0.1mm step, ≤13 = 0.5mm, ≤50 = 1mm, >50 = 2mm).
+ */
+export function roundToStandardBore(d_mm: number): number {
+  if (d_mm <= 0) return 0;
+  if (d_mm <= 6)   return Math.ceil(d_mm * 10) / 10;
+  if (d_mm <= 13)  return Math.ceil(d_mm * 2) / 2;
+  if (d_mm <= 50)  return Math.ceil(d_mm);
+  return Math.ceil(d_mm / 2) * 2;
 }
 
-function estimateCdFromReynolds(Re_d: number, beta: number, edgeType: EdgeType): number {
-  if (edgeType === "rounded") return 0.97;
-  if (Re_d < 100) return 0.50;
-  const Ce = 0.5959 + 0.0312 * Math.pow(beta, 2.1) - 0.1840 * Math.pow(beta, 8);
-  const ReCorr = Re_d > 4000 ? 91.706 * Math.pow(beta, 2.5) / Math.pow(Re_d, 0.75) : 0;
-  const Cd = Ce + ReCorr;
-  return Math.max(0.40, Math.min(Cd, 0.85));
+// ─── ISO 5167-2 Discharge Coefficient ────────────────────────────────────────
+
+/**
+ * Reader-Harris/Gallagher discharge coefficient (ISO 5167-2:2003, Eq. 1).
+ * Simplified for restriction orifice service (no tap-position correction terms
+ * L1/L2, which require knowledge of tap geometry and are zero for corner taps).
+ *
+ * Valid range: 0.1 ≤ β ≤ 0.75, Re_D ≥ 5000, 50 mm ≤ D ≤ 1000 mm
+ *
+ * For turbulent flow (Re_D > 10⁵): Cd ≈ 0.5961 + 0.0261β² − 0.216β⁸
+ * For Re_D < 5000: add a viscosity correction term.
+ *
+ * @param beta   d/D ratio
+ * @param Re_D   pipe Reynolds number
+ * @param D_mm   pipe internal diameter [mm]
+ * @param edgeType  "sharp" | "rounded"
+ */
+function cdReaderHarrisGallagher(beta: number, Re_D: number, D_mm: number, edgeType: EdgeType): number {
+  if (edgeType === "rounded") return 0.97; // Rounded (ISA 1932 nozzle type, Cd ≈ 0.97−0.99)
+
+  if (beta < 0.05 || beta > 0.95) return 0.61;
+  if (Re_D < 100) return 0.50;
+
+  // ISO 5167-2:2003 Eq. 1 — Reader-Harris/Gallagher (corner taps, no L1/L2 terms)
+  const b2  = beta * beta;
+  const b8  = Math.pow(beta, 8);
+  const b35 = Math.pow(beta, 3.5);
+
+  // Base equation (high Re)
+  const Cd_inf = 0.5961 + 0.0261 * b2 - 0.216 * b8;
+
+  // Re-dependent correction (first term)
+  const Re_term1 = Re_D > 0
+    ? 0.000521 * Math.pow(1e6 * beta / Re_D, 0.7)
+    : 0;
+
+  // Re-dependent correction (second term)
+  const A = Re_D > 0 ? Math.pow(19000 * beta / Re_D, 0.8) : 0;
+  const Re_term2 = Re_D > 0
+    ? (0.0188 + 0.0063 * A) * b35 * Math.pow(1e6 / Re_D, 0.3)
+    : 0;
+
+  // Small-pipe correction (ISO 5167-2: for D < 71.12 mm = 2.8 inch)
+  const D_corr = D_mm < 71.12
+    ? 0.011 * (0.75 - beta) * (2.8 - D_mm / 25.4)
+    : 0;
+
+  const Cd = Cd_inf + Re_term1 + Re_term2 + D_corr;
+  return Math.max(0.40, Math.min(Cd, 0.92));
 }
 
-function permanentPressureLossFraction(beta: number): number {
-  return Math.sqrt(1 - Math.pow(beta, 4)) - Math.pow(beta, 2);
+/**
+ * Plate thickness Cd correction.
+ * For thick orifices (e/d > 0.5), the effective discharge coefficient increases
+ * because the orifice acts more like a short tube (less contraction).
+ *
+ * Ref: Lienhard & Dhir (2005), Miller (2009), ISO 5167-2 Commentary
+ *   e/d ≤ 0.02 → thin plate, Cd = Cd_thin (no correction)
+ *   0.02 < e/d ≤ 0.5 → Cd_thick = Cd_thin (no meaningful correction in this range)
+ *   0.5 < e/d ≤ 2.5 → Cd increases linearly: Cd = Cd_thin × (1 + 0.023·(e/d − 0.5))
+ *   e/d > 2.5 → short tube regime: Cd ≈ 0.80 (square-edged tube)
+ */
+function applyThicknessCorrection(Cd_thin: number, e_mm: number, d_mm: number): { Cd: number; corrected: boolean; regime: string } {
+  if (d_mm <= 0 || e_mm <= 0) return { Cd: Cd_thin, corrected: false, regime: "thin plate" };
+  const eod = e_mm / d_mm;
+  if (eod <= 0.5) return { Cd: Cd_thin, corrected: false, regime: "thin plate (e/d ≤ 0.5)" };
+  if (eod > 2.5) return { Cd: 0.80, corrected: true, regime: "short tube (e/d > 2.5) — Cd ≈ 0.80" };
+  const Cd_corrected = Cd_thin * (1 + 0.023 * (eod - 0.5));
+  return { Cd: Math.min(Cd_corrected, 0.90), corrected: true, regime: `thick orifice (e/d = ${eod.toFixed(2)})` };
 }
 
-function estimateNoiseLevel(
+// ─── Permanent Pressure Loss ──────────────────────────────────────────────────
+
+/**
+ * Permanent pressure loss fraction per ISO 5167-2:2003 Annex D.
+ *   ΔP_perm / ΔP_total = (√(1−β⁴·Cd²) − Cd·β²) / (√(1−β⁴·Cd²) + Cd·β²)
+ * Returns the fraction [0..1].
+ * Note: Crane TP-410 approximation: ≈ (1−β²) for Cd=0.61, good for β < 0.7.
+ */
+function permanentPressureLossFraction(beta: number, Cd: number): number {
+  const b4  = Math.pow(beta, 4);
+  const inner = Math.sqrt(Math.max(1 - b4 * Cd * Cd, 0.001));
+  const CdB2  = Cd * beta * beta;
+  const num   = inner - CdB2;
+  const den   = inner + CdB2;
+  return den > 0 ? Math.max(0, Math.min(1, num / den)) : 1 - beta * beta;
+}
+
+// ─── Gas Critical Flow ────────────────────────────────────────────────────────
+
+/** Critical pressure ratio: r_crit = (2/(k+1))^(k/(k-1)) */
+function gasCriticalPressureRatio(k: number): number {
+  return Math.pow(2 / (k + 1), k / (k - 1));
+}
+
+/** Critical flow function: C(k) = √(k·(2/(k+1))^((k+1)/(k-1))) */
+function gasCriticalFlowFunction(k: number): number {
+  return Math.sqrt(k * Math.pow(2 / (k + 1), (k + 1) / (k - 1)));
+}
+
+/**
+ * ISO 5167-2 Gas expansion factor Y (ISA approximation).
+ * Y = 1 − (0.351 + 0.256β⁴ + 0.93β⁸)·(1−(P2/P1)^(1/k))
+ * Valid: 0.75 ≤ r ≤ 1 (subcritical). Returns 1 for incompressible limit.
+ */
+function gasExpansionFactorISO(beta: number, pressureRatio: number, k: number): number {
+  const r = pressureRatio;
+  if (r <= 0 || r >= 1 || k <= 1) return 1;
+  const b4 = Math.pow(beta, 4);
+  const b8 = Math.pow(beta, 8);
+  return Math.max(0.667, 1 - (0.351 + 0.256 * b4 + 0.93 * b8) * (1 - Math.pow(r, 1 / k)));
+}
+
+// ─── Erosional Velocity ───────────────────────────────────────────────────────
+
+/**
+ * API RP 14E erosional velocity limit.
+ * Ve = C_field / √ρ [ft/s, lb/ft³] → Ve = 122 / √ρ [m/s, kg/m³]
+ * C = 100 (continuous service, single-phase liquid or gas)
+ * Note: for multi-phase service, C = 75-100; for corrosive service, C = 60-80.
+ */
+function erosionalVelocity_SI(rho_kgm3: number): number {
+  if (rho_kgm3 <= 0) return 999;
+  return 122 / Math.sqrt(rho_kgm3);
+}
+
+// ─── Straight Pipe Length Recommendations ────────────────────────────────────
+
+/**
+ * Upstream/downstream straight-pipe length recommendations per ISO 5167-2:2003 Table 3.
+ * Values are in pipe diameters (L/D) for β ≈ 0.4−0.6 (interpolated).
+ * For restriction orifices (not metering) these are conservative best-practice guidelines.
+ */
+function straightPipeRecommendations(beta: number): StraightPipeRec[] {
+  // Interpolate between β=0.4 and β=0.6 for common fittings (upstream / downstream)
+  const f = Math.max(0, Math.min(1, (beta - 0.4) / 0.2));
+  const lerp = (a: number, b: number) => Math.round(a + (b - a) * f);
+  return [
+    { fitting: "Single 90° elbow",           upstreamLD: lerp(14, 18), downstreamLD: 5 },
+    { fitting: "Two 90° elbows (same plane)", upstreamLD: lerp(18, 22), downstreamLD: 5 },
+    { fitting: "Two 90° elbows (diff planes)",upstreamLD: lerp(34, 44), downstreamLD: 6 },
+    { fitting: "Globe / butterfly valve",     upstreamLD: lerp(18, 22), downstreamLD: 5 },
+    { fitting: "Gate valve (fully open)",     upstreamLD: lerp(12, 14), downstreamLD: 5 },
+    { fitting: "Reducer (2D upstream)",       upstreamLD: lerp(10, 12), downstreamLD: 5 },
+    { fitting: "No fitting (free flow)",      upstreamLD: lerp(6, 10),  downstreamLD: 4 },
+  ];
+}
+
+// ─── Noise Estimation ────────────────────────────────────────────────────────
+
+/**
+ * Simplified A-weighted SPL estimate for fluid noise from restriction orifice.
+ * Based on acoustic power methods (IEC 60534-8 adapted for RO).
+ * Returns estimated SPL at 1m distance [dB(A)]. Treat as screening only.
+ */
+function estimateNoiseSPL(
   W_kgs: number, P1_Pa: number, P2_Pa: number,
   D_mm: number, d_mm: number, rho1: number,
 ): number {
   const dP = P1_Pa - P2_Pa;
-  if (dP <= 0 || W_kgs <= 0 || rho1 <= 0) return 0;
-  const v_orifice = W_kgs / (rho1 * (PI / 4) * Math.pow(d_mm / 1000, 2));
-  const Lw = 10 * Math.log10(W_kgs * Math.pow(v_orifice, 3) * rho1) + 10;
-  const r_m = 1.0;
-  const SPL = Lw - 10 * Math.log10(PI * D_mm / 1000 * r_m) + 10 * Math.log10(D_mm / (D_mm + 2 * 10));
-  return Math.max(0, Math.min(SPL, 150));
+  if (dP <= 0 || W_kgs <= 0 || rho1 <= 0 || d_mm <= 0) return 0;
+  const A_orifice = PI / 4 * Math.pow(d_mm / 1000, 2);
+  const v_jet = A_orifice > 0 ? W_kgs / (rho1 * A_orifice) : 0;
+  if (v_jet <= 0) return 0;
+  // Acoustic power ~ W·v²·ρ proportional approach
+  // Calibrated to give ~80 dB for water at 10 m/s jet, ~100 dB for gas at 150 m/s jet
+  const Lw_ref = 10 * Math.log10(Math.max(W_kgs * Math.pow(v_jet, 2) * rho1 * 1e-4, 1e-30));
+  const SPL_at_1m = Lw_ref + 40 - 10 * Math.log10(2 * PI * Math.pow(D_mm / 1000 + 0.5, 2));
+  return Math.max(0, Math.min(SPL_at_1m, 160));
 }
 
-function liquidMassFlowForDiameter(
+// ─── Flow Equations ───────────────────────────────────────────────────────────
+
+function liquidMassFlow(
   d_mm: number, D_mm: number, rho: number, dP_Pa: number, Cd: number, basisMode: BasisMode,
 ): number {
   const d_m = d_mm / 1000;
   const D_m = D_mm / 1000;
-  const A = (PI / 4) * d_m * d_m;
+  const A   = (PI / 4) * d_m * d_m;
   const beta = d_m / D_m;
-  const betaCorr = basisMode === "inPipe" ? (1 - Math.pow(beta, 4)) : 1;
-  if (betaCorr <= 0 || dP_Pa <= 0) return 0;
-  return Cd * A * Math.sqrt(2 * rho * dP_Pa / betaCorr) * 3600;
+  const velApproach = basisMode === "inPipe" ? Math.sqrt(1 - Math.pow(beta, 4)) : 1;
+  if (velApproach <= 0 || dP_Pa <= 0 || A <= 0) return 0;
+  return Cd * A / velApproach * Math.sqrt(2 * rho * dP_Pa) * 3600;
 }
 
-function liquidDPForDiameter(
+function liquidDP(
   d_mm: number, D_mm: number, rho: number, W_kgh: number, Cd: number, basisMode: BasisMode,
 ): number {
   const d_m = d_mm / 1000;
   const D_m = D_mm / 1000;
-  const A = (PI / 4) * d_m * d_m;
+  const A   = (PI / 4) * d_m * d_m;
   const beta = d_m / D_m;
-  const betaCorr = basisMode === "inPipe" ? (1 - Math.pow(beta, 4)) : 1;
-  if (A <= 0 || Cd <= 0) return 0;
+  const velApproach = basisMode === "inPipe" ? Math.sqrt(1 - Math.pow(beta, 4)) : 1;
+  if (A <= 0 || Cd <= 0 || velApproach <= 0) return 0;
   const W_kgs = W_kgh / 3600;
-  return (W_kgs / (Cd * A)) * (W_kgs / (Cd * A)) * betaCorr / (2 * rho);
+  return Math.pow(W_kgs * velApproach / (Cd * A), 2) / (2 * rho);
 }
 
+function gasMassFlow(
+  d_mm: number, D_mm: number,
+  P1_Pa: number, T_K: number, MW: number, k: number, Z: number, Cd: number,
+  pressureRatio: number, isChoked: boolean, basisMode: BasisMode,
+): number {
+  const d_m  = d_mm / 1000;
+  const D_m  = D_mm / 1000;
+  const A    = (PI / 4) * d_m * d_m;
+  const beta = d_m / D_m;
+  const velApproach = basisMode === "inPipe" ? Math.sqrt(1 - Math.pow(beta, 4)) : 1;
+  const rho1 = (P1_Pa * MW) / (Z * R_UNIVERSAL * T_K);
+
+  if (isChoked) {
+    const fk = gasCriticalFlowFunction(k);
+    const W  = Cd * A * P1_Pa * fk * Math.sqrt(MW / (Z * R_UNIVERSAL * T_K)) / velApproach;
+    return W * 3600;
+  } else {
+    const Y   = gasExpansionFactorISO(beta, pressureRatio, k);
+    const dP  = P1_Pa * (1 - pressureRatio);
+    const W   = Cd * A * Y * Math.sqrt(2 * rho1 * dP) / velApproach;
+    return W * 3600;
+  }
+}
+
+function gasDP(
+  d_mm: number, D_mm: number,
+  P1_Pa: number, T_K: number, MW: number, k: number, Z: number, Cd: number,
+  W_kgh: number, basisMode: BasisMode, maxIter: number, tol: number,
+): { dP_Pa: number; isChoked: boolean; solverInfo: SolverInfo } {
+  const xCrit = gasCriticalPressureRatio(k);
+  const W_choked = gasMassFlow(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, xCrit, true, basisMode);
+
+  if (W_kgh >= W_choked) {
+    return {
+      dP_Pa: P1_Pa * (1 - xCrit),
+      isChoked: true,
+      solverInfo: { method: "Choked (direct)", iterations: 0, finalError: 0, tolerance: tol, converged: true, bracketLow: 0, bracketHigh: 0 },
+    };
+  }
+
+  const fn = (r: number) => gasMassFlow(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, r, false, basisMode) - W_kgh;
+  const sol = bisectionSolve(fn, xCrit + 0.0001, 0.99999, tol, maxIter);
+  return {
+    dP_Pa: P1_Pa * (1 - sol.root),
+    isChoked: false,
+    solverInfo: { method: "Bisection (pressure-ratio space)", iterations: sol.iterations, finalError: sol.error, tolerance: tol, converged: sol.converged, bracketLow: sol.bracketLow, bracketHigh: sol.bracketHigh },
+  };
+}
+
+// ─── Cd Iteration ────────────────────────────────────────────────────────────
+
+function iterateCd(
+  initialCd: number,
+  getReAndBeta: (Cd: number) => { Re_D: number; beta: number; d_mm: number },
+  D_mm: number,
+  edgeType: EdgeType,
+  e_mm: number,
+  maxIter: number,
+): { Cd: number; iterations: number; thicknessRegime: string } {
+  let Cd = initialCd;
+  let regime = "thin plate";
+  for (let i = 0; i < maxIter; i++) {
+    const { Re_D, beta, d_mm } = getReAndBeta(Cd);
+    const Cd_thin = cdReaderHarrisGallagher(beta, Re_D, D_mm, edgeType);
+    const thick   = applyThicknessCorrection(Cd_thin, e_mm, d_mm);
+    regime = thick.regime;
+    const Cd_new  = thick.Cd;
+    if (Math.abs(Cd_new - Cd) < 1e-6) { Cd = Cd_new; break; }
+    Cd = Cd_new;
+  }
+  return { Cd, iterations: maxIter, thicknessRegime: regime };
+}
+
+// ─── Multi-Stage Pressure Distribution ───────────────────────────────────────
+
+/**
+ * Compute per-stage pressures.
+ * "equal_dp":  each stage ΔP = ΔP_total / n  (simple equal distribution)
+ * "geometric": each stage P2/P1 = (P2_total/P1_total)^(1/n)  (equal pressure ratio per stage)
+ *   — preferred for gas and cavitation-limited liquid service
+ */
+function computeStageP(
+  P1_bar: number, P2_bar: number, n: number,
+  distribution: "equal_dp" | "geometric",
+): Array<{ P1: number; P2: number }> {
+  const stages = [];
+  if (distribution === "geometric" && P2_bar > 0 && P1_bar > P2_bar) {
+    const r_total = P2_bar / P1_bar;
+    const r_stage = Math.pow(r_total, 1 / n);
+    for (let i = 0; i < n; i++) {
+      const sP1 = P1_bar * Math.pow(r_stage, i);
+      const sP2 = P1_bar * Math.pow(r_stage, i + 1);
+      stages.push({ P1: sP1, P2: sP2 });
+    }
+  } else {
+    const dP = (P1_bar - P2_bar) / n;
+    for (let i = 0; i < n; i++) {
+      stages.push({ P1: P1_bar - i * dP, P2: P1_bar - (i + 1) * dP });
+    }
+  }
+  return stages;
+}
+
+// ─── Liquid Calculation ───────────────────────────────────────────────────────
+
 export function calculateROLiquid(input: ROServiceInput, project: ROProject): ROResult {
-  const steps: CalcStep[] = [];
-  const flags: ROFlag[] = [];
-  const warnings: string[] = [];
+  const steps:   CalcStep[]       = [];
+  const flags:   ROFlag[]         = [];
+  const warnings:  string[]       = [];
   const recommendations: string[] = [];
 
-  const P1_Pa = input.upstreamPressure * 1e5;
-  const P2_Pa = input.downstreamPressure * 1e5;
-  const rho = input.liquidProps.density;
-  const mu_cP = input.liquidProps.viscosity;
-  const Pv = input.liquidProps.vaporPressure;
-  let Cd = input.orifice.cdValue;
-  const D_mm = input.pipeDiameter;
-  const D_m = D_mm / 1000;
+  const P1_Pa   = input.upstreamPressure * 1e5;
+  const P2_Pa   = input.downstreamPressure * 1e5;
+  const rho     = input.liquidProps.density;
+  const mu_cP   = input.liquidProps.viscosity;
+  const Pv_bar  = input.liquidProps.vaporPressure;
+  const D_mm    = input.pipeDiameter;
+  const D_m     = D_mm / 1000;
   const basisMode = input.orifice.basisMode;
-  const estimateCd = input.orifice.cdMode === "estimated" && mu_cP > 0;
+  const e_mm    = input.orifice.thickness;
+  const estimateCd = input.orifice.cdMode === "estimated";
+  let Cd        = input.orifice.cdValue;
 
   if (input.sizingMode !== "predictDP") {
-    if (P1_Pa <= P2_Pa) throw new Error("Upstream pressure (P1) must be greater than downstream pressure (P2)");
+    if (P1_Pa <= P2_Pa) throw new Error("P1 must exceed P2");
   }
-  if (rho <= 0) throw new Error("Liquid density must be positive");
-  if (Cd <= 0 || Cd > 1) throw new Error("Discharge coefficient must be between 0 and 1");
-  if (D_mm <= 0) throw new Error("Pipe diameter must be positive");
+  if (rho <= 0)     throw new Error("Liquid density must be positive");
+  if (Cd <= 0 || Cd > 1) throw new Error("Discharge coefficient must be in (0, 1]");
+  if (D_mm <= 0)    throw new Error("Pipe diameter must be positive");
 
   let W_kgh: number;
   let Q_m3h: number;
+
   if (input.flowBasis === "volume") {
     Q_m3h = input.volFlowRate;
     W_kgh = Q_m3h * rho;
@@ -297,393 +643,50 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
     if (W_kgh <= 0 && input.sizingMode !== "checkOrifice") throw new Error("Mass flow rate must be positive");
   }
 
-  const dP_Pa = P1_Pa - P2_Pa;
+  const dP_Pa  = P1_Pa - P2_Pa;
   const dP_bar = input.upstreamPressure - input.downstreamPressure;
 
-  steps.push({ label: "Upstream pressure P₁", equation: "", value: input.upstreamPressure.toFixed(3), unit: "bar(a)", eqId: "RO-L-01" });
-  steps.push({ label: "Downstream pressure P₂", equation: "", value: input.downstreamPressure.toFixed(3), unit: "bar(a)", eqId: "RO-L-02" });
-  steps.push({ label: "Pressure drop ΔP", equation: "ΔP = P₁ - P₂", value: dP_bar.toFixed(3), unit: "bar", eqId: "RO-L-03" });
-  steps.push({ label: "ΔP (Pa)", equation: "ΔP = (P₁ - P₂) × 10⁵", value: dP_Pa.toFixed(0), unit: "Pa", eqId: "RO-L-04" });
-  steps.push({ label: "Liquid density ρ", equation: "", value: rho.toFixed(2), unit: "kg/m³", eqId: "RO-L-05" });
-  steps.push({ label: "Mass flow W", equation: "W = Q × ρ", value: W_kgh.toFixed(2), unit: "kg/h", eqId: "RO-L-06" });
-  steps.push({ label: "Volume flow Q", equation: "Q = W / ρ", value: Q_m3h.toFixed(4), unit: "m³/h", eqId: "RO-L-07" });
+  steps.push({ label: "P₁ upstream",     equation: "", value: input.upstreamPressure.toFixed(3), unit: "bar(a)", eqId: "RO-L-01" });
+  steps.push({ label: "P₂ downstream",   equation: "", value: input.downstreamPressure.toFixed(3), unit: "bar(a)", eqId: "RO-L-02" });
+  steps.push({ label: "ΔP = P₁ − P₂",   equation: "ΔP = P₁ − P₂", value: dP_bar.toFixed(4), unit: "bar", eqId: "RO-L-03" });
+  steps.push({ label: "ρ liquid",         equation: "", value: rho.toFixed(3), unit: "kg/m³", eqId: "RO-L-04" });
+  steps.push({ label: "Mass flow W",      equation: input.flowBasis === "volume" ? "W = Q × ρ" : "given", value: W_kgh.toFixed(3), unit: "kg/h", eqId: "RO-L-05" });
+  steps.push({ label: "Vol flow Q",       equation: input.flowBasis === "mass" ? "Q = W/ρ" : "given", value: Q_m3h.toFixed(4), unit: "m³/h", eqId: "RO-L-06" });
 
-  if (estimateCd) {
-    flags.push("CD_ESTIMATED");
-    warnings.push("Cd is iteratively estimated from Reader-Harris/Gallagher correlation — results have higher uncertainty");
-  }
+  // Discharge coefficient
+  if (estimateCd) { flags.push("CD_ESTIMATED"); }
 
   let d_mm: number;
   let solverInfo: SolverInfo | null = null;
-  let cdIterations = 0;
+  let thicknessRegime = "thin plate";
 
   if (input.sizingMode === "sizeForFlow") {
-    const maxCdIter = estimateCd ? 10 : 1;
-    let prevCd = Cd;
-    for (let ci = 0; ci < maxCdIter; ci++) {
-      cdIterations = ci + 1;
-      const fn = (d: number) => liquidMassFlowForDiameter(d, D_mm, rho, dP_Pa, Cd, basisMode) - W_kgh;
-      const solResult = bisectionSolve(fn, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
-      d_mm = solResult.root;
-      if (ci === 0) {
-        solverInfo = {
-          method: "Bisection", iterations: solResult.iterations, finalError: solResult.error,
-          tolerance: project.tolerance, converged: solResult.converged,
-          bracketLow: solResult.bracketLow, bracketHigh: solResult.bracketHigh,
-        };
-        if (!solResult.converged) {
-          flags.push("SOLVER_ISSUE");
-          warnings.push(`Solver did not converge after ${solResult.iterations} iterations (error: ${solResult.error.toExponential(2)})`);
-        }
-      }
-      if (!estimateCd) break;
-      const di_m = d_mm! / 1000;
-      const Ai = (PI / 4) * di_m * di_m;
-      const betai = di_m / D_m;
-      const vi = (Q_m3h / 3600) / Ai;
-      const mu_Pas = mu_cP * 1e-3;
-      const Rei = rho * vi * di_m / mu_Pas;
-      const Cd_new = estimateCdFromReynolds(Rei, betai, input.orifice.edgeType);
-      if (Math.abs(Cd_new - prevCd) < 1e-5) { Cd = Cd_new; break; }
-      prevCd = Cd;
-      Cd = Cd_new;
-    }
-    d_mm = d_mm!;
-    steps.push({ label: "Solver target", equation: "Find d : W(d) = W_target", value: W_kgh.toFixed(2), unit: "kg/h", eqId: "RO-L-09" });
     if (estimateCd) {
-      steps.push({ label: "Cd convergence", equation: `${cdIterations} Cd iterations`, value: Cd.toFixed(4), unit: "—", eqId: "RO-L-09b" });
-    }
-  } else if (input.sizingMode === "checkOrifice") {
-    d_mm = input.orificeDiameter;
-    if (d_mm <= 0) throw new Error("Orifice diameter must be positive in check mode");
-    if (estimateCd) {
-      const di_m = d_mm / 1000;
-      const betai = di_m / D_m;
-      const Ai = (PI / 4) * di_m * di_m;
-      let prevCd = Cd;
-      for (let ci = 0; ci < 10; ci++) {
-        cdIterations = ci + 1;
-        W_kgh = liquidMassFlowForDiameter(d_mm, D_mm, rho, dP_Pa, Cd, basisMode);
-        Q_m3h = W_kgh / rho;
-        const vi = (Q_m3h / 3600) / Ai;
-        const mu_Pas = mu_cP * 1e-3;
-        const Rei = rho * vi * di_m / mu_Pas;
-        const Cd_new = estimateCdFromReynolds(Rei, betai, input.orifice.edgeType);
-        if (Math.abs(Cd_new - prevCd) < 1e-5) { Cd = Cd_new; break; }
-        prevCd = Cd;
-        Cd = Cd_new;
-      }
-      W_kgh = liquidMassFlowForDiameter(d_mm, D_mm, rho, dP_Pa, Cd, basisMode);
-      Q_m3h = W_kgh / rho;
-      steps.push({ label: "Cd convergence", equation: `${cdIterations} Cd iterations`, value: Cd.toFixed(4), unit: "—", eqId: "RO-L-10b" });
+      const getReAndBeta = (CdGuess: number) => {
+        const fn2 = (d: number) => liquidMassFlow(d, D_mm, rho, dP_Pa, CdGuess, basisMode) - W_kgh;
+        const sol = bisectionSolve(fn2, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
+        const d_m_g = sol.root / 1000;
+        const A_g   = PI / 4 * d_m_g * d_m_g;
+        const v_g   = Q_m3h / 3600 / A_g;
+        const Re_D_g = rho * (Q_m3h / 3600 / (PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
+        return { Re_D: Re_D_g, beta: d_m_g / D_m, d_mm: sol.root };
+      };
+      const result = iterateCd(Cd, getReAndBeta, D_mm, input.orifice.edgeType, e_mm, 10);
+      Cd = result.Cd;
+      thicknessRegime = result.thicknessRegime;
     } else {
-      W_kgh = liquidMassFlowForDiameter(d_mm, D_mm, rho, dP_Pa, Cd, basisMode);
-      Q_m3h = W_kgh / rho;
-    }
-    steps.push({ label: "Check mode", equation: "Given d, P₁, P₂ → compute W", value: W_kgh.toFixed(2), unit: "kg/h", eqId: "RO-L-10" });
-  } else {
-    d_mm = input.orificeDiameter;
-    if (d_mm <= 0) throw new Error("Orifice diameter must be positive in ΔP prediction mode");
-    if (W_kgh <= 0) throw new Error("Flow rate must be positive in ΔP prediction mode");
-    if (estimateCd) {
-      const di_m = d_mm / 1000;
-      const betai = di_m / D_m;
-      const Ai = (PI / 4) * di_m * di_m;
-      let prevCd = Cd;
-      for (let ci = 0; ci < 10; ci++) {
-        cdIterations = ci + 1;
-        const vi = (Q_m3h / 3600) / Ai;
-        const mu_Pas = mu_cP * 1e-3;
-        const Rei = rho * vi * di_m / mu_Pas;
-        const Cd_new = estimateCdFromReynolds(Rei, betai, input.orifice.edgeType);
-        if (Math.abs(Cd_new - prevCd) < 1e-5) { Cd = Cd_new; break; }
-        prevCd = Cd;
-        Cd = Cd_new;
+      // Apply thickness correction to user-specified Cd
+      const fn2 = (d: number) => liquidMassFlow(d, D_mm, rho, dP_Pa, Cd, basisMode) - W_kgh;
+      const sol = bisectionSolve(fn2, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
+      const thickResult = applyThicknessCorrection(Cd, e_mm, sol.root);
+      if (thickResult.corrected) {
+        Cd = thickResult.Cd;
+        thicknessRegime = thickResult.regime;
+        flags.push("THICK_ORIFICE");
       }
-      steps.push({ label: "Cd convergence", equation: `${cdIterations} Cd iterations`, value: Cd.toFixed(4), unit: "—", eqId: "RO-L-11b" });
     }
-    const predictedDP_Pa = liquidDPForDiameter(d_mm, D_mm, rho, W_kgh, Cd, basisMode);
-    const predictedDP_bar = predictedDP_Pa / 1e5;
-    steps.push({ label: "Predicted ΔP", equation: "ΔP = W²·(1-β⁴) / (2ρ·Cd²·A²)", value: predictedDP_bar.toFixed(4), unit: "bar", eqId: "RO-L-11" });
-    steps.push({ label: "Predicted P₂", equation: "P₂ = P₁ - ΔP", value: (input.upstreamPressure - predictedDP_bar).toFixed(4), unit: "bar(a)", eqId: "RO-L-12" });
-  }
-
-  const d_m = d_mm / 1000;
-  const A_m2 = (PI / 4) * d_m * d_m;
-  const A_mm2 = A_m2 * 1e6;
-  const beta = d_m / D_m;
-  const betaCorr = basisMode === "inPipe" ? (1 - Math.pow(beta, 4)) : 1;
-  const pipeArea_m2 = (PI / 4) * D_m * D_m;
-
-  const actualDP_bar = input.sizingMode === "predictDP"
-    ? liquidDPForDiameter(d_mm, D_mm, rho, W_kgh, Cd, basisMode) / 1e5
-    : dP_bar;
-  const actualP2_bar = input.upstreamPressure - actualDP_bar;
-
-  const permLossFraction = permanentPressureLossFraction(beta);
-  const permanentPressureLoss = actualDP_bar * permLossFraction;
-  const recoveryFactor = 1 - permLossFraction;
-
-  steps.push({ label: "Orifice diameter d", equation: input.sizingMode === "sizeForFlow" ? "d (solved)" : "d (given)", value: d_mm.toFixed(3), unit: "mm", eqId: "RO-L-13" });
-  steps.push({ label: "Orifice area A", equation: "A = π·d²/4", value: A_mm2.toFixed(2), unit: "mm²", eqId: "RO-L-14" });
-  steps.push({ label: "Beta ratio β", equation: "β = d/D", value: beta.toFixed(4), unit: "—", eqId: "RO-L-15" });
-  steps.push({ label: "β⁴ correction", equation: `1 - β⁴ = ${betaCorr.toFixed(6)}`, value: betaCorr.toFixed(6), unit: "—", eqId: "RO-L-16" });
-  steps.push({ label: "Permanent ΔP fraction", equation: "α = √(1-β⁴) - β²", value: permLossFraction.toFixed(4), unit: "—", eqId: "RO-L-17" });
-  steps.push({ label: "Permanent pressure loss", equation: "ΔP_perm = ΔP × α", value: permanentPressureLoss.toFixed(4), unit: "bar", eqId: "RO-L-18" });
-  steps.push({ label: "Pressure recovery", equation: "ΔP_recov = ΔP × (1 - α)", value: (actualDP_bar * recoveryFactor).toFixed(4), unit: "bar", eqId: "RO-L-19" });
-
-  const Q_m3s = Q_m3h / 3600;
-  const orificeVelocity = A_m2 > 0 ? Q_m3s / A_m2 : 0;
-  const pipeVelocity = pipeArea_m2 > 0 ? Q_m3s / pipeArea_m2 : 0;
-  const flowCoefficient = Cd / Math.sqrt(betaCorr > 0 ? betaCorr : 1);
-
-  steps.push({ label: "Orifice velocity v_o", equation: "v_o = Q / A_orifice", value: orificeVelocity.toFixed(2), unit: "m/s", eqId: "RO-L-20" });
-  steps.push({ label: "Pipe velocity v_p", equation: "v_p = Q / A_pipe", value: pipeVelocity.toFixed(2), unit: "m/s", eqId: "RO-L-21" });
-  steps.push({ label: "Flow coefficient K", equation: "K = Cd / √(1-β⁴)", value: flowCoefficient.toFixed(4), unit: "—", eqId: "RO-L-22" });
-  steps.push({ label: "Cd effective", equation: estimateCd ? "Iteratively estimated (RHG)" : "User-defined", value: Cd.toFixed(4), unit: "—", eqId: "RO-L-25" });
-
-  let Re = 0;
-  let Re_pipe = 0;
-  if (mu_cP > 0 && d_m > 0) {
-    const mu_Pas = mu_cP * 1e-3;
-    Re = rho * orificeVelocity * d_m / mu_Pas;
-    Re_pipe = rho * pipeVelocity * D_m / mu_Pas;
-    steps.push({ label: "Reynolds (orifice)", equation: "Re_d = ρ·v_o·d / μ", value: Re.toFixed(0), unit: "—", eqId: "RO-L-23" });
-    steps.push({ label: "Reynolds (pipe)", equation: "Re_D = ρ·v_p·D / μ", value: Re_pipe.toFixed(0), unit: "—", eqId: "RO-L-24" });
-  }
-
-  if (Pv > 0) {
-    const sigma = actualDP_bar > 0 ? (input.upstreamPressure - Pv) / actualDP_bar : 0;
-    steps.push({ label: "Cavitation index σ", equation: "σ = (P₁ - Pv) / ΔP", value: sigma.toFixed(4), unit: "—", eqId: "RO-L-08" });
-
-    if (actualP2_bar <= Pv) {
-      flags.push("FLASHING_LIKELY");
-      warnings.push(`P₂ (${actualP2_bar.toFixed(2)} bar) ≤ Pv (${Pv.toFixed(2)} bar) — flashing likely, two-phase downstream`);
-      recommendations.push("Consider staged pressure reduction or relocate restriction point");
-    } else if (actualP2_bar < Pv * 1.3) {
-      flags.push("CAVITATION_RISK");
-      warnings.push(`P₂ close to Pv — cavitation risk (P₂=${actualP2_bar.toFixed(2)} bar, Pv=${Pv.toFixed(2)} bar)`);
-      recommendations.push("Evaluate anti-cavitation trim or multi-stage letdown");
-    }
-
-    if (Pv >= input.upstreamPressure) {
-      flags.push("TWO_PHASE_SUSPECTED");
-      warnings.push(`Pv (${Pv.toFixed(2)} bar) ≥ P₁ (${input.upstreamPressure.toFixed(2)} bar) — boiling upstream`);
-    }
-  }
-
-  const dpFraction = actualDP_bar > 0 && input.upstreamPressure > 0 ? actualDP_bar / input.upstreamPressure : 0;
-  if (dpFraction > 0.5) {
-    flags.push("HIGH_DP_FRACTION");
-    warnings.push(`ΔP/P₁ = ${(dpFraction * 100).toFixed(1)}% — very high pressure drop fraction`);
-    recommendations.push("Consider multi-stage restriction to reduce cavitation and noise risk");
-  }
-
-  const stdBore = roundToStandardBore(d_mm);
-  const stdBoreArea = (PI / 4) * Math.pow(stdBore / 1000, 2) * 1e6;
-  const stdBoreBeta = (stdBore / 1000) / D_m;
-  steps.push({ label: "Standard bore (rounded up)", equation: "", value: stdBore.toFixed(2), unit: "mm", eqId: "RO-L-26" });
-  steps.push({ label: "Standard bore β", equation: "β_std = d_std / D", value: stdBoreBeta.toFixed(4), unit: "—", eqId: "RO-L-27" });
-
-  if (beta < input.betaMin || beta > input.betaMax) {
-    flags.push("BETA_OUT_OF_RANGE");
-    warnings.push(`β = ${beta.toFixed(4)} outside recommended range [${input.betaMin}–${input.betaMax}]`);
-    if (beta > input.betaMax) recommendations.push("Consider using a larger pipe size to achieve a lower β ratio");
-    if (beta < input.betaMin) recommendations.push("Very small orifice — verify manufacturability and consider alternative restriction methods");
-  }
-
-  if (orificeVelocity > 50) {
-    flags.push("HIGH_ORIFICE_VELOCITY");
-    warnings.push(`Orifice velocity ${orificeVelocity.toFixed(1)} m/s is very high — erosion and cavitation risk`);
-    recommendations.push("Consider multi-stage restriction to reduce jet velocity");
-  }
-
-  const numStages = input.numStages > 1 ? input.numStages : 1;
-  const stages: StageResult[] = [];
-  if (numStages > 1 && input.sizingMode === "sizeForFlow") {
-    const totalDP = actualDP_bar;
-    const stageDP = totalDP / numStages;
-    for (let s = 0; s < numStages; s++) {
-      const sP1 = input.upstreamPressure - s * stageDP;
-      const sP2 = sP1 - stageDP;
-      const sDP_Pa = stageDP * 1e5;
-      const fn = (d: number) => liquidMassFlowForDiameter(d, D_mm, rho, sDP_Pa, Cd, basisMode) - W_kgh;
-      const sol = bisectionSolve(fn, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
-      const sBeta = (sol.root / 1000) / D_m;
-      const sArea = (PI / 4) * Math.pow(sol.root / 1000, 2);
-      const sVel = Q_m3s / sArea;
-      stages.push({
-        stageNumber: s + 1, upstreamPressure: sP1, downstreamPressure: sP2,
-        pressureDrop: stageDP, orificeDiameter: sol.root, betaRatio: sBeta, orificeVelocity: sVel,
-      });
-    }
-    steps.push({ label: "Multi-stage", equation: `${numStages} stages × ${stageDP.toFixed(3)} bar each`, value: totalDP.toFixed(3), unit: "bar total", eqId: "RO-L-28" });
-  }
-
-  if (dpFraction > 0.4 && numStages <= 1) {
-    flags.push("MULTI_STAGE_RECOMMENDED");
-    const suggestedStages = Math.ceil(dpFraction / 0.3);
-    recommendations.push(`Consider ${suggestedStages}-stage restriction (ΔP/P₁ = ${(dpFraction * 100).toFixed(0)}% exceeds 40%)`);
-  }
-
-  return {
-    phase: "liquid", sizingMode: input.sizingMode,
-    requiredDiameter: d_mm, orificeArea: A_mm2, betaRatio: beta,
-    pressureDrop: actualDP_bar, permanentPressureLoss, recoveryFactor,
-    orificeVelocity, pipeVelocity, flowCoefficient,
-    massFlow: W_kgh, volFlow: Q_m3h,
-    standardBore: stdBore, standardBoreArea: stdBoreArea, standardBoreBeta: stdBoreBeta,
-    pressureRatio: 0, criticalPressureRatio: 0, isChoked: false,
-    expansionFactor: 1, criticalFlowFunction: 0,
-    upstreamDensity: rho, rSpecific: 0,
-    reynoldsNumber: Re, reynoldsNumberPipe: Re_pipe, machNumber: 0,
-    sigma: Pv > 0 && actualDP_bar > 0 ? (input.upstreamPressure - Pv) / actualDP_bar : 0,
-    noiseLevelEstimate: 0, cdEffective: Cd,
-    numStages, stages,
-    calcSteps: steps, solverInfo, flags, warnings, recommendations,
-  };
-}
-
-function gasCriticalPressureRatio(k: number): number {
-  return Math.pow(2 / (k + 1), k / (k - 1));
-}
-
-function gasCriticalFlowFunction(k: number): number {
-  return Math.sqrt(k * Math.pow(2 / (k + 1), (k + 1) / (k - 1)));
-}
-
-function gasExpansionFactorExact(pressureRatio: number, k: number): number {
-  const r = pressureRatio;
-  if (r <= 0 || r >= 1) return 1;
-  const num = (k / (k - 1)) * (Math.pow(r, 2 / k) - Math.pow(r, (k + 1) / k));
-  const den = (1 - r);
-  if (den <= 0) return 1;
-  return Math.sqrt(num / den);
-}
-
-function gasExpansionFactorISA(beta: number, pressureRatio: number, k: number): number {
-  const r = pressureRatio;
-  return 1 - (0.41 + 0.35 * Math.pow(beta, 4)) * (1 - r) / k;
-}
-
-function gasMassFlowForDiameter(
-  d_mm: number, D_mm: number, P1_Pa: number, T_K: number,
-  MW: number, k: number, Z: number, Cd: number,
-  pressureRatio: number, isChoked: boolean, basisMode: BasisMode,
-): number {
-  const d_m = d_mm / 1000;
-  const D_m = D_mm / 1000;
-  const A = (PI / 4) * d_m * d_m;
-  const beta = d_m / D_m;
-  const betaCorr = basisMode === "inPipe" ? Math.sqrt(1 - Math.pow(beta, 4)) : 1;
-  const rho1 = (P1_Pa * MW) / (Z * R_UNIVERSAL * T_K);
-
-  if (isChoked) {
-    const fk = gasCriticalFlowFunction(k);
-    const W = Cd * A * P1_Pa * fk * Math.sqrt(MW / (Z * R_UNIVERSAL * T_K)) / betaCorr;
-    return W * 3600;
-  } else {
-    const Y = gasExpansionFactorISA(beta, pressureRatio, k);
-    const dP_Pa = P1_Pa * (1 - pressureRatio);
-    const W = Cd * A * Y * Math.sqrt(2 * rho1 * dP_Pa) / betaCorr;
-    return W * 3600;
-  }
-}
-
-function gasDPForDiameter(
-  d_mm: number, D_mm: number, P1_Pa: number, T_K: number,
-  MW: number, k: number, Z: number, Cd: number,
-  W_kgh: number, basisMode: BasisMode, maxIter: number, tol: number,
-): { dP_Pa: number; isChoked: boolean; solverInfo: SolverInfo } {
-  const xCrit = gasCriticalPressureRatio(k);
-  const W_choked = gasMassFlowForDiameter(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, xCrit, true, basisMode);
-  if (W_kgh >= W_choked) {
-    return {
-      dP_Pa: P1_Pa * (1 - xCrit),
-      isChoked: true,
-      solverInfo: { method: "Choked (direct)", iterations: 0, finalError: 0, tolerance: tol, converged: true, bracketLow: 0, bracketHigh: 0 },
-    };
-  }
-  const fn = (r: number) => gasMassFlowForDiameter(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, r, false, basisMode) - W_kgh;
-  const sol = bisectionSolve(fn, xCrit + 0.001, 0.9999, tol, maxIter);
-  return {
-    dP_Pa: P1_Pa * (1 - sol.root),
-    isChoked: false,
-    solverInfo: { method: "Bisection (r-space)", iterations: sol.iterations, finalError: sol.error, tolerance: tol, converged: sol.converged, bracketLow: sol.bracketLow, bracketHigh: sol.bracketHigh },
-  };
-}
-
-export function calculateROGas(input: ROServiceInput, project: ROProject): ROResult {
-  const steps: CalcStep[] = [];
-  const flags: ROFlag[] = [];
-  const warnings: string[] = [];
-  const recommendations: string[] = [];
-
-  const P1_bar = input.upstreamPressure;
-  const P2_bar = input.downstreamPressure;
-  const P1_Pa = P1_bar * 1e5;
-  const T_C = input.temperature;
-  const T_K = T_C + 273.15;
-  const k = input.gasProps.specificHeatRatio;
-  const Z = input.gasProps.compressibilityFactor;
-  const MW = input.gasProps.molecularWeight;
-  let Cd = input.orifice.cdValue;
-  const D_mm = input.pipeDiameter;
-  const D_m = D_mm / 1000;
-  const basisMode = input.orifice.basisMode;
-  const mu_cP = input.gasProps.viscosity;
-
-  if (input.sizingMode !== "predictDP") {
-    if (P2_bar >= P1_bar) throw new Error("Upstream pressure (P₁) must exceed downstream pressure (P₂)");
-  }
-  if (k <= 1) throw new Error("Specific heat ratio k must be > 1");
-  if (MW <= 0) throw new Error("Molecular weight must be positive");
-  if (Z <= 0) throw new Error("Compressibility factor Z must be positive");
-  if (Cd <= 0 || Cd > 1) throw new Error("Discharge coefficient must be between 0 and 1");
-  if (D_mm <= 0) throw new Error("Pipe diameter must be positive");
-
-  let W_kgh = input.massFlowRate;
-  if (W_kgh <= 0 && input.sizingMode === "sizeForFlow") throw new Error("Mass flow rate must be positive");
-  if (W_kgh <= 0 && input.sizingMode === "predictDP") throw new Error("Mass flow rate must be positive for ΔP prediction");
-
-  const R_specific = R_UNIVERSAL / MW;
-  const rho1 = (P1_Pa * MW) / (Z * R_UNIVERSAL * T_K);
-  const xCrit = gasCriticalPressureRatio(k);
-  const fk = gasCriticalFlowFunction(k);
-
-  steps.push({ label: "Upstream pressure P₁", equation: "", value: P1_bar.toFixed(3), unit: "bar(a)", eqId: "RO-G-01" });
-  steps.push({ label: "Downstream pressure P₂", equation: "", value: P2_bar.toFixed(3), unit: "bar(a)", eqId: "RO-G-02" });
-  steps.push({ label: "Temperature", equation: "T = T_C + 273.15", value: `${T_C.toFixed(1)} °C = ${T_K.toFixed(2)} K`, unit: "", eqId: "RO-G-03" });
-  steps.push({ label: "Molecular weight MW", equation: "", value: MW.toFixed(2), unit: "kg/kmol", eqId: "RO-G-04" });
-  steps.push({ label: "Specific heat ratio k", equation: "", value: k.toFixed(4), unit: "—", eqId: "RO-G-05" });
-  steps.push({ label: "Compressibility Z", equation: "", value: Z.toFixed(4), unit: "—", eqId: "RO-G-06" });
-  steps.push({ label: "R_specific", equation: "R_s = R_u / MW", value: R_specific.toFixed(3), unit: "J/(kg·K)", eqId: "RO-G-07" });
-  steps.push({ label: "Upstream density ρ₁", equation: "ρ₁ = P₁·MW / (Z·R_u·T)", value: rho1.toFixed(4), unit: "kg/m³", eqId: "RO-G-08" });
-  steps.push({ label: "Critical pressure ratio r_crit", equation: "r_crit = (2/(k+1))^(k/(k-1))", value: xCrit.toFixed(6), unit: "—", eqId: "RO-G-09" });
-  steps.push({ label: "Critical flow function f(k)", equation: "f(k) = √(k·(2/(k+1))^((k+1)/(k-1)))", value: fk.toFixed(6), unit: "—", eqId: "RO-G-10" });
-
-  if (input.orifice.cdMode === "estimated") {
-    flags.push("CD_ESTIMATED");
-    warnings.push("Cd is estimated — results carry higher uncertainty");
-  }
-
-  let d_mm: number;
-  let solverInfo: SolverInfo | null = null;
-  let actualDP_bar: number;
-  let isChoked: boolean;
-  let pressureRatio: number;
-
-  if (input.sizingMode === "sizeForFlow") {
-    const P2_Pa = P2_bar * 1e5;
-    pressureRatio = P2_Pa / P1_Pa;
-    isChoked = pressureRatio <= xCrit;
-    actualDP_bar = P1_bar - P2_bar;
-
-    const fn = (d: number) =>
-      gasMassFlowForDiameter(d, D_mm, P1_Pa, T_K, MW, k, Z, Cd, pressureRatio, isChoked, basisMode) - W_kgh;
-    const dMax = D_mm * 0.95;
-    const dMin = 0.5;
-    const solResult = bisectionSolve(fn, dMin, dMax, project.tolerance, project.maxIterations);
+    const fn = (d: number) => liquidMassFlow(d, D_mm, rho, dP_Pa, Cd, basisMode) - W_kgh;
+    const solResult = bisectionSolve(fn, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
     d_mm = solResult.root;
     solverInfo = {
       method: "Bisection", iterations: solResult.iterations, finalError: solResult.error,
@@ -692,188 +695,506 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
     };
     if (!solResult.converged) {
       flags.push("SOLVER_ISSUE");
-      warnings.push(`Solver did not converge after ${solResult.iterations} iterations`);
+      warnings.push(`Solver did not converge after ${solResult.iterations} iterations (error = ${solResult.error.toExponential(2)})`);
     }
-    steps.push({ label: "Pressure ratio r", equation: "r = P₂/P₁", value: pressureRatio.toFixed(6), unit: "—", eqId: "RO-G-11" });
-    steps.push({ label: "Flow regime", equation: isChoked ? "r ≤ r_crit → CHOKED" : "r > r_crit → Subcritical", value: isChoked ? "CHOKED (SONIC)" : "SUBCRITICAL", unit: "", eqId: "RO-G-12" });
-    steps.push({ label: "Solver target", equation: "Find d : W(d) = W_target", value: W_kgh.toFixed(2), unit: "kg/h", eqId: "RO-G-13" });
   } else if (input.sizingMode === "checkOrifice") {
     d_mm = input.orificeDiameter;
     if (d_mm <= 0) throw new Error("Orifice diameter must be positive in check mode");
+    if (estimateCd) {
+      const Re_D_est = rho * (Q_m3h / 3600 / (PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
+      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType);
+      const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
+      Cd = thick.Cd;
+      thicknessRegime = thick.regime;
+    }
+    W_kgh = liquidMassFlow(d_mm, D_mm, rho, dP_Pa, Cd, basisMode);
+    Q_m3h = W_kgh / rho;
+  } else {
+    // predictDP
+    d_mm = input.orificeDiameter;
+    if (d_mm <= 0) throw new Error("Orifice diameter must be positive in ΔP-prediction mode");
+    if (W_kgh <= 0) throw new Error("Flow rate must be positive in ΔP-prediction mode");
+    if (estimateCd) {
+      const Re_D_est = rho * (Q_m3h / 3600 / (PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
+      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType);
+      const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
+      Cd = thick.Cd;
+      thicknessRegime = thick.regime;
+    }
+    const predDP_Pa  = liquidDP(d_mm, D_mm, rho, W_kgh, Cd, basisMode);
+    const predDP_bar = predDP_Pa / 1e5;
+    steps.push({ label: "Predicted ΔP",  equation: "ΔP = W²·(1−β⁴) / (2ρ·Cd²·A²)", value: predDP_bar.toFixed(4), unit: "bar", eqId: "RO-L-11" });
+    steps.push({ label: "Predicted P₂",  equation: "P₂ = P₁ − ΔP", value: (input.upstreamPressure - predDP_bar).toFixed(4), unit: "bar(a)", eqId: "RO-L-12" });
+  }
+
+  const d_m   = d_mm / 1000;
+  const A_m2  = (PI / 4) * d_m * d_m;
+  const A_mm2 = A_m2 * 1e6;
+  const beta  = d_m / D_m;
+
+  const actualDP_bar = input.sizingMode === "predictDP"
+    ? liquidDP(d_mm, D_mm, rho, W_kgh, Cd, basisMode) / 1e5
+    : dP_bar;
+  const actualP2_bar = input.upstreamPressure - actualDP_bar;
+
+  // Permanent pressure loss — ISO 5167-2 Annex D
+  const permFraction  = permanentPressureLossFraction(beta, Cd);
+  const permLoss_bar  = actualDP_bar * permFraction;
+  const recoveryFac   = 1 - permFraction;
+
+  // Velocities
+  const Q_m3s         = Q_m3h / 3600;
+  const pipeArea_m2   = (PI / 4) * D_m * D_m;
+  const orificeVel    = A_m2 > 0  ? Q_m3s / A_m2  : 0;
+  const pipeVel       = pipeArea_m2 > 0 ? Q_m3s / pipeArea_m2 : 0;
+  const flowCoeff     = Cd / Math.sqrt(Math.max(1 - Math.pow(beta, 4), 1e-9));
+
+  // Reynolds numbers
+  let Re = 0; let Re_pipe = 0;
+  if (mu_cP > 0 && d_m > 0) {
+    const mu_Pas = mu_cP * 1e-3;
+    Re       = rho * orificeVel * d_m / mu_Pas;
+    Re_pipe  = rho * pipeVel   * D_m / mu_Pas;
+  }
+
+  steps.push({ label: "Cd effective",           equation: estimateCd ? `ISO 5167-2 RHG (${thicknessRegime})` : `user-defined (${thicknessRegime})`, value: Cd.toFixed(4), unit: "—", eqId: "RO-L-07" });
+  steps.push({ label: "Velocity approach E",     equation: "E = 1/√(1−β⁴)", value: (1/Math.sqrt(Math.max(1-Math.pow(beta,4),1e-9))).toFixed(4), unit: "—", eqId: "RO-L-07b" });
+  steps.push({ label: "d orifice (calculated)",  equation: input.sizingMode === "sizeForFlow" ? "W = Cd·E·A·√(2ρΔP) → d" : "given", value: d_mm.toFixed(3), unit: "mm", eqId: "RO-L-08" });
+  steps.push({ label: "A orifice",               equation: "A = π·d²/4", value: A_mm2.toFixed(2), unit: "mm²", eqId: "RO-L-09" });
+  steps.push({ label: "β = d/D",                 equation: "β = d/D", value: beta.toFixed(4), unit: "—", eqId: "RO-L-10" });
+  steps.push({ label: "ΔP_perm fraction (ISO)",  equation: "(√(1−β⁴Cd²)−Cd·β²) / (√(1−β⁴Cd²)+Cd·β²)", value: permFraction.toFixed(4), unit: "—", eqId: "RO-L-13" });
+  steps.push({ label: "ΔP_perm",                 equation: "ΔP_perm = ΔP × fraction", value: permLoss_bar.toFixed(4), unit: "bar", eqId: "RO-L-14" });
+  steps.push({ label: "Pressure recovery",       equation: "1 − permFraction", value: recoveryFac.toFixed(4), unit: "—", eqId: "RO-L-15" });
+  steps.push({ label: "Orifice velocity v_o",    equation: "v_o = Q/A_o", value: orificeVel.toFixed(2), unit: "m/s", eqId: "RO-L-16" });
+  steps.push({ label: "Pipe velocity v_p",       equation: "v_p = Q/A_p", value: pipeVel.toFixed(2), unit: "m/s", eqId: "RO-L-17" });
+  steps.push({ label: "Flow coefficient K",      equation: "K = Cd/√(1−β⁴) = Cd·E", value: flowCoeff.toFixed(4), unit: "—", eqId: "RO-L-18" });
+  if (Re > 0) {
+    steps.push({ label: "Re_d (orifice)",        equation: "ρ·v_o·d/μ", value: Re.toFixed(0), unit: "—", eqId: "RO-L-19" });
+    steps.push({ label: "Re_D (pipe)",           equation: "ρ·v_p·D/μ", value: Re_pipe.toFixed(0), unit: "—", eqId: "RO-L-20" });
+  }
+
+  // API 14E erosional velocity
+  const Ve = erosionalVelocity_SI(rho);
+  const Ve_ratio = orificeVel / Ve;
+
+  // Cavitation assessment (ISA-RP75.23 / Tullis method)
+  const sigma_i  = 2.7;  // incipient cavitation index for sharp orifice
+  const sigma_ch = 1.5;  // constant (choking) cavitation index
+  const sigma     = (actualDP_bar > 0 && input.upstreamPressure > Pv_bar)
+    ? (input.upstreamPressure - Pv_bar) / actualDP_bar
+    : 999;
+
+  if (Pv_bar > 0) {
+    steps.push({ label: "σ (cavitation index)", equation: "σ = (P₁−Pv)/ΔP", value: sigma < 999 ? sigma.toFixed(3) : "N/A", unit: "—", eqId: "RO-L-21" });
+    steps.push({ label: "σᵢ incipient (sharp)", equation: "σᵢ ≈ 2.7 (ISA-RP75.23)", value: sigma_i.toFixed(1), unit: "—", eqId: "RO-L-22" });
+
+    if (actualP2_bar <= Pv_bar) {
+      flags.push("FLASHING_LIKELY");
+      warnings.push(`FLASHING: P₂ = ${actualP2_bar.toFixed(2)} bar ≤ Pv = ${Pv_bar.toFixed(2)} bar. Liquid will flash to vapor downstream. Two-phase flow in outlet piping.`);
+      recommendations.push("Relocate orifice to higher-pressure section, or use multi-stage reduction to keep P₂ > 1.3×Pv");
+    } else if (sigma < sigma_ch) {
+      flags.push("CAVITATION_SEVERE");
+      warnings.push(`SEVERE CAVITATION: σ = ${sigma.toFixed(3)} < σch = ${sigma_ch.toFixed(1)} (ISA-RP75.23). Constant bubble collapse — erosion damage likely.`);
+      recommendations.push("Use multi-stage restriction to reduce per-stage ΔP and keep σ > 2.7");
+      recommendations.push("Specify hardened (stellite, tungsten carbide) orifice plate material");
+    } else if (sigma < sigma_i) {
+      flags.push("CAVITATION_INCIPIENT");
+      warnings.push(`INCIPIENT CAVITATION: σ = ${sigma.toFixed(3)} < σᵢ = ${sigma_i.toFixed(1)} (ISA-RP75.23). Cavitation bubbles forming in vena contracta.`);
+      recommendations.push("Monitor vibration and noise at commissioning. Consider anti-cavitation multi-stage restriction if σ approaches 1.5.");
+    }
+
+    if (Pv_bar >= input.upstreamPressure) {
+      flags.push("TWO_PHASE_SUSPECTED");
+      warnings.push(`Pv (${Pv_bar.toFixed(2)} bar) ≥ P₁ (${input.upstreamPressure.toFixed(2)} bar) — liquid may already be boiling upstream.`);
+    }
+  }
+
+  const dpFraction = actualDP_bar > 0 && input.upstreamPressure > 0 ? actualDP_bar / input.upstreamPressure : 0;
+  if (dpFraction > 0.5) {
+    flags.push("HIGH_DP_FRACTION");
+    warnings.push(`ΔP/P₁ = ${(dpFraction * 100).toFixed(1)}% — very high single-stage pressure drop. Cavitation and noise risks elevated.`);
+  }
+
+  if (beta < input.betaMin || beta > input.betaMax) {
+    flags.push("BETA_OUT_OF_RANGE");
+    warnings.push(`β = ${beta.toFixed(4)} outside recommended range [${input.betaMin.toFixed(2)} – ${input.betaMax.toFixed(2)}]`);
+    if (beta > input.betaMax) recommendations.push("Consider using a larger pipe size (increase D) to reduce β ratio");
+    if (beta < input.betaMin) recommendations.push("Very small orifice — verify manufacturability (min practical bore ≈ 3 mm). Consider raising β limit.");
+  }
+
+  if (orificeVel > Ve) {
+    flags.push("EROSIONAL_VELOCITY_EXCEEDED");
+    warnings.push(`Orifice velocity ${orificeVel.toFixed(1)} m/s EXCEEDS API 14E erosional limit ${Ve.toFixed(1)} m/s (C=100). Erosion of orifice plate and downstream pipe expected.`);
+    recommendations.push("Increase orifice diameter (or use multi-stage) to reduce jet velocity below API 14E erosional limit");
+  } else if (orificeVel > Ve * 0.75) {
+    flags.push("HIGH_ORIFICE_VELOCITY");
+    warnings.push(`Orifice velocity ${orificeVel.toFixed(1)} m/s approaching API 14E erosional limit ${Ve.toFixed(1)} m/s — use corrosion-resistant materials.`);
+  }
+
+  if (Re > 0 && Re < 5000) {
+    flags.push("LOW_REYNOLDS");
+    warnings.push(`Re_d = ${Re.toFixed(0)} < 5000 — Cd correlation valid range (Re ≥ 5000) not met. Results have higher uncertainty at laminar/transitional conditions.`);
+  }
+
+  if (thicknessRegime !== "thin plate") {
+    flags.push("THICK_ORIFICE");
+    warnings.push(`${thicknessRegime} — Cd corrected for plate thickness. Verify with vendor. Standard thin-plate orifice assumed in most references.`);
+  }
+
+  // Multi-stage
+  const numStages = Math.max(1, input.numStages || 1);
+  const stages: StageResult[] = [];
+  if (numStages > 1 && input.sizingMode === "sizeForFlow") {
+    const stagePs = computeStageP(input.upstreamPressure, actualP2_bar, numStages, input.stageDistribution);
+    for (const sp of stagePs) {
+      const sDP_Pa = (sp.P1 - sp.P2) * 1e5;
+      const fn_s = (d: number) => liquidMassFlow(d, D_mm, rho, sDP_Pa, Cd, basisMode) - W_kgh;
+      const sol_s = bisectionSolve(fn_s, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
+      const sBeta = (sol_s.root / 1000) / D_m;
+      const sArea = PI / 4 * Math.pow(sol_s.root / 1000, 2);
+      const sVel  = sArea > 0 ? Q_m3s / sArea : 0;
+      stages.push({
+        stageNumber: stagePs.indexOf(sp) + 1,
+        upstreamPressure: sp.P1, downstreamPressure: sp.P2,
+        pressureDrop: sp.P1 - sp.P2, orificeDiameter: sol_s.root,
+        betaRatio: sBeta, orificeVelocity: sVel,
+        pressureRatioDP: sp.P2 / sp.P1, isChoked: false,
+      });
+    }
+  }
+
+  if (dpFraction > 0.40 && numStages <= 1) {
+    flags.push("MULTI_STAGE_RECOMMENDED");
+    const suggestedN = Math.max(2, Math.ceil(dpFraction / 0.30));
+    recommendations.push(`Consider ${suggestedN}-stage restriction (ΔP/P₁ = ${(dpFraction * 100).toFixed(0)}% > 40%). Use geometric pressure distribution.`);
+  }
+
+  const stdBore     = roundToStandardBore(d_mm);
+  const stdBoreArea = (PI / 4) * Math.pow(stdBore / 1000, 2) * 1e6;
+  const stdBoreBeta = (stdBore / 1000) / D_m;
+
+  const straightPipeRecs = straightPipeRecommendations(beta);
+
+  return {
+    phase: "liquid", sizingMode: input.sizingMode,
+    requiredDiameter: d_mm, orificeArea: A_mm2, betaRatio: beta,
+    pressureDrop: actualDP_bar, permanentPressureLoss: permLoss_bar,
+    permanentPressureLossFraction: permFraction, recoveryFactor: recoveryFac,
+    orificeVelocity: orificeVel, pipeVelocity: pipeVel, flowCoefficient: flowCoeff,
+    massFlow: W_kgh, volFlow: Q_m3h,
+    standardBore: stdBore, standardBoreArea: stdBoreArea, standardBoreBeta: stdBoreBeta,
+    pressureRatio: 0, criticalPressureRatio: 0, isChoked: false,
+    expansionFactor: 1, criticalFlowFunction: 0,
+    upstreamDensity: rho, rSpecific: 0,
+    reynoldsNumber: Re, reynoldsNumberPipe: Re_pipe, machNumber: 0,
+    sigma, sigmaIncipient: sigma_i, noiseLevelEstimate: 0, cdEffective: Cd,
+    erosionalVelocity: Ve, erosionalVelocityRatio: Ve_ratio,
+    numStages, stages, straightPipeRecs,
+    calcSteps: steps, solverInfo, flags, warnings, recommendations,
+  };
+}
+
+// ─── Gas Calculation ──────────────────────────────────────────────────────────
+
+export function calculateROGas(input: ROServiceInput, project: ROProject): ROResult {
+  const steps:         CalcStep[] = [];
+  const flags:         ROFlag[]   = [];
+  const warnings:      string[]   = [];
+  const recommendations: string[] = [];
+
+  const P1_bar  = input.upstreamPressure;
+  const P2_bar  = input.downstreamPressure;
+  const P1_Pa   = P1_bar * 1e5;
+  const T_K     = input.temperature + 273.15;
+  const k       = input.gasProps.specificHeatRatio;
+  const Z       = input.gasProps.compressibilityFactor;
+  const MW      = input.gasProps.molecularWeight;
+  const mu_cP   = input.gasProps.viscosity;
+  const D_mm    = input.pipeDiameter;
+  const D_m     = D_mm / 1000;
+  const basisMode  = input.orifice.basisMode;
+  const e_mm    = input.orifice.thickness;
+  const estimateCd = input.orifice.cdMode === "estimated";
+  let Cd        = input.orifice.cdValue;
+
+  if (input.sizingMode !== "predictDP") {
+    if (P2_bar >= P1_bar) throw new Error("P1 must exceed P2");
+  }
+  if (k <= 1)   throw new Error("Specific heat ratio k must be > 1");
+  if (MW <= 0)  throw new Error("Molecular weight must be positive");
+  if (Z <= 0)   throw new Error("Compressibility factor Z must be positive");
+  if (Cd <= 0 || Cd > 1) throw new Error("Discharge coefficient must be in (0, 1]");
+  if (D_mm <= 0) throw new Error("Pipe diameter must be positive");
+
+  let W_kgh = input.massFlowRate;
+  if (W_kgh <= 0 && input.sizingMode === "sizeForFlow") throw new Error("Mass flow rate must be positive");
+  if (W_kgh <= 0 && input.sizingMode === "predictDP")   throw new Error("Mass flow rate must be positive for ΔP prediction");
+
+  const R_spec  = R_UNIVERSAL / MW;
+  const rho1    = (P1_Pa * MW) / (Z * R_UNIVERSAL * T_K);
+  const xCrit   = gasCriticalPressureRatio(k);
+  const fk      = gasCriticalFlowFunction(k);
+
+  steps.push({ label: "P₁ upstream",          equation: "", value: P1_bar.toFixed(3),  unit: "bar(a)", eqId: "RO-G-01" });
+  steps.push({ label: "P₂ downstream",         equation: "", value: P2_bar.toFixed(3),  unit: "bar(a)", eqId: "RO-G-02" });
+  steps.push({ label: "T upstream",            equation: "T = T_C + 273.15", value: `${input.temperature.toFixed(1)} °C = ${T_K.toFixed(2)} K`, unit: "", eqId: "RO-G-03" });
+  steps.push({ label: "MW",                    equation: "", value: MW.toFixed(3),       unit: "kg/kmol", eqId: "RO-G-04" });
+  steps.push({ label: "k = Cp/Cv",            equation: "", value: k.toFixed(4),        unit: "—", eqId: "RO-G-05" });
+  steps.push({ label: "Z",                     equation: "", value: Z.toFixed(4),        unit: "—", eqId: "RO-G-06" });
+  steps.push({ label: "R_specific",            equation: "R_s = Rᵤ / MW", value: R_spec.toFixed(3), unit: "J/(kg·K)", eqId: "RO-G-07" });
+  steps.push({ label: "ρ₁ upstream",           equation: "ρ₁ = P₁·MW / (Z·Rᵤ·T)", value: rho1.toFixed(4), unit: "kg/m³", eqId: "RO-G-08" });
+  steps.push({ label: "r_crit = (2/(k+1))^(k/(k-1))", equation: "r_crit = (2/(k+1))^(k/(k-1))", value: xCrit.toFixed(6), unit: "—", eqId: "RO-G-09" });
+  steps.push({ label: "C(k) critical flow fn", equation: "C(k) = √(k·(2/(k+1))^((k+1)/(k-1)))", value: fk.toFixed(6), unit: "—", eqId: "RO-G-10" });
+
+  if (estimateCd) { flags.push("CD_ESTIMATED"); }
+
+  let d_mm: number;
+  let solverInfo: SolverInfo | null = null;
+  let actualDP_bar: number;
+  let isChoked: boolean;
+  let pressureRatio: number;
+  let thicknessRegime = "thin plate";
+
+  if (input.sizingMode === "sizeForFlow") {
     const P2_Pa = P2_bar * 1e5;
     pressureRatio = P2_Pa / P1_Pa;
     isChoked = pressureRatio <= xCrit;
     actualDP_bar = P1_bar - P2_bar;
-    W_kgh = gasMassFlowForDiameter(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, pressureRatio, isChoked, basisMode);
-    steps.push({ label: "Pressure ratio r", equation: "r = P₂/P₁", value: pressureRatio.toFixed(6), unit: "—", eqId: "RO-G-11" });
-    steps.push({ label: "Flow regime", equation: isChoked ? "r ≤ r_crit → CHOKED" : "r > r_crit → Subcritical", value: isChoked ? "CHOKED (SONIC)" : "SUBCRITICAL", unit: "", eqId: "RO-G-12" });
-    steps.push({ label: "Check mode", equation: "Given d, P₁, P₂ → compute W", value: W_kgh.toFixed(2), unit: "kg/h", eqId: "RO-G-14" });
+
+    if (estimateCd) {
+      const getReAndBeta = (CdGuess: number) => {
+        const fn2 = (d: number) => gasMassFlow(d, D_mm, P1_Pa, T_K, MW, k, Z, CdGuess, pressureRatio, isChoked, basisMode) - W_kgh;
+        const sol = bisectionSolve(fn2, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
+        const d_m_g = sol.root / 1000;
+        const A_g   = PI / 4 * d_m_g * d_m_g;
+        const v_g   = rho1 > 0 && A_g > 0 ? (W_kgh / 3600) / (rho1 * A_g) : 0;
+        const Re_D_g = rho1 * (W_kgh / 3600 / (rho1 * PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
+        return { Re_D: Re_D_g, beta: d_m_g / D_m, d_mm: sol.root };
+      };
+      const result = iterateCd(Cd, getReAndBeta, D_mm, input.orifice.edgeType, e_mm, 10);
+      Cd = result.Cd;
+      thicknessRegime = result.thicknessRegime;
+    }
+
+    const fn = (d: number) => gasMassFlow(d, D_mm, P1_Pa, T_K, MW, k, Z, Cd, pressureRatio, isChoked, basisMode) - W_kgh;
+    const solResult = bisectionSolve(fn, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
+    d_mm = solResult.root;
+    solverInfo = {
+      method: "Bisection (diameter)", iterations: solResult.iterations, finalError: solResult.error,
+      tolerance: project.tolerance, converged: solResult.converged,
+      bracketLow: solResult.bracketLow, bracketHigh: solResult.bracketHigh,
+    };
+    if (!solResult.converged) { flags.push("SOLVER_ISSUE"); warnings.push(`Solver not converged — error = ${solResult.error.toExponential(2)}`); }
+
+    steps.push({ label: "r = P₂/P₁",         equation: "r = P₂/P₁", value: pressureRatio.toFixed(6), unit: "—", eqId: "RO-G-11" });
+    steps.push({ label: "r_crit",             equation: "—", value: xCrit.toFixed(6), unit: "—", eqId: "RO-G-11b" });
+    steps.push({ label: "Flow regime",        equation: isChoked ? "r ≤ r_crit → CHOKED" : "r > r_crit → Subcritical", value: isChoked ? "CHOKED (SONIC)" : "SUBCRITICAL", unit: "", eqId: "RO-G-12" });
+
+  } else if (input.sizingMode === "checkOrifice") {
+    d_mm = input.orificeDiameter;
+    if (d_mm <= 0) throw new Error("Orifice diameter must be positive in check mode");
+    pressureRatio = P2_bar / P1_bar;
+    isChoked = pressureRatio <= xCrit;
+    actualDP_bar = P1_bar - P2_bar;
+    if (estimateCd) {
+      const Re_D_est = rho1 * (W_kgh / 3600 / (rho1 * PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
+      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType);
+      const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
+      Cd = thick.Cd; thicknessRegime = thick.regime;
+    }
+    W_kgh = gasMassFlow(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, pressureRatio, isChoked, basisMode);
+    steps.push({ label: "Flow regime", equation: isChoked ? "r ≤ r_crit → CHOKED" : "Subcritical", value: isChoked ? "CHOKED" : "SUBCRITICAL", unit: "", eqId: "RO-G-12" });
+
   } else {
     d_mm = input.orificeDiameter;
-    if (d_mm <= 0) throw new Error("Orifice diameter must be positive in ΔP prediction mode");
-    const dpResult = gasDPForDiameter(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, W_kgh, basisMode, project.maxIterations, project.tolerance);
+    if (d_mm <= 0) throw new Error("Orifice diameter must be positive in ΔP-prediction mode");
+    if (estimateCd) {
+      const Re_D_est = rho1 * (W_kgh / 3600 / (rho1 * PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
+      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType);
+      const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
+      Cd = thick.Cd; thicknessRegime = thick.regime;
+    }
+    const dpResult = gasDP(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, W_kgh, basisMode, project.maxIterations, project.tolerance);
     actualDP_bar = dpResult.dP_Pa / 1e5;
-    isChoked = dpResult.isChoked;
+    isChoked     = dpResult.isChoked;
     pressureRatio = 1 - actualDP_bar / P1_bar;
-    solverInfo = dpResult.solverInfo;
-    steps.push({ label: "Predicted ΔP", equation: "Solve for r : W(d,r) = W_target", value: actualDP_bar.toFixed(4), unit: "bar", eqId: "RO-G-15" });
-    steps.push({ label: "Predicted P₂", equation: "P₂ = P₁ - ΔP", value: (P1_bar - actualDP_bar).toFixed(4), unit: "bar(a)", eqId: "RO-G-16" });
-    steps.push({ label: "Flow regime", equation: isChoked ? "CHOKED — max flow reached" : "Subcritical", value: isChoked ? "CHOKED" : "SUBCRITICAL", unit: "", eqId: "RO-G-12" });
+    solverInfo   = dpResult.solverInfo;
+    steps.push({ label: "Predicted ΔP", equation: "Solve r : W(d,r) = W_target", value: actualDP_bar.toFixed(4), unit: "bar", eqId: "RO-G-15" });
+    steps.push({ label: "Flow regime",  equation: isChoked ? "CHOKED" : "Subcritical", value: isChoked ? "CHOKED" : "SUBCRITICAL", unit: "", eqId: "RO-G-12" });
   }
 
+  const d_m    = d_mm / 1000;
+  const A_m2   = (PI / 4) * d_m * d_m;
+  const A_mm2  = A_m2 * 1e6;
+  const beta   = d_m / D_m;
+
+  const Y_actual  = isChoked ? 0 : gasExpansionFactorISO(beta, pressureRatio, k);
+  const pipeArea  = (PI / 4) * D_m * D_m;
+  const W_kgs     = W_kgh / 3600;
+  const orificeVel= A_m2 > 0 && rho1 > 0 ? W_kgs / (rho1 * A_m2) : 0;
+  const pipeVel   = pipeArea > 0 && rho1 > 0 ? W_kgs / (rho1 * pipeArea) : 0;
+  const sonicVel  = Math.sqrt(k * Z * R_spec * T_K);
+  const machNo    = orificeVel / sonicVel;
+  const permFrac  = permanentPressureLossFraction(beta, Cd);
+  const permLoss  = actualDP_bar * permFrac;
+  const recovFac  = 1 - permFrac;
+  const flowCoeff = Cd / Math.sqrt(Math.max(1 - Math.pow(beta, 4), 1e-9));
+
+  let Re = 0; let Re_pipe = 0;
+  if (mu_cP > 0 && d_m > 0) {
+    const mu_Pas = mu_cP * 1e-3;
+    Re       = rho1 * orificeVel * d_m / mu_Pas;
+    Re_pipe  = rho1 * pipeVel   * D_m / mu_Pas;
+  }
+
+  steps.push({ label: "Cd effective",             equation: estimateCd ? `ISO 5167-2 RHG (${thicknessRegime})` : "user-defined", value: Cd.toFixed(4), unit: "—", eqId: "RO-G-16" });
+  if (!isChoked) {
+    steps.push({ label: "Y (ISO 5167-2)",          equation: "Y = 1−(0.351+0.256β⁴+0.93β⁸)·(1−r^(1/k))", value: Y_actual.toFixed(6), unit: "—", eqId: "RO-G-17" });
+  }
+  steps.push({ label: "d orifice",                equation: input.sizingMode === "sizeForFlow" ? "solved" : "given", value: d_mm.toFixed(3), unit: "mm", eqId: "RO-G-18" });
+  steps.push({ label: "A orifice",                equation: "π·d²/4", value: A_mm2.toFixed(2), unit: "mm²", eqId: "RO-G-19" });
+  steps.push({ label: "β = d/D",                  equation: "β = d/D", value: beta.toFixed(4), unit: "—", eqId: "RO-G-20" });
+  steps.push({ label: "ΔP_perm fraction (ISO)",   equation: "(√(1−β⁴Cd²)−Cd·β²)/(√(1−β⁴Cd²)+Cd·β²)", value: permFrac.toFixed(4), unit: "—", eqId: "RO-G-21" });
+  steps.push({ label: "ΔP_perm",                  equation: "ΔP × permFraction", value: permLoss.toFixed(4), unit: "bar", eqId: "RO-G-22" });
+  steps.push({ label: "v_o orifice velocity",     equation: "W/(ρ₁·A_o)", value: orificeVel.toFixed(2), unit: "m/s", eqId: "RO-G-23" });
+  steps.push({ label: "v_p pipe velocity",        equation: "W/(ρ₁·A_p)", value: pipeVel.toFixed(2), unit: "m/s", eqId: "RO-G-24" });
+  steps.push({ label: "Speed of sound c",         equation: "c = √(k·Z·R_s·T)", value: sonicVel.toFixed(1), unit: "m/s", eqId: "RO-G-25" });
+  steps.push({ label: "Mach number Ma",           equation: "Ma = v_o / c", value: machNo.toFixed(4), unit: "—", eqId: "RO-G-26" });
+  if (Re > 0) {
+    steps.push({ label: "Re_d (orifice)",         equation: "ρ₁·v_o·d/μ", value: Re.toFixed(0), unit: "—", eqId: "RO-G-27" });
+    steps.push({ label: "Re_D (pipe)",            equation: "ρ₁·v_p·D/μ", value: Re_pipe.toFixed(0), unit: "—", eqId: "RO-G-28" });
+  }
+
+  // Choked flow checks
   if (isChoked) {
-    flags.push("CHOKED_FLOW");
-    flags.push("HIGH_NOISE_RISK");
-    warnings.push("Flow is CHOKED (critical) — downstream pressure does not affect flow rate");
-    warnings.push("Sonic flow at orifice — high noise and vibration expected");
-    recommendations.push("Consider multi-stage restriction with intermediate pipe sections");
-    recommendations.push("Evaluate noise levels per IEC 60534-8-3 or vendor acoustic analysis");
-    recommendations.push("Consider thicker orifice plate and downstream piping reinforcement");
+    flags.push("CHOKED_FLOW"); flags.push("HIGH_NOISE_RISK");
+    warnings.push(`Flow is CHOKED (sonic): P₂/P₁ = ${pressureRatio.toFixed(4)} ≤ r_crit = ${xCrit.toFixed(4)}. Downstream pressure does not affect flow. Y = 0.667 (min).`);
+    warnings.push(`Sonic gas jet — high aerodynamic noise expected. SPL > 100 dB(A) likely at orifice exit.`);
+    recommendations.push("Use multi-stage restriction to avoid sonic conditions per stage");
+    recommendations.push("Request vendor acoustic analysis per IEC 60534-8 / API RP 521 for noise and vibration");
+    recommendations.push("Downstream pipe wall thickness check for acoustic fatigue (ASME B31.3)");
   } else if (pressureRatio < xCrit * 1.1) {
     flags.push("NEAR_CHOKED");
-    warnings.push("Pressure ratio close to critical — small changes may cause choking");
+    warnings.push(`Near-choked: P₂/P₁ = ${pressureRatio.toFixed(4)} within 10% of r_crit = ${xCrit.toFixed(4)}. Small flow increase may cause choking.`);
+  }
+
+  if (machNo > 0.8 && !isChoked) {
+    flags.push("HIGH_MACH");
+    warnings.push(`Ma = ${machNo.toFixed(3)} at orifice — compressibility and noise significant. ISA expansion factor becomes less accurate above Ma = 0.6.`);
+  }
+
+  // API 14E erosional velocity
+  const Ve = erosionalVelocity_SI(rho1);
+  const Ve_ratio = orificeVel / Ve;
+  if (orificeVel > Ve) {
+    flags.push("EROSIONAL_VELOCITY_EXCEEDED");
+    warnings.push(`Orifice velocity ${orificeVel.toFixed(1)} m/s EXCEEDS API 14E erosional limit ${Ve.toFixed(1)} m/s (ρ=${rho1.toFixed(2)} kg/m³).`);
+    recommendations.push("Increase orifice diameter or split into multiple stages to reduce jet velocity");
+  } else if (orificeVel > Ve * 0.75) {
+    flags.push("HIGH_ORIFICE_VELOCITY");
+    warnings.push(`Orifice velocity ${orificeVel.toFixed(1)} m/s approaching API 14E erosional limit ${Ve.toFixed(1)} m/s.`);
   }
 
   const dpFraction = actualDP_bar > 0 && P1_bar > 0 ? actualDP_bar / P1_bar : 0;
   if (dpFraction > 0.5 && !flags.includes("HIGH_DP_FRACTION")) {
     flags.push("HIGH_DP_FRACTION");
-    warnings.push(`ΔP/P₁ = ${(dpFraction * 100).toFixed(1)}% — very high pressure drop fraction`);
+    warnings.push(`ΔP/P₁ = ${(dpFraction * 100).toFixed(1)}% — single-stage pressure reduction is very high.`);
   }
-
-  const d_m = d_mm / 1000;
-  const A_m2 = (PI / 4) * d_m * d_m;
-  const A_mm2 = A_m2 * 1e6;
-  const beta = d_m / D_m;
-  const Y_actual = isChoked ? 0 : gasExpansionFactorISA(beta, pressureRatio, k);
-  const Y_exact = isChoked ? 0 : gasExpansionFactorExact(pressureRatio, k);
-  const pipeArea_m2 = (PI / 4) * D_m * D_m;
-  const W_kgs = W_kgh / 3600;
-  const orificeVelocity = A_m2 > 0 && rho1 > 0 ? W_kgs / (rho1 * A_m2) : 0;
-  const pipeVelocity = pipeArea_m2 > 0 && rho1 > 0 ? W_kgs / (rho1 * pipeArea_m2) : 0;
-  const betaCorr = basisMode === "inPipe" ? (1 - Math.pow(beta, 4)) : 1;
-  const flowCoefficient = Cd / Math.sqrt(betaCorr > 0 ? betaCorr : 1);
-
-  const sonicVelocity = Math.sqrt(k * Z * R_specific * T_K);
-  const machNumber = orificeVelocity / sonicVelocity;
-
-  const permLossFraction = permanentPressureLossFraction(beta);
-  const permanentPressureLoss = actualDP_bar * permLossFraction;
-  const recoveryFactor = 1 - permLossFraction;
-
-  steps.push({ label: "Orifice diameter d", equation: input.sizingMode === "sizeForFlow" ? "d (solved)" : "d (given)", value: d_mm.toFixed(3), unit: "mm", eqId: "RO-G-17" });
-  steps.push({ label: "Orifice area A", equation: "A = π·d²/4", value: A_mm2.toFixed(2), unit: "mm²", eqId: "RO-G-18" });
-  steps.push({ label: "Beta ratio β", equation: "β = d/D", value: beta.toFixed(4), unit: "—", eqId: "RO-G-19" });
-  if (!isChoked) {
-    steps.push({ label: "Y (ISA approx.)", equation: "Y = 1 - (0.41+0.35β⁴)·(1-r)/k", value: Y_actual.toFixed(6), unit: "—", eqId: "RO-G-20a" });
-    steps.push({ label: "Y (exact isentropic)", equation: "Y = √[(k/(k-1))·(r^(2/k) - r^((k+1)/k))/(1-r)]", value: Y_exact.toFixed(6), unit: "—", eqId: "RO-G-20b" });
-  }
-  steps.push({ label: "Permanent ΔP fraction", equation: "α = √(1-β⁴) - β²", value: permLossFraction.toFixed(4), unit: "—", eqId: "RO-G-21" });
-  steps.push({ label: "Permanent pressure loss", equation: "ΔP_perm = ΔP × α", value: permanentPressureLoss.toFixed(4), unit: "bar", eqId: "RO-G-22" });
-  steps.push({ label: "Orifice velocity v_o", equation: "v_o = W / (ρ₁·A)", value: orificeVelocity.toFixed(2), unit: "m/s", eqId: "RO-G-23" });
-  steps.push({ label: "Pipe velocity v_p", equation: "v_p = W / (ρ₁·A_pipe)", value: pipeVelocity.toFixed(2), unit: "m/s", eqId: "RO-G-24" });
-  steps.push({ label: "Speed of sound c", equation: "c = √(k·Z·R_s·T)", value: sonicVelocity.toFixed(2), unit: "m/s", eqId: "RO-G-25" });
-  steps.push({ label: "Mach number at orifice", equation: "Ma = v_o / c", value: machNumber.toFixed(4), unit: "—", eqId: "RO-G-26" });
-
-  let Re = 0;
-  let Re_pipe = 0;
-  if (mu_cP > 0 && d_m > 0) {
-    const mu_Pas = mu_cP * 1e-3;
-    Re = rho1 * orificeVelocity * d_m / mu_Pas;
-    Re_pipe = rho1 * pipeVelocity * D_m / mu_Pas;
-    steps.push({ label: "Reynolds (orifice)", equation: "Re_d = ρ₁·v_o·d / μ", value: Re.toFixed(0), unit: "—", eqId: "RO-G-27" });
-    steps.push({ label: "Reynolds (pipe)", equation: "Re_D = ρ₁·v_p·D / μ", value: Re_pipe.toFixed(0), unit: "—", eqId: "RO-G-28" });
-  }
-
-  if (input.orifice.cdMode === "estimated" && Re > 0) {
-    const Cd_est = estimateCdFromReynolds(Re, beta, input.orifice.edgeType);
-    steps.push({ label: "Estimated Cd (RHG)", equation: "Cd = f(Re_d, β)", value: Cd_est.toFixed(4), unit: "—", eqId: "RO-G-29" });
-    Cd = Cd_est;
-  }
-
-  const noiseSPL = estimateNoiseLevel(W_kgs, P1_Pa, P1_Pa - actualDP_bar * 1e5, D_mm, d_mm, rho1);
-  if (noiseSPL > 0) {
-    steps.push({ label: "Noise estimate SPL", equation: "Simplified acoustic power model", value: noiseSPL.toFixed(1), unit: "dB(A)", eqId: "RO-G-30" });
-  }
-
-  if (machNumber > 1.0) {
-    flags.push("HIGH_MACH");
-    warnings.push(`Mach ${machNumber.toFixed(2)} > 1.0 at orifice — flow is sonic/supersonic`);
-  } else if (machNumber > 0.8) {
-    flags.push("HIGH_MACH");
-    warnings.push(`Mach ${machNumber.toFixed(2)} > 0.8 at orifice — approaching sonic conditions`);
-  }
-
-  const stdBore = roundToStandardBore(d_mm);
-  const stdBoreArea = (PI / 4) * Math.pow(stdBore / 1000, 2) * 1e6;
-  const stdBoreBeta = (stdBore / 1000) / D_m;
-  steps.push({ label: "Standard bore (rounded up)", equation: "", value: stdBore.toFixed(2), unit: "mm", eqId: "RO-G-31" });
-  steps.push({ label: "Standard bore β", equation: "β_std = d_std / D", value: stdBoreBeta.toFixed(4), unit: "—", eqId: "RO-G-32" });
 
   if (beta < input.betaMin || beta > input.betaMax) {
     flags.push("BETA_OUT_OF_RANGE");
-    warnings.push(`β = ${beta.toFixed(4)} outside recommended range [${input.betaMin}–${input.betaMax}]`);
-    if (beta > input.betaMax) recommendations.push("Consider using a larger pipe size to reduce β");
-    if (beta < input.betaMin) recommendations.push("Very small orifice — verify manufacturability");
+    warnings.push(`β = ${beta.toFixed(4)} outside range [${input.betaMin.toFixed(2)}–${input.betaMax.toFixed(2)}]`);
+    if (beta > input.betaMax) recommendations.push("Increase pipe size to reduce β");
+    if (beta < input.betaMin) recommendations.push("Very small bore — verify with manufacturer (minimum practical ≈ 3 mm)");
   }
 
-  if (orificeVelocity > 200) {
-    flags.push("HIGH_ORIFICE_VELOCITY");
-    warnings.push(`Orifice velocity ${orificeVelocity.toFixed(0)} m/s — high erosion risk`);
+  if (Re > 0 && Re < 5000) {
+    flags.push("LOW_REYNOLDS");
+    warnings.push(`Re_d = ${Re.toFixed(0)} < 5000 — gas flow may be non-turbulent. Cd correlation uncertainty increases significantly.`);
   }
 
-  const numStages = input.numStages > 1 ? input.numStages : 1;
+  if (thicknessRegime !== "thin plate") {
+    flags.push("THICK_ORIFICE");
+    warnings.push(`${thicknessRegime} — Cd corrected for plate thickness.`);
+  }
+
+  // Noise estimate
+  const noiseSPL = estimateNoiseSPL(W_kgs, P1_Pa, P1_Pa - actualDP_bar * 1e5, D_mm, d_mm, rho1);
+  if (noiseSPL > 0) {
+    steps.push({ label: "Noise SPL (screening)", equation: "Simplified acoustic power model", value: noiseSPL.toFixed(0), unit: "dB(A) at 1m", eqId: "RO-G-29" });
+    if (noiseSPL > 100) {
+      flags.push("HIGH_NOISE_RISK");
+      warnings.push(`Estimated SPL ≈ ${noiseSPL.toFixed(0)} dB(A) — very high noise level. Rigorous prediction required per API 521 / IEC 60534-8-3.`);
+    } else if (noiseSPL > 85) {
+      warnings.push(`Estimated SPL ≈ ${noiseSPL.toFixed(0)} dB(A) — noise may require mitigation. Verify with vendor acoustic prediction.`);
+    }
+  }
+
+  // Multi-stage
+  const numStages = Math.max(1, input.numStages || 1);
   const stages: StageResult[] = [];
   if (numStages > 1 && input.sizingMode === "sizeForFlow") {
-    const totalDP = actualDP_bar;
-    const stageDP = totalDP / numStages;
-    for (let s = 0; s < numStages; s++) {
-      const sP1_bar = P1_bar - s * stageDP;
-      const sP2_bar = sP1_bar - stageDP;
-      const sP1_Pa = sP1_bar * 1e5;
-      const sP2_Pa = sP2_bar * 1e5;
-      const sPressureRatio = sP2_Pa / sP1_Pa;
-      const sIsChoked = sPressureRatio <= xCrit;
-      const fn = (d: number) =>
-        gasMassFlowForDiameter(d, D_mm, sP1_Pa, T_K, MW, k, Z, Cd, sPressureRatio, sIsChoked, basisMode) - W_kgh;
-      const sol = bisectionSolve(fn, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
-      const sBeta = (sol.root / 1000) / D_m;
-      const sRho = (sP1_Pa * MW) / (Z * R_UNIVERSAL * T_K);
-      const sArea = (PI / 4) * Math.pow(sol.root / 1000, 2);
-      const sVel = sRho > 0 ? W_kgs / (sRho * sArea) : 0;
+    const stagePs = computeStageP(P1_bar, P1_bar - actualDP_bar, numStages, input.stageDistribution);
+    for (const sp of stagePs) {
+      const sP1_Pa    = sp.P1 * 1e5;
+      const sP2_Pa    = sp.P2 * 1e5;
+      const sPR       = sP2_Pa / sP1_Pa;
+      const sIsChoked = sPR <= xCrit;
+      const sRho1     = (sP1_Pa * MW) / (Z * R_UNIVERSAL * T_K);
+      const fn_s = (d: number) => gasMassFlow(d, D_mm, sP1_Pa, T_K, MW, k, Z, Cd, sPR, sIsChoked, basisMode) - W_kgh;
+      const sol_s = bisectionSolve(fn_s, 0.5, D_mm * 0.95, project.tolerance, project.maxIterations);
+      const sBeta = (sol_s.root / 1000) / D_m;
+      const sArea = PI / 4 * Math.pow(sol_s.root / 1000, 2);
+      const sVel  = sArea > 0 && sRho1 > 0 ? W_kgs / (sRho1 * sArea) : 0;
       stages.push({
-        stageNumber: s + 1, upstreamPressure: sP1_bar, downstreamPressure: sP2_bar,
-        pressureDrop: stageDP, orificeDiameter: sol.root, betaRatio: sBeta, orificeVelocity: sVel,
+        stageNumber: stagePs.indexOf(sp) + 1,
+        upstreamPressure: sp.P1, downstreamPressure: sp.P2,
+        pressureDrop: sp.P1 - sp.P2, orificeDiameter: sol_s.root,
+        betaRatio: sBeta, orificeVelocity: sVel,
+        pressureRatioDP: sPR, isChoked: sIsChoked,
       });
     }
   }
 
-  if (dpFraction > 0.4 && numStages <= 1) {
+  if (dpFraction > 0.40 && numStages <= 1) {
     flags.push("MULTI_STAGE_RECOMMENDED");
-    const suggestedStages = Math.ceil(dpFraction / 0.3);
-    recommendations.push(`Consider ${suggestedStages}-stage restriction (ΔP/P₁ = ${(dpFraction * 100).toFixed(0)}% exceeds 40%)`);
+    const suggestedN = Math.max(2, Math.ceil(dpFraction / 0.30));
+    recommendations.push(`Consider ${suggestedN}-stage restriction (ΔP/P₁ = ${(dpFraction*100).toFixed(0)}% > 40%). Use geometric pressure distribution to avoid choking per stage.`);
   }
+
+  const stdBore     = roundToStandardBore(d_mm);
+  const stdBoreArea = (PI / 4) * Math.pow(stdBore / 1000, 2) * 1e6;
+  const stdBoreBeta = (stdBore / 1000) / D_m;
+
+  const straightPipeRecs = straightPipeRecommendations(beta);
 
   return {
     phase: "gas", sizingMode: input.sizingMode,
     requiredDiameter: d_mm, orificeArea: A_mm2, betaRatio: beta,
-    pressureDrop: actualDP_bar, permanentPressureLoss, recoveryFactor,
-    orificeVelocity, pipeVelocity, flowCoefficient,
+    pressureDrop: actualDP_bar, permanentPressureLoss: permLoss,
+    permanentPressureLossFraction: permFrac, recoveryFactor: recovFac,
+    orificeVelocity: orificeVel, pipeVelocity: pipeVel, flowCoefficient: flowCoeff,
     massFlow: W_kgh, volFlow: rho1 > 0 ? W_kgh / rho1 : 0,
     standardBore: stdBore, standardBoreArea: stdBoreArea, standardBoreBeta: stdBoreBeta,
     pressureRatio, criticalPressureRatio: xCrit, isChoked,
     expansionFactor: Y_actual, criticalFlowFunction: fk,
-    upstreamDensity: rho1, rSpecific: R_specific,
-    reynoldsNumber: Re, reynoldsNumberPipe: Re_pipe, machNumber,
-    sigma: 0, noiseLevelEstimate: noiseSPL, cdEffective: Cd,
-    numStages, stages,
+    upstreamDensity: rho1, rSpecific: R_spec,
+    reynoldsNumber: Re, reynoldsNumberPipe: Re_pipe, machNumber: machNo,
+    sigma: 0, sigmaIncipient: 0, noiseLevelEstimate: noiseSPL, cdEffective: Cd,
+    erosionalVelocity: Ve, erosionalVelocityRatio: Ve_ratio,
+    numStages, stages, straightPipeRecs,
     calcSteps: steps, solverInfo, flags, warnings, recommendations,
   };
 }
+
+// ─── Main Entry Point ─────────────────────────────────────────────────────────
 
 export function calculateRO(input: ROServiceInput, project: ROProject): ROResult {
   if (input.phase === "liquid") return calculateROLiquid(input, project);
   return calculateROGas(input, project);
 }
+
+// ─── Legacy Interfaces (backward compat) ─────────────────────────────────────
 
 export interface ROLiquidInput {
   flowRate: number; liquidDensity: number; upstreamPressure: number;
@@ -911,11 +1232,7 @@ export function calculateROLiquidLegacy(input: ROLiquidInput): ROLiquidResult {
     orifice: { ...DEFAULT_SERVICE.orifice, cdValue: input.dischargeCoefficient },
   };
   const r = calculateROLiquid(service, DEFAULT_PROJECT);
-  return {
-    requiredOrificeDiameter: r.requiredDiameter, orificeArea: r.orificeArea,
-    betaRatio: r.betaRatio, velocity: r.orificeVelocity, pipeVelocity: r.pipeVelocity,
-    pressureDrop: r.pressureDrop, flowCoefficient: r.flowCoefficient, warnings: r.warnings,
-  };
+  return { requiredOrificeDiameter: r.requiredDiameter, orificeArea: r.orificeArea, betaRatio: r.betaRatio, velocity: r.orificeVelocity, pipeVelocity: r.pipeVelocity, pressureDrop: r.pressureDrop, flowCoefficient: r.flowCoefficient, warnings: r.warnings };
 }
 
 export function calculateROGasLegacy(input: ROGasInput): ROGasResult {
@@ -930,13 +1247,10 @@ export function calculateROGasLegacy(input: ROGasInput): ROGasResult {
     orifice: { ...DEFAULT_SERVICE.orifice, cdValue: input.dischargeCoefficient },
   };
   const r = calculateROGas(service, DEFAULT_PROJECT);
-  return {
-    requiredOrificeDiameter: r.requiredDiameter, orificeArea: r.orificeArea,
-    betaRatio: r.betaRatio, pressureRatio: r.pressureRatio,
-    criticalPressureRatio: r.criticalPressureRatio, isChoked: r.isChoked,
-    velocity: r.orificeVelocity, warnings: r.warnings,
-  };
+  return { requiredOrificeDiameter: r.requiredDiameter, orificeArea: r.orificeArea, betaRatio: r.betaRatio, pressureRatio: r.pressureRatio, criticalPressureRatio: r.criticalPressureRatio, isChoked: r.isChoked, velocity: r.orificeVelocity, warnings: r.warnings };
 }
+
+// ─── Test Cases ───────────────────────────────────────────────────────────────
 
 export const RO_LIQUID_TEST_CASE: ROLiquidInput = {
   flowRate: 50, liquidDensity: 998.2, upstreamPressure: 10,
@@ -956,7 +1270,8 @@ export const RO_LIQUID_SERVICE_TEST: ROServiceInput = {
   phase: "liquid", sizingMode: "sizeForFlow",
   volFlowRate: 50, flowBasis: "volume",
   upstreamPressure: 10, downstreamPressure: 5,
-  liquidProps: { density: 998.2, viscosity: 1.0, vaporPressure: 2.34 },
+  liquidProps: { density: 998.2, viscosity: 1.0, vaporPressure: 0.023 },
+  stageDistribution: "geometric",
 };
 
 export const RO_GAS_SERVICE_TEST: ROServiceInput = {
@@ -965,36 +1280,47 @@ export const RO_GAS_SERVICE_TEST: ROServiceInput = {
   massFlowRate: 5000, flowBasis: "mass",
   upstreamPressure: 30, downstreamPressure: 10, temperature: 40,
   gasProps: { molecularWeight: 18.5, specificHeatRatio: 1.27, compressibilityFactor: 0.92, viscosity: 0.012 },
+  stageDistribution: "geometric",
 };
 
+// ─── Flag Metadata ────────────────────────────────────────────────────────────
+
 export const FLAG_LABELS: Record<ROFlag, string> = {
-  CHOKED_FLOW: "CHOKED FLOW (GAS)",
-  HIGH_NOISE_RISK: "HIGH NOISE RISK",
-  FLASHING_LIKELY: "FLASHING LIKELY (LIQUID)",
-  CAVITATION_RISK: "CAVITATION RISK",
-  TWO_PHASE_SUSPECTED: "TWO-PHASE SUSPECTED",
-  BETA_OUT_OF_RANGE: "β OUT OF RANGE",
-  CD_ESTIMATED: "Cd ESTIMATED",
-  HIGH_DP_FRACTION: "HIGH ΔP FRACTION",
-  SOLVER_ISSUE: "SOLVER ISSUE",
-  NEAR_CHOKED: "NEAR CHOKED",
-  HIGH_MACH: "HIGH MACH NUMBER",
-  HIGH_ORIFICE_VELOCITY: "HIGH ORIFICE VELOCITY",
-  MULTI_STAGE_RECOMMENDED: "MULTI-STAGE RECOMMENDED",
+  CHOKED_FLOW:               "CHOKED FLOW (SONIC GAS)",
+  HIGH_NOISE_RISK:           "HIGH NOISE RISK",
+  FLASHING_LIKELY:           "FLASHING LIKELY",
+  CAVITATION_INCIPIENT:      "INCIPIENT CAVITATION",
+  CAVITATION_SEVERE:         "SEVERE CAVITATION",
+  TWO_PHASE_SUSPECTED:       "TWO-PHASE SUSPECTED UPSTREAM",
+  BETA_OUT_OF_RANGE:         "β OUT OF RANGE",
+  CD_ESTIMATED:              "Cd ESTIMATED (ISO 5167-2 RHG)",
+  HIGH_DP_FRACTION:          "HIGH ΔP/P₁ RATIO",
+  SOLVER_ISSUE:              "SOLVER CONVERGENCE ISSUE",
+  NEAR_CHOKED:               "NEAR CHOKED CONDITIONS",
+  HIGH_MACH:                 "HIGH MACH NUMBER (> 0.8)",
+  HIGH_ORIFICE_VELOCITY:     "HIGH ORIFICE VELOCITY",
+  EROSIONAL_VELOCITY_EXCEEDED: "API 14E EROSIONAL VELOCITY EXCEEDED",
+  MULTI_STAGE_RECOMMENDED:   "MULTI-STAGE REDUCTION RECOMMENDED",
+  THICK_ORIFICE:             "THICK ORIFICE PLATE — Cd CORRECTED",
+  LOW_REYNOLDS:              "LOW REYNOLDS NUMBER (Re < 5000)",
 };
 
 export const FLAG_SEVERITY: Record<ROFlag, "critical" | "warning" | "info"> = {
-  CHOKED_FLOW: "critical",
-  HIGH_NOISE_RISK: "critical",
-  FLASHING_LIKELY: "critical",
-  CAVITATION_RISK: "warning",
-  TWO_PHASE_SUSPECTED: "critical",
-  BETA_OUT_OF_RANGE: "warning",
-  CD_ESTIMATED: "info",
-  HIGH_DP_FRACTION: "warning",
-  SOLVER_ISSUE: "critical",
-  NEAR_CHOKED: "info",
-  HIGH_MACH: "warning",
-  HIGH_ORIFICE_VELOCITY: "warning",
-  MULTI_STAGE_RECOMMENDED: "info",
+  CHOKED_FLOW:               "critical",
+  HIGH_NOISE_RISK:           "critical",
+  FLASHING_LIKELY:           "critical",
+  CAVITATION_INCIPIENT:      "warning",
+  CAVITATION_SEVERE:         "critical",
+  TWO_PHASE_SUSPECTED:       "critical",
+  BETA_OUT_OF_RANGE:         "warning",
+  CD_ESTIMATED:              "info",
+  HIGH_DP_FRACTION:          "warning",
+  SOLVER_ISSUE:              "critical",
+  NEAR_CHOKED:               "info",
+  HIGH_MACH:                 "warning",
+  HIGH_ORIFICE_VELOCITY:     "warning",
+  EROSIONAL_VELOCITY_EXCEEDED: "critical",
+  MULTI_STAGE_RECOMMENDED:   "info",
+  THICK_ORIFICE:             "info",
+  LOW_REYNOLDS:              "warning",
 };

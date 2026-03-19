@@ -199,25 +199,32 @@ export default function RestrictionOrificePage() {
       { label: "β Ratio", value: result.betaRatio, unit: "" },
       { label: "Total ΔP", value: convertFromSI("pressure", result.pressureDrop, unitSystem), unit: pU("pressure") },
       { label: "Permanent ΔP", value: convertFromSI("pressure", result.permanentPressureLoss, unitSystem), unit: pU("pressure") },
+      { label: "Perm ΔP Fraction (ISO 5167-2 Annex D)", value: result.permanentPressureLossFraction, unit: "" },
       { label: "Recovery Factor", value: result.recoveryFactor, unit: "" },
       { label: "Orifice Velocity", value: convertFromSI("velocity", result.orificeVelocity, unitSystem), unit: pU("velocity") },
+      { label: "API 14E Erosional Velocity Ve", value: convertFromSI("velocity", result.erosionalVelocity, unitSystem), unit: pU("velocity") },
+      { label: "v_o / Ve Ratio", value: result.erosionalVelocityRatio, unit: result.erosionalVelocityRatio > 1 ? "EXCEEDED" : "OK" },
       { label: "Pipe Velocity", value: convertFromSI("velocity", result.pipeVelocity, unitSystem), unit: pU("velocity") },
       { label: "Flow Coefficient K", value: result.flowCoefficient, unit: "" },
       { label: "Mass Flow", value: convertFromSI("flowMass", result.massFlow, unitSystem), unit: pU("flowMass") },
       ...(result.phase === "gas" ? [
         { label: "P2/P1", value: result.pressureRatio, unit: "" },
-        { label: "Critical Pressure Ratio", value: result.criticalPressureRatio, unit: "" },
-        { label: "Flow Regime", value: result.isChoked ? "CHOKED" : "Subcritical", unit: "" },
-        { label: "Upstream Density", value: result.upstreamDensity, unit: "kg/m³" },
-        { label: "Mach Number", value: result.machNumber, unit: "" },
+        { label: "Critical Pressure Ratio r_crit", value: result.criticalPressureRatio, unit: "" },
+        { label: "Flow Regime", value: result.isChoked ? "CHOKED (SONIC)" : "Subcritical", unit: "" },
+        { label: "Upstream Density ρ₁", value: result.upstreamDensity, unit: "kg/m³" },
+        { label: "Mach Number at Orifice", value: result.machNumber, unit: "" },
         ...(result.isChoked
-          ? [{ label: "f(k) Critical Flow Function", value: result.criticalFlowFunction, unit: "" }]
-          : [{ label: "Y Expansion Factor", value: result.expansionFactor, unit: "" }]),
-        ...(result.noiseLevelEstimate > 0 ? [{ label: "Noise Level (est.)", value: result.noiseLevelEstimate, unit: "dB(A)" }] : []),
+          ? [{ label: "C(k) Critical Flow Function", value: result.criticalFlowFunction, unit: "" }]
+          : [{ label: "Y Expansion Factor (ISO 5167-2)", value: result.expansionFactor, unit: "" }]),
+        ...(result.noiseLevelEstimate > 0 ? [{ label: "Noise SPL (screening)", value: result.noiseLevelEstimate, unit: "dB(A) at 1m" }] : []),
       ] : []),
-      ...(result.reynoldsNumber > 0 ? [{ label: "Reynolds (orifice)", value: result.reynoldsNumber, unit: "" }] : []),
-      ...(result.reynoldsNumberPipe > 0 ? [{ label: "Reynolds (pipe)", value: result.reynoldsNumberPipe, unit: "" }] : []),
-      ...(result.phase === "liquid" && result.sigma > 0 ? [{ label: "Cavitation Index σ", value: result.sigma, unit: "" }] : []),
+      ...(result.reynoldsNumber > 0 ? [{ label: "Reynolds Re_d (orifice)", value: result.reynoldsNumber, unit: "" }] : []),
+      ...(result.reynoldsNumberPipe > 0 ? [{ label: "Reynolds Re_D (pipe)", value: result.reynoldsNumberPipe, unit: "" }] : []),
+      ...(result.phase === "liquid" && result.sigma < 999 ? [
+        { label: "Cavitation Index σ = (P₁−Pv)/ΔP", value: result.sigma, unit: "" },
+        { label: "σᵢ Incipient Threshold (ISA-RP75.23)", value: result.sigmaIncipient, unit: "" },
+        { label: "Cavitation Status", value: result.sigma < 1.5 ? "SEVERE" : result.sigma < result.sigmaIncipient ? "INCIPIENT" : "NONE", unit: "" },
+      ] : []),
     ];
 
     const calcSteps = result.calcSteps.map(s => ({
@@ -241,13 +248,15 @@ export default function RestrictionOrificePage() {
     }
     if (result.stages.length > 0) {
       additionalSections.push({
-        title: "Multi-Stage Breakdown",
+        title: `Multi-Stage Breakdown (${service.stageDistribution === "geometric" ? "Geometric P₂/P₁ distribution" : "Equal ΔP distribution"})`,
         items: result.stages.flatMap(s => [
           { label: `Stage ${s.stageNumber} P₁`, value: s.upstreamPressure, unit: "bar(a)" },
           { label: `Stage ${s.stageNumber} P₂`, value: s.downstreamPressure, unit: "bar(a)" },
+          { label: `Stage ${s.stageNumber} P₂/P₁`, value: s.pressureRatioDP ?? (s.downstreamPressure / s.upstreamPressure), unit: "" },
           { label: `Stage ${s.stageNumber} ΔP`, value: s.pressureDrop, unit: "bar" },
           { label: `Stage ${s.stageNumber} d`, value: s.orificeDiameter, unit: "mm" },
           { label: `Stage ${s.stageNumber} β`, value: s.betaRatio, unit: "" },
+          ...(result.phase === "gas" ? [{ label: `Stage ${s.stageNumber} Regime`, value: s.isChoked ? "CHOKED" : "Subcritical", unit: "" }] : []),
         ]),
       });
     }
@@ -267,28 +276,39 @@ export default function RestrictionOrificePage() {
       additionalSections,
       methodology: [
         result.phase === "liquid"
-          ? "Incompressible flow through sharp-edged restriction orifice"
-          : "Compressible flow through sharp-edged restriction orifice",
-        result.phase === "liquid"
-          ? "W = Cd·A·√(2·ρ·ΔP / (1-β⁴)) — orifice mass flow equation with β⁴ velocity-of-approach correction"
+          ? "Incompressible liquid flow through restriction orifice — ISO 5167-2:2003"
           : result.isChoked
-            ? "W = Cd·A·P₁·f(k)·√(MW/(Z·Ru·T)) / √(1-β⁴) — critical (choked) flow"
-            : "W = Cd·A·Y·√(2·ρ₁·ΔP) / √(1-β⁴) — subcritical compressible flow with ISA expansion factor",
-        "Permanent pressure loss: α = √(1-β⁴) - β² (ISO 5167)",
-        "Solver: bisection root-finding with bracket refinement",
+            ? "Compressible gas flow — CHOKED (sonic) conditions — ISO 5167-2:2003"
+            : "Compressible gas flow — subcritical conditions — ISO 5167-2:2003",
+        result.phase === "liquid"
+          ? "W = Cd · E · A · √(2·ρ·ΔP),  E = 1/√(1−β⁴) [ISO 5167-2 Eq.1, velocity-of-approach correction]"
+          : result.isChoked
+            ? "W = Cd · E · A · P₁ · C(k) · √(MW/(Z·Rᵤ·T)),  C(k) = √(k·(2/(k+1))^((k+1)/(k-1)))"
+            : "W = Cd · E · A · Y · √(2·ρ₁·ΔP),  Y = 1−(0.351+0.256β⁴+0.93β⁸)·(1−r^(1/k)) [ISO 5167-2]",
+        "Discharge coefficient: ISO 5167-2:2003 Reader-Harris/Gallagher (Eq.1) — corner taps, no L1/L2 tap correction",
+        "Permanent pressure loss: ΔP_perm/ΔP = (√(1−β⁴Cd²) − Cd·β²) / (√(1−β⁴Cd²) + Cd·β²) [ISO 5167-2:2003 Annex D]",
+        "Cavitation index: σ = (P₁−Pv)/ΔP vs σᵢ = 2.7 incipient, σch = 1.5 constant [ISA-RP75.23 / Tullis 1993]",
+        "Erosional velocity: Ve = 122/√ρ [m/s] — API RP 14E, C = 100 continuous service",
+        "Stage distribution: geometric (equal P₂/P₁ per stage) or equal ΔP per stage",
+        "Solver: bisection root-finding (bracketed, deterministic, tol=1e-6)",
       ],
       assumptions: [
-        `Discharge coefficient Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined" : "estimated via Reader-Harris/Gallagher"})`,
-        `Basis: ${service.orifice.basisMode === "inPipe" ? "In-pipe with β⁴ velocity-of-approach correction" : "Free discharge (no β correction)"}`,
-        result.phase === "gas" ? "Expansion factor Y per ISA/ISO 5167 approximation: Y = 1 - (0.41+0.35β⁴)·(1-r)/k" : "Incompressible (no expansion factor)",
-        "Permanent pressure loss per ISO 5167 orifice plate formula",
+        `Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined — not corrected for Re or β by engine" : "ISO 5167-2 RHG — iterative convergence on Re and d"})`,
+        `Basis: ${service.orifice.basisMode === "inPipe" ? "In-pipe flow — E = 1/√(1−β⁴) applied" : "Free discharge — no β correction (E = 1)"}`,
+        `Plate edge: ${service.orifice.edgeType === "sharp" ? "Sharp-edged (Cd ≈ 0.61 turbulent)" : "Rounded edge (Cd ≈ 0.97 — ISA 1932 nozzle type)"}`,
+        result.phase === "gas" ? `Gas treated as ideal with Z = ${service.gasProps.compressibilityFactor}` : "Liquid treated as incompressible (constant density)",
+        "All pressures are absolute (bar(a))",
+        "Standard bore rounded up to nearest metric drill size",
+        "Noise estimate is a screening tool only — not certified for acoustic design",
       ],
       references: [
-        "ISO 5167: Measurement of fluid flow by means of pressure differential devices",
-        "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
-        "API 520 Part I: Sizing of pressure-relieving devices (critical flow reference)",
-        "Miller, R.W. Flow Measurement Engineering Handbook, 3rd Edition",
-        "Reader-Harris, M.J. Orifice Plates and Venturi Tubes (Springer)",
+        "ISO 5167-2:2003 — Measurement of fluid flow by means of pressure differential devices — Orifice plates",
+        "ISO 5167-1:2003 — General principles and requirements",
+        "API RP 14E:2007 — Design of Offshore Production Platform Piping Systems (erosional velocity)",
+        "ISA-RP75.23-1995 — Considerations for control valve cavitation",
+        "Crane Technical Paper 410 — Flow of Fluids Through Valves, Fittings, and Pipe",
+        "Miller, R.W. Flow Measurement Engineering Handbook, 3rd Ed. (McGraw-Hill)",
+        "Reader-Harris, M.J. Orifice Plates and Venturi Tubes (Springer, 2015)",
       ],
       warnings: [
         ...result.warnings,
@@ -564,13 +584,28 @@ export default function RestrictionOrificePage() {
                   <div><Label className="text-[10px] mb-1 block">Number of Stages</Label>
                     <NumericInput className="h-8 text-xs" value={service.numStages} min={1} max={10} onValueChange={v => updateService("numStages", Math.max(1, Math.min(10, Math.round(v) || 1)))} data-testid="input-num-stages" /></div>
                 </div>
+                {service.numStages > 1 && (
+                  <div className="mt-3">
+                    <Label className="text-[10px] mb-1 block">Stage Pressure Distribution</Label>
+                    <Select value={service.stageDistribution ?? "geometric"} onValueChange={v => updateService("stageDistribution", v as "equal_dp" | "geometric")}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-stage-dist"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="geometric">Geometric (equal P₂/P₁ per stage) — recommended</SelectItem>
+                        <SelectItem value="equal_dp">Equal ΔP per stage</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Geometric distribution: each stage sees the same P₂/P₁ ratio = (P₂_total/P₁)^(1/n). Prevents early stages from choking on gas service and equalises cavitation index on liquid service.
+                    </p>
+                  </div>
+                )}
               </CardContent></Card>
 
               <Card className="bg-muted/30"><CardContent className="p-3 text-[10px] text-muted-foreground space-y-1">
                 <p><strong>Size for flow:</strong> Given Q or W, P₁, P₂ → solver finds required orifice diameter d (bisection method).</p>
                 <p><strong>Check orifice:</strong> Given d, P₁, P₂ → computes achievable flow W and resulting conditions.</p>
                 <p><strong>Predict ΔP:</strong> Given d, W, P₁ → solver finds required ΔP (and P₂) for the specified flow through the orifice.</p>
-                <p>Permanent pressure loss computed per ISO 5167: α = √(1-β⁴) - β². Multi-stage equally divides total ΔP across N stages.</p>
+                <p>Permanent pressure loss per ISO 5167-2 Annex D: (√(1−β⁴Cd²) − Cd·β²) / (√(1−β⁴Cd²) + Cd·β²). Cd per Reader-Harris/Gallagher (ISO 5167-2:2003). Cavitation index σ = (P₁−Pv)/ΔP checked against σᵢ = 2.7 (ISA-RP75.23).</p>
               </CardContent></Card>
 
               {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">{error}</div>}
@@ -662,31 +697,37 @@ export default function RestrictionOrificePage() {
                       {[
                         { label: "Orifice Area", val: result.orificeArea.toFixed(2), unit: "mm²" },
                         { label: "β ratio", val: result.betaRatio.toFixed(4), unit: "—" },
+                        { label: "Std β (rounded bore)", val: result.standardBoreBeta.toFixed(4), unit: "—" },
                         { label: "Total ΔP", val: convertFromSI("pressure", result.pressureDrop, unitSystem).toFixed(3), unit: pU("pressure") },
                         { label: "Permanent ΔP", val: convertFromSI("pressure", result.permanentPressureLoss, unitSystem).toFixed(3), unit: pU("pressure") },
-                        { label: "Recovery", val: (result.recoveryFactor * 100).toFixed(1) + "%", unit: "" },
+                        { label: "Perm ΔP fraction (ISO)", val: (result.permanentPressureLossFraction * 100).toFixed(1) + "%", unit: "" },
+                        { label: "Recovery factor", val: (result.recoveryFactor * 100).toFixed(1) + "%", unit: "" },
                         { label: "Orifice velocity", val: convertFromSI("velocity", result.orificeVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
+                        { label: "API 14E Ve limit", val: convertFromSI("velocity", result.erosionalVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
+                        { label: "v / Ve ratio", val: result.erosionalVelocityRatio.toFixed(3), unit: result.erosionalVelocityRatio > 1 ? "⚠ EXCEEDED" : "✓ OK" },
                         { label: "Pipe velocity", val: convertFromSI("velocity", result.pipeVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
                         { label: "Flow coeff. K", val: result.flowCoefficient.toFixed(4), unit: "—" },
                         { label: "Cd effective", val: result.cdEffective.toFixed(4), unit: "—" },
                         { label: "Mass flow", val: convertFromSI("flowMass", result.massFlow, unitSystem).toFixed(2), unit: pU("flowMass") },
                         ...(result.phase === "gas" ? [
-                          { label: "P₂/P₁", val: result.pressureRatio.toFixed(6), unit: "—" },
-                          { label: "r_crit", val: result.criticalPressureRatio.toFixed(6), unit: "—" },
+                          { label: "P₂/P₁ actual", val: result.pressureRatio.toFixed(6), unit: "—" },
+                          { label: "r_crit = (2/(k+1))^(k/(k-1))", val: result.criticalPressureRatio.toFixed(6), unit: "—" },
                           { label: "ρ₁ upstream", val: result.upstreamDensity.toFixed(4), unit: "kg/m³" },
-                          { label: "Mach", val: result.machNumber.toFixed(4), unit: "—" },
+                          { label: "Mach number (orifice)", val: result.machNumber.toFixed(4), unit: "—" },
                           { label: "R_specific", val: result.rSpecific.toFixed(3), unit: "J/(kg·K)" },
-                          ...(result.isChoked ? [{ label: "f(k)", val: result.criticalFlowFunction.toFixed(6), unit: "—" }]
-                            : [{ label: "Y expansion", val: result.expansionFactor.toFixed(6), unit: "—" }]),
+                          ...(result.isChoked ? [{ label: "C(k) critical flow fn", val: result.criticalFlowFunction.toFixed(6), unit: "—" }]
+                            : [{ label: "Y expansion (ISO 5167)", val: result.expansionFactor.toFixed(6), unit: "—" }]),
+                          ...(result.noiseLevelEstimate > 0 ? [{ label: "Noise SPL (screening)", val: result.noiseLevelEstimate.toFixed(0), unit: "dB(A) @1m" }] : []),
                         ] : []),
                         ...(result.reynoldsNumber > 0 ? [
-                          { label: "Re (orifice)", val: result.reynoldsNumber.toFixed(0), unit: "—" },
+                          { label: "Re (orifice, d)", val: result.reynoldsNumber.toFixed(0), unit: "—" },
                         ] : []),
                         ...(result.reynoldsNumberPipe > 0 ? [
-                          { label: "Re (pipe)", val: result.reynoldsNumberPipe.toFixed(0), unit: "—" },
+                          { label: "Re (pipe, D)", val: result.reynoldsNumberPipe.toFixed(0), unit: "—" },
                         ] : []),
-                        ...(result.phase === "liquid" && result.sigma > 0 ? [
-                          { label: "Cavitation σ", val: result.sigma.toFixed(4), unit: "—" },
+                        ...(result.phase === "liquid" && result.sigma < 999 ? [
+                          { label: "Cavitation index σ", val: result.sigma.toFixed(3), unit: "—" },
+                          { label: "σᵢ incipient (ISA)", val: result.sigmaIncipient.toFixed(1), unit: result.sigma < result.sigmaIncipient ? "⚠ σ < σᵢ" : "✓ σ > σᵢ" },
                         ] : []),
                       ].map((item, i) => (
                         <div key={i} className="flex justify-between py-1.5 border-b border-muted/20">
@@ -725,7 +766,7 @@ export default function RestrictionOrificePage() {
                     <CardHeader className="pb-2">
                       <div className="flex items-center gap-2">
                         <Layers className="w-4 h-4 text-primary" />
-                        <h4 className="text-sm font-semibold">Multi-Stage Breakdown ({result.stages.length} stages)</h4>
+                        <h4 className="text-sm font-semibold">Multi-Stage Breakdown ({result.stages.length} stages — {service.stageDistribution === "geometric" ? "geometric P₂/P₁" : "equal ΔP"} distribution)</h4>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -735,26 +776,62 @@ export default function RestrictionOrificePage() {
                             <th className="text-left py-1.5 pr-2">Stage</th>
                             <th className="text-right py-1.5 px-2">P₁ (bar)</th>
                             <th className="text-right py-1.5 px-2">P₂ (bar)</th>
+                            <th className="text-right py-1.5 px-2">P₂/P₁</th>
                             <th className="text-right py-1.5 px-2">ΔP (bar)</th>
                             <th className="text-right py-1.5 px-2">d (mm)</th>
                             <th className="text-right py-1.5 px-2">β</th>
-                            <th className="text-right py-1.5 pl-2">v_o (m/s)</th>
+                            <th className="text-right py-1.5 px-2">v_o (m/s)</th>
+                            {result.phase === "gas" && <th className="text-right py-1.5 pl-2">Regime</th>}
                           </tr></thead>
                           <tbody>
                             {result.stages.map((s, i) => (
                               <tr key={i} className="border-b border-muted/20">
                                 <td className="py-1.5 pr-2 font-mono">{s.stageNumber}</td>
-                                <td className="text-right py-1.5 px-2 font-mono">{s.upstreamPressure.toFixed(2)}</td>
-                                <td className="text-right py-1.5 px-2 font-mono">{s.downstreamPressure.toFixed(2)}</td>
+                                <td className="text-right py-1.5 px-2 font-mono">{s.upstreamPressure.toFixed(3)}</td>
+                                <td className="text-right py-1.5 px-2 font-mono">{s.downstreamPressure.toFixed(3)}</td>
+                                <td className="text-right py-1.5 px-2 font-mono">{s.pressureRatioDP?.toFixed(4) ?? "—"}</td>
                                 <td className="text-right py-1.5 px-2 font-mono">{s.pressureDrop.toFixed(3)}</td>
                                 <td className="text-right py-1.5 px-2 font-mono">{s.orificeDiameter.toFixed(2)}</td>
                                 <td className="text-right py-1.5 px-2 font-mono">{s.betaRatio.toFixed(4)}</td>
-                                <td className="text-right py-1.5 pl-2 font-mono">{s.orificeVelocity.toFixed(1)}</td>
+                                <td className="text-right py-1.5 px-2 font-mono">{s.orificeVelocity.toFixed(1)}</td>
+                                {result.phase === "gas" && (
+                                  <td className={`text-right py-1.5 pl-2 font-mono text-[10px] ${s.isChoked ? "text-destructive" : "text-green-400"}`}>
+                                    {s.isChoked ? "CHOKED" : "Subcrit."}
+                                  </td>
+                                )}
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {result.straightPipeRecs && result.straightPipeRecs.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <h4 className="text-sm font-semibold">Upstream / Downstream Straight-Pipe Requirements</h4>
+                      <p className="text-[10px] text-muted-foreground">ISO 5167-2:2003 Table 3 (β ≈ {result.betaRatio.toFixed(2)} interpolated). For restriction orifice service — informational best practice.</p>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <table className="w-full text-xs" data-testid="table-pipe-recs">
+                        <thead><tr className="border-b">
+                          <th className="text-left py-1.5 pr-2">Upstream Fitting</th>
+                          <th className="text-right py-1.5 px-2">Min Upstream L/D</th>
+                          <th className="text-right py-1.5 pl-2">Min Downstream L/D</th>
+                        </tr></thead>
+                        <tbody>
+                          {result.straightPipeRecs.map((r, i) => (
+                            <tr key={i} className="border-b border-muted/20">
+                              <td className="py-1.5 pr-2 text-muted-foreground">{r.fitting}</td>
+                              <td className="text-right py-1.5 px-2 font-mono">{r.upstreamLD}D ({(r.upstreamLD * service.pipeDiameter / 1000).toFixed(2)} m)</td>
+                              <td className="text-right py-1.5 pl-2 font-mono">{r.downstreamLD}D ({(r.downstreamLD * service.pipeDiameter / 1000).toFixed(2)} m)</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="text-[10px] text-muted-foreground mt-2">Note: For pressure-drop service (not metering), minimum upstream L/D ≥ 5D is generally acceptable. Values shown are conservative ISO 5167 metering-grade requirements.</p>
                     </CardContent>
                   </Card>
                 )}
@@ -834,25 +911,29 @@ export default function RestrictionOrificePage() {
 
                 <AssumptionsPanel
                   assumptions={[
-                    `${result.phase === "liquid" ? "Incompressible" : "Compressible"} flow through ${service.orifice.edgeType}-edged restriction orifice`,
+                    `${result.phase === "liquid" ? "Incompressible" : "Compressible"} flow through ${service.orifice.edgeType}-edged restriction orifice (ISO 5167-2:2003)`,
                     result.phase === "liquid"
-                      ? "W = Cd·A·√(2·ρ·ΔP / (1-β⁴)) — orifice mass flow with velocity-of-approach correction"
+                      ? "W = Cd · E · A · √(2·ρ·ΔP), E = 1/√(1−β⁴) — velocity-of-approach factor [ISO 5167-2 Eq. 1]"
                       : result.isChoked
-                        ? "W = Cd·A·P₁·f(k)·√(MW/(Z·Ru·T)) / √(1-β⁴) — critical (choked) flow"
-                        : "W = Cd·A·Y·√(2·ρ₁·ΔP) / √(1-β⁴) — subcritical compressible flow",
-                    `Discharge coefficient Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined" : "estimated via Reader-Harris/Gallagher correlation"})`,
-                    `Basis: ${service.orifice.basisMode === "inPipe" ? "In-pipe with β⁴ velocity-of-approach correction" : "Free discharge (no β correction)"}`,
-                    result.phase === "gas" ? "Expansion factor Y per ISA/ISO 5167: Y = 1 - (0.41+0.35β⁴)·(1-r)/k" : "Incompressible — no expansion factor applied",
-                    "Permanent pressure loss: α = √(1-β⁴) - β² (ISO 5167, Table A.1)",
-                    `Standard bore rounded to nearest ${result.requiredDiameter <= 10 ? "0.25" : result.requiredDiameter <= 50 ? "0.5" : "1.0"} mm increment`,
-                    "Solver: bisection root-finding with 40-step bracket refinement fallback",
+                        ? "W = Cd · E · A · P₁ · C(k) · √(MW/(Z·Rᵤ·T)), C(k) = √(k·(2/(k+1))^((k+1)/(k-1))) — critical (choked) flow"
+                        : "W = Cd · E · A · Y · √(2·ρ₁·ΔP), Y = 1−(0.351+0.256β⁴+0.93β⁸)·(1−r^(1/k)) — ISO 5167-2 expansion factor",
+                    `Discharge coefficient Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined" : "ISO 5167-2:2003 Reader-Harris/Gallagher correlation — validated for β ∈ [0.1,0.75], Re_D ≥ 5000"})`,
+                    `Basis mode: ${service.orifice.basisMode === "inPipe" ? "In-pipe (β⁴ velocity-of-approach correction applied)" : "Free discharge (no β correction — Cd acts on orifice area only)"}`,
+                    "Permanent pressure loss: ΔP_perm/ΔP = (√(1−β⁴Cd²) − Cd·β²) / (√(1−β⁴Cd²) + Cd·β²) [ISO 5167-2:2003 Annex D]",
+                    `Cavitation (liquid): σ = (P₁−Pv)/ΔP. Incipient threshold σᵢ = 2.7; constant cavitation σch = 1.5 [ISA-RP75.23 / Tullis 1993]`,
+                    "Erosional velocity: Ve = 122/√ρ [m/s] per API RP 14E §2.4, C = 100 (continuous service)",
+                    `Plate thickness: ${service.orifice.thickness > 0 ? `e = ${service.orifice.thickness} mm, e/d = ${result.requiredDiameter > 0 ? (service.orifice.thickness / result.requiredDiameter).toFixed(3) : "N/A"} — correction applied per Lienhard/ISO 5167 commentary` : "Plate thickness not specified — thin plate assumed (e/d ≤ 0.5)"}`,
+                    `Standard bore: ${result.standardBore.toFixed(2)} mm (rounded up to next standard drill size — metric series)`,
+                    "Solver: bisection root-finding (bracketed, deterministic) with 60-step initial bracket search",
                   ]}
                   references={[
-                    "ISO 5167-1/2: Measurement of fluid flow — pressure differential devices (orifice plates)",
-                    "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
-                    "API 520 Part I: Sizing of pressure-relieving devices (critical flow functions)",
-                    "Miller, R.W. Flow Measurement Engineering Handbook, 3rd Edition",
-                    "Reader-Harris, M.J. Orifice Plates and Venturi Tubes (Springer, 2015)",
+                    "ISO 5167-2:2003 — Measurement of fluid flow by means of pressure differential devices — Orifice plates",
+                    "ISO 5167-1:2003 — General principles and requirements",
+                    "API RP 14E:2007 — Design of Offshore Production Platform Piping Systems (erosional velocity §2.4)",
+                    "ISA-RP75.23-1995 — Considerations for the application of control valve body styles (cavitation index)",
+                    "Crane TP-410 — Flow of Fluids Through Valves, Fittings, and Pipe",
+                    "Miller, R.W. Flow Measurement Engineering Handbook, 3rd Edition (McGraw-Hill)",
+                    "Reader-Harris, M.J. Orifice Plates and Venturi Tubes (Springer, 2015) — RHG correlation",
                     "IEC 60534-8-3: Noise considerations (for gas noise estimates)",
                   ]}
                 />
@@ -901,17 +982,24 @@ export default function RestrictionOrificePage() {
                   <CardHeader className="pb-2"><h4 className="text-sm font-semibold">Next Steps Checklist</h4></CardHeader>
                   <CardContent className="pt-0 space-y-2 text-xs text-muted-foreground">
                     {[
-                      "Confirm fluid properties against NIST/GPSA/vendor data at actual conditions",
-                      "Verify pipe schedule and ID against isometric drawings",
-                      "Evaluate noise levels — especially for gas service at high ΔP",
-                      "Check orifice plate mechanical design (thickness, material, gasket compatibility)",
-                      "Review downstream piping for erosion and vibration",
-                      result.phase === "liquid" && service.liquidProps.vaporPressure <= 0 ? "Provide vapor pressure Pv for cavitation screening" : null,
-                      result.isChoked ? "Acoustic analysis recommended for choked flow conditions" : null,
-                      result.numStages > 1 ? "Verify inter-stage pipe spacing is sufficient for flow recovery" : null,
-                      "Confirm with vendor for final orifice bore tolerance and Cd",
-                      "Cross-check with detailed hydraulics model (PipeSim, Aspen Hydraulics, etc.)",
-                      result.standardBore > result.requiredDiameter ? `Standard bore ${result.standardBore.toFixed(2)} mm is larger than required ${result.requiredDiameter.toFixed(2)} mm — verify margin is acceptable` : null,
+                      "Confirm fluid properties against NIST / GPSA / vendor data at actual operating conditions",
+                      "Verify pipe schedule and internal diameter against P&ID and isometric drawings",
+                      result.phase === "liquid" && service.liquidProps.vaporPressure <= 0
+                        ? "⚠ Input vapor pressure Pv to enable cavitation screening (σ = (P₁−Pv)/ΔP)" : null,
+                      result.phase === "liquid" && result.sigma < 999 && result.sigma < 2.7
+                        ? `⚠ Cavitation: σ = ${result.sigma.toFixed(3)} < σᵢ = 2.7 — specify anti-cavitation material (stellite, WC) or multi-stage` : null,
+                      result.erosionalVelocityRatio > 0.75
+                        ? `⚠ Orifice velocity ${result.orificeVelocity.toFixed(1)} m/s — ${result.erosionalVelocityRatio > 1 ? "EXCEEDS" : "approaching"} API 14E erosional limit ${result.erosionalVelocity.toFixed(1)} m/s. Specify erosion-resistant material.` : null,
+                      result.phase === "gas" ? "Evaluate noise levels per IEC 60534-8-3 or vendor acoustic model — especially for choked or near-choked flow" : null,
+                      "Check orifice plate mechanical design — thickness per ASME B16.36 / ISO 5167, material per NACE MR0175 where applicable",
+                      "Review downstream piping for acoustic fatigue (ASME B31.3 Appendix X) if SPL > 140 dB in-pipe",
+                      result.isChoked ? "⚠ Choked flow: downstream pipe reinforcement and acoustic liner may be required" : null,
+                      result.numStages > 1 ? `Verify inter-stage pipe length — allow ≥ 10D between restriction stages for flow reconditioning` : null,
+                      "Confirm final orifice bore tolerance with fabricator (typical ±0.1 mm for machined orifice)",
+                      "Confirm Cd with vendor or request witnessed flow test if Cd accuracy > ±5% is required",
+                      "Cross-check with detailed hydraulics model (Aspen HYSYS, PipeSim, etc.) for long-term performance",
+                      result.standardBore > result.requiredDiameter
+                        ? `Standard bore ${result.standardBore.toFixed(2)} mm > required ${result.requiredDiameter.toFixed(2)} mm — verify that actual flow at standard bore is acceptable` : null,
                     ].filter(Boolean).map((item, i) => (
                       <div key={i} className="flex items-start gap-2 py-0.5">
                         <div className="w-4 h-4 rounded border border-muted-foreground/30 shrink-0 mt-0.5" />

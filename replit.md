@@ -77,6 +77,7 @@ Key architectural features and implementations include:
 - **Standardized Engineering Basis**: A dedicated reference page (`/engineering-basis`) details all industry standards and calculation methods used throughout the suite, organized by discipline.
 - **Safety Disclaimers**: Specific calculators (e.g., PRD/Flare Relief, Thermal Expansion Relief) feature prominent "Screening Tool Only" banners to emphasize their intended use.
 - **Custom Numeric Input**: A custom `NumericInput` component ensures decimal-safe number entry across all calculator pages, preventing common React controlled input issues.
+- **Restriction Orifice Engine (ISO 5167-2:2003)**: Full ISO 5167-2 Reader-Harris/Gallagher Cd (Eq.1, D-correction, Re-dependent terms), ISO 5167-2 Annex D permanent pressure loss fraction, ISO 5167-2 gas expansion factor Y, cavitation assessment (σ=(P₁−Pv)/ΔP vs σᵢ=2.7/σch=1.5 per ISA-RP75.23), API RP 14E erosional velocity (Ve=122/√ρ m/s), plate thickness Cd correction (thin/thick/short-tube regimes), geometric multi-stage pressure distribution (equal P₂/P₁ per stage), and straight-pipe L/D recommendations per ISO 5167-2 Table 3. Flags: CAVITATION_INCIPIENT, CAVITATION_SEVERE, EROSIONAL_VELOCITY_EXCEEDED, THICK_ORIFICE, LOW_REYNOLDS (17 total).
 
 ## External Dependencies
 - **React**: Frontend UI library.
