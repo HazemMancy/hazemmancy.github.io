@@ -36,6 +36,7 @@ const LineBlanksPage = lazy(() => import("@/pages/calculators/piping-components/
 const OletsPage = lazy(() => import("@/pages/calculators/piping-components/olets"));
 const PipeFlexibilityPage = lazy(() => import("@/pages/calculators/piping-components/pipe-flexibility"));
 const SafeSpansPage = lazy(() => import("@/pages/calculators/piping-components/safe-spans"));
+const PipeWallThicknessPage = lazy(() => import("@/pages/calculators/pipe-wall-thickness"));
 const EngineeringBasisPage = lazy(() => import("@/pages/engineering-basis"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
@@ -80,6 +81,7 @@ function Router() {
         <Route path="/calculators/piping-components/olets" component={OletsPage} />
         <Route path="/calculators/piping-components/pipe-flexibility" component={PipeFlexibilityPage} />
         <Route path="/calculators/piping-components/safe-spans" component={SafeSpansPage} />
+        <Route path="/calculators/pipe-wall-thickness" component={PipeWallThicknessPage} />
         <Route path="/engineering-basis" component={EngineeringBasisPage} />
         <Route component={NotFound} />
       </Switch>

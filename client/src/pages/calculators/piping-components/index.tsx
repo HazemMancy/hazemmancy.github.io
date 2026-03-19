@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ArrowLeft, Cylinder, CircleDot, Disc3, Settings2, Shield, Minus, GitBranch, TrendingUp, Ruler } from "lucide-react";
+import { ArrowRight, ArrowLeft, Cylinder, CircleDot, Disc3, Settings2, Shield, Minus, GitBranch, TrendingUp, Ruler, Layers } from "lucide-react";
 import { PIPING_CATEGORIES, CATEGORY_LABELS, type PipingCategory, type DatasetMeta } from "@/lib/engineering/piping/schemas";
 import { useState, useEffect } from "react";
 import { listDatasets } from "@/lib/engineering/piping/datasetManager";
@@ -110,6 +110,34 @@ export default function PipingComponentsIndex() {
                 </Link>
               );
             })}
+          </div>
+
+          <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Design Calculators</h2>
+          <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 mb-10">
+            <Link href="/calculators/pipe-wall-thickness">
+              <Card className="h-full hover-elevate cursor-pointer transition-all group" data-testid="card-piping-pipe-wall-thickness">
+                <CardContent className="p-4 md:p-5 flex flex-col h-full">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-md bg-primary/10 shrink-0">
+                      <Layers className="w-4 h-4 text-primary" />
+                    </div>
+                    <h3 className="font-semibold text-sm flex-1">Pipe Wall Thickness</h3>
+                    <Badge variant="outline" className="text-[10px] shrink-0 no-default-hover-elevate no-default-active-elevate">Calculator</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">
+                    Minimum wall thickness per ASME B31.3 §304.1.2 (t = P·D / 2(S·E·W + P·Y)), B31.4 §403.2.1, and B31.8 §841.11. Includes thick-wall Lamé check, temperature-interpolated allowable stress from Table A-1, B36.10M schedule selection, MAOP back-calculation, and hoop stress utilisation. API 5L grades for pipeline service.
+                  </p>
+                  <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-auto flex-wrap">
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">ASME B31.3</Badge>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">B31.4 / B31.8</Badge>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">ASME B36.10M</Badge>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           </div>
 
           <div className="text-center">
