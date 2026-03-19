@@ -180,9 +180,11 @@ export function PumpCurveChart({
 }: PumpCurveChartProps) {
   if (designFlowSI <= 0 || tdhSI <= 0) return null;
 
-  const shutoffHeadSI = tdhSI * 1.2;
+  // Shutoff head: 120% of TDH — typical per HI 9.6.3 / API 610 Fig. 6.1
+  const shutoffHeadSI = tdhSI * 1.20;
   const frictionHeadSI = Math.max(0, tdhSI - staticHeadSI);
-  const maxFlowSI = designFlowSI * 1.5;
+  // X-axis extends to runout (130% of design flow) with margin
+  const maxFlowSI = designFlowSI * 1.35;
   const effPeak = pumpEfficiency;
   const points = 80;
 
@@ -194,9 +196,14 @@ export function PumpCurveChart({
     const qSI = (maxFlowSI * i) / points;
     const qRatio = qSI / designFlowSI;
 
+    // H-Q parabola anchored at 3 points per HI typical centrifugal characteristic:
+    //   r=0   → H = 1.20 × TDH  (shutoff head)
+    //   r=1   → H = TDH          (design / operating point)
+    //   r=1.20 → H = 0.80 × TDH  (runout/end-of-curve)
+    // Fitted: H = TDH × (1.20 + 0.467·r − 0.667·r²)
     const pumpHeadSI = Math.max(
       0,
-      shutoffHeadSI * (1 - 0.6 * qRatio * qRatio - 0.4 * qRatio * qRatio * qRatio * (qRatio > 1 ? 1.5 : 1))
+      tdhSI * (1.20 + 0.467 * qRatio - 0.667 * qRatio * qRatio)
     );
 
     const systemHeadSI = staticHeadSI + frictionHeadSI * qRatio * qRatio;
@@ -514,10 +521,11 @@ export function PumpCurveChart({
         <div className="flex items-start gap-2.5 border-t border-muted/20 pt-3">
           <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
           <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="pump-curve-note">
-            Pump H-Q and efficiency curves are estimated based on typical centrifugal pump characteristics
-            with the design point as BEP. Preferred operating range shown at 70-120% of design flow.
-            Actual performance must be verified against manufacturer data.
-            Power is calculated as P = &#x3C1;gHQ/&#x3B7; at each flow point along the pump curve.
+            Illustrative curves based on typical centrifugal pump characteristics per HI 9.6.3 / API 610.
+            H-Q parabola: H = TDH × (1.20 + 0.467·r − 0.667·r²); anchors: shutoff = 1.20×TDH (r=0),
+            design = TDH (r=1), runout ≈ 0.80×TDH (r=1.20). Efficiency Gaussian centered at BEP.
+            Preferred operating range: 70–120% of design flow (HI 9.6.3 / API 610 Table 1).
+            Brake power: P = ρgHQ/η at each flow point. Verify against manufacturer certified curves.
           </p>
         </div>
       </CardContent>

@@ -117,7 +117,6 @@ function ReciprocatingTooltip({ active, payload, label, powerUnitLabel }: any) {
 
   const powerEntry = payload.find((p: any) => p.dataKey === "power");
   const volEffEntry = payload.find((p: any) => p.dataKey === "volEff");
-  const dischTempEntry = payload.find((p: any) => p.dataKey === "dischTemp");
 
   return (
     <div
@@ -160,15 +159,6 @@ function ReciprocatingTooltip({ active, payload, label, powerUnitLabel }: any) {
             <span style={{ color: "hsl(var(--muted-foreground))" }}>Vol. Efficiency</span>
             <span style={{ color: "hsl(var(--foreground))", fontWeight: 600, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>
               {volEffEntry.value.toFixed(1)} %
-            </span>
-          </div>
-        )}
-        {dischTempEntry && dischTempEntry.value != null && (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-            <div style={{ width: 10, height: 3, borderRadius: "1px", backgroundColor: COLORS.surge, flexShrink: 0 }} />
-            <span style={{ color: "hsl(var(--muted-foreground))" }}>Disch. Temp</span>
-            <span style={{ color: "hsl(var(--foreground))", fontWeight: 600, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>
-              {dischTempEntry.value.toFixed(0)} °C
             </span>
           </div>
         )}
@@ -224,20 +214,17 @@ function ReciprocatingLegend({ payload }: any) {
   const names: Record<string, string> = {
     power: "Shaft Power",
     volEff: "Volumetric Eff.",
-    dischTemp: "Discharge Temp.",
   };
+  const filtered = payload.filter((entry: any) => names[entry.dataKey]);
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: "24px", paddingTop: "12px", flexWrap: "wrap" }}>
-      {payload.map((entry: any) => {
+      {filtered.map((entry: any) => {
         const isDashed = entry.dataKey === "volEff";
-        const isDotted = entry.dataKey === "dischTemp";
         return (
           <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <svg width="18" height="10" viewBox="0 0 18 10" style={{ flexShrink: 0 }}>
               {isDashed ? (
                 <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2" strokeDasharray="4 2" />
-              ) : isDotted ? (
-                <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2" strokeDasharray="2 3" />
               ) : (
                 <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2.5" strokeLinecap="round" />
               )}
@@ -273,7 +260,8 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
 
   const surgeFlowSI = designFlowSI * 0.7;
   const minContFlowSI = designFlowSI * 0.75;
-  const maxFlowSI = designFlowSI * 1.6;
+  // X-axis extends to choke/stonewall boundary (approx. 1.30 × design) per API 617 §6.1
+  const maxFlowSI = designFlowSI * 1.40;
   const shutoffHeadKJkg = designHeadKJkg * 1.12;
   const points = 100;
 
@@ -288,16 +276,26 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
     const qSI = (maxFlowSI * i) / points;
     const qRatio = qSI / designFlowSI;
 
+    // H-Q parabola anchored at 3 points per API 617 typical centrifugal characteristic:
+    //   r=0    → H = 1.12 × H_design  (shutoff head)
+    //   r=1    → H = H_design          (design / operating point)
+    //   r=1.20 → H = 0.88 × H_design  (choke / stonewall boundary)
+    // Fitted: H = H_d × (1.12 + 0.28·r − 0.40·r²)
     const headKJkg = Math.max(
       0,
-      shutoffHeadKJkg * (1 - 0.4 * qRatio * qRatio - 0.48 * Math.pow(qRatio, 3) * (qRatio > 1.15 ? 1.4 : 1))
+      designHeadKJkg * (1.12 + 0.28 * qRatio - 0.40 * qRatio * qRatio)
     );
 
+    // Efficiency: Gaussian bell centred at BEP (r=1), peak = design efficiency
     const effSpread = 0.38;
     const eff = qSI > 0 ? designEff * Math.exp(-Math.pow((qRatio - 1) / effSpread, 2)) : 0;
 
-    const powerKW = qSI > 0 && eff > 1
-      ? massFlowKgs * headKJkg / (eff / 100)
+    // Shaft power: anchored to design shaft power at r=1.
+    // Formula: P(Q) = P_design × (H(Q)/H_d) × (η_d/η(Q))
+    // At design point: P = P_design × 1 × 1 = P_design ✓
+    // Physically: rising head or falling efficiency both increase power demand.
+    const powerKW = qSI > 0 && eff > 0 && headKJkg > 0
+      ? designPowerKW * (headKJkg / designHeadKJkg) * (designEff / eff)
       : 0;
 
     const isSurge = qSI < surgeFlowSI;
@@ -580,10 +578,11 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
       <div className="flex items-start gap-2.5 border-t border-muted/20 pt-3">
         <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
         <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="compressor-curve-note">
-          Curves are illustrative, based on typical centrifugal compressor characteristics
-          with the design point at best efficiency. The surge line is schematic (~70% of design flow).
-          Min. continuous flow shown at ~75% of design. Actual performance must be verified against
-          manufacturer data sheets per API 617.
+          Illustrative curves based on typical centrifugal compressor characteristics per API 617.
+          H-Q parabola: H = H_d × (1.12 + 0.28·r − 0.40·r²); anchors: shutoff = 1.12×H_d (r=0),
+          design = H_d (r=1), choke ≈ 0.88×H_d (r=1.20). Shaft power anchored at design point
+          P_d and scaled by (H/H_d)×(η_d/η). Surge line schematic at ~70% Q_d; min. continuous
+          flow at ~75% Q_d. Verify all data against manufacturer test sheets per API 617.
         </p>
       </div>
     </>
@@ -620,13 +619,10 @@ function ReciprocatingChart({ result, unitSystem }: CompressorCurveChartProps) {
     const powerKW = designPowerKW * powerRatio * (clampedVolEff / (volEff > 0 ? 100 * (1 - clearanceVol * (Math.pow(designRatio, 1 / k) - 1)) : 1));
     const clampedPower = Math.max(0, powerKW);
 
-    const T2_C = T1_K * Math.pow(r, (k - 1) / k) - 273.15;
-
     data.push({
       ratio: parseFloat(r.toFixed(2)),
       power: parseFloat(convertPower(clampedPower).toFixed(1)),
       volEff: parseFloat(clampedVolEff.toFixed(1)),
-      dischTemp: parseFloat(T2_C.toFixed(0)),
     });
   }
 
@@ -636,8 +632,6 @@ function ReciprocatingChart({ result, unitSystem }: CompressorCurveChartProps) {
   const designDischTemp = T1_K * Math.pow(designRatio, (k - 1) / k) - 273.15;
 
   const powerMax = Math.ceil(displayPower * 1.8 / 50) * 50 || 500;
-  const maxDischTemp = result.trace.intermediateValues["maxDischargeTemperature_C"]
-    || (result.compressorType === "reciprocating" ? 150 : 200);
 
   return (
     <>
@@ -737,17 +731,6 @@ function ReciprocatingChart({ result, unitSystem }: CompressorCurveChartProps) {
               name="volEff"
               activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.volEff }}
             />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="dischTemp"
-              stroke={COLORS.surge}
-              strokeWidth={1.5}
-              strokeDasharray="2 3"
-              dot={false}
-              name="dischTemp"
-              activeDot={{ r: 3, strokeWidth: 2, stroke: "#fff", fill: COLORS.surge }}
-            />
 
             <ReferenceLine
               yAxisId="left"
@@ -802,7 +785,7 @@ function ReciprocatingChart({ result, unitSystem }: CompressorCurveChartProps) {
         </div>
         <div className="relative w-7 shrink-0">
           <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap tracking-wide">
-            Vol. Eff. (%) / Disch. Temp (°C)
+            Vol. Eff. (%)
           </span>
         </div>
       </div>
@@ -825,17 +808,18 @@ function ReciprocatingChart({ result, unitSystem }: CompressorCurveChartProps) {
         <div className="text-muted-foreground">
           Stages: <span className="text-foreground font-semibold">{result.numberOfStages}</span>
           <span className="mx-1.5 text-muted-foreground/40">|</span>
-          T₂: <span className="text-foreground font-semibold">{designDischTemp.toFixed(0)} °C</span>
+          Disch. T₂: <span className="text-foreground font-semibold">{designDischTemp.toFixed(0)} °C</span>
         </div>
       </div>
 
       <div className="flex items-start gap-2.5 border-t border-muted/20 pt-3">
         <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
         <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="compressor-curve-note">
-          Curves are illustrative for reciprocating compressor characteristics. Volumetric efficiency
-          modeled with {(clearanceVol * 100).toFixed(0)}% clearance volume (η_v = 1 − c × (r^(1/k) − 1)).
-          Discharge temperature is adiabatic estimate. No surge phenomenon applies to PD compressors.
-          Actual performance must be verified against manufacturer data sheets per API 618.
+          Illustrative curves for reciprocating compressor characteristics.
+          Volumetric efficiency per clearance model: η_v = 1 − c × (r^(1/k) − 1), c = {(clearanceVol * 100).toFixed(0)}% assumed (API 618 §5.7.2).
+          Shaft power scales with compression work. No surge instability applies to PD machines.
+          Discharge temperature T₂ = {designDischTemp.toFixed(0)} °C (adiabatic) — see summary table; excluded from
+          plot to avoid incompatible axis scales. Verify all against manufacturer test data per API 618.
         </p>
       </div>
     </>
