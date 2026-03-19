@@ -297,6 +297,7 @@ export default function MultiphaseLinePage() {
                 />
               )}
               <ResultsPanel
+                showExport={true}
                 title="Multiphase Screening Results"
                 results={[
                   {

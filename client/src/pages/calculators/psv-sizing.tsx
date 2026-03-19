@@ -1053,7 +1053,7 @@ export default function PSVSizingPage() {
                       </Card>
                     </div>
 
-                    <ResultsPanel title="PRD Sizing Summary" results={[
+                    <ResultsPanel showExport={true} title="PRD Sizing Summary" results={[
                       { label: "Equipment Tag", value: equipment.tag || "—", unit: "" },
                       { label: "Governing Case", value: finalResult.governingScenario, unit: "" },
                       { label: "Relieving Rate", value: finalResult.relievingRate, unit: "kg/h", highlight: true },

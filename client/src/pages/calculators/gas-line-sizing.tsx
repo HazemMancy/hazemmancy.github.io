@@ -369,6 +369,7 @@ export default function GasLineSizingPage() {
                 />
               )}
               <ResultsPanel
+                showExport={true}
                 title="Gas Line Sizing Results"
                 results={[
                   {

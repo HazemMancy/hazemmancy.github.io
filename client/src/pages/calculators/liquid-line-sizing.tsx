@@ -283,6 +283,7 @@ export default function LiquidLineSizingPage() {
                 />
               )}
               <ResultsPanel
+                showExport={true}
                 title="Liquid Line Sizing Results"
                 results={[
                   {

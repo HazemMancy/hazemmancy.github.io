@@ -22,9 +22,10 @@ interface ResultsPanelProps {
   results: ResultItem[];
   rawData?: object;
   exportData?: ExportDatasheet;
+  showExport?: boolean;
 }
 
-export function ResultsPanel({ title, results, rawData, exportData }: ResultsPanelProps) {
+export function ResultsPanel({ title, results, rawData, exportData, showExport = false }: ResultsPanelProps) {
   const handleExportJSON = () => {
     if (exportData) {
       exportToJSON(exportData);
@@ -64,7 +65,7 @@ export function ResultsPanel({ title, results, rawData, exportData }: ResultsPan
           <CheckCircle2 className="w-5 h-5 text-green-400" />
           <h3 className="font-semibold text-base">{title}</h3>
         </div>
-        {exportData ? (
+        {showExport && exportData && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" data-testid="button-export-results">
@@ -87,11 +88,6 @@ export function ResultsPanel({ title, results, rawData, exportData }: ResultsPan
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        ) : (
-          <Button size="sm" variant="outline" onClick={handleExportJSON} data-testid="button-export-results">
-            <Download className="w-3.5 h-3.5 mr-1.5" />
-            Export JSON
-          </Button>
         )}
       </CardHeader>
       <CardContent className="pt-0">
