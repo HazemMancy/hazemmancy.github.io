@@ -442,8 +442,8 @@ export function computeLiquidPoint(
     const isChoked  = dP >= dP_choked;
 
     if (isChoked) {
-      // Choked: use FLP in denominator
-      Cv = 1.16 * point.flowRate / (FLP * Math.sqrt(Math.max((P1 - FF * Pv_bar) / Gf, 0.001)));
+      // Choked: use FLP in denominator (1/N1 ≈ 1.156 per IEC 60534-2-1 Table 1)
+      Cv = (1 / N1) * point.flowRate / (FLP * Math.sqrt(Math.max((P1 - FF * Pv_bar) / Gf, 0.001)));
     } else {
       // Normal: Cv = qv / (N1 · Fp · √(ΔP/ρr))
       Cv = point.flowRate / (N1 * Fp * Math.sqrt(dP_sizing / Gf));
@@ -920,7 +920,7 @@ export function computeRiskAssessment(
 
       if (pr.isChoked) {
         twoPhaseRisk = true;
-        mitigations.push("Choked liquid flow may produce two-phase conditions downstream — verify pipe supports for vibration per API 576");
+        mitigations.push("Choked liquid flow may produce two-phase conditions downstream — verify pipe supports for vibration and acoustic fatigue per IEC 60534-8-4 / ASME B31.3 Appendix X");
       }
     }
   }
