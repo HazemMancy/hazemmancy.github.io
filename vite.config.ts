@@ -10,10 +10,13 @@ function spaFallbackPlugin(): Plugin {
     closeBundle() {
       const distDir = path.resolve(import.meta.dirname, "dist");
       const indexPath = path.join(distDir, "index.html");
-      const fallbackPath = path.join(distDir, "404.html");
+      // 404.html — GitHub Pages SPA routing: serves index.html for any unknown path
       if (fs.existsSync(indexPath)) {
-        fs.copyFileSync(indexPath, fallbackPath);
+        fs.copyFileSync(indexPath, path.join(distDir, "404.html"));
       }
+      // .nojekyll — tells GitHub Pages NOT to run Jekyll processing
+      // (required for files/dirs that start with underscore, e.g. _app.js)
+      fs.writeFileSync(path.join(distDir, ".nojekyll"), "");
     },
   };
 }

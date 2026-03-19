@@ -93,8 +93,26 @@ Key architectural features and implementations include:
 - **FormSubmit.co**: For calculator feedback submission (client-side POST).
 
 ## GitHub Pages Deployment
-To deploy to GitHub Pages:
-1. Run `npx vite build` — generates `dist/` with static files
-2. The build automatically includes `404.html` (SPA routing fallback) and `.nojekyll`
-3. Push the `dist/` folder to the `gh-pages` branch, or configure GitHub Actions to build and deploy
-4. If using a repository subpath (e.g., `username.github.io/repo-name`), set `base: '/repo-name/'` in `vite.config.ts`
+
+**How it works:** The Vite build compiles all React/TypeScript source code into pure HTML, CSS, and JavaScript files in the `dist/` folder. GitHub Pages then serves those static files — no server required. The source code is never pushed to GitHub Pages; only the compiled output is deployed.
+
+### Automatic deployment (GitHub Actions — CONFIGURED)
+The file `.github/workflows/deploy.yml` automates the full build-and-deploy pipeline:
+1. Triggered on every push to the `main` branch
+2. Builds the project with `npx vite build`
+3. Deploys the `dist/` folder to GitHub Pages via the official `actions/deploy-pages` action
+
+**One-time GitHub setup required:**
+1. Go to the repository on GitHub → **Settings** → **Pages**
+2. Under **Source**, select **GitHub Actions**
+3. Push the code (including `.github/workflows/deploy.yml`) to the `main` branch
+4. GitHub Actions runs automatically — the site will be live at `https://hazemmancy.github.io`
+
+### What the build produces (`dist/`)
+- `dist/index.html` — pure HTML entry point (no React/TypeScript visible)
+- `dist/404.html` — copy of index.html for SPA routing (any URL works)
+- `dist/.nojekyll` — prevents GitHub Pages from running Jekyll processing
+- `dist/assets/` — all compiled CSS and JavaScript chunks (plain `.css` and `.js` files)
+
+### Base path note
+The `vite.config.ts` uses no explicit `base` (defaults to `/`), which is correct for the user pages repo `hazemmancy.github.io`. If this were a project pages repo (e.g., `hazemmancy.github.io/project-name`), `base: '/project-name/'` would be needed.
