@@ -246,7 +246,6 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
   const designHeadKJkg = isPolytropic ? result.totalPolytropicHead : result.totalIsentropicHead;
   const designPowerKW = result.totalShaftPower;
   const designEff = isPolytropic ? result.polytropicEfficiency : result.adiabaticEfficiency;
-  const massFlowKgs = result.massFlowRate / 3600;
 
   const flowUnit = "m\u00B3/h";
   const headUnitLabel = unitSystem === "SI" ? "kJ/kg" : "ft\u00B7lbf/lb";
@@ -594,8 +593,8 @@ function ReciprocatingChart({ result, unitSystem }: CompressorCurveChartProps) {
   const designRatio = result.overallCompressionRatio;
   const designPowerKW = result.totalShaftPower;
   const designEff = isPolytropic ? result.polytropicEfficiency : result.adiabaticEfficiency;
-  const k = result.trace.intermediateValues["polytropicExponent"] > 0
-    ? result.trace.intermediateValues["polytropicExponent"]
+  const k = (result.trace.intermediateValues["k"] ?? 0) > 0
+    ? result.trace.intermediateValues["k"]
     : 1.4;
   const T1_K = result.trace.intermediateValues["T1_K"] || 303.15;
 

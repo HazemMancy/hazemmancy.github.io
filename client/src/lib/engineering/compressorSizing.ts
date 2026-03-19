@@ -363,6 +363,7 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
     });
   }
 
+  intermediateValues["k"] = k;
   intermediateValues["polytropicExponent"] = n;
   intermediateValues["overallCompressionRatio"] = overallRatio;
   intermediateValues["ratioPerStage"] = ratioPerStage;
