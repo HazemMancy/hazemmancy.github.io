@@ -844,13 +844,13 @@ function solveOutletTemps(
 
   trace.steps.push({
     name: "Heat capacity rate (hot)",
-    equation: "Ch = ṁ_h × Cp_h",
+    equation: "Ch = (ṁ_h / 3600) × Cp_h  [kg/h ÷ 3600 = kg/s; Cp in kJ/(kg·K) → Ch in kW/K]",
     substitution: `(${hot.mDot.toFixed(1)} / 3600) × ${hot.cp.toFixed(3)}`,
     result: `${Ch.toFixed(4)} kW/K`,
   });
   trace.steps.push({
     name: "Heat capacity rate (cold)",
-    equation: "Cc = ṁ_c × Cp_c",
+    equation: "Cc = (ṁ_c / 3600) × Cp_c  [kg/h ÷ 3600 = kg/s; Cp in kJ/(kg·K) → Cc in kW/K]",
     substitution: `(${cold.mDot.toFixed(1)} / 3600) × ${cold.cp.toFixed(3)}`,
     result: `${Cc.toFixed(4)} kW/K`,
   });
@@ -935,7 +935,8 @@ function solveOutletTemps(
     }
     const Qh = Ch * (hot.tIn - hot.tOut);
     const Qc = Cc * (cold.tOut - cold.tIn);
-    dutyKW = Qh > 0 ? Qh : Qc;
+    // Conservative basis: use the larger of Qh and Qc to size for both sides
+    dutyKW = (Qh > 0 && Qc > 0) ? Math.max(Qh, Qc) : (Qh > 0 ? Qh : Qc);
 
     trace.steps.push({
       name: "Duty (hot side)",
@@ -948,6 +949,12 @@ function solveOutletTemps(
       equation: "Q_c = Cc × (Tc,out − Tc,in)",
       substitution: `${Cc.toFixed(4)} × (${cold.tOut.toFixed(2)} − ${cold.tIn.toFixed(2)})`,
       result: `${Qc.toFixed(2)} kW`,
+    });
+    trace.steps.push({
+      name: "Governing duty (conservative)",
+      equation: "Q_des = max(Q_h, Q_c) — largest duty governs area; covers both sides",
+      substitution: `max(${Qh.toFixed(2)}, ${Qc.toFixed(2)})`,
+      result: `${dutyKW.toFixed(2)} kW`,
     });
 
     trace.intermediateValues["Q_hot_kW"] = Qh;

@@ -227,8 +227,8 @@ export default function HeatExchangerPage() {
       { label: "ΔT1", value: gc.dT1, unit: "°C" },
       { label: "ΔT2", value: gc.dT2, unit: "°C" },
       { label: "LMTD", value: gc.lmtd, unit: "°C" },
-      { label: "R (capacity ratio)", value: gc.R, unit: "-" },
-      { label: "P (effectiveness)", value: gc.P, unit: "-" },
+      { label: "R (heat capacity ratio, Bowman et al.)", value: gc.R, unit: "-" },
+      { label: "P (temperature effectiveness, Bowman et al.)", value: gc.P, unit: "-" },
       { label: "F (correction factor)", value: gc.F, unit: "-" },
       { label: "Corrected LMTD", value: gc.correctedLMTD, unit: "°C", highlight: true },
       { label: "U_clean", value: gc.uClean, unit: "W/(m²·K)" },
@@ -242,7 +242,7 @@ export default function HeatExchangerPage() {
       { label: "Approach Temp", value: gc.approachTemp, unit: "°C" },
       { label: "ε (effectiveness)", value: gc.effectiveness * 100, unit: "%" },
       { label: "NTU", value: gc.ntu, unit: "-" },
-      { label: "C_r (capacity ratio)", value: gc.capacityRatio, unit: "-" },
+      { label: "C_r = Cmin/Cmax (NTU-ε method)", value: gc.capacityRatio, unit: "-" },
     ];
     const calcSteps: ExportDatasheet["calcSteps"] = gc.trace.steps.map(s => ({
       label: s.name, equation: s.equation, value: s.result, unit: "",
@@ -487,6 +487,17 @@ export default function HeatExchangerPage() {
                           <NumericInput className="h-8 text-xs" value={c.hotSide.mDot} onValueChange={v => updateCaseHot(idx, "mDot", v)} data-testid={`input-hot-flow-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Cp (kJ/(kg·K))</Label>
                           <NumericInput className="h-8 text-xs" value={c.hotSide.cp} onValueChange={v => updateCaseHot(idx, "cp", v)} data-testid={`input-hot-cp-${idx}`} /></div>
+                        <div className="col-span-2">
+                          <Label className="text-xs mb-1 block">Phase / Service</Label>
+                          <Select value={c.hotSide.phaseNote} onValueChange={v => updateCaseHot(idx, "phaseNote", v)} data-testid={`select-hot-phase-${idx}`}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="single_phase">Single Phase (liquid or gas)</SelectItem>
+                              <SelectItem value="condensing">Condensing Vapor</SelectItem>
+                              <SelectItem value="boiling">Boiling / Vaporizing</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       {c.dutyMode === "one_outlet_unknown" && (
                         <div className="flex items-center gap-2">
@@ -511,6 +522,17 @@ export default function HeatExchangerPage() {
                           <NumericInput className="h-8 text-xs" value={c.coldSide.mDot} onValueChange={v => updateCaseCold(idx, "mDot", v)} data-testid={`input-cold-flow-${idx}`} /></div>
                         <div><Label className="text-xs mb-1 block">Cp (kJ/(kg·K))</Label>
                           <NumericInput className="h-8 text-xs" value={c.coldSide.cp} onValueChange={v => updateCaseCold(idx, "cp", v)} data-testid={`input-cold-cp-${idx}`} /></div>
+                        <div className="col-span-2">
+                          <Label className="text-xs mb-1 block">Phase / Service</Label>
+                          <Select value={c.coldSide.phaseNote} onValueChange={v => updateCaseCold(idx, "phaseNote", v)} data-testid={`select-cold-phase-${idx}`}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="single_phase">Single Phase (liquid or gas)</SelectItem>
+                              <SelectItem value="condensing">Condensing Vapor</SelectItem>
+                              <SelectItem value="boiling">Boiling / Vaporizing</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       {c.dutyMode === "one_outlet_unknown" && (
                         <div className="flex items-center gap-2">
@@ -738,8 +760,8 @@ export default function HeatExchangerPage() {
                   </CardHeader>
                   <CardContent className="space-y-2 pt-0">
                     <div className="space-y-1">
-                      <EqLine eq="Q_hot = ṁ_hot × Cp_hot × (T_h,in − T_h,out)" val={`${fmtN(cr.hotDutyKW)} kW`} />
-                      <EqLine eq="Q_cold = ṁ_cold × Cp_cold × (T_c,out − T_c,in)" val={`${fmtN(cr.coldDutyKW)} kW`} />
+                      <EqLine eq="Q_hot = (ṁ_hot/3600) × Cp_hot × (Th,in − Th,out)  [kg/h → kW]" val={`${fmtN(cr.hotDutyKW)} kW`} />
+                      <EqLine eq="Q_cold = (ṁ_cold/3600) × Cp_cold × (Tc,out − Tc,in)  [kg/h → kW]" val={`${fmtN(cr.coldDutyKW)} kW`} />
                       <EqLine eq="Q_design (governing)" val={`${fmtN(cr.dutyKW)} kW`} highlight />
                     </div>
                     {Math.abs(cr.hotDutyKW - cr.coldDutyKW) / Math.max(cr.hotDutyKW, cr.coldDutyKW) > 0.01 && (
@@ -1315,8 +1337,8 @@ function SummaryTable({ cr }: { cr: CaseResult }) {
         { label: "ΔT₁", value: `${fmtN(cr.dT1)} °C`, hl: false },
         { label: "ΔT₂", value: `${fmtN(cr.dT2)} °C`, hl: false },
         { label: "LMTD", value: `${fmtN(cr.lmtd)} °C`, hl: false },
-        { label: "R (capacity ratio)", value: fmtN(cr.R, 4), hl: false },
-        { label: "P (thermal effectiveness)", value: fmtN(cr.P, 4), hl: false },
+        { label: "R (heat capacity ratio, Bowman et al.)", value: fmtN(cr.R, 4), hl: false },
+        { label: "P (temperature effectiveness, Bowman et al.)", value: fmtN(cr.P, 4), hl: false },
         { label: "F (correction factor)", value: fmtN(cr.F, 4), hl: cr.F < 0.8 },
         { label: "Corrected LMTD", value: `${fmtN(cr.correctedLMTD)} °C`, hl: true },
         { label: "Approach Temp", value: `${fmtN(cr.approachTemp)} °C`, hl: cr.approachTemp < 5 },
@@ -1340,7 +1362,7 @@ function SummaryTable({ cr }: { cr: CaseResult }) {
       rows: [
         { label: "ε (effectiveness)", value: `${(cr.effectiveness * 100).toFixed(1)}%`, hl: false },
         { label: "NTU", value: fmtN(cr.ntu, 3), hl: cr.ntu > 3 },
-        { label: "C_r (capacity ratio)", value: fmtN(cr.capacityRatio, 4), hl: false },
+        { label: "C_r = Cmin/Cmax (NTU-ε method)", value: fmtN(cr.capacityRatio, 4), hl: false },
       ],
     },
   ];
@@ -1396,6 +1418,7 @@ function buildCalcNoteHTML(result: HXFullResult, gc: CaseResult, project: HXProj
 <table>
 <tr><th></th><th>Hot Side</th><th>Cold Side</th></tr>
 <tr><td>Name</td><td>${gc.hotSide.name}</td><td>${gc.coldSide.name}</td></tr>
+<tr><td>Phase / Service</td><td>${gc.hotSide.phaseNote.replace(/_/g," ")}</td><td>${gc.coldSide.phaseNote.replace(/_/g," ")}</td></tr>
 <tr><td>T_in (°C)</td><td>${gc.hotSide.tIn.toFixed(1)}</td><td>${gc.coldSide.tIn.toFixed(1)}</td></tr>
 <tr><td>T_out (°C)</td><td>${gc.hotSide.tOut.toFixed(1)}</td><td>${gc.coldSide.tOut.toFixed(1)}</td></tr>
 <tr><td>Flow (kg/h)</td><td>${gc.hotSide.mDot.toFixed(0)}</td><td>${gc.coldSide.mDot.toFixed(0)}</td></tr>
@@ -1404,14 +1427,24 @@ function buildCalcNoteHTML(result: HXFullResult, gc: CaseResult, project: HXProj
 
 <h2>Results Summary</h2>
 <table>
-<tr><td>Duty</td><td>${gc.dutyKW.toFixed(2)} kW</td></tr>
+<tr><td>Hot Side Duty, Q_h</td><td>${gc.hotDutyKW.toFixed(2)} kW</td></tr>
+<tr><td>Cold Side Duty, Q_c</td><td>${gc.coldDutyKW.toFixed(2)} kW</td></tr>
+<tr><td>Governing Duty, Q_des = max(Q_h, Q_c)</td><td>${gc.dutyKW.toFixed(2)} kW</td></tr>
 <tr><td>LMTD</td><td>${gc.lmtd.toFixed(2)} °C</td></tr>
+<tr><td>R (heat capacity ratio, Bowman)</td><td>${gc.R.toFixed(4)}</td></tr>
+<tr><td>P (temperature effectiveness, Bowman)</td><td>${gc.P.toFixed(4)}</td></tr>
 <tr><td>F-factor</td><td>${gc.F.toFixed(4)}</td></tr>
 <tr><td>Corrected LMTD</td><td>${gc.correctedLMTD.toFixed(2)} °C</td></tr>
+<tr><td>U_clean</td><td>${gc.uClean.toFixed(1)} W/(m²·K)</td></tr>
 <tr><td>U_fouled</td><td>${gc.uFouled.toFixed(1)} W/(m²·K)</td></tr>
+<tr><td>Cleanliness Factor (U_fouled / U_clean)</td><td>${(gc.cleanlinessFactor * 100).toFixed(1)}%</td></tr>
 <tr><td>UA_req</td><td>${gc.uaReq.toFixed(1)} W/K</td></tr>
 <tr><td>A_req</td><td>${gc.aReq.toFixed(2)} m²</td></tr>
 <tr><td>A_design</td><td>${gc.aDesign.toFixed(2)} m²</td></tr>
+<tr><td>Overdesign (A_design − A_req) / A_req</td><td>${gc.overdesignPct.toFixed(1)}%</td></tr>
+<tr><td>ε (NTU-ε effectiveness, counter-current basis)</td><td>${(gc.effectiveness * 100).toFixed(1)}%</td></tr>
+<tr><td>NTU (counter-current basis — informational)</td><td>${gc.ntu.toFixed(3)}</td></tr>
+<tr><td>C_r = Cmin/Cmax (NTU-ε method)</td><td>${gc.capacityRatio.toFixed(4)}</td></tr>
 </table>
 
 <h2>Step-by-Step Calculations</h2>
