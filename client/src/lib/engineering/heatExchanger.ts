@@ -404,18 +404,19 @@ export function computeTubeGeometry(
 
   steps.push({
     name: "Bundle diameter (Db)",
-    equation: `Db = OD × (N_t / K1)^(1/n1) — K1=${K1}, n1=${n1} (${tubeInput.tubePitch}, ${closestPasses}-pass, Pt/OD=${tubeInput.pitchRatio})`,
+    equation: `Db = OD × (N_t / K1)^(1/n1) — Coulson & Richardson Vol.6 §12.5 / HEDH; K1=${K1}, n1=${n1} (${tubeInput.tubePitch}, ${closestPasses}-pass)`,
     substitution: `${tubeInput.tubeOD_mm} × (${nTubes} / ${K1})^(1/${n1})`,
     result: `${bundleDiameter.toFixed(0)} mm`,
   });
 
+  // Diametral clearance (total, not per-side) from Kern §11 / TEMA Table C-5
   const clearance = bundleDiameter < 300 ? 12 : bundleDiameter < 600 ? 25 : bundleDiameter < 1000 ? 35 : 45;
-  const shellID = bundleDiameter + clearance * 2;
+  const shellID = bundleDiameter + clearance;
 
   steps.push({
     name: "Shell ID estimate",
-    equation: "D_s = Db + 2 × clearance",
-    substitution: `${bundleDiameter.toFixed(0)} + 2 × ${clearance}`,
+    equation: "D_s = D_b + C_clearance (diametral) — Kern §11 / TEMA Table C-5",
+    substitution: `${bundleDiameter.toFixed(0)} + ${clearance} mm (diametral clearance)`,
     result: `${shellID.toFixed(0)} mm`,
   });
 
@@ -679,7 +680,7 @@ function computeEffectivenessNTU(
   });
   trace.steps.push({
     name: "NTU",
-    equation: "NTU = UA / C_min (derived from ε and C_r)",
+    equation: "NTU = UA / C_min (back-calc. from ε on counter-current basis — informational; Kays & London §2)",
     substitution: `C_r = ${Cr.toFixed(4)}, ε = ${epsilon.toFixed(4)}`,
     result: `${ntu.toFixed(3)}`,
   });
@@ -1269,10 +1270,10 @@ export function calculateHeatExchangerFull(
   if (geometry) {
     if (geometry.excessArea < 0) {
       recommendations.push(`Selected area is ${Math.abs(geometry.excessArea).toFixed(0)}% UNDERSIZED vs required — exchanger will not meet duty. Increase tube count, length, or add shells.`);
-    } else if (geometry.excessArea > 40) {
+    } else if (geometry.excessArea > 30) {
       if (!globalFlags.includes("HIGH_OVERDESIGN")) globalFlags.push("HIGH_OVERDESIGN");
-      recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% — significantly over-designed. Verify this is intentional (fouling margin, future debottleneck). Typical overdesign is 10–25% per TEMA.`);
-    } else if (geometry.excessArea > 25) {
+      recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% exceeds 30% — significantly over-designed. Verify this is intentional (fouling growth, future debottleneck). Optimal overdesign is 10–25% per TEMA/industry practice.`);
+    } else if (geometry.excessArea > 20) {
       recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% — acceptable if intended for fouling or future capacity. Optimal range is 10–25%.`);
     } else if (geometry.excessArea >= 0 && geometry.excessArea < 10) {
       recommendations.push(`Excess area ${geometry.excessArea.toFixed(0)}% — tight margin. Consider whether fouling growth will reduce effective area below required. Minimum 10% recommended.`);

@@ -128,7 +128,11 @@ export default function HeatExchangerPage() {
       });
 
       const geo = geoArea ? parseFloat(geoArea) : undefined;
-      const r = calculateHeatExchangerFull(project, convertedCases, config, uInput, geo);
+      // approachTempMin is a temperature DIFFERENCE — convert with multiplier only (no offset)
+      const convertedConfig = unitSystem !== "SI"
+        ? { ...config, approachTempMin: config.approachTempMin * 5 / 9 }
+        : config;
+      const r = calculateHeatExchangerFull(project, convertedCases, convertedConfig, uInput, geo);
       setResult(r);
 
       if (r.governingCase) {
@@ -756,8 +760,17 @@ export default function HeatExchangerPage() {
                   </CardHeader>
                   <CardContent className="space-y-2 pt-0">
                     <div className="space-y-1">
-                      <EqLine eq="ΔT₁ = T_h,in − T_c,out" val={`${fmtN(cr.dT1)} °C`} />
-                      <EqLine eq="ΔT₂ = T_h,out − T_c,in" val={`${fmtN(cr.dT2)} °C`} />
+                      {result.config.arrangement === "co_current" ? (
+                        <>
+                          <EqLine eq="ΔT₁ = T_h,in − T_c,in  (co-current inlet pairing)" val={`${fmtN(cr.dT1)} °C`} />
+                          <EqLine eq="ΔT₂ = T_h,out − T_c,out  (co-current outlet pairing)" val={`${fmtN(cr.dT2)} °C`} />
+                        </>
+                      ) : (
+                        <>
+                          <EqLine eq="ΔT₁ = T_h,in − T_c,out  (counter-current hot-inlet end)" val={`${fmtN(cr.dT1)} °C`} />
+                          <EqLine eq="ΔT₂ = T_h,out − T_c,in  (counter-current hot-outlet end)" val={`${fmtN(cr.dT2)} °C`} />
+                        </>
+                      )}
                       <EqLine eq="LMTD = (ΔT₁ − ΔT₂) / ln(ΔT₁ / ΔT₂)" val={`${fmtN(cr.lmtd)} °C`} highlight />
                     </div>
                   </CardContent>
