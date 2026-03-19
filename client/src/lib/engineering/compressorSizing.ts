@@ -156,12 +156,14 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
   const n = polytropicExponent(k, eta);
   intermediateValues["n"] = n;
 
-  traceSteps.push({
-    name: "Polytropic Exponent",
-    equation: "n = 1 / (1 - (k - 1) / (k * \u03B7_p))",
-    substitution: `n = 1 / (1 - (${k.toFixed(4)} - 1) / (${k.toFixed(4)} * ${eta.toFixed(4)}))`,
-    result: `n = ${n.toFixed(6)}`,
-  });
+  if (model === "polytropic") {
+    traceSteps.push({
+      name: "Polytropic Exponent",
+      equation: "n = 1 / (1 - (k - 1) / (k \u00D7 \u03B7_p))    [GPSA §13-2]",
+      substitution: `n = 1 / (1 - (${k.toFixed(4)} - 1) / (${k.toFixed(4)} \u00D7 ${eta.toFixed(4)}))`,
+      result: `n = ${n.toFixed(6)}`,
+    });
+  }
 
   const V_molar = (GAS_CONSTANT * STANDARD_TEMPERATURE) / STANDARD_PRESSURE;
   const massFlowRate_kgs = (input.gasFlowRate * MW) / (V_molar * 3600);
@@ -207,7 +209,8 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
     ? "Standard: API 617 (Axial and Centrifugal Compressors), GPSA Section 13"
     : "Standard: API 618 (Reciprocating Compressors), GPSA Section 13");
   assumptions.push(`Gas constant R = ${GAS_CONSTANT.toFixed(2)} J/(kmol\u00B7K)`);
-  assumptions.push(`Standard conditions: T_std = ${STANDARD_TEMPERATURE.toFixed(2)} K, P_std = ${STANDARD_PRESSURE.toFixed(0)} Pa`);
+  assumptions.push(`Standard conditions: T_std = ${STANDARD_TEMPERATURE.toFixed(2)} K (15°C), P_std = ${STANDARD_PRESSURE.toFixed(0)} Pa (101.325 kPa) — per ISO 13443 / GPSA Section 13 / API MPMS Chapter 14.3`);
+  assumptions.push("Z-factor applies at suction conditions only; EOS verification recommended for multi-stage or high-pressure service");
 
   const stages: StageResult[] = [];
   let currentP = P1_bar;
@@ -228,8 +231,8 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
       const T2_ideal = currentT * Math.pow(stageRatio, (k - 1) / k);
       traceSteps.push({
         name: `Discharge Temperature${stageLabel}`,
-        equation: "T\u2082 = T\u2081 + (T\u2081 * r^((k-1)/k) - T\u2081) / \u03B7",
-        substitution: `T\u2082 = ${currentT.toFixed(2)} + (${currentT.toFixed(2)} * ${stageRatio.toFixed(4)}^((${k.toFixed(4)}-1)/${k.toFixed(4)}) - ${currentT.toFixed(2)}) / ${eta.toFixed(4)}`,
+        equation: "T\u2082 = T\u2081 + (T\u2082_ideal - T\u2081) / \u03B7_is    where T\u2082_ideal = T\u2081 * r^((k-1)/k)    [ASME PTC-10]",
+        substitution: `T\u2082_ideal = ${currentT.toFixed(2)} * ${stageRatio.toFixed(4)}^((${k.toFixed(4)}-1)/${k.toFixed(4)}) = ${T2_ideal.toFixed(2)} K;  T\u2082 = ${currentT.toFixed(2)} + (${T2_ideal.toFixed(2)} - ${currentT.toFixed(2)}) / ${eta.toFixed(4)}`,
         result: `T\u2082 = ${T_discharge.toFixed(2)} K (${(T_discharge - 273.15).toFixed(2)} \u00B0C)`,
       });
     } else {
@@ -242,37 +245,38 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
     }
 
     const heads = calcHeads(currentT, stageRatio, k, Z, MW, eta);
-    const R_sp = GAS_CONSTANT / MW;
 
     traceSteps.push({
       name: `Isentropic Head${stageLabel}`,
-      equation: "H_is = Z * (R/MW) * T\u2081 * (k/(k-1)) * (r^((k-1)/k) - 1)",
-      substitution: `H_is = ${Z.toFixed(4)} * (${GAS_CONSTANT.toFixed(2)}/${MW.toFixed(4)}) * ${currentT.toFixed(2)} * (${k.toFixed(4)}/(${k.toFixed(4)}-1)) * (${stageRatio.toFixed(4)}^((${k.toFixed(4)}-1)/${k.toFixed(4)}) - 1)`,
+      equation: "H_is = Z\u00B7(R/MW)\u00B7T\u2081\u00B7(k/(k-1))\u00B7(r^((k-1)/k) - 1)    [GPSA §13-4, API 617 §5.9.4]",
+      substitution: `H_is = ${Z.toFixed(4)}\u00B7(${GAS_CONSTANT.toFixed(2)}/${MW.toFixed(4)})\u00B7${currentT.toFixed(2)}\u00B7(${k.toFixed(4)}/(${k.toFixed(4)}-1))\u00B7(${stageRatio.toFixed(4)}^((${k.toFixed(4)}-1)/${k.toFixed(4)})-1)`,
       result: `H_is = ${heads.isentropicHead.toFixed(2)} J/kg (${(heads.isentropicHead / 1000).toFixed(4)} kJ/kg)`,
     });
 
-    traceSteps.push({
-      name: `Polytropic Head${stageLabel}`,
-      equation: "H_p = Z * (R/MW) * T\u2081 * (n/(n-1)) * (r^((n-1)/n) - 1)",
-      substitution: `H_p = ${Z.toFixed(4)} * (${GAS_CONSTANT.toFixed(2)}/${MW.toFixed(4)}) * ${currentT.toFixed(2)} * (${n.toFixed(6)}/(${n.toFixed(6)}-1)) * (${stageRatio.toFixed(4)}^((${n.toFixed(6)}-1)/${n.toFixed(6)}) - 1)`,
-      result: `H_p = ${heads.polytropicHead.toFixed(2)} J/kg (${(heads.polytropicHead / 1000).toFixed(4)} kJ/kg)`,
-    });
+    if (model === "polytropic") {
+      traceSteps.push({
+        name: `Polytropic Head${stageLabel}`,
+        equation: "H_p = Z\u00B7(R/MW)\u00B7T\u2081\u00B7(n/(n-1))\u00B7(r^((n-1)/n) - 1)    [GPSA §13-4, API 617 §5.9.5]",
+        substitution: `H_p = ${Z.toFixed(4)}\u00B7(${GAS_CONSTANT.toFixed(2)}/${MW.toFixed(4)})\u00B7${currentT.toFixed(2)}\u00B7(${n.toFixed(6)}/(${n.toFixed(6)}-1))\u00B7(${stageRatio.toFixed(4)}^((${n.toFixed(6)}-1)/${n.toFixed(6)})-1)`,
+        result: `H_p = ${heads.polytropicHead.toFixed(2)} J/kg (${(heads.polytropicHead / 1000).toFixed(4)} kJ/kg)`,
+      });
+    }
 
     let gasPower: number;
     if (model === "polytropic") {
       gasPower = (massFlowRate_kgs * heads.polytropicHead) / 1000;
       traceSteps.push({
-        name: `Gas Power${stageLabel}`,
-        equation: "W_gas = (\u1E41 * H_p) / 1000",
-        substitution: `W_gas = (${massFlowRate_kgs.toFixed(6)} * ${heads.polytropicHead.toFixed(2)}) / 1000`,
+        name: `Gas Power${stageLabel}  (polytropic)`,
+        equation: "W_gas = \u1E41 \u00D7 H_p / 1000    [H_p already accounts for \u03B7_p through n]",
+        substitution: `W_gas = ${massFlowRate_kgs.toFixed(6)} \u00D7 ${heads.polytropicHead.toFixed(2)} / 1000`,
         result: `W_gas = ${gasPower.toFixed(4)} kW`,
       });
     } else {
       gasPower = (massFlowRate_kgs * heads.isentropicHead) / (eta * 1000);
       traceSteps.push({
-        name: `Gas Power${stageLabel}`,
-        equation: "W_gas = (\u1E41 * H_is) / (\u03B7 * 1000)",
-        substitution: `W_gas = (${massFlowRate_kgs.toFixed(6)} * ${heads.isentropicHead.toFixed(2)}) / (${eta.toFixed(4)} * 1000)`,
+        name: `Gas Power${stageLabel}  (isentropic)`,
+        equation: "W_gas = \u1E41 \u00D7 H_is / (\u03B7_is \u00D7 1000)    [ASME PTC-10, API 617 §5.9.3]",
+        substitution: `W_gas = ${massFlowRate_kgs.toFixed(6)} \u00D7 ${heads.isentropicHead.toFixed(2)} / (${eta.toFixed(4)} \u00D7 1000)`,
         result: `W_gas = ${gasPower.toFixed(4)} kW`,
       });
     }
@@ -310,10 +314,24 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
   const totalMotorPower = totalShaftPower / etaMotor;
 
   traceSteps.push({
-    name: "Total Motor Power",
+    name: "Total Gas Power",
+    equation: "W_gas_total = \u03A3 W_gas per stage",
+    substitution: stages.map((s, i) => `Stage ${i + 1}: ${s.gasPower.toFixed(4)} kW`).join(" + "),
+    result: `W_gas_total = ${totalGasPower.toFixed(4)} kW`,
+  });
+
+  traceSteps.push({
+    name: "Total Shaft Power",
+    equation: "W_shaft_total = \u03A3 W_shaft per stage  (includes mechanical losses per stage)",
+    substitution: stages.map((s, i) => `Stage ${i + 1}: ${s.shaftPower.toFixed(4)} kW`).join(" + "),
+    result: `W_shaft_total = ${totalShaftPower.toFixed(4)} kW`,
+  });
+
+  traceSteps.push({
+    name: "Total Motor Power (Electrical Input)",
     equation: "W_motor = W_shaft_total / \u03B7_motor",
     substitution: `W_motor = ${totalShaftPower.toFixed(4)} / ${etaMotor.toFixed(4)}`,
-    result: `W_motor = ${totalMotorPower.toFixed(4)} kW`,
+    result: `W_motor = ${totalMotorPower.toFixed(4)} kW  (electrical input to motor terminals)`,
   });
 
   const finalDischargeTemp = stages[stages.length - 1].dischargeTemperature;
@@ -325,6 +343,24 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
     const idealTempRise = Math.pow(overallRatio, (k - 1) / k) - 1;
     const actualTempRise = Math.pow(overallRatio, (n - 1) / n) - 1;
     adiabaticEff = actualTempRise > 0 ? idealTempRise / actualTempRise : eta;
+  }
+
+  if (model === "polytropic") {
+    const idealTempRise = Math.pow(overallRatio, (k - 1) / k) - 1;
+    const actualTempRise = Math.pow(overallRatio, (n - 1) / n) - 1;
+    traceSteps.push({
+      name: "Adiabatic (Isentropic) Efficiency",
+      equation: "\u03B7_is = (r^((k-1)/k) - 1) / (r^((n-1)/n) - 1)    [ASME PTC-10 / GPSA §13-2]",
+      substitution: `\u03B7_is = (${overallRatio.toFixed(4)}^((${k.toFixed(4)}-1)/${k.toFixed(4)})-1) / (${overallRatio.toFixed(4)}^((${n.toFixed(6)}-1)/${n.toFixed(6)})-1) = ${idealTempRise.toFixed(6)} / ${actualTempRise.toFixed(6)}`,
+      result: `\u03B7_is = ${(adiabaticEff * 100).toFixed(2)}%  (adiabatic efficiency equivalent to specified \u03B7_p = ${(eta * 100).toFixed(1)}%)`,
+    });
+  } else {
+    traceSteps.push({
+      name: "Adiabatic (Isentropic) Efficiency",
+      equation: "\u03B7_is = input (isentropic model — user-specified)",
+      substitution: `\u03B7_is = ${(eta * 100).toFixed(2)}%`,
+      result: `\u03B7_is = ${(adiabaticEff * 100).toFixed(2)}%`,
+    });
   }
 
   intermediateValues["polytropicExponent"] = n;
@@ -385,10 +421,13 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
     warnings.push(`Low efficiency (${input.polytropicEfficiency}%) — verify compressor selection. Typical: centrifugal 75–85%, reciprocating 80–90% (GPSA Table 13-2/3).`);
   }
 
-  const driverMarginPower = totalShaftPower * 1.10;
-  if (totalMotorPower < driverMarginPower) {
-    warnings.push(`Motor power ${totalMotorPower.toFixed(1)} kW — API 617/618 recommends driver rated ≥ 110% of maximum shaft power (${driverMarginPower.toFixed(1)} kW). Verify motor nameplate.`);
-  }
+  const minNameplate_kW = totalShaftPower * 1.10;
+  warnings.push(
+    `Motor nameplate required ≥ ${minNameplate_kW.toFixed(1)} kW ` +
+    `(= 110% \u00D7 shaft power ${totalShaftPower.toFixed(1)} kW per API 617 §5.1.5.6 / API 618 §6.1.5). ` +
+    `Calculated motor electrical input = ${totalMotorPower.toFixed(1)} kW at \u03B7_motor = ${input.motorEfficiency}%. ` +
+    `Select next standard IEC/NEMA motor nameplate \u2265 ${minNameplate_kW.toFixed(1)} kW.`
+  );
 
   warnings.push(`Z-factor used: ${Z.toFixed(3)} (suction conditions). For multi-stage, actual Z varies per stage — average Z may improve accuracy. Verify with EOS at discharge conditions.`);
 

@@ -38,6 +38,7 @@ export interface PipingInput {
 export interface PumpSizingInput extends PipingInput {
   pumpEfficiency: number;
   motorEfficiency: number;
+  pumpSpeed?: number;
 }
 
 export interface PDPumpSizingInput extends PipingInput {
@@ -258,10 +259,13 @@ export function calculatePumpSizing(input: PumpSizingInput): PumpSizingResult {
   }
 
   const motorMarginPct = brakePower <= 22 ? 25 : (brakePower <= 55 ? 15 : 10);
-  const requiredMotorMin = brakePower * (1 + motorMarginPct / 100) / motorEff;
-  if (motorPower < requiredMotorMin) {
-    warnings.push(`Motor power ${motorPower.toFixed(1)} kW may be undersized. Common practice (per API 610 / project specs): motor nameplate ≥ ${motorMarginPct}% margin over rated brake power at end-of-curve (min ${requiredMotorMin.toFixed(1)} kW). Confirm with project motor sizing philosophy.`);
-  }
+  const requiredNameplate_kW = brakePower * (1 + motorMarginPct / 100);
+  warnings.push(
+    `Motor nameplate required ≥ ${requiredNameplate_kW.toFixed(1)} kW ` +
+    `(= brake power ${brakePower.toFixed(1)} kW × ${motorMarginPct}% margin per API 610 Table 8). ` +
+    `Calculated motor electrical input = ${motorPower.toFixed(1)} kW at η_motor = ${input.motorEfficiency}%. ` +
+    `Select next standard IEC/NEMA motor nameplate ≥ ${requiredNameplate_kW.toFixed(1)} kW.`
+  );
 
   if (input.viscosity > 200) {
     warnings.push(`High viscosity (${input.viscosity.toFixed(0)} cP) — centrifugal pump performance significantly degraded. Positive displacement pump strongly recommended per HI guidelines.`);
@@ -270,14 +274,16 @@ export function calculatePumpSizing(input: PumpSizingInput): PumpSizingResult {
   }
 
   if (totalDynamicHead > 0 && flowRate_m3s > 0) {
-    const Ns = 1450 * Math.sqrt(flowRate_m3s * 3600) / Math.pow(totalDynamicHead, 0.75);
+    const speed_rpm = input.pumpSpeed && input.pumpSpeed > 0 ? input.pumpSpeed : 1450;
+    const Ns = speed_rpm * Math.sqrt(flowRate_m3s * 3600) / Math.pow(totalDynamicHead, 0.75);
     if (Ns > 0) {
       let pumpTypeNote = "";
       if (Ns < 1000) pumpTypeNote = "low Ns — radial impeller (high head / low flow), verify efficiency";
       else if (Ns < 3000) pumpTypeNote = "radial impeller range — standard centrifugal pump";
       else if (Ns < 8000) pumpTypeNote = "mixed-flow impeller range";
       else pumpTypeNote = "axial flow range — verify pump type suitability";
-      warnings.push(`Specific speed Ns ≈ ${Ns.toFixed(0)} (at 1450 rpm) — ${pumpTypeNote}.`);
+      const speedNote = input.pumpSpeed && input.pumpSpeed > 0 ? `${speed_rpm} rpm` : "1450 rpm assumed";
+      warnings.push(`Specific speed Ns ≈ ${Ns.toFixed(0)} (n = ${speedNote}, Q in m³/h, H in m; per HI 1.3) — ${pumpTypeNote}.`);
     }
   }
 
@@ -371,6 +377,15 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
   if (input.viscosity > 500) {
     warnings.push(`Very high viscosity (${input.viscosity.toFixed(0)} cP) — PD pump is appropriate but verify that driver is sized for viscous power requirement. Heating/tracing may reduce viscosity.`);
   }
+
+  const pdMotorMarginPct = shaftPower <= 22 ? 25 : (shaftPower <= 55 ? 15 : 10);
+  const pdRequiredNameplate_kW = shaftPower * (1 + pdMotorMarginPct / 100);
+  warnings.push(
+    `Motor nameplate required ≥ ${pdRequiredNameplate_kW.toFixed(1)} kW ` +
+    `(= shaft power ${shaftPower.toFixed(1)} kW × ${pdMotorMarginPct}% margin per API 674/676). ` +
+    `Calculated motor electrical input = ${motorPower.toFixed(1)} kW at η_motor = ${input.motorEfficiency}%. ` +
+    `Select next standard IEC/NEMA motor nameplate ≥ ${pdRequiredNameplate_kW.toFixed(1)} kW.`
+  );
 
   const trace = buildPDTrace(input, piping, flowRate_m3s, totalDynamicHead, differentialPressure, theoreticalFlow, slip, hydraulicPower, shaftPower, motorPower, npipAvailable, warnings);
 

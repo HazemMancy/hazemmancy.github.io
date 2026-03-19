@@ -92,6 +92,7 @@ interface FormState {
   dischargeFittingsK: string;
   pumpEfficiency: string;
   motorEfficiency: string;
+  pumpSpeed: string;
   vaporPressure: string;
   atmosphericPressure: string;
   suctionVesselPressure: string;
@@ -117,6 +118,7 @@ const defaultForm: FormState = {
   dischargeFittingsK: "0",
   pumpEfficiency: "75",
   motorEfficiency: "95",
+  pumpSpeed: "",
   vaporPressure: "",
   atmosphericPressure: "1.01325",
   suctionVesselPressure: "0",
@@ -142,6 +144,7 @@ const fieldUnitMap: FieldUnitMap = {
   dischargeFittingsK: null,
   pumpEfficiency: null,
   motorEfficiency: null,
+  pumpSpeed: null,
   vaporPressure: "pressureKpa",
   atmosphericPressure: "pressureAbs",
   suctionVesselPressure: "pressure",
@@ -260,10 +263,12 @@ export default function PumpSizingPage() {
       }
 
       if (pumpType === "centrifugal") {
+        const speedVal = parseFloat(form.pumpSpeed);
         const input = {
           ...pipingInput,
           pumpEfficiency: parseFloat(form.pumpEfficiency),
           motorEfficiency: parseFloat(form.motorEfficiency),
+          pumpSpeed: !isNaN(speedVal) && speedVal > 0 ? speedVal : undefined,
         };
         if (isNaN(input.pumpEfficiency)) throw new Error("Invalid pump efficiency");
         if (isNaN(input.motorEfficiency)) throw new Error("Invalid motor efficiency");
@@ -820,6 +825,11 @@ export default function PumpSizingPage() {
                       <div>
                         <Label className="text-xs mb-1.5 block">Motor Efficiency (%)</Label>
                         <Input type="number" value={form.motorEfficiency} onChange={(e) => updateField("motorEfficiency", e.target.value)} placeholder="e.g. 95" data-testid="input-motor-eff" />
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Pump Speed (rpm) <span className="text-muted-foreground font-normal">— for specific speed Ns</span></Label>
+                        <Input type="number" value={form.pumpSpeed} onChange={(e) => updateField("pumpSpeed", e.target.value)} placeholder="e.g. 1450 or 2950 (optional)" data-testid="input-pump-speed" />
+                        <p className="text-[10px] text-muted-foreground mt-1">Leave blank to use 1450 rpm as assumed basis (HI 1.3)</p>
                       </div>
                     </>
                   ) : (
