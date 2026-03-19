@@ -121,6 +121,20 @@ export const UNITS: Record<string, UnitDefinition> = {
     toSI: (psia: number) => psia * 0.0689476,
     fromSI: (bar: number) => bar / 0.0689476,
   },
+  pressureBara: {
+    label: "Absolute Pressure (bara/psia)",
+    si: "bar(a)",
+    field: "psia",
+    toSI: (psia: number) => psia * 0.0689476,
+    fromSI: (bar: number) => bar / 0.0689476,
+  },
+  pressureGauge: {
+    label: "Gauge Pressure (barg/psig)",
+    si: "bar(g)",
+    field: "psig",
+    toSI: (psig: number) => psig * 0.0689476,
+    fromSI: (bar: number) => bar / 0.0689476,
+  },
   pressureKpa: {
     label: "Pressure (kPa)",
     si: "kPa",

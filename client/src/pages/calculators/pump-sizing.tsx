@@ -147,11 +147,11 @@ const fieldUnitMap: FieldUnitMap = {
   pumpSpeed: null,
   vaporPressure: "pressureKpa",
   atmosphericPressure: "pressureAbs",
-  suctionVesselPressure: "pressure",
+  suctionVesselPressure: "pressureGauge",
   volumetricEfficiency: null,
   mechanicalEfficiency: null,
-  reliefValvePressure: "pressure",
-  dischargePressure: "pressure",
+  reliefValvePressure: "pressureGauge",
+  dischargePressure: "pressureGauge",
 };
 
 interface FittingEntry {
@@ -255,7 +255,7 @@ export default function PumpSizingPage() {
         dischargeFittingsK: parseFloat(form.dischargeFittingsK),
         vaporPressure: convertToSI("pressureKpa", parseFloat(form.vaporPressure), unitSystem),
         atmosphericPressure: convertToSI("pressureAbs", parseFloat(form.atmosphericPressure), unitSystem),
-        suctionVesselPressure: convertToSI("pressure", parseFloat(form.suctionVesselPressure), unitSystem),
+        suctionVesselPressure: convertToSI("pressureGauge", parseFloat(form.suctionVesselPressure), unitSystem),
       };
 
       for (const [key, val] of Object.entries(pipingInput)) {
@@ -282,8 +282,8 @@ export default function PumpSizingPage() {
           volumetricEfficiency: parseFloat(form.volumetricEfficiency),
           mechanicalEfficiency: parseFloat(form.mechanicalEfficiency),
           motorEfficiency: parseFloat(form.motorEfficiency),
-          reliefValvePressure: convertToSI("pressure", parseFloat(form.reliefValvePressure) || 0, unitSystem),
-          dischargePressure: convertToSI("pressure", parseFloat(form.dischargePressure) || 0, unitSystem),
+          reliefValvePressure: convertToSI("pressureGauge", parseFloat(form.reliefValvePressure) || 0, unitSystem),
+          dischargePressure: convertToSI("pressureGauge", parseFloat(form.dischargePressure) || 0, unitSystem),
         };
         if (isNaN(input.volumetricEfficiency)) throw new Error("Invalid volumetric efficiency");
         if (isNaN(input.mechanicalEfficiency)) throw new Error("Invalid mechanical efficiency");
@@ -455,7 +455,7 @@ export default function PumpSizingPage() {
         { label: "Motor Efficiency", value: form.motorEfficiency, unit: "%" },
         { label: "Vapor Pressure", value: form.vaporPressure, unit: getUnit("pressureKpa", u) },
         { label: "Atmospheric Pressure", value: form.atmosphericPressure, unit: getUnit("pressureAbs", u) },
-        { label: "Suction Vessel Pressure", value: form.suctionVesselPressure, unit: getUnit("pressure", u) },
+        { label: "Suction Vessel Pressure", value: form.suctionVesselPressure, unit: getUnit("pressureGauge", u) },
       ],
       results: [
         { label: "Total Dynamic Head (TDH)", value: convertFromSI("head", r.totalDynamicHead, u), unit: getUnit("head", u), highlight: true },
@@ -534,11 +534,11 @@ export default function PumpSizingPage() {
         { label: "Volumetric Efficiency", value: form.volumetricEfficiency, unit: "%" },
         { label: "Mechanical Efficiency", value: form.mechanicalEfficiency, unit: "%" },
         { label: "Motor Efficiency", value: form.motorEfficiency, unit: "%" },
-        { label: "Discharge Pressure", value: form.dischargePressure, unit: getUnit("pressure", u) },
-        { label: "Relief Valve Set Pressure", value: form.reliefValvePressure, unit: getUnit("pressure", u) },
+        { label: "Discharge Pressure", value: form.dischargePressure, unit: getUnit("pressureGauge", u) },
+        { label: "Relief Valve Set Pressure", value: form.reliefValvePressure, unit: getUnit("pressureGauge", u) },
         { label: "Vapor Pressure", value: form.vaporPressure, unit: getUnit("pressureKpa", u) },
         { label: "Atmospheric Pressure", value: form.atmosphericPressure, unit: getUnit("pressureAbs", u) },
-        { label: "Suction Vessel Pressure", value: form.suctionVesselPressure, unit: getUnit("pressure", u) },
+        { label: "Suction Vessel Pressure", value: form.suctionVesselPressure, unit: getUnit("pressureGauge", u) },
       ],
       results: [
         { label: "Differential Pressure", value: convertFromSI("pressure", r.differentialPressure, u), unit: getUnit("pressure", u), highlight: true },
@@ -555,7 +555,7 @@ export default function PumpSizingPage() {
         { label: "NPIPa (Available)", value: r.npipAvailable, unit: "kPa", highlight: r.npipAvailable < 30 },
         { label: "Suction Velocity", value: convertFromSI("velocity", r.suctionVelocity, u), unit: getUnit("velocity", u) },
         { label: "Discharge Velocity", value: convertFromSI("velocity", r.dischargeVelocity, u), unit: getUnit("velocity", u) },
-        { label: "Relief Valve Set Pressure", value: r.reliefValvePressure > 0 ? convertFromSI("pressure", r.reliefValvePressure, u) : 0, unit: r.reliefValvePressure > 0 ? getUnit("pressure", u) : "Not set" },
+        { label: "Relief Valve Set Pressure", value: r.reliefValvePressure > 0 ? convertFromSI("pressureGauge", r.reliefValvePressure, u) : 0, unit: r.reliefValvePressure > 0 ? getUnit("pressureGauge", u) : "Not set" },
       ],
       methodology: [
         "Darcy-Weisbach equation with Swamee-Jain friction factor approximation",
@@ -847,11 +847,11 @@ export default function PumpSizingPage() {
                         <Input type="number" value={form.motorEfficiency} onChange={(e) => updateField("motorEfficiency", e.target.value)} placeholder="e.g. 95" data-testid="input-motor-eff" />
                       </div>
                       <div>
-                        <Label className="text-xs mb-1.5 block">Discharge Pressure ({getUnit("pressure", unitSystem)})</Label>
+                        <Label className="text-xs mb-1.5 block">Discharge Pressure ({getUnit("pressureGauge", unitSystem)})</Label>
                         <Input type="number" value={form.dischargePressure} onChange={(e) => updateField("dischargePressure", e.target.value)} placeholder="0 = from TDH" data-testid="input-discharge-pressure" />
                       </div>
                       <div>
-                        <Label className="text-xs mb-1.5 block">Relief Valve Pressure ({getUnit("pressure", unitSystem)})</Label>
+                        <Label className="text-xs mb-1.5 block">Relief Valve Pressure ({getUnit("pressureGauge", unitSystem)})</Label>
                         <Input type="number" value={form.reliefValvePressure} onChange={(e) => updateField("reliefValvePressure", e.target.value)} placeholder="e.g. 15" data-testid="input-relief-pressure" />
                       </div>
                     </>
@@ -861,7 +861,7 @@ export default function PumpSizingPage() {
                     <Input type="number" value={form.atmosphericPressure} onChange={(e) => updateField("atmosphericPressure", e.target.value)} data-testid="input-atm-pressure" />
                   </div>
                   <div>
-                    <Label className="text-xs mb-1.5 block">Suction Vessel Pressure ({getUnit("pressure", unitSystem)})</Label>
+                    <Label className="text-xs mb-1.5 block">Suction Vessel Pressure ({getUnit("pressureGauge", unitSystem)})</Label>
                     <Input type="number" value={form.suctionVesselPressure} onChange={(e) => updateField("suctionVesselPressure", e.target.value)} placeholder="0 = atmospheric" data-testid="input-vessel-pressure" />
                   </div>
                 </div>
@@ -1085,14 +1085,14 @@ export default function PumpSizingPage() {
                       results={[
                         {
                           label: "Relief Valve Set Pressure",
-                          value: pdResult.reliefValvePressure > 0 ? convertFromSI("pressure", pdResult.reliefValvePressure, unitSystem) : 0,
-                          unit: pdResult.reliefValvePressure > 0 ? getUnit("pressure", unitSystem) : "Not set",
+                          value: pdResult.reliefValvePressure > 0 ? convertFromSI("pressureGauge", pdResult.reliefValvePressure, unitSystem) : 0,
+                          unit: pdResult.reliefValvePressure > 0 ? getUnit("pressureGauge", unitSystem) : "Not set",
                           highlight: pdResult.reliefValvePressure <= 0,
                         },
                         {
                           label: "Required Discharge Pressure",
-                          value: pdResult.dischargePressure > 0 ? convertFromSI("pressure", pdResult.dischargePressure, unitSystem) : 0,
-                          unit: pdResult.dischargePressure > 0 ? getUnit("pressure", unitSystem) : "From TDH",
+                          value: pdResult.dischargePressure > 0 ? convertFromSI("pressureGauge", pdResult.dischargePressure, unitSystem) : 0,
+                          unit: pdResult.dischargePressure > 0 ? getUnit("pressureGauge", unitSystem) : "From TDH",
                         },
                       ]}
                       rawData={pdResult}

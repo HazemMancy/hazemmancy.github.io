@@ -84,8 +84,8 @@ const defaultForm: FormState = {
 const fieldUnitMap: FieldUnitMap = {
   gasFlowRate: "flowGas",
   molecularWeight: null,
-  suctionPressure: "pressure",
-  dischargePressure: "pressure",
+  suctionPressure: "pressureBara",
+  dischargePressure: "pressureBara",
   suctionTemperature: "temperature",
   specificHeatRatio: null,
   compressibilityFactor: null,
@@ -138,8 +138,8 @@ export default function CompressorPage() {
       const input = {
         gasFlowRate: convertToSI("flowGas", parseFloat(form.gasFlowRate), unitSystem),
         molecularWeight: parseFloat(form.molecularWeight),
-        suctionPressure: convertToSI("pressure", parseFloat(form.suctionPressure), unitSystem),
-        dischargePressure: convertToSI("pressure", parseFloat(form.dischargePressure), unitSystem),
+        suctionPressure: convertToSI("pressureBara", parseFloat(form.suctionPressure), unitSystem),
+        dischargePressure: convertToSI("pressureBara", parseFloat(form.dischargePressure), unitSystem),
         suctionTemperature: convertToSI("temperature", parseFloat(form.suctionTemperature), unitSystem),
         specificHeatRatio: parseFloat(form.specificHeatRatio),
         compressibilityFactor: parseFloat(form.compressibilityFactor),
@@ -225,8 +225,8 @@ export default function CompressorPage() {
           title: `Stage ${s.stageNumber}`,
           items: [
             { label: "Compression Ratio", value: s.compressionRatio, unit: "" },
-            { label: "Suction Pressure", value: convertFromSI("pressure", s.suctionPressure, u), unit: getUnit("pressure", u) },
-            { label: "Discharge Pressure", value: convertFromSI("pressure", s.dischargePressure, u), unit: getUnit("pressure", u) },
+            { label: "Suction Pressure", value: convertFromSI("pressureBara", s.suctionPressure, u), unit: getUnit("pressureBara", u) },
+            { label: "Discharge Pressure", value: convertFromSI("pressureBara", s.dischargePressure, u), unit: getUnit("pressureBara", u) },
             { label: "Suction Temperature", value: convertFromSI("temperature", s.suctionTemperature, u), unit: getUnit("temperature", u) },
             { label: "Discharge Temperature", value: convertFromSI("temperature", s.dischargeTemperature, u), unit: getUnit("temperature", u) },
             { label: "Shaft Power", value: convertFromSI("power", s.shaftPower, u), unit: getUnit("power", u) },
@@ -248,8 +248,8 @@ export default function CompressorPage() {
       inputs: [
         { label: "Gas Flow Rate", value: form.gasFlowRate, unit: getUnit("flowGas", u) },
         { label: "Molecular Weight", value: form.molecularWeight, unit: "kg/kmol" },
-        { label: "Suction Pressure", value: form.suctionPressure, unit: getUnit("pressure", u) },
-        { label: "Discharge Pressure", value: form.dischargePressure, unit: getUnit("pressure", u) },
+        { label: "Suction Pressure", value: form.suctionPressure, unit: getUnit("pressureBara", u) },
+        { label: "Discharge Pressure", value: form.dischargePressure, unit: getUnit("pressureBara", u) },
         { label: "Suction Temperature", value: form.suctionTemperature, unit: getUnit("temperature", u) },
         { label: "Specific Heat Ratio (k)", value: form.specificHeatRatio },
         { label: "Compressibility Factor (Z)", value: form.compressibilityFactor },
@@ -310,8 +310,8 @@ export default function CompressorPage() {
     return result.stages.map(s => ({
       stage: s.stageNumber,
       ratio: s.compressionRatio.toFixed(2),
-      pSuction: convertFromSI("pressure", s.suctionPressure, u).toFixed(2),
-      pDischarge: convertFromSI("pressure", s.dischargePressure, u).toFixed(2),
+      pSuction: convertFromSI("pressureBara", s.suctionPressure, u).toFixed(2),
+      pDischarge: convertFromSI("pressureBara", s.dischargePressure, u).toFixed(2),
       tSuction: convertFromSI("temperature", s.suctionTemperature, u).toFixed(1),
       tDischarge: convertFromSI("temperature", s.dischargeTemperature, u).toFixed(1),
       power: convertFromSI("power", s.shaftPower, u).toFixed(1),
@@ -511,12 +511,12 @@ export default function CompressorPage() {
               <CardContent className="space-y-4 pt-0">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label className="text-xs mb-1.5 block">Suction Pressure ({getUnit("pressure", unitSystem)})</Label>
+                    <Label className="text-xs mb-1.5 block">Suction Pressure ({getUnit("pressureBara", unitSystem)})</Label>
                     <Input type="number" value={form.suctionPressure} onChange={e => update("suctionPressure", e.target.value)}
                       placeholder="e.g. 30" data-testid="input-p1" />
                   </div>
                   <div>
-                    <Label className="text-xs mb-1.5 block">Discharge Pressure ({getUnit("pressure", unitSystem)})</Label>
+                    <Label className="text-xs mb-1.5 block">Discharge Pressure ({getUnit("pressureBara", unitSystem)})</Label>
                     <Input type="number" value={form.dischargePressure} onChange={e => update("dischargePressure", e.target.value)}
                       placeholder="e.g. 90" data-testid="input-p2" />
                   </div>
@@ -656,8 +656,8 @@ export default function CompressorPage() {
                           <tr className="border-b text-muted-foreground">
                             <th className="py-2 pr-2 text-left">Stage</th>
                             <th className="py-2 px-2 text-right">Ratio</th>
-                            <th className="py-2 px-2 text-right">P in ({getUnit("pressure", unitSystem)})</th>
-                            <th className="py-2 px-2 text-right">P out ({getUnit("pressure", unitSystem)})</th>
+                            <th className="py-2 px-2 text-right">P in ({getUnit("pressureBara", unitSystem)})</th>
+                            <th className="py-2 px-2 text-right">P out ({getUnit("pressureBara", unitSystem)})</th>
                             <th className="py-2 px-2 text-right">T in ({getUnit("temperature", unitSystem)})</th>
                             <th className="py-2 px-2 text-right">T out ({getUnit("temperature", unitSystem)})</th>
                             <th className="py-2 pl-2 text-right">Power ({getUnit("power", unitSystem)})</th>
