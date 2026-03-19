@@ -340,11 +340,12 @@ export default function ControlValvePage() {
         sd.fluidType === "steam" ? "Steam uses approximate MW/k/Z — verify with steam tables" : "",
       ].filter(Boolean),
       references: [
-        "IEC 60534-2-1: Industrial-process control valves — Sizing equations",
+        "IEC 60534-2-1: Industrial-process control valves — Sizing equations (primary standard)",
+        "IEC 60534-2-2: Sizing equations — Cavitation (liquid service, Kc coefficient)",
+        "IEC 60534-8-3: Noise prediction — Aerodynamic noise (gas/vapor service)",
         "ISA S75.01: Flow Equations for Sizing Control Valves",
-        "ISA S75.02: Control Valve Capacity Test Procedure",
-        "Fisher Control Valve Handbook, 5th Edition",
-        "Masoneilan Engineering Handbook for Control Valves",
+        "THINKTANK Technical Bulletin 1-I: Handbook for Control Valve Sizing (N-constant table, Fp/FLP/xTP, Figure 15)",
+        "Fisher Control Valve Handbook, 5th Edition (N-constant validation, numerical factors)",
       ],
       warnings: [
         ...sr.warnings,
@@ -364,7 +365,7 @@ export default function ControlValvePage() {
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">Control Valve Sizing</h1>
-            <p className="text-xs md:text-sm text-muted-foreground">Cv calculation per IEC 60534 / ISA S75 — 7-step wizard</p>
+            <p className="text-xs md:text-sm text-muted-foreground">Cv sizing per IEC 60534-2-1 / ISA S75.01 — corrected N1, N8, Fp, FLP, xTP, Kc per Technical Bulletin 1-I</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -658,8 +659,11 @@ export default function ControlValvePage() {
                           <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Fp:</span><span className="font-mono">{pr.fpFactor.toFixed(3)}</span></div>
                           {serviceData.fluidType === "liquid" && <>
                             <div className="flex justify-between py-0.5"><span className="text-muted-foreground">FF:</span><span className="font-mono">{pr.ffFactor.toFixed(3)}</span></div>
+                            <div className="flex justify-between py-0.5"><span className="text-muted-foreground">FLP:</span><span className="font-mono">{pr.flpFactor.toFixed(3)}</span></div>
                             <div className="flex justify-between py-0.5"><span className="text-muted-foreground">ΔP choked:</span><span className="font-mono">{pr.deltaPChoked.toFixed(2)} bar</span></div>
-                            {pr.viscosityCorrection > 1 && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Visc. Corr:</span><span className="font-mono">{pr.viscosityCorrection.toFixed(3)}</span></div>}
+                            {pr.cavitationIndex > 0 && pr.cavitationIndex < 999 && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">σ (cav. idx):</span><span className={`font-mono ${pr.cavitationIndex < pr.kcFactor ? "text-red-400" : pr.cavitationIndex < valveData.fl * valveData.fl ? "text-amber-400" : "text-green-400"}`}>{pr.cavitationIndex.toFixed(3)}</span></div>}
+                            {pr.kcFactor > 0 && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Kc (0.80·FL²):</span><span className="font-mono">{pr.kcFactor.toFixed(3)}</span></div>}
+                            {pr.viscosityCorrection > 1 && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Visc. corr (1/FR):</span><span className="font-mono">{pr.viscosityCorrection.toFixed(3)}</span></div>}
                           </>}
                           {isGasLike && <>
                             <div className="flex justify-between py-0.5"><span className="text-muted-foreground">x (ΔP/P1):</span><span className="font-mono">{pr.xActual.toFixed(4)}</span></div>
@@ -918,11 +922,12 @@ export default function ControlValvePage() {
                       serviceData.fluidType === "steam" ? "Steam uses approximate MW/k/Z — verify with steam tables" : "",
                     ].filter(Boolean)}
                     references={[
-                      "IEC 60534-2-1: Industrial-process control valves — Sizing equations",
+                      "IEC 60534-2-1: Industrial-process control valves — Sizing equations (primary standard)",
+                      "IEC 60534-2-2: Sizing equations — Cavitation (liquid service, Kc coefficient)",
+                      "IEC 60534-8-3: Noise prediction — Aerodynamic noise (gas/vapor service)",
                       "ISA S75.01: Flow Equations for Sizing Control Valves",
-                      "ISA S75.02: Control Valve Capacity Test Procedure",
+                      "THINKTANK Technical Bulletin 1-I: Handbook for Control Valve Sizing",
                       "Fisher Control Valve Handbook, 5th Edition",
-                      "Masoneilan Engineering Handbook for Control Valves",
                     ]}
                   />
                 </>
