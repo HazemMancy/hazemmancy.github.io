@@ -196,7 +196,9 @@ export interface ThermalReliefResult {
 
 const SOLAR_HEAT_FLUX_BARE = 947;
 const SOLAR_HEAT_FLUX_INSULATED = 315;
-const N1_METRIC = 14.2;
+// API 520 Part I, 10th Ed, §5.7.2 (SI): N₁ = 0.849 for Q[L/min], ΔP[bar], A[mm²]
+// (derived: N₁_m³h = 1/19.63 = 0.05094; × 16.667 [m³/h → L/min] = 0.849)
+const N1_METRIC = 0.849;
 
 export const FLAG_LABELS: Record<string, { label: string; severity: "info" | "warning" | "error" }> = {
   VERY_SMALL_EXPANSION: { label: "Very Small Expansion Volume", severity: "info" },

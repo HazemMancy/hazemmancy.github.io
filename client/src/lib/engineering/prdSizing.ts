@@ -204,9 +204,9 @@ export function calculateRelievingPressure(
   overpressurePercent: number,
   atmosphericPressure: number
 ): { abs: number; gauge: number } {
-  const P_set_abs = setPressure + atmosphericPressure;
-  const P1 = P_set_abs * (1 + overpressurePercent / 100);
-  return { abs: P1, gauge: P1 - atmosphericPressure };
+  // API 520 §3.2.7: overpressure % is a percentage of gauge set pressure, not absolute.
+  const P1_gauge = setPressure * (1 + overpressurePercent / 100);
+  return { abs: P1_gauge + atmosphericPressure, gauge: P1_gauge };
 }
 
 // ─── C COEFFICIENT FROM k ───────────────────────────────────────────────────────
@@ -238,11 +238,16 @@ export function sizeGasVapor(input: PRDSizingInput): PRDSizingResult {
   let A_mm2: number;
   let flowRegime: string;
 
+  // API 520 Eq. 5.21 (SI): P must be in kPa(a); √ argument is M/(Z·T), not T·Z/M
+  const P1_kPa = relievingPressureAbs * 100;
+
   if (isCritical) {
     flowRegime = "Critical (choked)";
+    // API 520 Part I, 10th Ed, Eq. 5.21 (SI):
+    //   A [mm²] = W [kg/h] / (C × Kd × P1 [kPa(a)] × Kb × Kc × √(M / (Z·T)))
     A_mm2 = relievingRate /
-      (C * kd * relievingPressureAbs * kb * kc *
-        Math.sqrt(T_K * compressibilityFactor / molecularWeight));
+      (C * kd * P1_kPa * kb * kc *
+        Math.sqrt(molecularWeight / (T_K * compressibilityFactor)));
   } else {
     flowRegime = "Subcritical";
     const r = backPressureAbs / relievingPressureAbs;
@@ -252,14 +257,16 @@ export function sizeGasVapor(input: PRDSizingInput): PRDSizingResult {
       Math.pow(r, 2 / k) *
       ((1 - Math.pow(r, (k - 1) / k)) / (1 - r))
     );
+    // API 520 Part I, 10th Ed, Eq. 5.24 (SI — subcritical):
+    //   A [mm²] = W [kg/h] / (F2 × Kd × P1 [kPa(a)] × Kc × √(2M / (Z·T)))
     A_mm2 = relievingRate /
-      (F2 * kd * relievingPressureAbs * kc *
-        Math.sqrt(2 * T_K * compressibilityFactor / molecularWeight));
+      (F2 * kd * P1_kPa * kc *
+        Math.sqrt(2 * molecularWeight / (T_K * compressibilityFactor)));
 
     if (isNaN(A_mm2) || !isFinite(A_mm2)) {
       A_mm2 = relievingRate /
-        (C * kd * relievingPressureAbs * kb * kc *
-          Math.sqrt(T_K * compressibilityFactor / molecularWeight));
+        (C * kd * P1_kPa * kb * kc *
+          Math.sqrt(molecularWeight / (T_K * compressibilityFactor)));
       flowRegime = "Critical (fallback)";
       warnings.push("Subcritical calculation produced invalid result — used critical flow equation as conservative fallback");
     }
@@ -302,11 +309,19 @@ export function sizeSteam(input: PRDSizingInput): PRDSizingResult {
   let Kn = 1.0;
   const P1_barg = relievingPressureAbs - input.atmosphericPressure;
   if (P1_barg > 103.4) {
-    Kn = (2.7644 * relievingPressureAbs - 1000) / (2.7644 * relievingPressureAbs);
+    // API 520 Napier correction (Kn) uses P in psia (USC origin — same formula in SI)
+    const P1_psia = relievingPressureAbs * 14.5038;
+    Kn = (2.7644 * P1_psia - 1000) / (2.7644 * P1_psia);
     warnings.push(`High pressure steam — Napier correction Kn = ${Kn.toFixed(4)} applied`);
   }
 
-  const STEAM_CONSTANT = 190.5;
+  // API 520 Part I, 10th Ed, §5.7.1 (SI) steam constant:
+  //   A [mm²] = W [kg/h] × 190.5 / (Kd × P1 [kPa(a)] × Kb × Kc × Ksh × Kn)
+  //   Equivalently: A = W / (C_steam × Kd × P1 [bar(a)] × Kb × Kc × Ksh × Kn)
+  //   C_steam = 190.5 / (100 kPa/bar × 190.5) = 1/100 … → C_steam for bar = 190.5/100/190.5 × 190.5
+  //   From USC→SI conversion: A[mm²] = W[kg/h] / (0.5247 × Kd × P1[bar(a)] × Kb × Kc × Ksh × Kn)
+  //   Derivation: 1/STEAM_CONSTANT_bar = (190.5 SI factor) / (bar → kPa × 190.5) = 1/100 → 0.5247 = 100/190.5
+  const STEAM_CONSTANT = 0.5247;   // for W[kg/h], P[bar(a)], A[mm²]
 
   const A_mm2 = relievingRate /
     (STEAM_CONSTANT * kd * relievingPressureAbs * kb * kc * ksh * Kn);
@@ -342,7 +357,9 @@ export function sizeLiquid(input: PRDSizingInput): PRDSizingResult {
 
   let Kv = 1.0;
   if (viscosity > 2) {
-    const Re_prelim = Q_Lmin * 18800 * G / (viscosity * Math.sqrt(dP / G));
+    // Re per API 520 §5.7.2 — constant 1304 for Q[L/min], ΔP[bar], μ[cP]
+    // (= 18800 [gpm,psi] × (1/3.785) × (1/3.808) unit conversions)
+    const Re_prelim = Q_Lmin * 1304 * G / (viscosity * Math.sqrt(dP / G));
     if (Re_prelim < 100000) {
       Kv = (0.9935 + 2.878 / Math.sqrt(Re_prelim) + 342.75 / (Re_prelim * Re_prelim));
       Kv = Math.min(Kv, 1.0);
@@ -357,7 +374,10 @@ export function sizeLiquid(input: PRDSizingInput): PRDSizingResult {
     }
   }
 
-  const N1_liquid = 14.2;
+  // API 520 Part I, 10th Ed, §5.7.2 (SI):
+  //   A [mm²] = Q [L/min] × √G / (N₁ × Kd × Kw × Kc × Kv × √ΔP [bar])
+  //   N₁ = 0.849  (derived: N₁_m³h = 1/19.63 = 0.05094; × 16.667 [m³/h→L/min] = 0.849)
+  const N1_liquid = 0.849;
   const A_mm2 = (Q_Lmin * Math.sqrt(G)) /
     (N1_liquid * kd * kw * kc * Kv * Math.sqrt(dP));
 

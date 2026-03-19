@@ -1,25 +1,26 @@
 import { GAS_CONSTANT, PI } from "./constants";
 
 /**
- * PSV (Pressure Safety Valve) Sizing — API 520 Part I
+ * PSV (Pressure Safety Valve) Sizing — API 520 Part I, 10th Edition (2020)
  *
- * Gas/Vapor Relief (API 520 Section 5.6):
- *   A = W / (C * Kd * P1 * Kb * Kc * sqrt(T * Z / M))
+ * Gas/Vapor Relief (API 520 §5.6, Eq. 5.21 SI):
+ *   A = W / (C × Kd × P1 × Kb × Kc × √(M / (Z·T)))
  *
  * where:
  *   A  = required effective discharge area (mm²)
  *   W  = required relieving capacity (kg/h)
  *   C  = coefficient from k (specific heat ratio)
- *      C = 0.03948 * sqrt(k * (2/(k+1))^((k+1)/(k-1)))
+ *      C = 0.03948 × √(k × (2/(k+1))^((k+1)/(k-1)))
  *   Kd = effective coefficient of discharge (0.975 for gas, 0.65 for liquid)
- *   P1 = upstream relieving pressure = Set pressure × (1 + overpressure) + atmospheric (bar(a))
+ *   P1 = upstream relieving pressure in kPa(a)  [bar(a) × 100 — SI unit required by constant]
+ *        P1_gauge = P_set_gauge × (1 + OP/100);  P1_abs = P1_gauge + P_atm  (API 520 §3.2.7)
  *   Kb = back pressure correction factor (1.0 for conventional, varies for balanced)
  *   Kc = combination correction factor (1.0 for no rupture disk, 0.9 with)
  *   T  = relieving temperature (K)
  *   Z  = compressibility factor
  *   M  = molecular weight (kg/kmol)
  *
- * Liquid Relief (API 520 Section 5.8):
+ * Liquid Relief (API 520 §5.7.2 SI):
  *   A = Q / (Kd * Kw * Kc * Kv * sqrt(ΔP / G))
  *
  * where:
@@ -105,10 +106,11 @@ function selectOrifice(requiredArea: number): { designation: string; area: numbe
 }
 
 /**
- * C coefficient from specific heat ratio k (API 520 Eq. 5.6):
- *   C = 0.03948 * sqrt(k * (2/(k+1))^((k+1)/(k-1)))
+ * C coefficient from specific heat ratio k (API 520 Part I, 10th Ed, Eq. 5.21 SI):
+ *   C = 0.03948 × √(k × (2/(k+1))^((k+1)/(k-1)))
  *
- * Note: The constant 0.03948 applies for W in kg/h, P in bar(a), T in K, M in kg/kmol, A in mm²
+ * Note: The constant 0.03948 applies for W in kg/h, P in kPa(a), T in K, M in kg/kmol, A in mm².
+ * All callers must pass P1 in kPa(a) (= bar(a) × 100) and √(M/(Z·T)) (not √(TZ/M)).
  */
 function cFromK(k: number): number {
   return 0.03948 * Math.sqrt(k * Math.pow(2 / (k + 1), (k + 1) / (k - 1)));
@@ -117,16 +119,20 @@ function cFromK(k: number): number {
 export function calculatePSVGas(input: PSVGasInput): PSVResult {
   const warnings: string[] = [];
 
-  const P_set_abs = input.setPressure + input.atmosphericPressure;
-  const P1 = P_set_abs * (1 + input.overpressure / 100);
+  // API 520 §3.2.7: overpressure % is applied to gauge set pressure, not absolute
+  const P1_gauge = input.setPressure * (1 + input.overpressure / 100);
+  const P1 = P1_gauge + input.atmosphericPressure;          // bar(a)
+  const P1_kPa = P1 * 100;                                  // kPa(a) — required by API 520 Eq. 5.21 SI
   const P_back_abs = input.backPressure + input.atmosphericPressure;
   const T_K = input.relievingTemperature + 273.15;
 
   const C = cFromK(input.specificHeatRatio);
 
+  // API 520 Part I, 10th Ed, Eq. 5.21 (SI):
+  //   A [mm²] = W [kg/h] / (C × Kd × P1 [kPa(a)] × Kb × Kc × √(M / (Z·T)))
   const A_mm2 = input.massFlowRate /
-    (C * input.kd * P1 * input.kb * input.kc *
-      Math.sqrt(T_K * input.compressibilityFactor / input.molecularWeight));
+    (C * input.kd * P1_kPa * input.kb * input.kc *
+      Math.sqrt(input.molecularWeight / (T_K * input.compressibilityFactor)));
 
   if (A_mm2 <= 0) throw new Error("Calculated area is non-positive — check inputs");
 
@@ -162,19 +168,22 @@ export function calculatePSVGas(input: PSVGasInput): PSVResult {
 export function calculatePSVLiquid(input: PSVLiquidInput): PSVResult {
   const warnings: string[] = [];
 
-  const P_set_abs = input.setPressure + input.atmosphericPressure;
-  const P1 = P_set_abs * (1 + input.overpressure / 100);
+  // API 520 §3.2.7: overpressure % is applied to gauge set pressure, not absolute
+  const P1_gauge = input.setPressure * (1 + input.overpressure / 100);
+  const P1 = P1_gauge + input.atmosphericPressure;          // bar(a)
   const P_back_abs = input.backPressure + input.atmosphericPressure;
-  const dP = P1 - P_back_abs;
+  const dP = P1 - P_back_abs;                               // bar (differential)
 
   if (dP <= 0) throw new Error("Relieving pressure must exceed back pressure");
 
   const G = input.liquidDensity / 999;
-  const Q_Lmin = input.flowRate * 1000 / 60;
+  const Q_Lmin = input.flowRate * 1000 / 60;                // m³/h → L/min
 
   let Kv = 1.0;
   if (input.viscosity > 2) {
-    const Re_prelim = Q_Lmin * 18800 * G / (input.viscosity * Math.sqrt(dP / G));
+    // Re per API 520 §5.7.2 — constant 1304 for Q[L/min], ΔP[bar], μ[cP]
+    // (= 18800 [gpm,psi] × (1/3.785) × (1/3.808) unit conversions)
+    const Re_prelim = Q_Lmin * 1304 * G / (input.viscosity * Math.sqrt(dP / G));
     if (Re_prelim < 100000) {
       Kv = (0.9935 + 2.878 / Math.sqrt(Re_prelim) + 342.75 / (Re_prelim * Re_prelim));
       Kv = Math.min(Kv, 1.0);
@@ -182,7 +191,10 @@ export function calculatePSVLiquid(input: PSVLiquidInput): PSVResult {
     }
   }
 
-  const N1_liquid = 14.2;
+  // API 520 Part I, 10th Ed, §5.7.2 (SI):
+  //   A [mm²] = Q [L/min] × √G / (N₁ × Kd × Kw × Kc × Kv × √ΔP [bar])
+  //   N₁ = 0.849  (derived: N₁_m³h = 1/19.63 = 0.05094; × 16.667 [m³/h→L/min] = 0.849)
+  const N1_liquid = 0.849;
 
   const A_mm2 = (Q_Lmin * Math.sqrt(G)) /
     (N1_liquid * input.kd * input.kw * input.kc * Kv * Math.sqrt(dP));
@@ -215,7 +227,7 @@ export function calculatePSVLiquid(input: PSVLiquidInput): PSVResult {
 
 // Gas PSV — per API 520 Part I, Section 4.3 (vapor service)
 // Blocked outlet relief on HP gas separator, conventional valve
-// Expected: orifice letter J–L (API 526), area ~1500–3000 mm²
+// Expected: H orifice (506 mm²) — A_required ≈ 460 mm² [Rev D corrected]
 export const PSV_GAS_TEST_CASE: PSVGasInput = {
   massFlowRate: 15000,       // kg/h — blocked outlet relief rate (API 521 Section 5)
   molecularWeight: 18.5,     // sweet natural gas (GPSA)
