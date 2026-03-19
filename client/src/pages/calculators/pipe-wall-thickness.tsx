@@ -15,6 +15,7 @@ import {
   MATERIAL_DB,
   NPS_DATA,
   QUALITY_FACTORS,
+  QUALITY_FACTORS_PIPELINE,
   B318_LOCATION_CLASS,
   DEFAULT_PWT_INPUT,
   PWT_TEST_CASE_B313,
@@ -148,7 +149,7 @@ function ScheduleTable({ checks, tReq }: { checks: PipeWTResult["scheduleChecks"
           <tr className="border-t border-border bg-muted/20">
             <td colSpan={7} className="px-3 py-1.5 text-xs text-muted-foreground">
               Required nominal wall: <span className="font-mono font-semibold text-amber-400">{fmt(tReq)} mm</span> — first green row = governing schedule selection.
-              MAOP back-calculated at fresh-wall condition (no corrosion removed).
+              MAOP back-calculated at corroded end-of-life condition: t_eff = t_nom × (1 − MT/100) − c.
             </td>
           </tr>
         </tfoot>
@@ -290,6 +291,11 @@ export default function PipeWallThicknessPage() {
       const mat = MATERIAL_DB[prev.materialId];
       if (mat && !mat.compatibleStandards.includes(std)) {
         next.materialId = std === "B31.3" ? "A106_B" : "API5L_X52";
+        next.jointType  = std === "B31.3" ? "seamless" : "erw";
+      }
+      // erw_psl2 is B31.8-only; reset to erw if switching to B31.3/B31.4
+      if (prev.jointType === "erw_psl2" && std !== "B31.8") {
+        next.jointType = "erw";
       }
       return next;
     });
@@ -595,10 +601,21 @@ export default function PipeWallThicknessPage() {
               <div className="space-y-3">
                 <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                   Longitudinal Joint Type
-                  {inp.pipingStandard === "B31.3" && <span className="font-normal ml-2 text-muted-foreground/60">(E factor per ASME B31.3 Table A-1B)</span>}
+                  <span className="font-normal ml-2 text-muted-foreground/60">
+                    {inp.pipingStandard === "B31.3"
+                      ? "(E per ASME B31.3 Table A-1B)"
+                      : inp.pipingStandard === "B31.4"
+                        ? "(E per ASME B31.4 Table 403.2.1-1)"
+                        : "(E per ASME B31.8 §841.11)"}
+                  </span>
                 </Label>
+                {inp.pipingStandard !== "B31.3" && (
+                  <p className="text-xs text-amber-400/80 bg-amber-950/20 border border-amber-900/40 rounded px-3 py-1.5">
+                    B31.4/B31.8 joint factors differ from B31.3. ERW PSL1 = 0.80 (not 0.85). See ASME B31.4 Table 403.2.1-1 / B31.8 §841.11.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {Object.entries(QUALITY_FACTORS).map(([key, q]) => (
+                  {Object.entries(inp.pipingStandard === "B31.3" ? QUALITY_FACTORS : QUALITY_FACTORS_PIPELINE).map(([key, q]) => (
                     <button
                       key={key}
                       onClick={() => upd("jointType", key as JointTypeKey)}
@@ -928,7 +945,18 @@ export default function PipeWallThicknessPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                       <div><span className="text-muted-foreground">Nominal wall:</span><br/><span className="font-mono font-semibold">{fmt(result.selectedSchedule.wallMm)} mm</span></div>
                       <div><span className="text-muted-foreground">Effective (corroded):</span><br/><span className="font-mono font-semibold">{fmt(result.selectedSchedule.tEffective)} mm</span></div>
-                      <div><span className="text-muted-foreground">MAOP (back-calc):</span><br/><span className="font-mono font-semibold">{fmt(result.selectedSchedule.maop)} bar(g)</span></div>
+                      <div>
+                        <span className="text-muted-foreground">MAOP (back-calc):</span><br/>
+                        <span className="font-mono font-semibold">{fmt(result.selectedSchedule.maop)} bar(g)</span>
+                        {inp.designPressure > 0 && (
+                          <span className={`ml-1.5 text-xs font-normal ${
+                            result.selectedSchedule.maop < inp.designPressure ? "text-red-400" :
+                            result.selectedSchedule.maop / inp.designPressure < 1.05 ? "text-amber-400" : "text-green-400"
+                          }`}>
+                            ({((result.selectedSchedule.maop - inp.designPressure) / inp.designPressure * 100).toFixed(1)}% margin)
+                          </span>
+                        )}
+                      </div>
                       <div><span className="text-muted-foreground">Hoop stress utilisation:</span><br/><span className={`font-mono font-semibold ${result.selectedSchedule.utilisation > 0.9 ? "text-amber-400" : "text-green-400"}`}>{fmt(result.selectedSchedule.utilisation * 100, 1)}%</span></div>
                     </div>
                   </CardContent>

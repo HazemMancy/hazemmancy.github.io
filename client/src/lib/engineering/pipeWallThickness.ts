@@ -69,6 +69,26 @@ export const QUALITY_FACTORS: Record<string, { E: number; label: string; std: st
   fbw:      { E: 0.60, label: "Furnace Butt Welded (FBW)",          std: "ASME B31.3 Table A-1B" },
 };
 
+/**
+ * ASME B31.4:2019 Table 403.2.1-1 / ASME B31.8:2022 §841.11 — Joint factor E.
+ *
+ * NOTE: B31.4/B31.8 define joint factors differently from B31.3 Table A-1B:
+ *   - ERW (PSL1, no full-body NDE): E = 0.80 — the conservative default for API 5L ERW pipe.
+ *   - ERW (PSL2, full-body UT per API 5L SR4): E = 1.00 — B31.8 §841.11 Note (3) / Annex R.
+ *   - FBW: not permitted for gas pipelines (B31.8 §817.1); E = 0.60 for liquid lines.
+ *   - Seamless and SAW/DSAW: E = 1.00.
+ *
+ * Using B31.3 ERW value (0.85) for B31.4/B31.8 design is incorrect and non-conservative.
+ */
+export const QUALITY_FACTORS_PIPELINE: Record<string, { E: number; label: string; std: string }> = {
+  seamless:  { E: 1.00, label: "Seamless",                                    std: "ASME B31.4 Table 403.2.1-1 / B31.8 §841.11" },
+  erw:       { E: 0.80, label: "ERW (API 5L PSL1 — standard, no full-body NDE)", std: "ASME B31.4 Table 403.2.1-1 / B31.8 §841.11" },
+  erw_psl2:  { E: 1.00, label: "ERW (API 5L PSL2 — full-body UT per SR4)",    std: "ASME B31.8 §841.11 Note (3) / Annex R" },
+  dsaw:      { E: 1.00, label: "Submerged Arc Welded (SAW/DSAW)",              std: "ASME B31.4 Table 403.2.1-1 / B31.8 §841.11" },
+  efw:       { E: 0.80, label: "Electric Fusion Welded (EFW)",                 std: "ASME B31.4 Table 403.2.1-1" },
+  fbw:       { E: 0.60, label: "Furnace Butt Welded (FBW — B31.4 liquid only)",std: "ASME B31.4 Table 403.2.1-1" },
+};
+
 /** ASME B31.8 §841.114A — Location class design factors */
 export const B318_LOCATION_CLASS: Record<string, { F: number; label: string }> = {
   "1D1": { F: 0.80, label: "Class 1, Division 1 (offshore gathering, very remote)" },
@@ -82,7 +102,7 @@ export const B318_LOCATION_CLASS: Record<string, { F: number; label: string }> =
 
 export type PipeStandard    = "B31.3" | "B31.4" | "B31.8";
 export type MaterialType    = "ferritic" | "austenitic" | "pipeline" | "user";
-export type JointTypeKey    = "seamless" | "erw" | "dsaw" | "efw" | "fbw" | "user";
+export type JointTypeKey    = "seamless" | "erw" | "erw_psl2" | "dsaw" | "efw" | "fbw" | "user";
 export type LocationClassKey = "1D1" | "1D2" | "2" | "3" | "4";
 
 export interface PipeWTProject {
@@ -180,6 +200,7 @@ export type PipeWTFlag =
   | "MATERIAL_TEMP_LIMIT"
   | "MILL_TOL_DOMINANT"
   | "W_FACTOR_WARNING"
+  | "MAOP_LOW_MARGIN"
   | "PRELIMINARY_DATA";
 
 export interface PipeWTResult {
@@ -257,6 +278,31 @@ export const MATERIAL_DB: Record<string, MaterialSpec> = {
     ],
     smys: 241, smuts: 414, defaultJoint: "seamless",
     notes: "Most common CS process pipe. SMYS=241 MPa, SMUTS=414 MPa. Not rated > 482 °C.",
+  },
+
+  A106_C: {
+    id: "A106_C", name: "ASTM A106 Gr. C — Seamless CS (High-Strength)",
+    spec: "ASTM A106 / ASME B31.3 Table A-1",
+    materialType: "ferritic",
+    compatibleStandards: ["B31.3"],
+    stressTable: [
+      // Source: ASME B31.3:2022 Table A-1.  SMYS=276 MPa (40 ksi), SMUTS=483 MPa (70 ksi).
+      // S = min(SMUTS/3, 2/3×SMYS) = min(161, 184) = 161 MPa at ambient.
+      // High-temp values follow ferritic derating trend — verify vs. current Table A-1 edition.
+      { tempC: -29,  S_MPa: 160 },
+      { tempC: 204,  S_MPa: 160 },
+      { tempC: 260,  S_MPa: 153 },
+      { tempC: 288,  S_MPa: 149 },
+      { tempC: 316,  S_MPa: 145 },
+      { tempC: 343,  S_MPa: 141 },
+      { tempC: 371,  S_MPa: 138 },
+      { tempC: 399,  S_MPa: 131 },
+      { tempC: 427,  S_MPa: 121 },
+      { tempC: 454,  S_MPa: 100 },
+      { tempC: 482,  S_MPa: 72  },
+    ],
+    smys: 276, smuts: 483, defaultJoint: "seamless",
+    notes: "Highest-strength A106 grade. SMYS=276 MPa, SMUTS=483 MPa. Seamless only. Not rated > 482 °C.",
   },
 
   A106_A: {
@@ -482,6 +528,16 @@ export const NPS_DATA: NpsEntry[] = [
     ],
   },
   {
+    nps: '1-1/4"', odMm: 42.2,
+    // ASME B36.10M-2018: NPS 1-1/4" (DN 32), OD = 42.2 mm
+    schedules: [
+      { schedule: "Sch 40 (Std)",  wallMm: 3.56 },
+      { schedule: "Sch 80 (XS)",   wallMm: 4.85 },
+      { schedule: "Sch 160",        wallMm: 6.35 },
+      { schedule: "XXS",            wallMm: 9.70 },
+    ],
+  },
+  {
     nps: '1-1/2"', odMm: 48.3,
     schedules: [
       { schedule: "Sch 40 (Std)",  wallMm: 3.68 },
@@ -521,6 +577,14 @@ export const NPS_DATA: NpsEntry[] = [
     ],
   },
   {
+    nps: '3-1/2"', odMm: 101.6,
+    // ASME B36.10M-2018: NPS 3-1/2" (DN 90), OD = 101.6 mm
+    schedules: [
+      { schedule: "Sch 40 (Std)",  wallMm: 5.74 },
+      { schedule: "Sch 80 (XS)",   wallMm: 8.08 },
+    ],
+  },
+  {
     nps: '4"', odMm: 114.3,
     schedules: [
       { schedule: "Sch 10",         wallMm: 3.05 },
@@ -532,6 +596,19 @@ export const NPS_DATA: NpsEntry[] = [
       { schedule: "Sch 120",        wallMm: 11.13 },
       { schedule: "Sch 160",        wallMm: 13.49 },
       { schedule: "XXS",            wallMm: 17.12 },
+    ],
+  },
+  {
+    nps: '5"', odMm: 141.3,
+    // ASME B36.10M-2018: NPS 5" (DN 125), OD = 141.3 mm
+    schedules: [
+      { schedule: "Sch 10",         wallMm: 3.40 },
+      { schedule: "Sch 20",         wallMm: 3.96 },
+      { schedule: "Sch 40 (Std)",  wallMm: 6.55 },
+      { schedule: "Sch 80 (XS)",   wallMm: 9.53 },
+      { schedule: "Sch 120",        wallMm: 12.70 },
+      { schedule: "Sch 160",        wallMm: 15.88 },
+      { schedule: "XXS",            wallMm: 19.05 },
     ],
   },
   {
@@ -712,13 +789,19 @@ function interpolateAllowableStress(stressTable: Array<{ tempC: number; S_MPa: n
  */
 function yCoefficient(materialType: MaterialType, tempC: number): number {
   if (materialType === "austenitic") {
+    // ASME B31.3 Table 304.1.1 — Austenitic stainless steel
     return tempC > 566 ? 0.5 : 0.4;
   }
-  // Ferritic / carbon steel
+  // ASME B31.3 Table 304.1.1 — Ferritic / carbon steel
+  // Table boundary interpretation: use the Y value from the highest listed temperature
+  // that does NOT exceed the design temperature (step-function, most conservative).
+  //   ≤ 482 °C → 0.4  |  ≤ 510 °C → 0.5  |  ≤ 565 °C → 0.6  |  ≥ 566 °C → 0.7
+  // Note: B31.3 Table 304.1.1 lists 566 °C (1050 °F) as the boundary for Y=0.7.
+  // Temperatures from 539–565 °C use Y=0.6 (last row not exceeding design temp).
   if (tempC <= 482) return 0.4;
   if (tempC <= 510) return 0.5;
-  if (tempC <= 538) return 0.6;
-  return 0.7; // ≥ 566 °C (also 538-566 per table)
+  if (tempC < 566)  return 0.6; // 510 < T < 566 °C → use 538 °C row (Y=0.6)
+  return 0.7; // T ≥ 566 °C (= 1050 °F); also 0.7 at 593 °C+ per table
 }
 
 /**
@@ -796,9 +879,13 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   if (S_eff <= 0) throw new Error("Allowable stress must be positive");
 
   // ── Quality Factor E ──
+  // B31.3 uses ASME B31.3 Table A-1B values (QUALITY_FACTORS).
+  // B31.4/B31.8 use separate joint factor table (QUALITY_FACTORS_PIPELINE).
+  // ERW: B31.3=0.85, B31.4/B31.8 PSL1=0.80 — NOT interchangeable.
+  const qTable = (std === "B31.3") ? QUALITY_FACTORS : QUALITY_FACTORS_PIPELINE;
   const E_eff = input.jointType === "user"
     ? input.userE
-    : (QUALITY_FACTORS[input.jointType]?.E ?? 1.0);
+    : (qTable[input.jointType]?.E ?? 1.0);
 
   // ── Y coefficient (B31.3 only) ──
   const Y_eff = yCoefficient(matType, T_des);
@@ -833,12 +920,12 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   steps.push({ label: "Design temperature T", equation: "",                    value: T_des.toFixed(1), unit: "°C", ref: "" });
   if (std === "B31.3") {
     steps.push({ label: "Allowable stress S", equation: "Table A-1 interpolated", value: S_eff.toFixed(2), unit: "MPa", ref: "ASME B31.3 Table A-1" });
-    steps.push({ label: "Quality factor E",   equation: "",                    value: E_eff.toFixed(2), unit: "—", ref: "ASME B31.3 Table A-1B" });
+    steps.push({ label: "Quality factor E",   equation: "",                    value: E_eff.toFixed(2), unit: "—", ref: input.jointType === "user" ? "User-defined" : (QUALITY_FACTORS[input.jointType]?.std ?? "ASME B31.3 Table A-1B") });
     steps.push({ label: "Y coefficient",      equation: `Table 304.1.1 (${matType})`, value: Y_eff.toFixed(1), unit: "—", ref: "ASME B31.3 Table 304.1.1" });
     steps.push({ label: "W factor",           equation: "Table 302.3.5",       value: W_eff.toFixed(1), unit: "—", ref: "ASME B31.3 Table 302.3.5" });
   } else {
     steps.push({ label: "SMYS",              equation: "API 5L Table B.2",     value: S_eff.toFixed(0), unit: "MPa", ref: "API 5L:2018" });
-    steps.push({ label: "Quality factor E",  equation: "",                     value: E_eff.toFixed(2), unit: "—", ref: std === "B31.4" ? "ASME B31.4 Table 403.2.1-1" : "ASME B31.8 Table 841.114A" });
+    steps.push({ label: "Quality factor E",  equation: "",                     value: E_eff.toFixed(2), unit: "—", ref: input.jointType === "user" ? "User-defined" : (QUALITY_FACTORS_PIPELINE[input.jointType]?.std ?? (std === "B31.4" ? "ASME B31.4 Table 403.2.1-1" : "ASME B31.8 §841.11")) });
     steps.push({ label: "Design factor F",   equation: "",                     value: F_eff.toFixed(2), unit: "—", ref: std === "B31.4" ? "ASME B31.4 §403.2.1" : "ASME B31.8 Table 841.114A" });
     steps.push({ label: "Temp derating T",   equation: "",                     value: T_derating.toFixed(3), unit: "—", ref: std === "B31.4" ? "ASME B31.4 Table 403.2.1-1" : "ASME B31.8 Table 841.1.8-1" });
   }
@@ -1033,6 +1120,13 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
       flags.push("HIGH_UTILISATION");
       warnings.push(`Hoop stress utilisation = ${(selectedSchedule.utilisation*100).toFixed(1)}% — close to allowable limit. Review corrosion life and consider the next heavier schedule.`);
     }
+
+    // MAOP margin check: MAOP should comfortably exceed design pressure
+    const maopMarginFrac = P_bar > 0 ? (selectedSchedule.maop - P_bar) / P_bar : 1;
+    if (maopMarginFrac < 0.05 && selectedSchedule.maop > P_bar) {
+      flags.push("MAOP_LOW_MARGIN");
+      warnings.push(`MAOP = ${selectedSchedule.maop.toFixed(1)} bar — only ${(maopMarginFrac*100).toFixed(1)}% margin above design pressure of ${P_bar.toFixed(1)} bar. Consider selecting the next heavier schedule to increase MAOP margin.`);
+    }
   }
 
   // ── Mill tolerance dominance ──
@@ -1174,6 +1268,7 @@ export const PWT_FLAG_LABELS: Record<PipeWTFlag, string> = {
   MATERIAL_TEMP_LIMIT:  "TEMPERATURE EXCEEDS MATERIAL TABLE LISTING",
   MILL_TOL_DOMINANT:    "MILL TOLERANCE SIGNIFICANT CONTRIBUTION",
   W_FACTOR_WARNING:     "W FACTOR CHECK REQUIRED (T > 510 °C)",
+  MAOP_LOW_MARGIN:      "LOW MAOP MARGIN (< 5% above design pressure)",
   PRELIMINARY_DATA:     "PRELIMINARY DATA — re-confirm before final design",
 };
 
@@ -1189,5 +1284,6 @@ export const PWT_FLAG_SEVERITY: Record<PipeWTFlag, "critical" | "warning" | "inf
   MATERIAL_TEMP_LIMIT:  "critical",
   MILL_TOL_DOMINANT:    "info",
   W_FACTOR_WARNING:     "warning",
+  MAOP_LOW_MARGIN:      "warning",
   PRELIMINARY_DATA:     "info",
 };
