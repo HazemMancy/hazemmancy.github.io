@@ -95,25 +95,25 @@ Key architectural features and implementations include:
 
 ## GitHub Pages Deployment
 
-**How it works:** The Vite build compiles all React/TypeScript source code into pure HTML, CSS, and JavaScript files in the `dist/` folder. GitHub Pages then serves those static files — no server required. The source code is never pushed to GitHub Pages; only the compiled output is deployed.
+**How it works:** The Vite build compiles all React/TypeScript source code into pure HTML, CSS, and JavaScript files in the `dist/` folder. The compiled output is pushed to the `gh-pages` branch on GitHub. GitHub Pages (in legacy/classic mode) serves directly from that branch — no build step happens on GitHub's side.
 
-### Automatic deployment (GitHub Actions — CONFIGURED)
-The file `.github/workflows/deploy.yml` automates the full build-and-deploy pipeline:
-1. Triggered on every push to the `main` branch
-2. Builds the project with `npx vite build`
-3. Deploys the `dist/` folder to GitHub Pages via the official `actions/deploy-pages` action
+### Branch structure
+- `main` — source code (TypeScript, React, Vite config, etc.)
+- `gh-pages` — compiled output only (HTML, CSS, JS — 103 files). This is what GitHub Pages serves.
 
-**One-time GitHub setup required:**
-1. Go to the repository on GitHub → **Settings** → **Pages**
-2. Under **Source**, select **GitHub Actions**
-3. Push the code (including `.github/workflows/deploy.yml`) to the `main` branch
-4. GitHub Actions runs automatically — the site will be live at `https://hazemmancy.github.io`
+### How to deploy updates (after making changes in Replit)
+Run these steps from Replit whenever you want to publish a new version:
+1. Build: `node node_modules/.bin/vite build`
+2. Copy SPA fix: `cp dist/index.html dist/404.html && touch dist/.nojekyll`
+3. Push compiled output to `gh-pages` branch (use the deploy script or agent)
+4. GitHub Pages auto-serves the new files within ~30 seconds
 
-### What the build produces (`dist/`)
-- `dist/index.html` — pure HTML entry point (no React/TypeScript visible)
-- `dist/404.html` — copy of index.html for SPA routing (any URL works)
-- `dist/.nojekyll` — prevents GitHub Pages from running Jekyll processing
-- `dist/assets/` — all compiled CSS and JavaScript chunks (plain `.css` and `.js` files)
+### What the build produces (`dist/` → pushed to `gh-pages` root)
+- `index.html` — pure HTML entry point (no React/TypeScript visible)
+- `404.html` — copy of index.html for SPA routing (any URL works)
+- `.nojekyll` — prevents GitHub Pages from running Jekyll processing
+- `assets/` — all compiled CSS and JavaScript chunks (plain `.css` and `.js` files)
+- `favicon.png` — site icon
 
 ### Base path note
 The `vite.config.ts` uses no explicit `base` (defaults to `/`), which is correct for the user pages repo `hazemmancy.github.io`. If this were a project pages repo (e.g., `hazemmancy.github.io/project-name`), `base: '/project-name/'` would be needed.
