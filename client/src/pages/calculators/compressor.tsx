@@ -25,7 +25,7 @@ import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitTogg
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { CompressorCurveChart } from "@/components/engineering/compressor-curve-chart";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   Cog, FlaskConical, RotateCcw, ChevronLeft, ChevronRight,
   ClipboardList, Wind, Calculator, Layers, CheckCircle2,
@@ -712,9 +712,9 @@ export default function CompressorPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
+                      <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToCalcNote(d); }} data-testid="button-export-calc-note">
                         <FileText className="w-4 h-4 mr-2 text-red-400" />
-                        Export as PDF
+                        Calc Note (Print / PDF)
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
                         <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />

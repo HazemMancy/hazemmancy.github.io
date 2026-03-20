@@ -18,7 +18,7 @@ import {
   calculateApi2000, API_2000_TEST_CASE, PRODUCT_LABELS, INSULATION_LABELS,
 } from "@/lib/engineering/api2000";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -709,8 +709,8 @@ export default function TankVentingPage() {
                         <DropdownMenuItem data-testid="button-export-excel" onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }}>
                           <FileSpreadsheet className="w-3.5 h-3.5 mr-2" /> Excel
                         </DropdownMenuItem>
-                        <DropdownMenuItem data-testid="button-export-pdf" onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }}>
-                          <FileText className="w-3.5 h-3.5 mr-2" /> PDF
+                        <DropdownMenuItem data-testid="button-export-calc-note" onClick={() => { const d = buildExportData(); if (d) exportToCalcNote(d); }}>
+                          <FileText className="w-3.5 h-3.5 mr-2" /> Calc Note (Print / PDF)
                         </DropdownMenuItem>
                         <DropdownMenuItem data-testid="button-export-json" onClick={() => { const d = buildExportData(); if (d) exportToJSON(d); }}>
                           <Download className="w-3.5 h-3.5 mr-2" /> JSON

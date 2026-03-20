@@ -395,6 +395,146 @@ export async function exportToPDF(data: ExportDatasheet): Promise<void> {
   doc.save(`${slugify(data.calculatorName)}_${timestamp()}.pdf`);
 }
 
+export function exportToCalcNote(data: ExportDatasheet): void {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" });
+  const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+  const esc = (s: string | number) =>
+    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const fmtV = (v: string | number): string => {
+    if (typeof v === "number") {
+      if (Math.abs(v) >= 1e6 || (Math.abs(v) < 0.001 && v !== 0)) return v.toExponential(4);
+      if (Math.abs(v) >= 1000) return v.toFixed(1);
+      if (Math.abs(v) >= 1) return v.toFixed(4);
+      return v.toFixed(6);
+    }
+    return esc(v);
+  };
+
+  const projectBlock = data.projectInfo && data.projectInfo.length > 0
+    ? `<div class="project-grid">${data.projectInfo.map(p =>
+        `<div><span>${esc(p.label)}:</span> <strong>${esc(p.value)}</strong></div>`).join("")}</div>`
+    : "";
+
+  const warningsBlock = data.warnings && data.warnings.length > 0
+    ? `<div class="warnings"><strong>&#9888; Engineering Warnings / Flags</strong>
+       <ul>${data.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul></div>`
+    : "";
+
+  const inputRows = data.inputs.map(inp =>
+    `<tr><td>${esc(inp.label)}</td><td class="mono right">${esc(fmtV(inp.value))}</td><td>${esc(inp.unit || "")}</td></tr>`
+  ).join("");
+
+  const calcStepsSection = data.calcSteps && data.calcSteps.length > 0
+    ? `<h2>&#9658; Calculation Steps</h2>
+       <table>
+         <tr><th>#</th><th>Step</th><th>Equation</th><th class="right">Value</th><th>Unit</th></tr>
+         ${data.calcSteps.map((s, i) =>
+           `<tr>
+             <td style="color:#999;font-size:8pt">${i + 1}</td>
+             <td>${esc(s.label)}</td>
+             <td class="mono eq">${esc(s.equation || "\u2014")}</td>
+             <td class="mono right">${esc(fmtV(s.value))}</td>
+             <td>${esc(s.unit || "")}</td>
+           </tr>`).join("")}
+       </table>`
+    : "";
+
+  const resultRows = data.results.map(r =>
+    `<tr class="${r.highlight ? "highlight" : ""}">
+       <td>${esc(r.label)}</td>
+       <td class="mono right">${esc(fmtV(r.value))}</td>
+       <td>${esc(r.unit)}</td>
+     </tr>`
+  ).join("");
+
+  const additionalSections = (data.additionalSections || []).map(sec =>
+    `<h2>&#9658; ${esc(sec.title)}</h2>
+     <table>
+       <tr><th>Parameter</th><th class="right">Value</th><th>Unit</th></tr>
+       ${sec.items.map(item =>
+         `<tr><td>${esc(item.label)}</td><td class="mono right">${esc(fmtV(item.value))}</td><td>${esc(item.unit || "")}</td></tr>`
+       ).join("")}
+     </table>`
+  ).join("");
+
+  const listBlock = (title: string, items: string[]) =>
+    items.length
+      ? `<h2>&#9658; ${esc(title)}</h2><ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`
+      : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>${esc(data.calculatorName)} \u2014 Calc Note</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#1a1a2e;margin:0;background:#fff}
+  .header{background:#0c1222;color:#d4a04a;padding:14px 24px 10px;margin-bottom:20px}
+  .header h1{font-size:15pt;margin:0 0 4px;letter-spacing:.02em}
+  .header .sub{color:#b0b0c0;font-size:8.5pt}
+  .page{max-width:920px;margin:0 auto;padding:0 24px 32px}
+  .project-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px 32px;font-size:9pt;margin-bottom:16px;padding:10px 14px;background:#f4f4f8;border:1px solid #e0e0e8;border-radius:4px}
+  .project-grid div span{color:#888;margin-right:4px}
+  h2{font-size:10pt;color:#0c1222;border-bottom:2px solid #d4a04a;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.04em}
+  table{width:100%;border-collapse:collapse;margin-bottom:4px;font-size:8.5pt}
+  th{background:#0c1222;color:#d4a04a;padding:4px 8px;text-align:left;font-size:8pt;font-weight:600}
+  td{padding:3px 8px;border-bottom:1px solid #eee;vertical-align:top}
+  tr:nth-child(even) td{background:#f8f8fc}
+  tr.highlight td{font-weight:bold;background:#e8f5e9!important;color:#1b5e20}
+  .mono{font-family:"Courier New",monospace}
+  .eq{font-size:7.5pt;color:#555}
+  .right{text-align:right}
+  .warnings{background:#fff8e1;border-left:4px solid #f59e0b;padding:8px 12px;margin:12px 0;font-size:9pt}
+  .warnings strong{display:block;margin-bottom:4px;color:#92400e}
+  .warnings ul,.warnings li{margin:2px 0;color:#78350f}
+  ul{padding-left:20px;margin:4px 0 10px}
+  li{font-size:9pt;margin:2px 0}
+  .disclaimer{border:1px solid #d4a04a;background:#fffbf0;padding:8px 12px;font-size:8pt;margin-top:20px;color:#7a5c10;font-style:italic}
+  footer{margin-top:16px;font-size:7.5pt;color:#999;border-top:1px solid #eee;padding-top:6px;display:flex;justify-content:space-between}
+  .print-btn{display:flex;gap:8px;margin-bottom:14px}
+  .print-btn button{padding:6px 14px;font-size:9pt;cursor:pointer;border:1px solid #0c1222;background:#0c1222;color:#d4a04a;border-radius:3px}
+  .print-btn button:hover{background:#1a2840}
+  @media print{.print-btn{display:none}body{font-size:9pt}.header{margin-bottom:12px;padding:10px 18px 8px}h2{margin:12px 0 6px}table{page-break-inside:auto}tr{page-break-inside:avoid}}
+</style>
+</head><body>
+<div class="header">
+  <h1>${esc(data.calculatorName)}</h1>
+  <div class="sub">Engineering Calculation Note &nbsp;|&nbsp; ${esc(dateStr)} ${esc(timeStr)} &nbsp;|&nbsp; Hazem El Mancy \u2014 DG Impianti Industriali S.P.A.</div>
+</div>
+<div class="page">
+  <div class="print-btn">
+    <button onclick="window.print()">&#128438; Print / Save as PDF</button>
+    <button onclick="window.close()">&#10005; Close</button>
+  </div>
+  ${projectBlock}
+  ${warningsBlock}
+  <h2>&#9658; Input Data</h2>
+  <table><tr><th>Parameter</th><th class="right">Value</th><th>Unit</th></tr>${inputRows}</table>
+  ${calcStepsSection}
+  <h2>&#9658; Results</h2>
+  <table><tr><th>Parameter</th><th class="right">Value</th><th>Unit</th></tr>${resultRows}</table>
+  ${additionalSections}
+  ${listBlock("Methodology", data.methodology || [])}
+  ${listBlock("Assumptions", data.assumptions || [])}
+  ${listBlock("References", data.references || [])}
+  <div class="disclaimer">
+    SCREENING TOOL ONLY \u2014 This calculation note is generated for preliminary engineering screening purposes only.
+    For detailed engineering, FEED, or EPC project applications, verify all results against the cited standards
+    using licensed software and qualified engineering judgment.
+  </div>
+  <footer>
+    <span>Hazem El Mancy \u2014 Process Engineering Calculator Suite</span>
+    <span>Generated: ${esc(dateStr)} ${esc(timeStr)}</span>
+  </footer>
+</div></body></html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) { alert("Popup blocked \u2014 please allow popups for this site to open the Calc Note."); return; }
+  win.document.write(html);
+  win.document.close();
+}
+
 export function exportToJSON(data: ExportDatasheet): void {
   const exportData = {
     calculator: data.calculatorName,

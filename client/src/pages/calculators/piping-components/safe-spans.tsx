@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Ruler, Calculator, AlertTriangle, CheckCircle2, RotateCcw, Info, Download, FileText, FileSpreadsheet } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { calculateSafeSpan, type SafeSpanInput, type SafeSpanResult } from "@/lib/engineering/piping/safeSpans";
-import { exportToExcel, exportToPDF, exportToJSON, type ExportDatasheet } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON, type ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 
 export default function SafeSpansPage() {
@@ -91,7 +91,7 @@ export default function SafeSpansPage() {
   const handleExport = (format: "pdf" | "excel" | "json") => {
     const data = buildExportData();
     if (!data) return;
-    if (format === "pdf") exportToPDF(data);
+    if (format === "pdf") exportToCalcNote(data);
     else if (format === "excel") exportToExcel(data);
     else exportToJSON(data);
   };
@@ -179,7 +179,7 @@ export default function SafeSpansPage() {
                           <Button size="sm" variant="outline" data-testid="button-export-results"><Download className="w-3.5 h-3.5 mr-1.5" />Export</Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-pdf"><FileText className="w-4 h-4 mr-2 text-red-400" />Export as PDF</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-calc-note"><FileText className="w-4 h-4 mr-2 text-red-400" />Calc Note (Print / PDF)</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleExport("excel")} data-testid="button-export-excel"><FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />Export as Excel</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleExport("json")} data-testid="button-export-json"><Download className="w-4 h-4 mr-2 text-blue-400" />Export as JSON</DropdownMenuItem>
                         </DropdownMenuContent>

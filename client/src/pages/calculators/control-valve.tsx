@@ -17,7 +17,7 @@ import { COMMON_GASES, COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   type CVProject, type CVServiceData, type CVValveData, type CVInstallation,
   type OperatingPoint, type FluidType, type ValveStyle, type TrimCharacteristic,
@@ -810,9 +810,9 @@ export default function ControlValvePage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
+                    <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToCalcNote(d); }} data-testid="button-export-calc-note">
                       <FileText className="w-4 h-4 mr-2 text-red-400" />
-                      Export as PDF
+                      Calc Note (Print / PDF)
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
                       <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />

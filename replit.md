@@ -46,7 +46,8 @@ Every solver/calc must return a structured trace object containing:
 ### UI/UX Rules
 - Wizard-style workflow with "cannot proceed" gates where necessary
 - Provide "Compare cases" view (min/normal/max) where applicable
-- Provide "copy as JSON" and "export report" always visible
+- Export dropdown (ONE per calculator, on Results tab only): 3 items — "Calc Note (Print / PDF)", "Export as Excel", "Export as JSON"
+- "Calc Note (Print / PDF)" opens a browser HTML engineering calc note via `exportToCalcNote()` in exportUtils.ts — opens in new window with Print button
 - Provide "Engineering Flags" banner always visible on results
 - Provide "Assumptions" panel editable by user where applicable
 

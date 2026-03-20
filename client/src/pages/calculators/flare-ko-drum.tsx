@@ -27,7 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import { computeOrientationRecommendation, type OrientationResult } from "@/lib/engineering/orientationRecommendation";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import {
@@ -849,9 +849,9 @@ export default function FlareKODrumPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
+                        <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToCalcNote(d); }} data-testid="button-export-calc-note">
                           <FileText className="w-4 h-4 mr-2 text-red-400" />
-                          Export as PDF
+                          Calc Note (Print / PDF)
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
                           <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />

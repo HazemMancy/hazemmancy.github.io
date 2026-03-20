@@ -27,7 +27,7 @@ import {
   estimateFireCaseReliefRate, PRD_TEST_CASE,
 } from "@/lib/engineering/prdSizing";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";

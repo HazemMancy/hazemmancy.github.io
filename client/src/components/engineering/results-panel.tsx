@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 
 interface ResultItem {
@@ -52,9 +52,9 @@ export function ResultsPanel({ title, results, rawData, exportData, showExport =
     }
   };
 
-  const handleExportPDF = () => {
+  const handleExportCalcNote = () => {
     if (exportData) {
-      exportToPDF(exportData);
+      exportToCalcNote(exportData);
     }
   };
 
@@ -74,9 +74,9 @@ export function ResultsPanel({ title, results, rawData, exportData, showExport =
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExportPDF} data-testid="button-export-pdf">
+              <DropdownMenuItem onClick={handleExportCalcNote} data-testid="button-export-calc-note">
                 <FileText className="w-4 h-4 mr-2 text-red-400" />
-                Export as PDF
+                Calc Note (Print / PDF)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportExcel} data-testid="button-export-excel">
                 <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />

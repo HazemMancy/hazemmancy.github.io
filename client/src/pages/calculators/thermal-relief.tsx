@@ -27,7 +27,7 @@ import {
   THERMAL_RELIEF_TEST_CASE,
 } from "@/lib/engineering/thermalRelief";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -874,8 +874,8 @@ export default function ThermalReliefPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem data-testid="button-export-final-pdf" onClick={() => exportToPDF(buildExportDatasheet())}>
-                          <FileText className="w-3.5 h-3.5 mr-2" /> Export PDF
+                        <DropdownMenuItem data-testid="button-export-calc-note" onClick={() => exportToCalcNote(buildExportDatasheet())}>
+                          <FileText className="w-3.5 h-3.5 mr-2" /> Calc Note (Print / PDF)
                         </DropdownMenuItem>
                         <DropdownMenuItem data-testid="button-export-final-excel" onClick={() => exportToExcel(buildExportDatasheet())}>
                           <FileSpreadsheet className="w-3.5 h-3.5 mr-2" /> Export Excel

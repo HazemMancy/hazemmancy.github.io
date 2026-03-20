@@ -36,7 +36,7 @@ import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConve
 import { convertFormValues, type FieldUnitMap } from "@/lib/engineering/unitToggle";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   Droplets, FlaskConical, RotateCcw, X,
   ChevronLeft, ChevronRight, ClipboardList,
@@ -1124,8 +1124,8 @@ export default function PumpSizingPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => { const d = getExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
-                        <FileText className="w-4 h-4 mr-2" />PDF Datasheet
+                      <DropdownMenuItem onClick={() => { const d = getExportData(); if (d) exportToCalcNote(d); }} data-testid="button-export-calc-note">
+                        <FileText className="w-4 h-4 mr-2" />Calc Note (Print / PDF)
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { const d = getExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
                         <FileSpreadsheet className="w-4 h-4 mr-2" />Excel Workbook

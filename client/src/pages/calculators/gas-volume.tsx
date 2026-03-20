@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 
 const FLOW_UNIT_KEYS = Object.keys(FLOW_UNITS) as FlowUnitType[];
@@ -256,7 +256,7 @@ export default function GasVolumePage() {
   const handleExport = (format: "pdf" | "excel" | "json") => {
     const data = buildExportData();
     if (!data) return;
-    if (format === "pdf") exportToPDF(data);
+    if (format === "pdf") exportToCalcNote(data);
     else if (format === "excel") exportToExcel(data);
     else exportToJSON(data);
   };
@@ -441,9 +441,9 @@ export default function GasVolumePage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-pdf">
+                      <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-calc-note">
                         <FileText className="w-4 h-4 mr-2 text-red-400" />
-                        Export as PDF
+                        Calc Note (Print / PDF)
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleExport("excel")} data-testid="button-export-excel">
                         <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />

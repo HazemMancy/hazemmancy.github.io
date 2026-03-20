@@ -24,7 +24,7 @@ import {
   FLAG_LABELS, FLAG_SEVERITY,
 } from "@/lib/engineering/restrictionOrifice";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
-import { exportToExcel, exportToPDF, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
   CircleDot, FlaskConical, RotateCcw, ChevronLeft, ChevronRight,
   ClipboardList, Droplets, Settings2, BarChart3, ShieldCheck,
@@ -657,8 +657,8 @@ export default function RestrictionOrificePage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDF(d); }} data-testid="button-export-pdf">
-                              <FileText className="w-4 h-4 mr-2 text-red-400" />Export as PDF
+                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToCalcNote(d); }} data-testid="button-export-calc-note">
+                              <FileText className="w-4 h-4 mr-2 text-red-400" />Calc Note (Print / PDF)
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
                               <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />Export as Excel

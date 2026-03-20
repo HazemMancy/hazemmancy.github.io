@@ -30,7 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { exportToExcel, exportToPDF as exportToPDFUtil, exportToJSON } from "@/lib/engineering/exportUtils";
+import { exportToExcel, exportToJSON } from "@/lib/engineering/exportUtils";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import {
   Thermometer, ClipboardList, Droplets, Settings2, BarChart3,
@@ -1137,9 +1137,6 @@ export default function HeatExchangerPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={handleExportPDF} data-testid="button-export-calc-note">
                               <FileText className="w-4 h-4 mr-2 text-red-400" /> Calc Note (Print/PDF)
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToPDFUtil(d); }} data-testid="button-export-pdf">
-                              <FileText className="w-4 h-4 mr-2 text-red-400" /> Export as PDF
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { const d = buildExportData(); if (d) exportToExcel(d); }} data-testid="button-export-excel">
                               <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" /> Export as Excel
