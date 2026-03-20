@@ -640,12 +640,8 @@ export function estimateFireCaseReliefRate(
   const F = insulated ? 0.3 : 1.0;
   const A_ft2 = wettedArea_m2 * 10.7639;
 
-  let Q_BTUh: number;
-  if (A_ft2 <= 2800) {
-    Q_BTUh = 21000 * F * Math.pow(A_ft2, 0.82);
-  } else {
-    Q_BTUh = 21000 * F * Math.pow(A_ft2, 0.82);
-  }
+  // API 521 Eq. 3.15 (simplified F-factor method) — same exponent for all Aw ranges
+  const Q_BTUh = 21000 * F * Math.pow(A_ft2, 0.82);
 
   const Q_kW = Q_BTUh * 0.000293071;
   const W_kgh = (Q_kW / latentHeat_kJ_kg) * 3600;

@@ -21,7 +21,8 @@ import { GAS_CONSTANT, PI } from "./constants";
  *   M  = molecular weight (kg/kmol)
  *
  * Liquid Relief (API 520 §5.7.2 SI):
- *   A = Q / (Kd * Kw * Kc * Kv * sqrt(ΔP / G))
+ *   A = Q / (N₁ × Kd × Kw × Kc × Kv × √(ΔP / G))
+ *   N₁ = 0.849  (for Q[L/min], ΔP[bar], A[mm²])
  *
  * where:
  *   Q  = required flow (L/min)

@@ -220,9 +220,9 @@ const THERMAL_COEFF_IN: Record<ProductCategory, number> = {
 };
 
 export const PRODUCT_LABELS: Record<ProductCategory, string> = {
-  hexane_and_below: "Hexane and lighter (flash point \u2264 -1\u00B0C / 30\u00B0F)",
-  above_hexane: "Above hexane (flash point > -1\u00B0C and \u2264 37.8\u00B0C / 100\u00B0F)",
-  non_volatile: "Non-volatile (flash point > 37.8\u00B0C / 100\u00B0F)",
+  hexane_and_below: "Group A \u2014 High volatility (NVP > 6.7 kPa, or flash point < 37.8\u00B0C / 100\u00B0F, API 2000 Table 2)",
+  above_hexane: "Group B \u2014 Moderate volatility (flash point 37.8\u201360\u00B0C / 100\u2013140\u00B0F, NVP \u2264 6.7 kPa)",
+  non_volatile: "Group C \u2014 Low volatility (flash point > 60\u00B0C / 140\u00B0F)",
 };
 
 export const INSULATION_LABELS = ENV_LABELS;
@@ -320,13 +320,15 @@ function calcEmergencyFlow(
   if (latentHeat_kJ_kg > 0 && vaporDensity_kg_m3 > 0 && heatInput_kW > 0) {
     const vap_kg_h = (heatInput_kW * 3600) / latentHeat_kJ_kg;
     const actual_m3h = vap_kg_h / vaporDensity_kg_m3;
-    const flow_Nm3h = actual_m3h * (273.15 / T_K);
+    // API 2000 §3.40: Nm³ defined at 15 °C (288.15 K), 101.325 kPa
+    const flow_Nm3h = actual_m3h * (288.15 / T_K);
     return { vap_kg_h, flow_Nm3h };
   }
 
   if (heatInput_W > 0) {
+    // Approximate free-air equivalent — API 2000 §3.40 standard: 288.15 K
     const flow_Nm3h = 906.6 * F * Math.pow(effectiveArea_m2, 0.82) *
-      Math.sqrt(28.97 / Math.max(vaporMW, 1)) * Math.sqrt(T_K / 273.15);
+      Math.sqrt(28.97 / Math.max(vaporMW, 1)) * Math.sqrt(T_K / 288.15);
     const vap_kg_h = latentHeat_kJ_kg > 0 ? (heatInput_kW * 3600) / latentHeat_kJ_kg : 0;
     return { vap_kg_h, flow_Nm3h };
   }
@@ -719,7 +721,7 @@ export function calculateApi2000(input: Api2000Input): Api2000Result {
   assumptions.push("Fire heat input: Q = 43,200 \u00D7 F \u00D7 drainage \u00D7 A_w^0.82 W (Section 5.2, A_w > 2.8 m\u00B2)");
   assumptions.push(`Normal venting credit applied to emergency per Section 5.3: ${fmtNum(normalCredit)} Nm\u00B3/h`);
   assumptions.push(`PV valve Cd = ${Cd_pv}; Emergency vent Cd = ${Cd_emerg}`);
-  assumptions.push("Standard conditions: 0\u00B0C (273.15 K), 101.325 kPa for Nm\u00B3/h");
+  assumptions.push("Standard conditions: 15\u00B0C (288.15 K), 101.325 kPa for Nm\u00B3/h (API 2000 \u00A73.40)");
 
   if (isFloating) {
     warnings.push("Floating roof tank: emergency venting based on rim seal area only (Section 5.4)");
