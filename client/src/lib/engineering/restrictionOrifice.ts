@@ -61,16 +61,22 @@
  */
 
 import { PI, GAS_CONSTANT } from "./constants";
+import {
+  type CompositionEntry, type SRKMixtureResult,
+  computeSRKProperties, isenthalpicFlash,
+} from "./srkEos";
 
 export const R_UNIVERSAL = GAS_CONSTANT;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type Phase       = "liquid" | "gas";
-export type SizingMode  = "sizeForFlow" | "checkOrifice" | "predictDP";
-export type CdMode      = "user" | "estimated";
-export type EdgeType    = "sharp" | "rounded";
-export type BasisMode   = "inPipe" | "freeDischarge";
+export type Phase        = "liquid" | "gas";
+export type SizingMode   = "sizeForFlow" | "checkOrifice" | "predictDP";
+export type CdMode       = "user" | "estimated";
+export type EdgeType     = "sharp" | "rounded";
+export type BasisMode    = "inPipe" | "freeDischarge";
+export type TappingType  = "corner" | "D-D2" | "flange";
+export type GasPropsMode = "manual" | "srk";
 
 export interface ROProject {
   name: string;
@@ -106,6 +112,7 @@ export interface OrificeOptions {
   edgeType: EdgeType;
   basisMode: BasisMode;
   thickness: number;
+  tappingType: TappingType;
 }
 
 export interface ROServiceInput {
@@ -121,6 +128,8 @@ export interface ROServiceInput {
   orificeDiameter: number;
   liquidProps: FluidPropsLiquid;
   gasProps: FluidPropsGas;
+  gasPropsMode: GasPropsMode;
+  composition: CompositionEntry[];
   orifice: OrificeOptions;
   betaMin: number;
   betaMax: number;
@@ -136,7 +145,9 @@ export const DEFAULT_SERVICE: ROServiceInput = {
   pipeDiameter: 154.08, orificeDiameter: 0,
   liquidProps: { density: 998.2, viscosity: 1.0, vaporPressure: 0 },
   gasProps: { molecularWeight: 18.5, specificHeatRatio: 1.27, compressibilityFactor: 0.92, viscosity: 0.012 },
-  orifice: { cdMode: "user", cdValue: 0.61, edgeType: "sharp", basisMode: "inPipe", thickness: 6 },
+  gasPropsMode: "manual",
+  composition: [{ componentId: "CH4", moleFraction: 1.0 }],
+  orifice: { cdMode: "user", cdValue: 0.61, edgeType: "sharp", basisMode: "inPipe", thickness: 6, tappingType: "corner" },
   betaMin: 0.20, betaMax: 0.75, numStages: 1, stageDistribution: "geometric",
 };
 
@@ -237,7 +248,14 @@ export interface ROResult {
   flags: ROFlag[];
   warnings: string[];
   recommendations: string[];
+  // SRK EoS outputs (gas phase, when gasPropsMode = "srk")
+  srkResult: SRKMixtureResult | null;
+  dischargeTemperature: number | null;
+  dischargeTemperatureConverged: boolean;
 }
+
+// Re-export SRK types for UI consumption
+export type { CompositionEntry, SRKMixtureResult };
 
 // ─── Internal Types ───────────────────────────────────────────────────────────
 
@@ -305,51 +323,92 @@ export function roundToStandardBore(d_mm: number): number {
 // ─── ISO 5167-2 Discharge Coefficient ────────────────────────────────────────
 
 /**
- * Reader-Harris/Gallagher discharge coefficient (ISO 5167-2:2003, Eq. 1).
- * Simplified for restriction orifice service (no tap-position correction terms
- * L1/L2, which require knowledge of tap geometry and are zero for corner taps).
+ * Full ISO 5167-2:2003 Eq. 1 — Reader-Harris/Gallagher discharge coefficient.
  *
- * Valid range: 0.1 ≤ β ≤ 0.75, Re_D ≥ 5000, 50 mm ≤ D ≤ 1000 mm
+ * Implements ALL terms including tapping-type correction via L1 and L'2:
  *
- * For turbulent flow (Re_D > 10⁵): Cd ≈ 0.5961 + 0.0261β² − 0.216β⁸
- * For Re_D < 5000: add a viscosity correction term.
+ *   Cd = 0.5961 + 0.0261β² − 0.216β⁸
+ *        + 0.000521·(10⁶β/Re_D)^0.7                          [Re term 1]
+ *        + (0.0188 + 0.0063A)·β^3.5·(10⁶/Re_D)^0.3          [Re term 2]
+ *        + (0.043 + 0.08·e^(−10L1) − 0.123·e^(−7L1))·(1−0.11A)·β⁴/(1−β⁴)  [upstream tap term]
+ *        − 0.031·(M'2 − 0.8·M'2^1.1)·β^1.3                  [downstream tap term]
+ *        + 0.011·(0.75−β)·(2.8 − D/25.4)                    [D-correction, D < 71.12 mm]
  *
- * @param beta   d/D ratio
- * @param Re_D   pipe Reynolds number
- * @param D_mm   pipe internal diameter [mm]
- * @param edgeType  "sharp" | "rounded"
+ *   A  = (19000β/Re_D)^0.8
+ *   M'2 = 2L'2/(1−β)
+ *
+ *   Tapping geometry:
+ *     Corner taps:   L1 = L'2 = 0             → upstream and downstream tap terms = 0 (vanish analytically)
+ *     D–D/2 taps:    L1 = 1,   L'2 = 0.47
+ *     Flange taps:   L1 = L'2 = 25.4/D [mm]   (D in mm)
+ *
+ * Valid: 0.1 ≤ β ≤ 0.75, Re_D ≥ 5000, 50 mm ≤ D ≤ 1000 mm
+ * For rounded-edge (ISA 1932 nozzle type): Cd ≈ 0.97 (Cd is flat vs Re).
+ *
+ * Ref: ISO 5167-2:2003 §8.3.2, Table 1; Reader & Harris (1995) Flow Meas. Instrum.
+ *
+ * @param beta        d/D ratio
+ * @param Re_D        pipe Reynolds number
+ * @param D_mm        pipe internal diameter [mm]
+ * @param edgeType    "sharp" | "rounded"
+ * @param tappingType "corner" | "D-D2" | "flange"
  */
-function cdReaderHarrisGallagher(beta: number, Re_D: number, D_mm: number, edgeType: EdgeType): number {
-  if (edgeType === "rounded") return 0.97; // Rounded (ISA 1932 nozzle type, Cd ≈ 0.97−0.99)
+function cdReaderHarrisGallagher(
+  beta: number,
+  Re_D: number,
+  D_mm: number,
+  edgeType: EdgeType,
+  tappingType: TappingType = "corner",
+): number {
+  if (edgeType === "rounded") return 0.97;
 
   if (beta < 0.05 || beta > 0.95) return 0.61;
   if (Re_D < 100) return 0.50;
 
-  // ISO 5167-2:2003 Eq. 1 — Reader-Harris/Gallagher (corner taps, no L1/L2 terms)
   const b2  = beta * beta;
-  const b8  = Math.pow(beta, 8);
+  const b4  = b2 * b2;
+  const b8  = b4 * b4;
   const b35 = Math.pow(beta, 3.5);
+  const b13 = Math.pow(beta, 1.3);
 
-  // Base equation (high Re)
+  // ── Base (infinite Re) ─────────────────────────────────────────────────────
   const Cd_inf = 0.5961 + 0.0261 * b2 - 0.216 * b8;
 
-  // Re-dependent correction (first term)
-  const Re_term1 = Re_D > 0
-    ? 0.000521 * Math.pow(1e6 * beta / Re_D, 0.7)
-    : 0;
-
-  // Re-dependent correction (second term)
+  // ── Re-dependent terms ─────────────────────────────────────────────────────
   const A = Re_D > 0 ? Math.pow(19000 * beta / Re_D, 0.8) : 0;
-  const Re_term2 = Re_D > 0
-    ? (0.0188 + 0.0063 * A) * b35 * Math.pow(1e6 / Re_D, 0.3)
-    : 0;
+  const Re_term1 = Re_D > 0 ? 0.000521 * Math.pow(1e6 * beta / Re_D, 0.7) : 0;
+  const Re_term2 = Re_D > 0 ? (0.0188 + 0.0063 * A) * b35 * Math.pow(1e6 / Re_D, 0.3) : 0;
 
-  // Small-pipe correction (ISO 5167-2: for D < 71.12 mm = 2.8 inch)
-  const D_corr = D_mm < 71.12
-    ? 0.011 * (0.75 - beta) * (2.8 - D_mm / 25.4)
-    : 0;
+  // ── Tapping geometry L1, L'2 ───────────────────────────────────────────────
+  let L1  = 0; // upstream tap position (normalised by D)
+  let L2p = 0; // L'2 = downstream tap position (normalised by D)
 
-  const Cd = Cd_inf + Re_term1 + Re_term2 + D_corr;
+  if (tappingType === "corner") {
+    L1 = 0; L2p = 0;
+  } else if (tappingType === "D-D2") {
+    L1 = 1; L2p = 0.47;
+  } else {
+    // Flange taps: L1 = L'2 = 25.4/D where D is in mm
+    const ratio = 25.4 / D_mm;
+    L1 = ratio; L2p = ratio;
+  }
+
+  // ── Upstream tap correction term (ISO 5167-2 Eq. 1 term 4) ───────────────
+  // (0.043 + 0.08·e^(−10L1) − 0.123·e^(−7L1))·(1−0.11A)·β⁴/(1−β⁴)
+  // For corner taps (L1=0): 0.043 + 0.08 − 0.123 = 0 → term vanishes ✓
+  const upstreamCoeff = 0.043 + 0.08 * Math.exp(-10 * L1) - 0.123 * Math.exp(-7 * L1);
+  const upstreamTerm = upstreamCoeff * (1 - 0.11 * A) * b4 / Math.max(1 - b4, 1e-9);
+
+  // ── Downstream tap correction term (ISO 5167-2 Eq. 1 term 5) ─────────────
+  // −0.031·(M'2 − 0.8·M'2^1.1)·β^1.3,  M'2 = 2·L'2/(1−β)
+  // For corner taps (L'2=0): M'2 = 0 → term vanishes ✓
+  const M2p = 2 * L2p / Math.max(1 - beta, 0.01);
+  const downstreamTerm = -0.031 * (M2p - 0.8 * Math.pow(M2p, 1.1)) * b13;
+
+  // ── Small-pipe D-correction (ISO 5167-2: for D < 71.12 mm = 2.8 inch) ────
+  const D_corr = D_mm < 71.12 ? 0.011 * (0.75 - beta) * (2.8 - D_mm / 25.4) : 0;
+
+  const Cd = Cd_inf + Re_term1 + Re_term2 + upstreamTerm + downstreamTerm + D_corr;
   return Math.max(0.40, Math.min(Cd, 0.92));
 }
 
@@ -558,12 +617,13 @@ function iterateCd(
   edgeType: EdgeType,
   e_mm: number,
   maxIter: number,
+  tappingType: TappingType = "corner",
 ): { Cd: number; iterations: number; thicknessRegime: string } {
   let Cd = initialCd;
   let regime = "thin plate";
   for (let i = 0; i < maxIter; i++) {
     const { Re_D, beta, d_mm } = getReAndBeta(Cd);
-    const Cd_thin = cdReaderHarrisGallagher(beta, Re_D, D_mm, edgeType);
+    const Cd_thin = cdReaderHarrisGallagher(beta, Re_D, D_mm, edgeType, tappingType);
     const thick   = applyThicknessCorrection(Cd_thin, e_mm, d_mm);
     regime = thick.regime;
     const Cd_new  = thick.Cd;
@@ -671,7 +731,7 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
         const Re_D_g = rho * (Q_m3h / 3600 / (PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
         return { Re_D: Re_D_g, beta: d_m_g / D_m, d_mm: sol.root };
       };
-      const result = iterateCd(Cd, getReAndBeta, D_mm, input.orifice.edgeType, e_mm, 10);
+      const result = iterateCd(Cd, getReAndBeta, D_mm, input.orifice.edgeType, e_mm, 10, input.orifice.tappingType || "corner");
       Cd = result.Cd;
       thicknessRegime = result.thicknessRegime;
     } else {
@@ -702,7 +762,7 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
     if (d_mm <= 0) throw new Error("Orifice diameter must be positive in check mode");
     if (estimateCd) {
       const Re_D_est = rho * (Q_m3h / 3600 / (PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
-      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType);
+      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType, input.orifice.tappingType || "corner");
       const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
       Cd = thick.Cd;
       thicknessRegime = thick.regime;
@@ -716,7 +776,7 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
     if (W_kgh <= 0) throw new Error("Flow rate must be positive in ΔP-prediction mode");
     if (estimateCd) {
       const Re_D_est = rho * (Q_m3h / 3600 / (PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
-      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType);
+      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType, input.orifice.tappingType || "corner");
       const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
       Cd = thick.Cd;
       thicknessRegime = thick.regime;
@@ -891,6 +951,7 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
     erosionalVelocity: Ve, erosionalVelocityRatio: Ve_ratio,
     numStages, stages, straightPipeRecs,
     calcSteps: steps, solverInfo, flags, warnings, recommendations,
+    srkResult: null, dischargeTemperature: null, dischargeTemperatureConverged: false,
   };
 }
 
@@ -906,16 +967,39 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
   const P2_bar  = input.downstreamPressure;
   const P1_Pa   = P1_bar * 1e5;
   const T_K     = input.temperature + 273.15;
-  const k       = input.gasProps.specificHeatRatio;
-  const Z       = input.gasProps.compressibilityFactor;
-  const MW      = input.gasProps.molecularWeight;
-  const mu_cP   = input.gasProps.viscosity;
   const D_mm    = input.pipeDiameter;
   const D_m     = D_mm / 1000;
   const basisMode  = input.orifice.basisMode;
   const e_mm    = input.orifice.thickness;
   const estimateCd = input.orifice.cdMode === "estimated";
   let Cd        = input.orifice.cdValue;
+
+  // ── SRK EoS integration ────────────────────────────────────────────────────
+  let srkResult: SRKMixtureResult | null = null;
+  let MW      = input.gasProps.molecularWeight;
+  let k       = input.gasProps.specificHeatRatio;
+  let Z       = input.gasProps.compressibilityFactor;
+  let mu_cP   = input.gasProps.viscosity;
+
+  if (input.gasPropsMode === "srk" && input.composition && input.composition.length > 0) {
+    try {
+      srkResult = computeSRKProperties(input.composition, input.temperature, P1_bar);
+      MW    = srkResult.MWm;
+      k     = srkResult.k;
+      Z     = srkResult.Z;
+      mu_cP = srkResult.viscosity_cP;
+      // Propagate SRK warnings into main warnings array
+      for (const w of srkResult.warnings) warnings.push(`SRK: ${w}`);
+      steps.push({ label: "── SRK EoS Mode ──", equation: "Properties from SRK EoS + Chueh-Prausnitz BIP + Lee viscosity", value: "", unit: "", eqId: "SRK-00" });
+      steps.push({ label: "MWm (SRK)",   equation: "MWm = Σ xi·MWi", value: MW.toFixed(3), unit: "kg/kmol", eqId: "SRK-01" });
+      steps.push({ label: "Z (SRK)",     equation: "SRK cubic — largest positive root", value: Z.toFixed(4), unit: "—", eqId: "SRK-13" });
+      steps.push({ label: "k (SRK)",     equation: "k = Cp/(Cp−R), ideal-gas Cp", value: k.toFixed(4), unit: "—", eqId: "SRK-28" });
+      steps.push({ label: "μ (SRK/Lee)", equation: "Lee-Gonzalez-Eakin (1966)", value: mu_cP.toFixed(5), unit: "cP", eqId: "SRK-19" });
+      steps.push({ label: "ρ (SRK)",     equation: "ρ = MWm/Vm", value: srkResult.rho.toFixed(3), unit: "kg/m³", eqId: "SRK-15" });
+    } catch (e: unknown) {
+      warnings.push(`SRK EoS failed: ${e instanceof Error ? e.message : String(e)}. Falling back to manual gas properties.`);
+    }
+  }
 
   if (input.sizingMode !== "predictDP") {
     if (P2_bar >= P1_bar) throw new Error("P1 must exceed P2");
@@ -931,18 +1015,18 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
   if (W_kgh <= 0 && input.sizingMode === "predictDP")   throw new Error("Mass flow rate must be positive for ΔP prediction");
 
   const R_spec  = R_UNIVERSAL / MW;
-  const rho1    = (P1_Pa * MW) / (Z * R_UNIVERSAL * T_K);
+  const rho1    = srkResult ? srkResult.rho : (P1_Pa * MW) / (Z * R_UNIVERSAL * T_K);
   const xCrit   = gasCriticalPressureRatio(k);
   const fk      = gasCriticalFlowFunction(k);
 
   steps.push({ label: "P₁ upstream",          equation: "", value: P1_bar.toFixed(3),  unit: "bar(a)", eqId: "RO-G-01" });
   steps.push({ label: "P₂ downstream",         equation: "", value: P2_bar.toFixed(3),  unit: "bar(a)", eqId: "RO-G-02" });
   steps.push({ label: "T upstream",            equation: "T = T_C + 273.15", value: `${input.temperature.toFixed(1)} °C = ${T_K.toFixed(2)} K`, unit: "", eqId: "RO-G-03" });
-  steps.push({ label: "MW",                    equation: "", value: MW.toFixed(3),       unit: "kg/kmol", eqId: "RO-G-04" });
-  steps.push({ label: "k = Cp/Cv",            equation: "", value: k.toFixed(4),        unit: "—", eqId: "RO-G-05" });
-  steps.push({ label: "Z",                     equation: "", value: Z.toFixed(4),        unit: "—", eqId: "RO-G-06" });
+  steps.push({ label: "MW",                    equation: srkResult ? "From SRK EoS" : "user input", value: MW.toFixed(3), unit: "kg/kmol", eqId: "RO-G-04" });
+  steps.push({ label: "k = Cp/Cv",            equation: srkResult ? "From SRK EoS (ideal gas)" : "user input", value: k.toFixed(4), unit: "—", eqId: "RO-G-05" });
+  steps.push({ label: "Z",                     equation: srkResult ? "From SRK EoS cubic" : "user input", value: Z.toFixed(4), unit: "—", eqId: "RO-G-06" });
   steps.push({ label: "R_specific",            equation: "R_s = Rᵤ / MW", value: R_spec.toFixed(3), unit: "J/(kg·K)", eqId: "RO-G-07" });
-  steps.push({ label: "ρ₁ upstream",           equation: "ρ₁ = P₁·MW / (Z·Rᵤ·T)", value: rho1.toFixed(4), unit: "kg/m³", eqId: "RO-G-08" });
+  steps.push({ label: "ρ₁ upstream",           equation: srkResult ? "ρ₁ = MWm/Vm (SRK)" : "ρ₁ = P₁·MW/(Z·Rᵤ·T)", value: rho1.toFixed(4), unit: "kg/m³", eqId: "RO-G-08" });
   steps.push({ label: "r_crit = (2/(k+1))^(k/(k-1))", equation: "r_crit = (2/(k+1))^(k/(k-1))", value: xCrit.toFixed(6), unit: "—", eqId: "RO-G-09" });
   steps.push({ label: "C(k) critical flow fn", equation: "C(k) = √(k·(2/(k+1))^((k+1)/(k-1)))", value: fk.toFixed(6), unit: "—", eqId: "RO-G-10" });
 
@@ -971,7 +1055,7 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
         const Re_D_g = rho1 * (W_kgh / 3600 / (rho1 * PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
         return { Re_D: Re_D_g, beta: d_m_g / D_m, d_mm: sol.root };
       };
-      const result = iterateCd(Cd, getReAndBeta, D_mm, input.orifice.edgeType, e_mm, 10);
+      const result = iterateCd(Cd, getReAndBeta, D_mm, input.orifice.edgeType, e_mm, 10, input.orifice.tappingType || "corner");
       Cd = result.Cd;
       thicknessRegime = result.thicknessRegime;
     }
@@ -998,7 +1082,7 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
     actualDP_bar = P1_bar - P2_bar;
     if (estimateCd) {
       const Re_D_est = rho1 * (W_kgh / 3600 / (rho1 * PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
-      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType);
+      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType, input.orifice.tappingType || "corner");
       const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
       Cd = thick.Cd; thicknessRegime = thick.regime;
     }
@@ -1010,7 +1094,7 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
     if (d_mm <= 0) throw new Error("Orifice diameter must be positive in ΔP-prediction mode");
     if (estimateCd) {
       const Re_D_est = rho1 * (W_kgh / 3600 / (rho1 * PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
-      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType);
+      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType, input.orifice.tappingType || "corner");
       const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
       Cd = thick.Cd; thicknessRegime = thick.regime;
     }
@@ -1168,6 +1252,38 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
 
   const straightPipeRecs = straightPipeRecommendations(beta);
 
+  // ── Isenthalpic flash (discharge temperature) via SRK ─────────────────────
+  let dischargeTemperature: number | null = null;
+  let dischargeTemperatureConverged = false;
+
+  if (srkResult && input.composition && input.composition.length > 0) {
+    try {
+      const H_inlet = srkResult.Hm; // kJ/kmol at upstream conditions
+      const flashResult = isenthalpicFlash(
+        input.composition, H_inlet, P2_bar > 0 ? P2_bar : P1_bar - actualDP_bar, input.temperature,
+      );
+      dischargeTemperature = flashResult.T2_C;
+      dischargeTemperatureConverged = flashResult.converged;
+      const dT = dischargeTemperature - input.temperature;
+      steps.push({
+        label: "T discharge (isenthalpic flash)",
+        equation: "SRK isenthalpic flash: H(T2,P2) = H(T1,P1) — bisection",
+        value: `${dischargeTemperature.toFixed(2)} °C  (ΔT = ${dT.toFixed(2)} °C)`,
+        unit: "",
+        eqId: "SRK-30",
+      });
+      if (!flashResult.converged) {
+        warnings.push(`Isenthalpic flash did not fully converge (iter=${flashResult.iterations}). T_discharge = ${dischargeTemperature.toFixed(1)} °C is approximate.`);
+      }
+      if (dT < -50) {
+        warnings.push(`Large discharge temperature drop ΔT = ${dT.toFixed(1)} °C — check for hydrate or wax formation.`);
+        recommendations.push("Evaluate hydrate inhibition (e.g. MEG injection) if T_discharge is below hydrate formation temperature");
+      }
+    } catch {
+      warnings.push("Isenthalpic flash for discharge temperature could not be computed.");
+    }
+  }
+
   return {
     phase: "gas", sizingMode: input.sizingMode,
     requiredDiameter: d_mm, orificeArea: A_mm2, betaRatio: beta,
@@ -1184,6 +1300,7 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
     erosionalVelocity: Ve, erosionalVelocityRatio: Ve_ratio,
     numStages, stages, straightPipeRecs,
     calcSteps: steps, solverInfo, flags, warnings, recommendations,
+    srkResult, dischargeTemperature, dischargeTemperatureConverged,
   };
 }
 

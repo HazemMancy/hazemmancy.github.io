@@ -18,11 +18,13 @@ import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConve
 import {
   type ROProject, type ROServiceInput, type ROResult,
   type Phase, type SizingMode, type CdMode, type BasisMode,
+  type GasPropsMode, type TappingType, type CompositionEntry,
   DEFAULT_PROJECT, DEFAULT_SERVICE,
   calculateRO,
   RO_LIQUID_SERVICE_TEST, RO_GAS_SERVICE_TEST,
   FLAG_LABELS, FLAG_SEVERITY,
 } from "@/lib/engineering/restrictionOrifice";
+import { COMPONENT_DB } from "@/lib/engineering/srkEos";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
@@ -65,6 +67,26 @@ export default function RestrictionOrificePage() {
 
   const updateOrifice = (field: string, value: string | number) =>
     setService(p => ({ ...p, orifice: { ...p.orifice, [field]: value } }));
+
+  const addCompositionRow = () =>
+    setService(p => ({ ...p, composition: [...(p.composition || []), { componentId: "CH4", moleFraction: 0 }] }));
+
+  const removeCompositionRow = (idx: number) =>
+    setService(p => ({ ...p, composition: (p.composition || []).filter((_, i) => i !== idx) }));
+
+  const updateCompositionRow = (idx: number, field: keyof CompositionEntry, value: string | number) =>
+    setService(p => ({
+      ...p,
+      composition: (p.composition || []).map((row, i) => i === idx ? { ...row, [field]: value } : row),
+    }));
+
+  const normalizeComposition = () => {
+    setService(p => {
+      const sum = (p.composition || []).reduce((s, r) => s + r.moleFraction, 0);
+      if (sum <= 0) return p;
+      return { ...p, composition: (p.composition || []).map(r => ({ ...r, moleFraction: r.moleFraction / sum })) };
+    });
+  };
 
   const handleUnitToggle = (ns: UnitSystem) => {
     if (ns === unitSystem) return;
@@ -488,21 +510,92 @@ export default function RestrictionOrificePage() {
                   </div>
 
                   <h4 className="text-xs font-semibold text-muted-foreground">Gas Properties</h4>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div><Label className="text-xs mb-1.5 block">Gas Selection</Label>
-                      <Select onValueChange={handleGasSelect}>
-                        <SelectTrigger data-testid="select-gas"><SelectValue placeholder="Select gas..." /></SelectTrigger>
-                        <SelectContent>{Object.keys(COMMON_GASES).map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                      </Select></div>
-                    <div><Label className="text-xs mb-1.5 block">MW (kg/kmol)</Label>
-                      <NumericInput value={service.gasProps.molecularWeight} onValueChange={v => updateGasProps("molecularWeight", v)} data-testid="input-mw" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
-                      <NumericInput value={service.gasProps.specificHeatRatio} onValueChange={v => updateGasProps("specificHeatRatio", v)} data-testid="input-k" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Z-factor</Label>
-                      <NumericInput value={service.gasProps.compressibilityFactor} onValueChange={v => updateGasProps("compressibilityFactor", v)} data-testid="input-z" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
-                      <NumericInput value={service.gasProps.viscosity} step="0.001" onValueChange={v => updateGasProps("viscosity", v)} data-testid="input-gas-viscosity" /></div>
+                  <div className="grid gap-3 sm:grid-cols-2 mb-1">
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs mb-1.5 block">Gas Properties Mode</Label>
+                      <Select value={service.gasPropsMode || "manual"} onValueChange={v => updateService("gasPropsMode", v as GasPropsMode)} data-testid="select-gas-props-mode">
+                        <SelectTrigger data-testid="select-gas-props-mode-trigger"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="manual">Manual Input (MW, k, Z, μ)</SelectItem>
+                          <SelectItem value="srk">SRK EoS from Composition (auto-computes MW, k, Z, μ, T₂)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+
+                  {(service.gasPropsMode === "srk") ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-amber-400 font-semibold">SRK EoS Composition (Graboski-Daubert α, Chueh-Prausnitz BIP, Lee viscosity)</span>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={normalizeComposition} data-testid="btn-normalize-composition">Normalize</Button>
+                          <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={addCompositionRow} data-testid="btn-add-component">+ Component</Button>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        Sum of mole fractions: <span className={Math.abs((service.composition || []).reduce((s, r) => s + r.moleFraction, 0) - 1) > 0.001 ? "text-amber-400 font-bold" : "text-green-400"}>
+                          {((service.composition || []).reduce((s, r) => s + r.moleFraction, 0) * 100).toFixed(2)}%
+                        </span> — must equal 100% before calculating
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="border-b border-muted/30">
+                              <th className="text-left py-1 pr-2 font-medium text-muted-foreground">Component</th>
+                              <th className="text-right py-1 px-2 font-medium text-muted-foreground">Mole Fraction</th>
+                              <th className="text-right py-1 pl-2 font-medium text-muted-foreground">MW</th>
+                              <th className="w-8"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(service.composition || []).map((row, i) => {
+                              const comp = COMPONENT_DB[row.componentId];
+                              return (
+                                <tr key={i} className="border-b border-muted/10">
+                                  <td className="py-1 pr-2">
+                                    <Select value={row.componentId} onValueChange={v => updateCompositionRow(i, "componentId", v)}>
+                                      <SelectTrigger className="h-6 text-[11px]" data-testid={`select-component-${i}`}><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        {Object.entries(COMPONENT_DB).map(([id, c]) => <SelectItem key={id} value={id}>{c.name} ({id})</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                  </td>
+                                  <td className="py-1 px-2">
+                                    <NumericInput
+                                      value={row.moleFraction} step="0.001"
+                                      onValueChange={v => updateCompositionRow(i, "moleFraction", v)}
+                                      className="h-6 text-[11px] text-right"
+                                      data-testid={`input-mole-fraction-${i}`}
+                                    />
+                                  </td>
+                                  <td className="py-1 pl-2 font-mono text-right text-muted-foreground">{comp ? comp.MW.toFixed(2) : "—"}</td>
+                                  <td className="py-1 pl-1">
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-400" onClick={() => removeCompositionRow(i)} data-testid={`btn-remove-component-${i}`}>×</Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div><Label className="text-xs mb-1.5 block">Gas Selection</Label>
+                        <Select onValueChange={handleGasSelect}>
+                          <SelectTrigger data-testid="select-gas"><SelectValue placeholder="Select gas..." /></SelectTrigger>
+                          <SelectContent>{Object.keys(COMMON_GASES).map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                        </Select></div>
+                      <div><Label className="text-xs mb-1.5 block">MW (kg/kmol)</Label>
+                        <NumericInput value={service.gasProps.molecularWeight} onValueChange={v => updateGasProps("molecularWeight", v)} data-testid="input-mw" /></div>
+                      <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
+                        <NumericInput value={service.gasProps.specificHeatRatio} onValueChange={v => updateGasProps("specificHeatRatio", v)} data-testid="input-k" /></div>
+                      <div><Label className="text-xs mb-1.5 block">Z-factor</Label>
+                        <NumericInput value={service.gasProps.compressibilityFactor} onValueChange={v => updateGasProps("compressibilityFactor", v)} data-testid="input-z" /></div>
+                      <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
+                        <NumericInput value={service.gasProps.viscosity} step="0.001" onValueChange={v => updateGasProps("viscosity", v)} data-testid="input-gas-viscosity" /></div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -543,6 +636,15 @@ export default function RestrictionOrificePage() {
                     <SelectContent>
                       <SelectItem value="inPipe">In-pipe with β correction</SelectItem>
                       <SelectItem value="freeDischarge">Free discharge (no β corr.)</SelectItem>
+                    </SelectContent>
+                  </Select></div>
+                <div><Label className="text-xs mb-1.5 block">Tapping Type (ISO 5167-2)</Label>
+                  <Select value={service.orifice.tappingType || "corner"} onValueChange={v => updateOrifice("tappingType", v as TappingType)}>
+                    <SelectTrigger data-testid="select-tapping-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="corner">Corner taps (L₁=L'₂=0)</SelectItem>
+                      <SelectItem value="D-D2">D and D/2 taps (L₁=1, L'₂=0.47)</SelectItem>
+                      <SelectItem value="flange">Flange taps (L₁=L'₂=25.4/D mm)</SelectItem>
                     </SelectContent>
                   </Select></div>
                 <div><Label className="text-xs mb-1.5 block">Plate Thickness ({pU("diameter")})</Label>
@@ -718,6 +820,16 @@ export default function RestrictionOrificePage() {
                           ...(result.isChoked ? [{ label: "C(k) critical flow fn", val: result.criticalFlowFunction.toFixed(6), unit: "—" }]
                             : [{ label: "Y expansion (ISO 5167)", val: result.expansionFactor.toFixed(6), unit: "—" }]),
                           ...(result.noiseLevelEstimate > 0 ? [{ label: "Noise SPL (screening)", val: result.noiseLevelEstimate.toFixed(0), unit: "dB(A) @1m" }] : []),
+                          ...(result.dischargeTemperature !== null ? [
+                            { label: "T discharge (SRK isenthalpic flash)", val: result.dischargeTemperature.toFixed(2) + " °C  (ΔT = " + (result.dischargeTemperature - service.temperature).toFixed(2) + " °C)", unit: result.dischargeTemperatureConverged ? "✓ converged" : "⚠ approx" },
+                          ] : []),
+                          ...(result.srkResult ? [
+                            { label: "MW (SRK)", val: result.srkResult.MWm.toFixed(3), unit: "kg/kmol" },
+                            { label: "Z (SRK)", val: result.srkResult.Z.toFixed(4), unit: "—" },
+                            { label: "k (SRK)", val: result.srkResult.k.toFixed(4), unit: "—" },
+                            { label: "μ (SRK/Lee)", val: result.srkResult.viscosity_cP.toFixed(5), unit: "cP" },
+                            { label: "Hm (SRK)", val: result.srkResult.Hm.toFixed(1), unit: "kJ/kmol" },
+                          ] : []),
                         ] : []),
                         ...(result.reynoldsNumber > 0 ? [
                           { label: "Re (orifice, d)", val: result.reynoldsNumber.toFixed(0), unit: "—" },
