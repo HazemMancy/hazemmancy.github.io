@@ -787,13 +787,13 @@ export function calculateMixtureAtConditions(
     }
 
     Cp_kJkgK = Cp_ideal + CpDeparture;
-    Cv_kJkgK = Cp_kJkgK - Rsp / Z; // Cp - R/Z for real gas
+    Cv_kJkgK = Cp_kJkgK - Rsp; // ideal-gas relation: Cp − Cv = R_specific [kJ/(kg·K)]
     if (Cv_kJkgK <= 0) Cv_kJkgK = Cv_ideal;
     gammaActual = Cp_kJkgK / Cv_kJkgK;
 
     calcTrace.push({ label: "Cp (ideal)", equation: `γ/(γ-1) × R/MW = ${gammaMix.toFixed(4)}/(${gammaMix.toFixed(4)}-1) × ${Rsp.toFixed(6)}`, value: Cp_ideal, unit: "kJ/(kg·K)" });
-    calcTrace.push({ label: "Cp (at conditions)", equation: `Cp_ideal + departure`, value: Cp_kJkgK, unit: "kJ/(kg·K)" });
-    calcTrace.push({ label: "Cv (at conditions)", equation: `Cp - R/(Z)`, value: Cv_kJkgK, unit: "kJ/(kg·K)" });
+    calcTrace.push({ label: "Cp (at conditions)", equation: `Cp_ideal + ΔCp_departure`, value: Cp_kJkgK, unit: "kJ/(kg·K)" });
+    calcTrace.push({ label: "Cv (at conditions)", equation: `Cp − R_sp (ideal-gas: Cp−Cv = R/MW)`, value: Cv_kJkgK, unit: "kJ/(kg·K)" });
     calcTrace.push({ label: "γ (at conditions)", equation: `Cp/Cv`, value: gammaActual, unit: "—" });
 
     // Speed of sound: a = √(γ·Z·R·T/MW) where R in J/(kg·K)
@@ -1022,9 +1022,9 @@ export function calculateMixtureAtConditionsEoS(
     if (eos.phase === "two-phase") flags.push("TWO_PHASE");
     if (eos.Z < 0.2) flags.push("NEAR_CRITICAL");
 
-    const Rsp = 8314.46 / eos.MWm; // J/(kg·K)
-    const Cp_kJkgK = eos.Cp_mix / eos.MWm; // kJ/kg·K (ideal gas)
-    const Cv_kJkgK = Cp_kJkgK - Rsp / 1000 / eos.Z; // kJ/kg·K
+    const Rsp = 8314.46 / eos.MWm; // J/(kg·K) = specific gas constant
+    const Cp_kJkgK = eos.Cp_mix / eos.MWm; // kJ/kg·K (ideal-gas Cp from EoS database)
+    const Cv_kJkgK = Cp_kJkgK - Rsp / 1000; // ideal-gas: Cp − Cv = R_specific [kJ/(kg·K)]
     const gammaActual = Cv_kJkgK > 0 ? Cp_kJkgK / Cv_kJkgK : null;
     const speedOfSound = gammaActual != null
       ? Math.sqrt(gammaActual * eos.Z * Rsp * T_K)
@@ -1059,6 +1059,7 @@ export function calculateMixtureAtConditionsEoS(
         { label: "ρ (EoS)", equation: "MWm/Vm", value: density_kgm3, unit: "kg/m³" },
         { label: "μ (Lee 1966)", equation: "K·exp(X·ρ^Y)", value: eos.viscosity_cP, unit: "cP" },
         { label: "Cp (ideal gas)", equation: "Σxi·Cp,i / MWm", value: Cp_kJkgK, unit: "kJ/(kg·K)" },
+        { label: "Cv (ideal-gas rel.)", equation: "Cp − Rsp  (Rsp = Ru/MWm)", value: Cv_kJkgK, unit: "kJ/(kg·K)" },
         { label: "γ (actual)", equation: "Cp/Cv", value: gammaActual ?? 0, unit: "—" },
         ...(speedOfSound != null ? [{ label: "a (speed of sound)", equation: "√(γ·Z·R·T/MW)", value: speedOfSound, unit: "m/s" }] : []),
       ],

@@ -996,10 +996,10 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
       for (const w of srkResult.warnings) warnings.push(`${eosId}: ${w}`);
       steps.push({ label: `── ${eosLabel} Mode ──`, equation: "Properties from EoS + Chueh-Prausnitz BIP + Lee viscosity", value: "", unit: "", eqId: `${eosId}-00` });
       steps.push({ label: `MWm (${eosId})`,   equation: "MWm = Σ xi·MWi", value: MW.toFixed(3), unit: "kg/kmol", eqId: `${eosId}-01` });
-      steps.push({ label: `Z (${eosId})`,     equation: `${eosId} cubic — largest positive root`, value: Z.toFixed(4), unit: "—", eqId: `${eosId}-13` });
-      steps.push({ label: `k (${eosId})`,     equation: "k = Cp/(Cp−R), ideal-gas Cp", value: k.toFixed(4), unit: "—", eqId: `${eosId}-28` });
-      steps.push({ label: `μ (${eosId}/Lee)`, equation: "Lee-Gonzalez-Eakin (1966)", value: mu_cP.toFixed(5), unit: "cP", eqId: `${eosId}-19` });
-      steps.push({ label: `ρ (${eosId})`,     equation: "ρ = MWm/Vm", value: srkResult.rho.toFixed(3), unit: "kg/m³", eqId: `${eosId}-15` });
+      steps.push({ label: `Z (${eosId})`,     equation: `${eosId} cubic EoS — largest real positive root`, value: Z.toFixed(4), unit: "—", eqId: `${eosId}-13` });
+      steps.push({ label: `k (${eosId})`,     equation: `k = Cp/(Cp−R), ideal-gas Cp [${eosLabel}]`, value: k.toFixed(4), unit: "—", eqId: `${eosId}-28` });
+      steps.push({ label: `μ (${eosId}/Lee)`, equation: "Lee-Gonzalez-Eakin (1966) SPE-1340-PA", value: mu_cP.toFixed(5), unit: "cP", eqId: `${eosId}-19` });
+      steps.push({ label: `ρ (${eosId})`,     equation: "ρ = MWm/Vm = MWm·P/(Z·R·T)", value: srkResult.rho.toFixed(3), unit: "kg/m³", eqId: `${eosId}-15` });
     } catch (e: unknown) {
       warnings.push(`${eosLabel} failed: ${e instanceof Error ? e.message : String(e)}. Falling back to manual gas properties.`);
     }
@@ -1026,11 +1026,11 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
   steps.push({ label: "P₁ upstream",          equation: "", value: P1_bar.toFixed(3),  unit: "bar(a)", eqId: "RO-G-01" });
   steps.push({ label: "P₂ downstream",         equation: "", value: P2_bar.toFixed(3),  unit: "bar(a)", eqId: "RO-G-02" });
   steps.push({ label: "T upstream",            equation: "T = T_C + 273.15", value: `${input.temperature.toFixed(1)} °C = ${T_K.toFixed(2)} K`, unit: "", eqId: "RO-G-03" });
-  steps.push({ label: "MW",                    equation: srkResult ? "From SRK EoS" : "user input", value: MW.toFixed(3), unit: "kg/kmol", eqId: "RO-G-04" });
-  steps.push({ label: "k = Cp/Cv",            equation: srkResult ? "From SRK EoS (ideal gas)" : "user input", value: k.toFixed(4), unit: "—", eqId: "RO-G-05" });
-  steps.push({ label: "Z",                     equation: srkResult ? "From SRK EoS cubic" : "user input", value: Z.toFixed(4), unit: "—", eqId: "RO-G-06" });
+  steps.push({ label: "MW",                    equation: srkResult ? `From ${eosMode === "pr" ? "PR" : "SRK"} EoS` : "user input", value: MW.toFixed(3), unit: "kg/kmol", eqId: "RO-G-04" });
+  steps.push({ label: "k = Cp/Cv",            equation: srkResult ? `${eosMode === "pr" ? "PR" : "SRK"} EoS — ideal-gas Cp (Cp_mix/MWm)` : "user input", value: k.toFixed(4), unit: "—", eqId: "RO-G-05" });
+  steps.push({ label: "Z",                     equation: srkResult ? `${eosMode === "pr" ? "PR" : "SRK"} EoS cubic — largest real root` : "user input", value: Z.toFixed(4), unit: "—", eqId: "RO-G-06" });
   steps.push({ label: "R_specific",            equation: "R_s = Rᵤ / MW", value: R_spec.toFixed(3), unit: "J/(kg·K)", eqId: "RO-G-07" });
-  steps.push({ label: "ρ₁ upstream",           equation: srkResult ? "ρ₁ = MWm/Vm (SRK)" : "ρ₁ = P₁·MW/(Z·Rᵤ·T)", value: rho1.toFixed(4), unit: "kg/m³", eqId: "RO-G-08" });
+  steps.push({ label: "ρ₁ upstream",           equation: srkResult ? `ρ₁ = MWm/Vm (${eosMode === "pr" ? "PR" : "SRK"} EoS)` : "ρ₁ = P₁·MW/(Z·Rᵤ·T)", value: rho1.toFixed(4), unit: "kg/m³", eqId: "RO-G-08" });
   steps.push({ label: "r_crit = (2/(k+1))^(k/(k-1))", equation: "r_crit = (2/(k+1))^(k/(k-1))", value: xCrit.toFixed(6), unit: "—", eqId: "RO-G-09" });
   steps.push({ label: "C(k) critical flow fn", equation: "C(k) = √(k·(2/(k+1))^((k+1)/(k-1)))", value: fk.toFixed(6), unit: "—", eqId: "RO-G-10" });
 
@@ -1276,7 +1276,7 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
         equation: `${eosMode === "pr" ? "PR" : "SRK"} isenthalpic flash: H(T2,P2) = H(T1,P1) — bisection`,
         value: `${dischargeTemperature.toFixed(2)} °C  (ΔT = ${dT.toFixed(2)} °C)`,
         unit: "",
-        eqId: "SRK-30",
+        eqId: "RO-G-30",
       });
       if (!flashResult.converged) {
         warnings.push(`Isenthalpic flash did not fully converge (iter=${flashResult.iterations}). T_discharge = ${dischargeTemperature.toFixed(1)} °C is approximate.`);

@@ -307,7 +307,7 @@ export default function RestrictionOrificePage() {
           : result.isChoked
             ? "W = Cd · E · A · P₁ · C(k) · √(MW/(Z·Rᵤ·T)),  C(k) = √(k·(2/(k+1))^((k+1)/(k-1)))"
             : "W = Cd · E · A · Y · √(2·ρ₁·ΔP),  Y = 1−(0.351+0.256β⁴+0.93β⁸)·(1−r^(1/k)) [ISO 5167-2]",
-        "Discharge coefficient: ISO 5167-2:2003 Reader-Harris/Gallagher (Eq.1) — corner taps, no L1/L2 tap correction",
+        `Discharge coefficient: ISO 5167-2:2003 Reader-Harris/Gallagher (RHG) — ${service.orifice.tappingType === "corner" ? "corner taps (L₁=L′₂=0)" : service.orifice.tappingType === "D-D2" ? "D and D/2 taps (L₁=1, L′₂=0.47) — L1/L2 applied" : `flange taps (L₁=L′₂=25.4/D mm) — L1/L2 applied`}`,
         "Permanent pressure loss: ΔP_perm/ΔP = (√(1−β⁴Cd²) − Cd·β²) / (√(1−β⁴Cd²) + Cd·β²) [ISO 5167-2:2003 Annex D]",
         "Cavitation index: σ = (P₁−Pv)/ΔP vs σᵢ = 2.7 incipient, σch = 1.5 constant [ISA-RP75.23 / Tullis 1993]",
         "Erosional velocity: Ve = 122/√ρ [m/s] — API RP 14E, C = 100 continuous service",
@@ -318,7 +318,7 @@ export default function RestrictionOrificePage() {
         `Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined — not corrected for Re or β by engine" : "ISO 5167-2 RHG — iterative convergence on Re and d"})`,
         `Basis: ${service.orifice.basisMode === "inPipe" ? "In-pipe flow — E = 1/√(1−β⁴) applied" : "Free discharge — no β correction (E = 1)"}`,
         `Plate edge: ${service.orifice.edgeType === "sharp" ? "Sharp-edged (Cd ≈ 0.61 turbulent)" : "Rounded edge (Cd ≈ 0.97 — ISA 1932 nozzle type)"}`,
-        result.phase === "gas" ? `Gas treated as ideal with Z = ${service.gasProps.compressibilityFactor}` : "Liquid treated as incompressible (constant density)",
+        result.phase === "gas" ? (service.gasPropsMode && service.gasPropsMode !== "manual" ? `Z from ${service.gasPropsMode === "pr" ? "Peng-Robinson" : "SRK"} EoS = ${result.srkResult?.Z?.toFixed(4) ?? "computed"} (real-gas compressibility)` : `Manual Z = ${service.gasProps.compressibilityFactor} (user-specified compressibility factor)`) : "Liquid treated as incompressible (constant density)",
         "All pressures are absolute (bar(a))",
         "Standard bore rounded up to nearest metric drill size",
         "Noise estimate is a screening tool only — not certified for acoustic design",
