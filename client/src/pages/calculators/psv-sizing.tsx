@@ -12,8 +12,14 @@ import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
-import { COMMON_GASES, COMMON_LIQUIDS } from "@/lib/engineering/constants";
+import { COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
+import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
+import {
+  type GasPropsMode, type ManualGasProps,
+  DEFAULT_EOS_COMPOSITION, resolveGasProps,
+} from "@/lib/engineering/eosGasProps";
+import type { CompositionEntry } from "@/lib/engineering/srkEos";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import {
   type PRDProject, type PRDEquipment, type PRDScenario, type PRDDevice,
@@ -100,6 +106,10 @@ export default function PSVSizingPage() {
   const [bpResult, setBpResult] = useState<PRDBackpressureResult | null>(null);
   const [finalResult, setFinalResult] = useState<PRDFinalResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [psvGasPropsMode, setPsvGasPropsMode] = useState<GasPropsMode>("manual");
+  const [psvGasComposition, setPsvGasComposition] = useState<CompositionEntry[]>([...DEFAULT_EOS_COMPOSITION]);
+  const [psvEosMW, setPsvEosMW] = useState<number | null>(null);
+  const [psvEosZ, setPsvEosZ] = useState<number | null>(null);
 
   const relievingP = useMemo(() =>
     calculateRelievingPressure(
@@ -177,8 +187,27 @@ export default function PSVSizingPage() {
 
       const bpAbs = convertToSI("pressureAbs", sizing.backPressureAbs, unitSystem);
 
+      let mw = sizing.molecularWeight;
+      let z  = sizing.compressibilityFactor;
+      let k  = sizing.specificHeatRatio;
+
+      if (sizing.fluidType === "gas" && psvGasPropsMode !== "manual") {
+        const T_K = convertToSI("temperature", sizing.relievingTemperature, unitSystem);
+        const T_C = T_K - 273.15;
+        const manual: ManualGasProps = { molecularWeight: mw, specificHeatRatio: k, compressibilityFactor: z, viscosity: 0.015 };
+        const resolved = resolveGasProps(psvGasPropsMode, manual, psvGasComposition, T_C, rp.abs);
+        if (resolved.warnings.length > 0) setError(`EoS: ${resolved.warnings.join("; ")}`);
+        mw = resolved.MW; z = resolved.Z; k = resolved.k;
+        setPsvEosMW(mw); setPsvEosZ(z);
+      } else {
+        setPsvEosMW(null); setPsvEosZ(null);
+      }
+
       const input: PRDSizingInput = {
         ...sizing,
+        molecularWeight: mw,
+        compressibilityFactor: z,
+        specificHeatRatio: k,
         relievingRate: gov.relievingRate,
         relievingTemperature: convertToSI("temperature", sizing.relievingTemperature, unitSystem),
         relievingPressureAbs: rp.abs,
@@ -208,7 +237,7 @@ export default function PSVSizingPage() {
       const P_Pa = relievingP.abs * 1e5;
       const density = sizing.fluidType === "liquid"
         ? sizing.liquidDensity
-        : (sizing.molecularWeight * P_Pa) / (8314.46 * T_K * sizing.compressibilityFactor);
+        : ((psvEosMW ?? sizing.molecularWeight) * P_Pa) / (8314.46 * T_K * (psvEosZ ?? sizing.compressibilityFactor));
       const visc = sizing.fluidType === "liquid" ? sizing.viscosity : 0.015;
       const setPressure_bar = convertToSI("pressure", equipment.setPressure, unitSystem);
 
@@ -286,11 +315,6 @@ export default function PSVSizingPage() {
     setFinalResult(null);
     setError(null);
     setActiveTab("project");
-  };
-
-  const handleGasSelect = (name: string) => {
-    const g = COMMON_GASES[name];
-    if (g) setSizing(s => ({ ...s, molecularWeight: g.mw, specificHeatRatio: g.gamma }));
   };
 
   const handleLiquidSelect = (name: string) => {
@@ -675,19 +699,25 @@ export default function PSVSizingPage() {
 
                   {sizing.fluidType === "gas" && (
                     <div className="space-y-4">
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div><Label className="text-xs mb-1.5 block">Gas Selection</Label>
-                          <Select onValueChange={handleGasSelect}>
-                            <SelectTrigger data-testid="select-gas"><SelectValue placeholder="Select..." /></SelectTrigger>
-                            <SelectContent>{Object.keys(COMMON_GASES).map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                          </Select></div>
-                        <div><Label className="text-xs mb-1.5 block">MW (kg/kmol)</Label>
-                          <NumericInput value={sizing.molecularWeight} onValueChange={v => setSizing(s => ({ ...s, molecularWeight: v }))} data-testid="input-mw" /></div>
-                        <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
-                          <NumericInput value={sizing.specificHeatRatio} onValueChange={v => setSizing(s => ({ ...s, specificHeatRatio: v }))} data-testid="input-k" /></div>
-                        <div><Label className="text-xs mb-1.5 block">Z-factor</Label>
-                          <NumericInput value={sizing.compressibilityFactor} onValueChange={v => setSizing(s => ({ ...s, compressibilityFactor: v }))} data-testid="input-z" /></div>
-                      </div>
+                      <EosGasPropsPanel
+                        mode={psvGasPropsMode}
+                        onModeChange={setPsvGasPropsMode}
+                        composition={psvGasComposition}
+                        onCompositionChange={setPsvGasComposition}
+                        manual={{
+                          molecularWeight: sizing.molecularWeight,
+                          specificHeatRatio: sizing.specificHeatRatio,
+                          compressibilityFactor: sizing.compressibilityFactor,
+                          viscosity: 0.015,
+                        }}
+                        onManualChange={(field, value) => {
+                          if (field === "molecularWeight") setSizing(s => ({ ...s, molecularWeight: value }));
+                          else if (field === "specificHeatRatio") setSizing(s => ({ ...s, specificHeatRatio: value }));
+                          else if (field === "compressibilityFactor") setSizing(s => ({ ...s, compressibilityFactor: value }));
+                        }}
+                        showViscosity={false}
+                        testIdPrefix="psv"
+                      />
                     </div>
                   )}
 

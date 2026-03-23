@@ -16,12 +16,18 @@ import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { LimitsPanel } from "@/components/engineering/limits-panel";
+import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
+import {
+  type GasPropsMode, type ManualGasProps,
+  DEFAULT_EOS_COMPOSITION, resolveGasProps,
+} from "@/lib/engineering/eosGasProps";
+import type { CompositionEntry } from "@/lib/engineering/srkEos";
 import {
   calculateGasLineSizing,
   GAS_SIZING_TEST_CASE,
   type GasSizingResult,
 } from "@/lib/engineering/gasSizing";
-import { COMMON_GASES, GAS_SERVICE_LIMITS, type GasServiceLimit } from "@/lib/engineering/constants";
+import { GAS_SERVICE_LIMITS, type GasServiceLimit } from "@/lib/engineering/constants";
 import { checkGasLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
@@ -75,6 +81,8 @@ export default function GasLineSizingPage() {
   const [result, setResult] = useState<GasSizingResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<string>("");
+  const [gasPropsMode, setGasPropsMode] = useState<GasPropsMode>("manual");
+  const [gasComposition, setGasComposition] = useState<CompositionEntry[]>([...DEFAULT_EOS_COMPOSITION]);
   const [limitWarnings, setLimitWarnings] = useState<LimitWarning[]>([]);
 
   const updateField = (field: keyof FormState, value: string) => {
@@ -90,17 +98,40 @@ export default function GasLineSizingPage() {
   const handleCalculate = () => {
     setError(null);
     try {
+      let mw  = parseFloat(form.molecularWeight);
+      let z   = parseFloat(form.compressibilityFactor);
+      let k   = parseFloat(form.specificHeatRatio);
+      let mu  = parseFloat(form.viscosity);
+
+      if (gasPropsMode !== "manual") {
+        const T_K = convertToSI("temperature", parseFloat(form.temperature), unitSystem);
+        const T_C = T_K - 273.15;
+        const P_bar = convertToSI("pressure", parseFloat(form.pressure), unitSystem);
+        const manual: ManualGasProps = {
+          molecularWeight: isNaN(mw) ? 18.5 : mw,
+          specificHeatRatio: isNaN(k) ? 1.27 : k,
+          compressibilityFactor: isNaN(z) ? 0.92 : z,
+          viscosity: isNaN(mu) ? 0.012 : mu,
+        };
+        const resolved = resolveGasProps(gasPropsMode, manual, gasComposition, T_C, P_bar);
+        if (resolved.warnings.length > 0) setError(`EoS: ${resolved.warnings.join("; ")}`);
+        mw = resolved.MW;
+        z  = resolved.Z;
+        k  = resolved.k;
+        mu = resolved.viscosity_cP;
+      }
+
       const input = {
         flowRate: convertToSI("flowMass", parseFloat(form.flowRate), unitSystem),
         pressure: convertToSI("pressure", parseFloat(form.pressure), unitSystem),
         temperature: convertToSI("temperature", parseFloat(form.temperature), unitSystem),
-        molecularWeight: parseFloat(form.molecularWeight),
+        molecularWeight: mw,
         innerDiameter: convertToSI("diameter", parseFloat(form.innerDiameter), unitSystem),
         pipeLength: convertToSI("length", parseFloat(form.pipeLength), unitSystem),
         roughness: parseFloat(form.roughness),
-        compressibilityFactor: parseFloat(form.compressibilityFactor),
-        specificHeatRatio: parseFloat(form.specificHeatRatio),
-        viscosity: parseFloat(form.viscosity),
+        compressibilityFactor: z,
+        specificHeatRatio: k,
+        viscosity: mu,
       };
       for (const [key, val] of Object.entries(input)) {
         if (isNaN(val)) throw new Error(`Invalid value for ${key}`);
@@ -150,17 +181,6 @@ export default function GasLineSizingPage() {
     setError(null);
     setLimitWarnings([]);
     setSelectedService("");
-  };
-
-  const handleGasSelect = (gasName: string) => {
-    const gas = COMMON_GASES[gasName];
-    if (gas) {
-      setForm((prev) => ({
-        ...prev,
-        molecularWeight: String(gas.mw),
-        specificHeatRatio: String(gas.gamma),
-      }));
-    }
   };
 
   return (
@@ -239,35 +259,6 @@ export default function GasLineSizingPage() {
                 </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Gas Selection
-                  </Label>
-                  <Select onValueChange={handleGasSelect}>
-                    <SelectTrigger data-testid="select-gas">
-                      <SelectValue placeholder="Select a gas..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(COMMON_GASES).map((gas) => (
-                        <SelectItem key={gas} value={gas}>
-                          {gas}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
-                    Molecular Weight (kg/kmol)
-                  </Label>
-                  <Input
-                    type="number"
-                    value={form.molecularWeight}
-                    onChange={(e) => updateField("molecularWeight", e.target.value)}
-                    placeholder="e.g. 18.5"
-                    data-testid="input-mw"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
                     Pipe Length ({getUnit("length", unitSystem)})
                   </Label>
                   <Input
@@ -311,37 +302,26 @@ export default function GasLineSizingPage() {
                 <p className="text-xs font-medium text-muted-foreground mb-3">
                   Gas Properties
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Z-factor</Label>
-                    <Input
-                      type="number"
-                      value={form.compressibilityFactor}
-                      onChange={(e) => updateField("compressibilityFactor", e.target.value)}
-                      data-testid="input-z-factor"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
-                    <Input
-                      type="number"
-                      value={form.specificHeatRatio}
-                      onChange={(e) => updateField("specificHeatRatio", e.target.value)}
-                      data-testid="input-cp-cv"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">
-                      Viscosity ({getUnit("viscosity", unitSystem)})
-                    </Label>
-                    <Input
-                      type="number"
-                      value={form.viscosity}
-                      onChange={(e) => updateField("viscosity", e.target.value)}
-                      data-testid="input-viscosity"
-                    />
-                  </div>
-                </div>
+                <EosGasPropsPanel
+                  mode={gasPropsMode}
+                  onModeChange={setGasPropsMode}
+                  composition={gasComposition}
+                  onCompositionChange={setGasComposition}
+                  manual={{
+                    molecularWeight: parseFloat(form.molecularWeight) || 18.5,
+                    specificHeatRatio: parseFloat(form.specificHeatRatio) || 1.27,
+                    compressibilityFactor: parseFloat(form.compressibilityFactor) || 0.92,
+                    viscosity: parseFloat(form.viscosity) || 0.012,
+                  }}
+                  onManualChange={(field, value) => {
+                    if (field === "molecularWeight") updateField("molecularWeight", String(value));
+                    else if (field === "specificHeatRatio") updateField("specificHeatRatio", String(value));
+                    else if (field === "compressibilityFactor") updateField("compressibilityFactor", String(value));
+                    else if (field === "viscosity") updateField("viscosity", String(value));
+                  }}
+                  showViscosity={true}
+                  testIdPrefix="gas-line"
+                />
               </div>
 
               {error && (

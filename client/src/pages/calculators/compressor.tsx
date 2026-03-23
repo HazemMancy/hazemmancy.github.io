@@ -10,6 +10,12 @@ import { UnitSelector } from "@/components/engineering/unit-selector";
 import { WarningPanel } from "@/components/engineering/warning-panel";
 import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
+import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
+import {
+  type GasPropsMode, type ManualGasProps,
+  DEFAULT_EOS_COMPOSITION, resolveGasProps,
+} from "@/lib/engineering/eosGasProps";
+import type { CompositionEntry } from "@/lib/engineering/srkEos";
 import {
   calculateCompressorSizing,
   COMPRESSOR_CENTRIFUGAL_TEST_CASE,
@@ -112,6 +118,8 @@ export default function CompressorPage() {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [result, setResult] = useState<CompressorResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gasPropsMode, setGasPropsMode] = useState<GasPropsMode>("manual");
+  const [gasComposition, setGasComposition] = useState<CompositionEntry[]>([...DEFAULT_EOS_COMPOSITION]);
 
   const update = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
 
@@ -135,14 +143,38 @@ export default function CompressorPage() {
   const handleCalculate = () => {
     setError(null);
     try {
+      const T_K_suction = convertToSI("temperature", parseFloat(form.suctionTemperature), unitSystem);
+      const P_bar_suction = convertToSI("pressureBara", parseFloat(form.suctionPressure), unitSystem);
+
+      let MW = parseFloat(form.molecularWeight);
+      let k  = parseFloat(form.specificHeatRatio);
+      let Z  = parseFloat(form.compressibilityFactor);
+
+      if (gasPropsMode !== "manual") {
+        const T_C = T_K_suction - 273.15;
+        const manual: ManualGasProps = {
+          molecularWeight: isNaN(MW) ? 18.5 : MW,
+          specificHeatRatio: isNaN(k) ? 1.27 : k,
+          compressibilityFactor: isNaN(Z) ? 1.0 : Z,
+          viscosity: 0.012,
+        };
+        const resolved = resolveGasProps(gasPropsMode, manual, gasComposition, T_C, P_bar_suction);
+        if (resolved.warnings.length > 0) {
+          setError(`EoS: ${resolved.warnings.join("; ")}`);
+        }
+        MW = resolved.MW;
+        k  = resolved.k;
+        Z  = resolved.Z;
+      }
+
       const input = {
         gasFlowRate: convertToSI("flowGas", parseFloat(form.gasFlowRate), unitSystem),
-        molecularWeight: parseFloat(form.molecularWeight),
-        suctionPressure: convertToSI("pressureBara", parseFloat(form.suctionPressure), unitSystem),
+        molecularWeight: MW,
+        suctionPressure: P_bar_suction,
         dischargePressure: convertToSI("pressureBara", parseFloat(form.dischargePressure), unitSystem),
-        suctionTemperature: convertToSI("temperature", parseFloat(form.suctionTemperature), unitSystem),
-        specificHeatRatio: parseFloat(form.specificHeatRatio),
-        compressibilityFactor: parseFloat(form.compressibilityFactor),
+        suctionTemperature: T_K_suction,
+        specificHeatRatio: k,
+        compressibilityFactor: Z,
         polytropicEfficiency: parseFloat(form.polytropicEfficiency),
         mechanicalEfficiency: parseFloat(form.mechanicalEfficiency),
         motorEfficiency: parseFloat(form.motorEfficiency),
@@ -466,41 +498,30 @@ export default function CompressorPage() {
                 <p className="text-xs text-muted-foreground">Select a gas or enter custom properties</p>
               </CardHeader>
               <CardContent className="space-y-4 pt-0">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Gas Selection</Label>
-                    <Select onValueChange={handleGasSelect}>
-                      <SelectTrigger data-testid="select-gas">
-                        <SelectValue placeholder="Select a gas..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.keys(COMMON_COMPRESSOR_GASES).map(g => (
-                          <SelectItem key={g} value={g}>{g}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Gas Flow Rate ({getUnit("flowGas", unitSystem)})</Label>
-                    <Input type="number" value={form.gasFlowRate} onChange={e => update("gasFlowRate", e.target.value)}
-                      placeholder="e.g. 5000" data-testid="input-flow" />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Molecular Weight (kg/kmol)</Label>
-                    <Input type="number" value={form.molecularWeight} onChange={e => update("molecularWeight", e.target.value)}
-                      placeholder="e.g. 18.5" data-testid="input-mw" />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Specific Heat Ratio k (Cp/Cv)</Label>
-                    <Input type="number" value={form.specificHeatRatio} onChange={e => update("specificHeatRatio", e.target.value)}
-                      placeholder="e.g. 1.28" data-testid="input-k" />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1.5 block">Compressibility Factor Z</Label>
-                    <Input type="number" value={form.compressibilityFactor} onChange={e => update("compressibilityFactor", e.target.value)}
-                      placeholder="e.g. 0.95" data-testid="input-z" />
-                  </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Gas Flow Rate ({getUnit("flowGas", unitSystem)})</Label>
+                  <Input type="number" value={form.gasFlowRate} onChange={e => update("gasFlowRate", e.target.value)}
+                    placeholder="e.g. 5000" data-testid="input-flow" />
                 </div>
+                <EosGasPropsPanel
+                  mode={gasPropsMode}
+                  onModeChange={setGasPropsMode}
+                  composition={gasComposition}
+                  onCompositionChange={setGasComposition}
+                  manual={{
+                    molecularWeight: parseFloat(form.molecularWeight) || 18.5,
+                    specificHeatRatio: parseFloat(form.specificHeatRatio) || 1.27,
+                    compressibilityFactor: parseFloat(form.compressibilityFactor) || 1.0,
+                    viscosity: 0.012,
+                  }}
+                  onManualChange={(field, value) => {
+                    if (field === "molecularWeight") update("molecularWeight", String(value));
+                    else if (field === "specificHeatRatio") update("specificHeatRatio", String(value));
+                    else if (field === "compressibilityFactor") update("compressibilityFactor", String(value));
+                  }}
+                  showViscosity={false}
+                  testIdPrefix="comp"
+                />
               </CardContent>
             </Card>
 

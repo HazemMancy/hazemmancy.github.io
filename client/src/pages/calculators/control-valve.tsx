@@ -13,8 +13,14 @@ import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { PipeSizeSelector } from "@/components/engineering/pipe-size-selector";
-import { COMMON_GASES, COMMON_LIQUIDS } from "@/lib/engineering/constants";
+import { COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
+import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
+import {
+  type GasPropsMode, type ManualGasProps,
+  DEFAULT_EOS_COMPOSITION, resolveGasProps,
+} from "@/lib/engineering/eosGasProps";
+import type { CompositionEntry } from "@/lib/engineering/srkEos";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
@@ -61,6 +67,8 @@ export default function ControlValvePage() {
   const [riskResult, setRiskResult] = useState<CVRiskAssessment | null>(null);
   const [finalResult, setFinalResult] = useState<CVFinalResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cvGasPropsMode, setCvGasPropsMode] = useState<GasPropsMode>("manual");
+  const [cvGasComposition, setCvGasComposition] = useState<CompositionEntry[]>([...DEFAULT_EOS_COMPOSITION]);
 
   const pU = getUnit("pressureAbs", unitSystem);
   const tU = getUnit("temperature", unitSystem);
@@ -142,15 +150,6 @@ export default function ControlValvePage() {
     }
   };
 
-  const handleGasSelect = (name: string) => {
-    const g = COMMON_GASES[name];
-    if (g) {
-      setServiceData(sd => ({
-        ...sd, fluidName: name,
-        gasProps: { ...sd.gasProps, molecularWeight: g.mw, specificHeatRatio: g.gamma },
-      }));
-    }
-  };
 
   const handleStyleSelect = (style: ValveStyle) => {
     const defaults = TYPICAL_VALVE_DEFAULTS[style];
@@ -189,7 +188,32 @@ export default function ControlValvePage() {
   const handleCalcSizing = () => {
     try {
       setError(null);
-      const sd = toSIPoints();
+      let sd = toSIPoints();
+
+      if ((serviceData.fluidType === "gas") && cvGasPropsMode !== "manual") {
+        const op0 = sd.operatingPoints[0];
+        const T_K = op0?.temperature ?? 298.15;
+        const T_C = T_K - 273.15;
+        const P_bar = op0?.upstreamPressure ?? 1.0;
+        const manual: ManualGasProps = {
+          molecularWeight: sd.gasProps.molecularWeight,
+          specificHeatRatio: sd.gasProps.specificHeatRatio,
+          compressibilityFactor: sd.gasProps.compressibilityFactor,
+          viscosity: 0.012,
+        };
+        const resolved = resolveGasProps(cvGasPropsMode, manual, cvGasComposition, T_C, P_bar);
+        if (resolved.warnings.length > 0) setError(`EoS: ${resolved.warnings.join("; ")}`);
+        sd = {
+          ...sd,
+          gasProps: {
+            ...sd.gasProps,
+            molecularWeight: resolved.MW,
+            specificHeatRatio: resolved.k,
+            compressibilityFactor: resolved.Z,
+          },
+        };
+      }
+
       const vd = toSIValve();
       const result = computeMultiPointSizing(sd, vd, installation);
       setSizingResult(result);
@@ -479,28 +503,50 @@ export default function ControlValvePage() {
               {isGasLike && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-xs font-medium"><Droplets className="w-3.5 h-3.5 text-primary" /> {serviceData.fluidType === "steam" ? "Steam Properties" : "Gas Properties"}</div>
-                  {serviceData.fluidType === "gas" && (
-                    <div><Label className="text-xs mb-1.5 block">Select Common Gas</Label>
-                      <Select onValueChange={handleGasSelect}>
-                        <SelectTrigger data-testid="select-gas"><SelectValue placeholder="Select..." /></SelectTrigger>
-                        <SelectContent>{Object.keys(COMMON_GASES).map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                      </Select></div>
-                  )}
                   {serviceData.fluidType === "steam" && (
-                    <Card className="bg-muted/30"><CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground">Using approximate steam properties: MW={STEAM_PROPS.molecularWeight}, k={STEAM_PROPS.specificHeatRatio}, Z={STEAM_PROPS.compressibilityFactor}. Verify with steam tables for final design.</p>
-                    </CardContent></Card>
+                    <>
+                      <Card className="bg-muted/30"><CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Using approximate steam properties: MW={STEAM_PROPS.molecularWeight}, k={STEAM_PROPS.specificHeatRatio}, Z={STEAM_PROPS.compressibilityFactor}. Verify with steam tables for final design.</p>
+                      </CardContent></Card>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div><Label className="text-xs mb-1.5 block">Molecular Weight (kg/kmol)</Label>
+                          <NumericInput value={STEAM_PROPS.molecularWeight} disabled onValueChange={() => {}} data-testid="input-mw" /></div>
+                        <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
+                          <NumericInput value={STEAM_PROPS.specificHeatRatio} disabled onValueChange={() => {}} data-testid="input-k" /></div>
+                        <div><Label className="text-xs mb-1.5 block">Z-factor</Label>
+                          <NumericInput value={STEAM_PROPS.compressibilityFactor} disabled onValueChange={() => {}} data-testid="input-z" /></div>
+                        <div><Label className="text-xs mb-1.5 block">Critical Pressure ({pU})</Label>
+                          <NumericInput value={serviceData.gasProps.criticalPressure} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, criticalPressure: v } }))} data-testid="input-gas-pc" /></div>
+                      </div>
+                    </>
                   )}
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div><Label className="text-xs mb-1.5 block">Molecular Weight (kg/kmol)</Label>
-                      <NumericInput value={serviceData.fluidType === "steam" ? STEAM_PROPS.molecularWeight : serviceData.gasProps.molecularWeight} disabled={serviceData.fluidType === "steam"} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, molecularWeight: v } }))} data-testid="input-mw" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Cp/Cv (k)</Label>
-                      <NumericInput value={serviceData.fluidType === "steam" ? STEAM_PROPS.specificHeatRatio : serviceData.gasProps.specificHeatRatio} disabled={serviceData.fluidType === "steam"} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, specificHeatRatio: v } }))} data-testid="input-k" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Z-factor</Label>
-                      <NumericInput value={serviceData.fluidType === "steam" ? STEAM_PROPS.compressibilityFactor : serviceData.gasProps.compressibilityFactor} disabled={serviceData.fluidType === "steam"} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, compressibilityFactor: v } }))} data-testid="input-z" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Critical Pressure ({pU})</Label>
-                      <NumericInput value={serviceData.gasProps.criticalPressure} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, criticalPressure: v } }))} data-testid="input-gas-pc" /></div>
-                  </div>
+                  {serviceData.fluidType === "gas" && (
+                    <>
+                      <EosGasPropsPanel
+                        mode={cvGasPropsMode}
+                        onModeChange={setCvGasPropsMode}
+                        composition={cvGasComposition}
+                        onCompositionChange={setCvGasComposition}
+                        manual={{
+                          molecularWeight: serviceData.gasProps.molecularWeight,
+                          specificHeatRatio: serviceData.gasProps.specificHeatRatio,
+                          compressibilityFactor: serviceData.gasProps.compressibilityFactor,
+                          viscosity: 0.012,
+                        }}
+                        onManualChange={(field, value) => {
+                          if (field === "molecularWeight") setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, molecularWeight: value } }));
+                          else if (field === "specificHeatRatio") setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, specificHeatRatio: value } }));
+                          else if (field === "compressibilityFactor") setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, compressibilityFactor: value } }));
+                        }}
+                        showViscosity={false}
+                        testIdPrefix="cv"
+                      />
+                      <div className="grid gap-4 sm:grid-cols-2 mt-2">
+                        <div><Label className="text-xs mb-1.5 block">Critical Pressure ({pU})</Label>
+                          <NumericInput value={serviceData.gasProps.criticalPressure} onValueChange={v => setServiceData(sd => ({ ...sd, gasProps: { ...sd.gasProps, criticalPressure: v } }))} data-testid="input-gas-pc" /></div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
