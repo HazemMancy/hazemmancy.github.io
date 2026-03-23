@@ -1,7 +1,8 @@
 /**
  * Control Valve Sizing — Cv Calculator
  *
- * Standard: IEC 60534-2-1 / ISA S75.01
+ * Basis: IEC 60534-informed preliminary sizing (screening tool only — not a substitute for
+ * final vendor sizing per IEC 60534-2-1 / ISA S75.01 with confirmed fluid properties)
  * Reference: THINKTANK Technical Bulletin 1-I — Handbook for Control Valve Sizing
  *
  * 7-Tab Wizard Engine:
@@ -157,7 +158,7 @@ export interface CVSelectionResult {
   minOpening: number;
   maxOpening: number;
   rangeabilityOK: boolean;
-  authorityFactor: number;
+  authorityScreeningEstimate: number;
   warnings: string[];
 }
 
@@ -404,6 +405,7 @@ export function computeLiquidPoint(
   valveSize_mm: number,
   pipeUp_mm: number,
   pipeDn_mm: number,
+  fpOverride?: number,
 ): CVPointResult {
   const warnings: string[] = [];
   const P1    = point.upstreamPressure;
@@ -430,7 +432,17 @@ export function computeLiquidPoint(
     : { sumK: 0, K1prime: 0 };
 
   // Iterative Fp/FLP computation (3 iterations, starting Fp=1)
-  let Fp  = 1.0;
+  // If fpOverride is provided, Fp is fixed; FLP is still computed from valve/pipe geometry.
+  const useManualFp = fpOverride !== undefined && fpOverride > 0 && fpOverride <= 1.0;
+  if (useManualFp) {
+    warnings.push(
+      `Manual Fp override = ${fpOverride!.toFixed(3)} applied. ` +
+      "Cv is computed using this Fp directly; FLP is still derived from piping geometry. " +
+      "Confirm Fp value against vendor datasheet or IEC 60534-2-1 Annex A."
+    );
+  }
+
+  let Fp  = useManualFp ? fpOverride! : 1.0;
   let FLP = FL;
   let Cv  = 0;
 
@@ -451,7 +463,7 @@ export function computeLiquidPoint(
 
     // Recompute Fp and FLP with this Cv estimate
     if (hasReducers && Cv > 0) {
-      Fp  = computeFp(sumK, Cv, d_mm);
+      if (!useManualFp) Fp = computeFp(sumK, Cv, d_mm);
       FLP = computeFLP(FL, K1prime, Cv, d_mm);
     }
   }
@@ -499,8 +511,8 @@ export function computeLiquidPoint(
   if (P1 > Pv_bar && !isChoked) {
     if (sigma < Kc) {
       warnings.push(
-        `SEVERE CAVITATION: σ = ${sigma.toFixed(3)} < Kc = ${Kc.toFixed(3)} (Kc = 0.80·FL²). ` +
-        "Constant bubble cavitation regime. Multi-stage anti-cavitation trim or cascaded valves required per IEC 60534-2-2."
+        `SEVERE CAVITATION RISK: σ = ${sigma.toFixed(3)} < Kc = ${Kc.toFixed(3)} (Kc = 0.80·FL², approximate per IEC 60534-2-2). ` +
+        "Constant bubble cavitation regime likely. Anti-cavitation or multi-stage trim may be required — verify with vendor cavitation data (σ_mr, σ_id per IEC 60534-2-2)."
       );
     } else if (sigma < FL * FL) {
       warnings.push(
@@ -579,6 +591,7 @@ export function computeGasPoint(
   valveSize_mm: number,
   pipeUp_mm: number,
   pipeDn_mm: number,
+  fpOverride?: number,
 ): CVPointResult {
   const warnings: string[] = [];
   const P1   = point.upstreamPressure;
@@ -590,7 +603,8 @@ export function computeGasPoint(
   if (P1 <= 0) throw new Error(`${point.label}: P1 must be positive (absolute pressure)`);
   if (T_K <= 0) throw new Error(`${point.label}: Temperature must be above absolute zero`);
 
-  // Convert volumetric (Nm³/h at 0°C, 1.01325 bar) to mass flow if needed
+  // Convert volumetric (Normal Nm³/h at 0°C, 1.01325 bar per ISO 13443) to mass flow if needed.
+  // Molar volume at 0°C, 1.01325 bar (STP) = 22.414 m³/kmol.
   const W_kgh = point.flowUnit === "mass"
     ? point.flowRate
     : point.flowRate * props.molecularWeight / 22.414;
@@ -606,7 +620,16 @@ export function computeGasPoint(
     : { sumK: 0, K1prime: 0 };
 
   // Iterative Fp/xTP (3 iterations)
-  let Fp   = 1.0;
+  // If fpOverride is provided, Fp is fixed; xTP is still computed from geometry.
+  const useManualFpGas = fpOverride !== undefined && fpOverride > 0 && fpOverride <= 1.0;
+  if (useManualFpGas) {
+    warnings.push(
+      `Manual Fp override = ${fpOverride!.toFixed(3)} applied. ` +
+      "xTP is still derived from piping geometry. Confirm Fp against vendor data or IEC 60534-2-1 Annex A."
+    );
+  }
+
+  let Fp   = useManualFpGas ? fpOverride! : 1.0;
   let xTP  = xt;
   let Cv   = 0;
 
@@ -626,7 +649,7 @@ export function computeGasPoint(
 
     // Recompute Fp, xTP with this Cv estimate
     if (hasReducers && Cv > 0) {
-      Fp  = computeFp(sumK, Cv, d_mm);
+      if (!useManualFpGas) Fp = computeFp(sumK, Cv, d_mm);
       xTP = computeXTP(xt, Fp, K1prime, Cv, d_mm);
     }
   }
@@ -686,7 +709,7 @@ export function computeGasPoint(
   return {
     label: point.label, cvRequired: Cv, deltaPActual: dP, deltaPChoked: dP_choked_equiv,
     isChoked, flowRegime: isChoked ? "Choked (Critical/Sonic)" : "Subcritical",
-    fpFactor: Fp, flpFactor: Fp, ffFactor: 0, fkFactor: Fk,
+    fpFactor: Fp, flpFactor: 0, ffFactor: 0, fkFactor: Fk,
     xActual: x, xChoked: x_choked, yFactor: Y,
     viscosityCorrection: 1.0, openingPercent: 0, velocity: 0,
     cavitationIndex: 0, kcFactor: 0,
@@ -704,10 +727,11 @@ export function computeSteamPoint(
   valveSize_mm: number,
   pipeUp_mm: number,
   pipeDn_mm: number,
+  fpOverride?: number,
   customProps?: Partial<FluidPropsGas>,
 ): CVPointResult {
   const props: FluidPropsGas = { ...STEAM_PROPS, ...customProps };
-  const result = computeGasPoint(point, props, xt, valveSize_mm, pipeUp_mm, pipeDn_mm);
+  const result = computeGasPoint(point, props, xt, valveSize_mm, pipeUp_mm, pipeDn_mm, fpOverride);
   result.warnings.push(
     "Steam sizing uses approximate properties (MW=18.015, k=1.3, Z=0.95). " +
     "Verify with steam tables (IAPWS-IF97) for final design."
@@ -735,10 +759,12 @@ export function computeMultiPointSizing(
   const enabledPoints = serviceData.operatingPoints.filter(p => p.enabled);
   if (enabledPoints.length === 0) throw new Error("At least one operating point must be enabled");
 
+  const fpOverrideVal = useManualFp ? installation.fpOverride : undefined;
+
   const pointResults: CVPointResult[] = enabledPoints.map(point => {
     // Validate inputs
     if (point.flowRate <= 0) throw new Error(`${point.label}: Flow rate must be positive`);
-    if (point.upstreamPressure <= 0) throw new Error(`${point.label}: P1 must be positive`);
+    if (point.upstreamPressure <= 0) throw new Error(`${point.label}: P1 must be positive (absolute pressure)`);
     if (point.upstreamPressure <= point.downstreamPressure) throw new Error(`${point.label}: P1 must exceed P2`);
 
     let result: CVPointResult;
@@ -747,22 +773,16 @@ export function computeMultiPointSizing(
       case "liquid":
         result = computeLiquidPoint(
           point, serviceData.liquidProps, valveData.fl,
-          valveD, pipeUp, pipeDn,
+          valveD, pipeUp, pipeDn, fpOverrideVal,
         );
         result.velocity = estimateVelocity(point.flowRate, valveData.pipeSize, "liquid", serviceData.liquidProps.density);
         break;
       case "gas":
-        result = computeGasPoint(point, serviceData.gasProps, valveData.xt, valveD, pipeUp, pipeDn);
+        result = computeGasPoint(point, serviceData.gasProps, valveData.xt, valveD, pipeUp, pipeDn, fpOverrideVal);
         break;
       case "steam":
-        result = computeSteamPoint(point, valveData.xt, valveD, pipeUp, pipeDn);
+        result = computeSteamPoint(point, valveData.xt, valveD, pipeUp, pipeDn, fpOverrideVal);
         break;
-    }
-
-    // Apply manual Fp override if set
-    if (useManualFp) {
-      result.fpFactor = installation.fpOverride;
-      result.flpFactor = installation.fpOverride;
     }
 
     if (valveData.ratedCv > 0) {
@@ -807,7 +827,7 @@ export function computeValveSelection(
   if (ratedCv <= 0) {
     return {
       ratedCv: 0, cvRatio: 0, openings: [], minOpening: 0, maxOpening: 0,
-      rangeabilityOK: false, authorityFactor: 0,
+      rangeabilityOK: false, authorityScreeningEstimate: 0,
       warnings: ["No rated Cv entered — enter vendor valve data for selection check"],
     };
   }
@@ -840,13 +860,17 @@ export function computeValveSelection(
   const normalPt = sizingResult.pointResults.find(p => p.label === "Normal") || sizingResult.pointResults[0];
   const dPValveNormal = normalPt.deltaPActual;
   const dPMaxSystem   = Math.max(...sizingResult.pointResults.map(p => p.deltaPActual));
+  // Heuristic: total system ΔP ≈ 2 × max valve ΔP (not rigorous — assumes valve takes ~50% of system drop)
   const dPSystemEst   = dPMaxSystem * 2;
-  const authorityFactor = dPSystemEst > 0 ? dPValveNormal / dPSystemEst : 0;
-  if (authorityFactor < 0.25) {
-    warnings.push(`Low valve authority (${(authorityFactor*100).toFixed(0)}%) — poor control. Target >25%. (Authority = ΔP_valve_normal / ΔP_system_estimated)`);
+  const authorityScreeningEstimate = dPSystemEst > 0 ? dPValveNormal / dPSystemEst : 0;
+  if (authorityScreeningEstimate < 0.25) {
+    warnings.push(
+      `Low valve authority screening estimate (${(authorityScreeningEstimate*100).toFixed(0)}%) — heuristic indicator only. ` +
+      "Target >25% for good control. Authority = ΔP_valve_normal / ΔP_system_estimated (where ΔP_system ≈ 2×max valve ΔP — confirm with actual system curve)."
+    );
   }
 
-  return { ratedCv, cvRatio, openings, minOpening: minOpen, maxOpening: maxOpen, rangeabilityOK, authorityFactor, warnings };
+  return { ratedCv, cvRatio, openings, minOpening: minOpen, maxOpening: maxOpen, rangeabilityOK, authorityScreeningEstimate, warnings };
 }
 
 export function computeRiskAssessment(
@@ -894,8 +918,8 @@ export function computeRiskAssessment(
       if (sigma < Kc) {
         cavitationRisk = "severe";
         warnings.push(
-          `${pr.label}: SEVERE CAVITATION — σ = ${sigma.toFixed(3)} < Kc = ${Kc.toFixed(3)} (Kc = 0.80·FL²). ` +
-          "Constant bubble cavitation — risk of erosion damage. Multi-stage trim or cascaded valves required."
+          `${pr.label}: SEVERE CAVITATION RISK — σ = ${sigma.toFixed(3)} < Kc = ${Kc.toFixed(3)} (Kc = 0.80·FL², approximate per IEC 60534-2-2). ` +
+          "Constant bubble cavitation regime likely — risk of erosion damage. Anti-cavitation or multi-stage trim may be required; verify with vendor cavitation data (σ_mr, σ_id per IEC 60534-2-2)."
         );
         mitigations.push("Use multi-stage anti-cavitation trim (cage-guided, labyrinth) — obtain vendor σ_mr and σ_id values");
         mitigations.push("Install restriction orifice downstream to increase P2 and raise σ above Kc");

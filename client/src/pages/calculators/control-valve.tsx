@@ -313,7 +313,7 @@ export default function ControlValvePage() {
           { label: "Cv Ratio (Governing/Rated)", value: `${(sel.cvRatio * 100).toFixed(0)}%` },
           { label: "Min Opening", value: sel.minOpening, unit: "%" },
           { label: "Max Opening", value: sel.maxOpening, unit: "%" },
-          { label: "Valve Authority", value: `${(sel.authorityFactor * 100).toFixed(0)}%` },
+          { label: "Valve Authority (Screening)", value: `${(sel.authorityScreeningEstimate * 100).toFixed(0)}%` },
           { label: "Rangeability", value: sel.rangeabilityOK ? "OK" : "INSUFFICIENT" },
         ],
       });
@@ -334,7 +334,7 @@ export default function ControlValvePage() {
     }
 
     return {
-      calculatorName: "Control Valve Sizing (IEC 60534)",
+      calculatorName: "Control Valve Sizing — IEC 60534-Informed Preliminary Sizing",
       projectInfo: [
         { label: "Project", value: fr.project.name },
         { label: "Client", value: fr.project.client },
@@ -348,17 +348,25 @@ export default function ControlValvePage() {
       results,
       additionalSections,
       methodology: [
-        "Cv sizing per IEC 60534-2-1 / ISA S75.01",
+        "IEC 60534-informed preliminary sizing — screening tool only; not a substitute for final vendor sizing",
         sd.fluidType === "liquid"
-          ? "Liquid: Cv = Q·√(ρ/ΔP) / (N1·Fp), choked check via FL²(P1-FF·Pv)"
-          : "Gas: Cv = W / (N8·Fp·P1·Y·√(x·Fk·M/(T·Z))), choked check via Fk·xT",
-        "Piping geometry factor Fp based on reducers (sum K = 1.5(1-β²))",
-      ],
+          ? "Liquid: Cv = Q·√(ρ/ΔP) / (N1·Fp), choked check via FL²(P1-FF·Pv) per IEC 60534-2-1"
+          : "Gas: Cv = W / (N8·Fp·P1·Y·√(x·Fk·M/(T·Z))), choked check via Fk·xT per IEC 60534-2-1",
+        "Piping geometry factor Fp based on reducers (sum K = 1.5(1-β²)); FLP iterative per IEC 60534-2-1",
+        sd.fluidType === "gas"
+          ? "Normal volumetric gas flow converted to mass flow at 0°C, 1.01325 bar (STP) via 22.414 m³/kmol"
+          : "",
+        sd.fluidType === "steam"
+          ? "PRELIMINARY — steam uses fixed approximate properties (MW=18.015, k=1.3, Z=0.95). Verify with IAPWS-IF97 steam tables."
+          : "",
+      ].filter(Boolean),
       assumptions: [
-        "FL, xT, Fd values are typical defaults unless vendor-confirmed",
-        "Valve opening estimated from inherent characteristic (not installed)",
-        "Valve authority = min ΔP / (max ΔP + min ΔP)",
-        sd.fluidType === "steam" ? "Steam uses approximate MW/k/Z — verify with steam tables" : "",
+        "PRELIMINARY SIZING BASIS — results are for screening/FEED purposes only; verify with vendor confirmed data",
+        "FL, xT values are typical defaults unless vendor-confirmed; Fd shown for reference only (not used in Cv calculation)",
+        "Valve opening estimated from inherent characteristic (not installed characteristic)",
+        "Valve authority is a heuristic screening indicator (assumes total system ΔP ≈ 2 × max valve ΔP — confirm with system curve)",
+        "Cavitation Kc = 0.80·FL² is an approximate IEC 60534-2-2 screening threshold — obtain vendor σ_mr, σ_id for specification",
+        sd.fluidType === "steam" ? "Steam sizing PRELIMINARY — approximate properties only; final sizing requires IAPWS-IF97 and vendor steam trim data" : "",
       ].filter(Boolean),
       references: [
         "IEC 60534-2-1: Industrial-process control valves — Sizing equations (primary standard)",
@@ -386,7 +394,7 @@ export default function ControlValvePage() {
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">Control Valve Sizing</h1>
-            <p className="text-xs md:text-sm text-muted-foreground">Cv sizing per IEC 60534-2-1 / ISA S75.01 — corrected N1, N8, Fp, FLP, xTP, Kc per Technical Bulletin 1-I</p>
+            <p className="text-xs md:text-sm text-muted-foreground">IEC 60534-informed preliminary Cv sizing — screening tool only; confirm with vendor sizing for final design</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -448,7 +456,7 @@ export default function ControlValvePage() {
                     </SelectContent>
                   </Select></div>
                 <div><Label className="text-xs mb-1.5 block">Standards Basis</Label>
-                  <Input value="IEC 60534-2-1 / ISA S75.01" disabled className="text-muted-foreground" /></div>
+                  <Input value="IEC 60534-informed preliminary sizing (ref. IEC 60534-2-1 / ISA S75.01)" disabled className="text-muted-foreground" /></div>
               </div>
             </CardContent>
           </Card>
@@ -502,8 +510,11 @@ export default function ControlValvePage() {
                   <div className="flex items-center gap-2 text-xs font-medium"><Droplets className="w-3.5 h-3.5 text-primary" /> {serviceData.fluidType === "steam" ? "Steam Properties" : "Gas Properties"}</div>
                   {serviceData.fluidType === "steam" && (
                     <>
+                      <Card className="bg-amber-950/40 border-amber-700/60"><CardContent className="p-3">
+                        <p className="text-xs text-amber-200 font-medium">STEAM SERVICE — PRELIMINARY ONLY: This tool uses fixed approximate steam properties (MW=18.015, k=1.3, Z=0.95). These values are not valid for wet steam, high-superheat, or near-saturation conditions. Final sizing MUST use steam tables (IAPWS-IF97) and vendor steam trim data.</p>
+                      </CardContent></Card>
                       <Card className="bg-muted/30"><CardContent className="p-3">
-                        <p className="text-xs text-muted-foreground">Using approximate steam properties: MW={STEAM_PROPS.molecularWeight}, k={STEAM_PROPS.specificHeatRatio}, Z={STEAM_PROPS.compressibilityFactor}. Verify with steam tables for final design.</p>
+                        <p className="text-xs text-muted-foreground">Approximate properties used: MW={STEAM_PROPS.molecularWeight}, k={STEAM_PROPS.specificHeatRatio}, Z={STEAM_PROPS.compressibilityFactor}.</p>
                       </CardContent></Card>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div><Label className="text-xs mb-1.5 block">Molecular Weight (kg/kmol)</Label>
@@ -557,7 +568,13 @@ export default function ControlValvePage() {
                     <thead>
                       <tr className="border-b">
                         <th className="text-left py-1.5 pr-2 w-16">Point</th>
-                        <th className="text-left py-1.5 px-1">{serviceData.fluidType === "liquid" ? `Flow (${fU})` : `Flow (${fmU})`}</th>
+                        <th className="text-left py-1.5 px-1">
+                          {serviceData.fluidType === "liquid"
+                            ? `Flow (${fU})`
+                            : serviceData.fluidType === "gas"
+                              ? `Flow (${fmU} or Nm³/h @ 0°C, 1.01325 bar)`
+                              : `Flow (${fmU})`}
+                        </th>
                         <th className="text-left py-1.5 px-1">P1 ({pU})</th>
                         <th className="text-left py-1.5 px-1">P2 ({pU})</th>
                         <th className="text-left py-1.5 px-1">T ({tU})</th>
@@ -626,8 +643,11 @@ export default function ControlValvePage() {
                     <NumericInput value={valveData.fl} onValueChange={v => setValveData(vd => ({ ...vd, fl: v || 0.9 }))} data-testid="input-fl" /></div>
                   <div><Label className="text-xs mb-1.5 block">xT (Gas Pressure Ratio)</Label>
                     <NumericInput value={valveData.xt} onValueChange={v => setValveData(vd => ({ ...vd, xt: v || 0.7 }))} data-testid="input-xt" /></div>
-                  <div><Label className="text-xs mb-1.5 block">Fd (Valve Style Modifier)</Label>
-                    <NumericInput value={valveData.fd} onValueChange={v => setValveData(vd => ({ ...vd, fd: v || 0.46 }))} data-testid="input-fd" /></div>
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Fd (Valve Style Modifier)</Label>
+                    <NumericInput value={valveData.fd} onValueChange={v => setValveData(vd => ({ ...vd, fd: v || 0.46 }))} data-testid="input-fd" />
+                    <p className="text-[10px] text-muted-foreground mt-1">Informational only — Fd is not used in the current Cv calculation. Full Reynolds number correction per IEC 60534-2-1 §5.9 requires vendor-confirmed Fd.</p>
+                  </div>
                 </div>
                 <Card className="bg-muted/30 mt-3"><CardContent className="p-3">
                   <p className="text-[10px] md:text-xs text-muted-foreground">Typical values for {valveData.style}: FL={TYPICAL_VALVE_DEFAULTS[valveData.style].fl}, xT={TYPICAL_VALVE_DEFAULTS[valveData.style].xt}, Fd={TYPICAL_VALVE_DEFAULTS[valveData.style].fd}. Confirm with manufacturer data.</p>
@@ -659,7 +679,7 @@ export default function ControlValvePage() {
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm">Sizing Calculations</h3>
-              <p className="text-xs text-muted-foreground">Cv computation per IEC 60534-2-1 for each operating point</p>
+              <p className="text-xs text-muted-foreground">IEC 60534-informed preliminary Cv computation for each operating point</p>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               <Button className="w-full" onClick={handleCalcSizing} data-testid="button-calculate">
@@ -753,7 +773,7 @@ export default function ControlValvePage() {
                     { label: "Governing / Rated", value: `${(selectionResult.cvRatio * 100).toFixed(0)}%`, unit: "" },
                     { label: "Min Opening", value: selectionResult.minOpening, unit: "%", highlight: selectionResult.minOpening < 10 },
                     { label: "Max Opening", value: selectionResult.maxOpening, unit: "%", highlight: selectionResult.maxOpening > 90 },
-                    { label: "Valve Authority", value: `${(selectionResult.authorityFactor * 100).toFixed(0)}%`, unit: "", highlight: selectionResult.authorityFactor < 0.25 },
+                    { label: "Valve Authority (Screening)", value: `${(selectionResult.authorityScreeningEstimate * 100).toFixed(0)}%`, unit: "", highlight: selectionResult.authorityScreeningEstimate < 0.25 },
                     { label: "Rangeability", value: selectionResult.rangeabilityOK ? "OK" : "INSUFFICIENT", unit: "" },
                   ]} rawData={selectionResult} exportData={buildExportData()} />
 
@@ -903,7 +923,7 @@ export default function ControlValvePage() {
                           <SummaryRow label="Cv Ratio" value={`${(finalResult.selectionResult.cvRatio * 100).toFixed(0)}%`} />
                           <SummaryRow label="Min Opening" value={`${finalResult.selectionResult.minOpening.toFixed(1)}%`} />
                           <SummaryRow label="Max Opening" value={`${finalResult.selectionResult.maxOpening.toFixed(1)}%`} />
-                          <SummaryRow label="Valve Authority" value={`${(finalResult.selectionResult.authorityFactor * 100).toFixed(0)}%`} />
+                          <SummaryRow label="Valve Authority (Screening)" value={`${(finalResult.selectionResult.authorityScreeningEstimate * 100).toFixed(0)}%`} />
                         </>}
                         <SummaryRow label="FL" value={String(finalResult.valveData.fl)} />
                         <SummaryRow label="xT" value={String(finalResult.valveData.xt)} />
@@ -955,17 +975,19 @@ export default function ControlValvePage() {
 
                   <AssumptionsPanel
                     assumptions={[
-                      "Cv sizing per IEC 60534-2-1 / ISA S75.01 — N1=0.865, N8=94.8, N2=0.00214 (IEC 60534-2-1 Table 1)",
+                      "PRELIMINARY SIZING BASIS — IEC 60534-informed screening only; not a substitute for final vendor sizing with confirmed fluid properties",
+                      "N1=0.865, N8=94.8, N2=0.00214 per IEC 60534-2-1 Table 1 (SI units: m³/h, bar, kg/h, K, mm)",
                       "Piping geometry factor: Fp = 1/√(1 + ΣK·Cv²/(N2·d⁴)); ΣK = K1+K2+KB1+KB2 per IEC 60534-2-1 Figure 11",
                       "FLP = FL/√(1 + FL²·K1'·Cv²/(N2·d⁴)) per IEC 60534-2-1 §5.4; iterative 3-pass convergence",
                       "Liquid choked: ΔP_max = (FLP/Fp)²·(P1 − FF·Pv); FF = 0.96 − 0.28·√(Pv/Pc) per IEC 60534-2-1 §5.5",
                       "Gas/vapor: Y = 1 − x/(3·Fk·xTP·Fp²), Fk = k/1.4 per IEC 60534-2-1 §5.6; xTP iterative per §5.8",
-                      "Cavitation: Kc = 0.80·FL² per IEC 60534-2-2 §5.2; σ = (P1−Pv)/ΔP; incipient limit = FL²",
-                      "FL, xT, Fd: typical defaults per IEC 60534-2-1 Figure 15 — must be replaced by confirmed vendor data for final design",
-                      "Viscosity correction (FR) is approximate — full iterative Rev per IEC 60534-2-1 §5.9 requires vendor Fd value",
-                      "Valve opening estimated from inherent characteristic (equal %, linear, quick-open) — not installed characteristic",
-                      "Valve authority = min ΔP / (min ΔP + max ΔP); target authority >25% for acceptable controllability",
-                      serviceData.fluidType === "steam" ? "Steam uses approximate k and Z — verify with IAPWS-IF97 steam tables at actual conditions" : "",
+                      "Gas normal volumetric flow (Nm³/h) converted to mass flow at 0°C, 1.01325 bar (STP) per ISO 13443 — 22.414 m³/kmol",
+                      "Cavitation: Kc = 0.80·FL² is an approximate screening threshold per IEC 60534-2-2 §5.2; σ = (P1−Pv)/ΔP; obtain vendor σ_mr, σ_id for specification",
+                      "FL, xT: typical defaults — must be replaced by confirmed vendor data for final design. Fd shown for reference only (not used in Cv calculation)",
+                      "Viscosity correction (FR) is approximate — full iterative Rev per IEC 60534-2-1 §5.9 requires vendor-confirmed Fd value",
+                      "Valve opening estimated from inherent characteristic (not installed characteristic)",
+                      "Valve authority is a heuristic screening indicator only; assumes total system ΔP ≈ 2 × max valve ΔP — confirm with actual system curve",
+                      serviceData.fluidType === "steam" ? "STEAM PRELIMINARY: Uses fixed MW=18.015, k=1.3, Z=0.95 — not valid for wet steam or near-saturation. Verify with IAPWS-IF97 and vendor steam trim data" : "",
                     ].filter(Boolean)}
                     references={[
                       "IEC 60534-2-1:2011: Industrial-process control valves — Sizing equations for fluid flow (primary sizing standard)",
