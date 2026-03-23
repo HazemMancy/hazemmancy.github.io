@@ -66,6 +66,7 @@ import {
   computeSRKProperties, isenthalpicFlash,
 } from "./srkEos";
 import { computePRProperties, isenthalpicFlashPR } from "./prEos";
+import type { GasPropsMode } from "./eosGasProps";
 
 export const R_UNIVERSAL = GAS_CONSTANT;
 
@@ -77,7 +78,7 @@ export type CdMode       = "user" | "estimated";
 export type EdgeType     = "sharp" | "rounded";
 export type BasisMode    = "inPipe" | "freeDischarge";
 export type TappingType  = "corner" | "D-D2" | "flange";
-export type GasPropsMode = "manual" | "srk" | "pr";
+export type { GasPropsMode };
 
 export interface ROProject {
   name: string;
