@@ -8,7 +8,7 @@ export interface MultiphaseResult {
   erosionalVelocity: number;
   mixtureDensity: number;
   rhoV2: number;
-  liquidHoldup: number;
+  noSlipLiquidFraction: number;  // λL = Vsl / (Vsg + Vsl) — no-slip assumption
   velocityRatio: number;
   warnings: string[];
 }
@@ -57,9 +57,9 @@ export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
   }
 
   if (lambdaL > 0.5) {
-    warnings.push("High liquid holdup — expect slug flow regime");
+    warnings.push("Liquid-rich screening result (no-slip λL > 0.5) — slugging risk should be verified with detailed mechanistic multiphase analysis (e.g. OLGA / PIPESIM)");
   } else if (lambdaL < 0.01 && input.liquidFlowRate > 0) {
-    warnings.push("Very low liquid content — mist flow likely");
+    warnings.push("Gas-dominated screening result (no-slip λL < 0.01) — detailed multiphase analysis recommended to assess mist entrainment and liquid accumulation");
   }
 
   return {
@@ -69,7 +69,7 @@ export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
     erosionalVelocity,
     mixtureDensity,
     rhoV2,
-    liquidHoldup: lambdaL,
+    noSlipLiquidFraction: lambdaL,
     velocityRatio,
     warnings,
   };
@@ -78,12 +78,13 @@ export function calculateMultiphase(input: MultiphaseInput): MultiphaseResult {
 // Wellhead flowline — per API RP 14E erosional velocity screening
 // Gas-condensate multiphase flow in 10" Sch 40 CS pipe
 // Expected: erosional velocity ~8–15 m/s, ρV² < 10,000 Pa
+// NOTE: gasFlowRate is ACTUAL volumetric flow at operating P/T (not standard/Sm³/h)
+//       Solver computes superficial gas velocity directly from actual volume flow
 export const MULTIPHASE_TEST_CASE: MultiphaseInput = {
-  gasFlowRate: 5000,     // Sm³/h — gas from wellhead/manifold
-  liquidFlowRate: 50,    // m³/h — condensate/produced water
-  gasDensity: 25,        // kg/m³ — at operating P/T (from PVT)
-  liquidDensity: 800,    // kg/m³ — condensate + water weighted average
-  innerDiameter: 254.5,  // mm — 10" NPS Sch 40 (ASME B36.10)
-  pipeLength: 1000,      // m — flowline from wellhead to separator
+  gasFlowRate: 5000,     // m³/h — actual gas volumetric flow at operating P/T (from PVT/process simulation)
+  liquidFlowRate: 50,    // m³/h — condensate + produced water actual volumetric flow
+  gasDensity: 25,        // kg/m³ — gas density at operating P/T (from PVT)
+  liquidDensity: 800,    // kg/m³ — condensate + water density weighted average
+  innerDiameter: 254.5,  // mm — 10" NPS Sch 40 ID (ASME B36.10)
   cFactor: 150,          // API RP 14E C-factor (continuous service, inhibited)
 };

@@ -29,7 +29,6 @@ export const multiphaseSchema = z.object({
   gasDensity: z.number().positive("Gas density must be positive"),
   liquidDensity: z.number().positive("Liquid density must be positive"),
   innerDiameter: z.number().positive("Diameter must be positive"),
-  pipeLength: z.number().positive("Pipe length must be positive"),
   cFactor: z.number().min(50, "C-factor must be >= 50").max(300, "C-factor must be <= 300"),
 });
 

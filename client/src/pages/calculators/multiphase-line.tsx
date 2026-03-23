@@ -17,6 +17,7 @@ import {
   MULTIPHASE_TEST_CASE,
   type MultiphaseResult,
 } from "@/lib/engineering/multiphase";
+import { multiphaseSchema } from "@/lib/engineering/validation";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import { MIXED_PHASE_SERVICE_LIMITS, type MixedPhaseServiceLimit } from "@/lib/engineering/constants";
@@ -31,9 +32,7 @@ interface FormState {
   gasDensity: string;
   liquidDensity: string;
   innerDiameter: string;
-  pipeLength: string;
   cFactor: string;
-  roughness: string;
 }
 
 const defaultForm: FormState = {
@@ -42,20 +41,16 @@ const defaultForm: FormState = {
   gasDensity: "",
   liquidDensity: "",
   innerDiameter: "",
-  pipeLength: "",
   cFactor: "150",
-  roughness: "0.0457",
 };
 
 const fieldUnitMap: FieldUnitMap = {
-  gasFlowRate: "flowVolume",
-  liquidFlowRate: "flowVolume",
+  gasFlowRate: "flowActualGas",
+  liquidFlowRate: "flowLiquid",
   gasDensity: "density",
   liquidDensity: "density",
   innerDiameter: "diameter",
-  pipeLength: "length",
   cFactor: null,
-  roughness: null,
 };
 
 export default function MultiphaseLinePage() {
@@ -80,18 +75,26 @@ export default function MultiphaseLinePage() {
     setError(null);
     try {
       const input = {
-        gasFlowRate: convertToSI("flowVolume", parseFloat(form.gasFlowRate), unitSystem),
-        liquidFlowRate: convertToSI("flowVolume", parseFloat(form.liquidFlowRate), unitSystem),
+        gasFlowRate: convertToSI("flowActualGas", parseFloat(form.gasFlowRate), unitSystem),
+        liquidFlowRate: convertToSI("flowLiquid", parseFloat(form.liquidFlowRate), unitSystem),
         gasDensity: convertToSI("density", parseFloat(form.gasDensity), unitSystem),
         liquidDensity: convertToSI("density", parseFloat(form.liquidDensity), unitSystem),
         innerDiameter: convertToSI("diameter", parseFloat(form.innerDiameter), unitSystem),
-        pipeLength: convertToSI("length", parseFloat(form.pipeLength), unitSystem),
         cFactor: parseFloat(form.cFactor),
       };
       for (const [key, val] of Object.entries(input)) {
         if (isNaN(val)) throw new Error(`Invalid value for ${key}`);
       }
-      const res = calculateMultiphase(input);
+
+      // Zod validation — field-specific errors before solver is called
+      const validation = multiphaseSchema.safeParse(input);
+      if (!validation.success) {
+        const firstIssue = validation.error.issues[0];
+        const fieldLabel = firstIssue.path.length > 0 ? `${firstIssue.path[0]}: ` : "";
+        throw new Error(`${fieldLabel}${firstIssue.message}`);
+      }
+
+      const res = calculateMultiphase(validation.data);
       setResult(res);
       
       if (selectedService) {
@@ -118,9 +121,7 @@ export default function MultiphaseLinePage() {
       gasDensity: String(tc.gasDensity),
       liquidDensity: String(tc.liquidDensity),
       innerDiameter: String(tc.innerDiameter),
-      pipeLength: String(tc.pipeLength),
       cFactor: String(tc.cFactor),
-      roughness: "0.0457",
     });
     setResult(null);
     setError(null);
@@ -146,7 +147,7 @@ export default function MultiphaseLinePage() {
               Multiphase Line Screening
             </h1>
             <p className="text-sm text-muted-foreground">
-              Homogeneous model with API RP 14E erosional velocity
+              Homogeneous no-slip screening — API RP 14E erosional velocity
             </p>
           </div>
         </div>
@@ -190,7 +191,7 @@ export default function MultiphaseLinePage() {
                 </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Gas Volume Flow ({getUnit("flowVolume", unitSystem)})
+                    Actual Gas Flow — at operating P/T ({getUnit("flowActualGas", unitSystem)})
                   </Label>
                   <Input
                     type="number"
@@ -202,7 +203,7 @@ export default function MultiphaseLinePage() {
                 </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Liquid Volume Flow ({getUnit("flowVolume", unitSystem)})
+                    Liquid Volume Flow ({getUnit("flowLiquid", unitSystem)})
                   </Label>
                   <Input
                     type="number"
@@ -241,21 +242,8 @@ export default function MultiphaseLinePage() {
                   <PipeSizeSelector
                     unitSystem={unitSystem}
                     innerDiameter={form.innerDiameter}
-                    roughness={form.roughness}
                     onDiameterChange={(v) => updateField("innerDiameter", v)}
-                    onRoughnessChange={(v) => updateField("roughness", v)}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs mb-1.5 block">
-                    Pipe Length ({getUnit("length", unitSystem)})
-                  </Label>
-                  <Input
-                    type="number"
-                    value={form.pipeLength}
-                    onChange={(e) => updateField("pipeLength", e.target.value)}
-                    placeholder="e.g. 1000"
-                    data-testid="input-length"
+                    showRoughness={false}
                   />
                 </div>
                 <div>
@@ -334,8 +322,8 @@ export default function MultiphaseLinePage() {
                     unit: getUnit("density", unitSystem),
                   },
                   {
-                    label: "Liquid Holdup (λL)",
-                    value: result.liquidHoldup,
+                    label: "No-slip liquid fraction (λL)",
+                    value: result.noSlipLiquidFraction,
                     unit: "—",
                   },
                   {
@@ -348,14 +336,12 @@ export default function MultiphaseLinePage() {
                 exportData={{
                   calculatorName: "Multiphase Line Screening",
                   inputs: [
-                    { label: "Gas Volume Flow", value: form.gasFlowRate, unit: getUnit("flowVolume", unitSystem) },
-                    { label: "Liquid Volume Flow", value: form.liquidFlowRate, unit: getUnit("flowVolume", unitSystem) },
-                    { label: "Gas Density", value: form.gasDensity, unit: getUnit("density", unitSystem) },
+                    { label: "Actual Gas Flow (at operating P/T)", value: form.gasFlowRate, unit: getUnit("flowActualGas", unitSystem) },
+                    { label: "Liquid Volume Flow", value: form.liquidFlowRate, unit: getUnit("flowLiquid", unitSystem) },
+                    { label: "Gas Density (at operating P/T)", value: form.gasDensity, unit: getUnit("density", unitSystem) },
                     { label: "Liquid Density", value: form.liquidDensity, unit: getUnit("density", unitSystem) },
                     { label: "Inner Diameter", value: form.innerDiameter, unit: getUnit("diameter", unitSystem) },
-                    { label: "Pipe Length", value: form.pipeLength, unit: getUnit("length", unitSystem) },
-                    { label: "C-Factor (API 14E)", value: form.cFactor },
-                    { label: "Roughness", value: form.roughness, unit: "mm" },
+                    { label: "C-Factor (API RP 14E)", value: form.cFactor },
                     ...(selectedService ? [{ label: "Service Type", value: selectedService }] : []),
                   ],
                   results: [
@@ -364,27 +350,34 @@ export default function MultiphaseLinePage() {
                     { label: "Mixture Velocity (Vm)", value: convertFromSI("velocity", result.mixtureVelocity, unitSystem), unit: getUnit("velocity", unitSystem), highlight: true },
                     { label: "Erosional Velocity (Ve)", value: convertFromSI("velocity", result.erosionalVelocity, unitSystem), unit: getUnit("velocity", unitSystem), highlight: true },
                     { label: "Vm / Ve Ratio", value: result.velocityRatio, unit: "—" },
-                    { label: "Mixture Density", value: result.mixtureDensity, unit: getUnit("density", unitSystem) },
-                    { label: "Liquid Holdup (λL)", value: result.liquidHoldup, unit: "—" },
+                    { label: "Mixture Density (homogeneous)", value: result.mixtureDensity, unit: "kg/m³" },
+                    { label: "No-slip liquid fraction (λL)", value: result.noSlipLiquidFraction, unit: "—" },
                     { label: "ρv²", value: result.rhoV2, unit: "kg/(m·s²)" },
                   ],
                   methodology: [
-                    "Homogeneous (no-slip) multiphase flow model for screening",
-                    "Erosional velocity per API RP 14E: Ve = C / sqrt(ρm)",
-                    "Mixture density from volumetric-weighted average of phase densities",
-                    "Liquid holdup estimated from superficial velocity ratio (no-slip assumption)",
+                    "HOMOGENEOUS NO-SLIP SCREENING MODEL — not a mechanistic multiphase model",
+                    "Superficial gas velocity: Vsg = Qg_actual / A (actual volumetric flow at operating P/T required)",
+                    "Superficial liquid velocity: Vsl = Ql / A",
+                    "Mixture velocity: Vm = Vsg + Vsl",
+                    "No-slip liquid fraction: λL = Vsl / Vm (volumetric fraction assuming no phase slip)",
+                    "Homogeneous mixture density: ρm = ρL·λL + ρG·(1 − λL)",
+                    "Erosional velocity per API RP 14E: Ve = C / √ρm",
+                    "Mixture density used for both erosional velocity and ρv² screening check",
+                    "Velocity and ρv² limits: engineering best-practice screening per API RP 14E and EPC FEED practice",
                   ],
                   assumptions: [
-                    "Homogeneous (no-slip) multiphase flow model — screening level only",
-                    "Liquid holdup estimated from superficial velocity ratio (no-slip assumption)",
-                    "Erosional velocity per API RP 14E: Ve = C / √ρm",
-                    "Not suitable for detailed flow assurance — use OLGA/Pipesim for rigorous analysis",
-                    "No terrain profile or slug tracking included",
+                    "HOMOGENEOUS NO-SLIP SCREENING ONLY — phases assumed to travel at the same velocity (no slip)",
+                    "This is NOT a detailed pressure-drop model, mechanistic correlation, or flow-regime predictor",
+                    "Not a substitute for rigorous flow assurance analysis (OLGA / PIPESIM / Ledaflow)",
+                    "Gas flow input must be ACTUAL volumetric flow at operating P/T — standard or Sm³/h must be converted first",
+                    "No-slip liquid fraction (λL) is a screening estimate only — not the same as true in-situ liquid holdup",
+                    "No terrain profile, elevation effects, or slug tracking — homogeneous model only",
+                    "Mixture density is volume-fraction weighted average — appropriate for homogeneous model",
+                    "Velocity and ρv² limits: engineering best-practice screening per API RP 14E — not universal hard code-compliance limits; for FEED / preliminary design",
                   ],
                   references: [
                     "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
-                    "Beggs, H.D. and Brill, J.P. — A Study of Two-Phase Flow in Inclined Pipes (1973)",
-                    "GPSA Engineering Data Book, 14th Edition",
+                    "GPSA Engineering Data Book, 14th Edition — Section 17",
                   ],
                   warnings: result.warnings.length > 0 ? result.warnings : undefined,
                 } as ExportDatasheet}
@@ -404,16 +397,20 @@ export default function MultiphaseLinePage() {
           <div className="mt-4">
             <AssumptionsPanel
             assumptions={[
-            "Homogeneous (no-slip) multiphase flow model — screening level only",
-            "Liquid holdup estimated from superficial velocity ratio (no-slip assumption)",
-            "Erosional velocity per API RP 14E: Ve = C / √ρm",
-            "Not suitable for detailed flow assurance — use OLGA/Pipesim for rigorous analysis",
-            "No terrain profile or slug tracking included",
+              "HOMOGENEOUS NO-SLIP SCREENING ONLY — phases assumed to travel at the same velocity (no phase slip)",
+              "This is NOT a detailed pressure-drop model, mechanistic correlation, or flow-regime predictor",
+              "NOT a substitute for rigorous multiphase flow assurance analysis (OLGA / PIPESIM / Ledaflow)",
+              "No flow-regime map or mechanistic correlation is implemented — Beggs & Brill and similar methods are NOT used",
+              "Gas flow input is ACTUAL volumetric flow at operating P/T — standard flow (Sm³/h / MMSCFD) must be converted to actual conditions first",
+              "No-slip liquid fraction λL = Vsl / Vm is a screening estimate only — NOT equal to true in-situ liquid holdup",
+              "Homogeneous mixture density: ρm = ρL·λL + ρG·(1−λL) — volume-fraction weighted, no-slip basis",
+              "No terrain profile, elevation effects, or transient slug tracking — steady-state homogeneous model only",
+              "Erosional velocity per API RP 14E: Ve = C / √ρm; C-factor is user input",
+              "Velocity and ρv² limits: engineering best-practice screening per API RP 14E — not universal hard code-compliance limits; for FEED / preliminary design",
             ]}
             references={[
-            "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
-            "Beggs, H.D. and Brill, J.P. — A Study of Two-Phase Flow in Inclined Pipes (1973)",
-            "GPSA Engineering Data Book, 14th Edition",
+              "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
+              "GPSA Engineering Data Book, 14th Edition — Section 17",
             ]}
             />
           </div>
