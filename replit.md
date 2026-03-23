@@ -74,6 +74,19 @@ The application is a pure static single-page application (SPA) with no backend s
 - **Restriction Orifice Engine (ISO 5167-2:2003)**: Implements Reader-Harris/Gallagher Cd, permanent pressure loss, gas expansion factor Y, cavitation assessment, erosional velocity, and multi-stage pressure distribution. Gas properties are handled via Manual, Peng-Robinson EoS, or SRK EoS modes, with Van der Waals mixing rules, Chueh-Prausnitz BIPs, and Lee-Gonzalez-Eakin gas viscosity.
 - **Gas Mixing Calculator**: Calculates Z, ρ, μ, Cp/Cv, γ, and speed of sound at specified T & P using Peng-Robinson EoS, SRK EoS, or Pitzer correlation, supporting 20 common O&G species.
 
+## Separator Sizing — Revision Notes (Task D, March 2026)
+Ten corrections applied to `separatorSizing.ts` and `separator-sizing.tsx`:
+1. **K-pressure correction abs/gauge fix**: `computeEffectiveK` now accepts `P_bara` and converts internally (`P_barg = P_bara - 1.01325`). Step logged in calc trace.
+2. **Per-case K correction**: K_eff is computed per-case inside the case loop using each case's own operating pressure. Governing case K_eff reported in assumptions. `CaseGasResult` now carries `K_eff`, `pressureCorrected`, `foamDerated`.
+3. **API RP 14E reference removed**: References updated to API 12J, GPSA Section 7, and Stewart & Arnold only.
+4. **Schema validation**: Formal input validation added for gasPressure > 0, gasTemperature > absolute zero, liquidDensity > 0, flow rates ≥ 0, levelFraction in (0,1), residenceTime/surgeTime/slugVolume ≥ 0, waterCut in [0,1], dropletDiameter_um > 0.
+5. **3-phase scope disclosure**: Amber banner added in Results tab for 3-phase mode. `buildAssumptions` and `buildRecommendations` strengthened with explicit scope limitations and next-step guidance.
+6. **Stokes Re warning corrected**: Step label and FLAG_LABELS updated to correctly state Stokes OVERPREDICTS v_t when Re_p > 1 (non-conservative — may miss carryover).
+7. **Hidden L/D cap removed**: `Math.min(config.maxLD, 5)` removed; user's value is applied directly. UI helper text added explaining the change.
+8. **Density mismatch visible warning**: Density cross-check result propagated to `warnings[]` array (shown in UI) for >20% deviation between user density and ideal-gas estimate.
+9. **Standard gas basis disclosed**: Assumptions log now includes "Standard gas flow basis: 15°C and 1.01325 bar(a) per ISO 13443". Step label in standard-to-actual conversion updated accordingly.
+10. **Mist face velocity relabeled**: Renamed to `grossFaceVelocity` (field + UI label) with note that actual demister face velocity requires vendor pad area.
+
 ## External Dependencies
 - **React**: Frontend UI library.
 - **TypeScript**: For type safety.

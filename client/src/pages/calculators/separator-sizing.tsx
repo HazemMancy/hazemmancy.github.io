@@ -250,7 +250,7 @@ export default function SeparatorSizingPage() {
       { label: "Liquid Volume Required", value: result.geometry.liquidVolume_m3, unit: "m\u00B3" },
       { label: "Gas Area Fraction", value: result.geometry.gasAreaFraction * 100, unit: "%" },
       { label: "Actual Gas Velocity", value: result.geometry.actualGasVelocity, unit: "m/s" },
-      { label: "Mist Face Velocity", value: result.geometry.mistFaceVelocity, unit: "m/s" },
+      { label: "Gross Vessel Face Velocity (screening est.)", value: result.geometry.grossFaceVelocity, unit: "m/s" },
       { label: "Liquid Level", value: result.geometry.liquidLevelPercent, unit: "%" },
     ];
 
@@ -816,8 +816,10 @@ export default function SeparatorSizingPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div><Label className="text-xs mb-1.5 block">Max Vessel Diameter (mm) - 0 = no limit</Label>
                       <NumericInput value={config.maxDiameter} onValueChange={v => updateConfig("maxDiameter", v)} data-testid="input-max-dia" /></div>
-                    <div><Label className="text-xs mb-1.5 block">Max L/D - 0 = default</Label>
-                      <NumericInput value={config.maxLD} onValueChange={v => updateConfig("maxLD", v)} data-testid="input-max-ld" /></div>
+                    <div><Label className="text-xs mb-1.5 block">Max L/D - 0 = default (4)</Label>
+                      <NumericInput value={config.maxLD} onValueChange={v => updateConfig("maxLD", v)} data-testid="input-max-ld" />
+                      <p className="text-xs text-muted-foreground mt-1">Typical horizontal range: 2.5-6. User value is used directly (no hidden cap). Warn if outside typical range.</p>
+                    </div>
                   </div>
                 </div>
 
@@ -1004,7 +1006,7 @@ export default function SeparatorSizingPage() {
                       { label: "Liquid Volume Required", value: `${result.geometry.liquidVolume_m3.toFixed(3)} m\u00B3` },
                       { label: "Gas Area Fraction", value: `${(result.geometry.gasAreaFraction * 100).toFixed(1)}%` },
                       { label: "Actual Gas Velocity", value: `${result.geometry.actualGasVelocity.toFixed(3)} m/s` },
-                      { label: "Mist Face Velocity", value: `${result.geometry.mistFaceVelocity.toFixed(3)} m/s` },
+                      { label: "Gross Vessel Face Velocity (screening est.)", value: `${result.geometry.grossFaceVelocity.toFixed(3)} m/s` },
                       { label: "Liquid Level", value: `${result.geometry.liquidLevelPercent.toFixed(1)}%` },
                     ].map((r, i) => (
                       <div key={i} className={`p-3 rounded-md border ${r.highlight ? "border-primary/40 bg-primary/5" : ""}`}>
@@ -1123,6 +1125,18 @@ export default function SeparatorSizingPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {result.config.phaseMode === "three_phase" && (
+                  <div className="bg-amber-500/10 border border-amber-500/40 rounded-md p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="text-xs text-amber-300 space-y-1">
+                        <p className="font-semibold text-amber-400">3-Phase Sizing — Preliminary Screening Only</p>
+                        <p>This result provides volumetric retention estimates only. It does <strong>not</strong> design weirs, baffles, oil/water interface levels, emulsion layers, or coalescers. Independent specialist process design review is required before issuing a data sheet or proceeding to detailed design.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {result.flags.length > 0 && (
                   <Card>

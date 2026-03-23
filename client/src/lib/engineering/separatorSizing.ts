@@ -94,6 +94,9 @@ export interface CaseGasResult {
   v_s_max: number;
   A_req: number;
   D_req_mm: number;
+  K_eff: number;
+  pressureCorrected: boolean;
+  foamDerated: boolean;
   dropletSettlingVelocity?: number;
   actualGasVelocity?: number;
   dropletCarryoverRisk?: boolean;
@@ -115,7 +118,7 @@ export interface GeometryResult {
   holdupCapacity_m3: number;
   surgeCapacity_m3: number;
   totalLiquidCapacity_m3: number;
-  mistFaceVelocity: number;
+  grossFaceVelocity: number;
   steps: CalcStep[];
 }
 
@@ -164,7 +167,7 @@ export const FLAG_LABELS: Record<EngFlag, string> = {
   FOAM_K_DERATED: "K value derated for foam tendency (GPSA guidance)",
   PRESSURE_K_CORRECTED: "K value corrected for high pressure per GPSA Fig 7-9",
   SETTLING_LENGTH_SHORT: "Horizontal settling length may be insufficient for droplet removal",
-  STOKES_RE_EXCEEDED: "Particle Reynolds number exceeds 1 \u2014 Stokes law may underestimate terminal velocity",
+  STOKES_RE_EXCEEDED: "Particle Re_p > 1 \u2014 Stokes law OVERPREDICTS v_t (actual drag higher than Stokes); settling may be slower than calculated \u2014 non-conservative, may miss carryover",
   PROPERTY_UNCERTAINTY: "Fluid property uncertainty \u2014 validate with PVT data or lab analysis",
   SLUG_CATCHER_REQUIRED: "Slug catcher service \u2014 ensure slug volume is adequately accommodated",
   DROPLET_CARRYOVER_RISK: "Droplet settling velocity < actual gas velocity \u2014 carryover risk",
@@ -336,7 +339,7 @@ export function computeKPressureCorrection(P_barg: number): { Cp: number; steps:
 
 export function computeEffectiveK(
   K_base: number,
-  P_barg: number,
+  P_bara: number,
   foamFactor: number,
   applyPressureCorrection: boolean,
   anyFoamCase: boolean,
@@ -346,7 +349,10 @@ export function computeEffectiveK(
   let pressureCorrected = false;
   let foamDerated = false;
 
+  const P_barg = Math.max(0, P_bara - 1.01325);
+
   steps.push({ label: "K base value", equation: "K_base", substitution: `K_base = ${K_base}`, result: K_base, unit: "m/s" });
+  steps.push({ label: "Operating pressure (gauge)", equation: "P_barg = P_bara \u2212 1.01325", substitution: `P_barg = ${P_bara.toFixed(3)} \u2212 1.01325`, result: P_barg, unit: "barg" });
 
   if (applyPressureCorrection) {
     const { Cp, steps: cpSteps } = computeKPressureCorrection(P_barg);
@@ -369,9 +375,10 @@ export function computeEffectiveK(
   return { K_eff, pressureCorrected, foamDerated, steps };
 }
 
-function computeActualGasFlow(c: OperatingCase): { Qg_m3s: number; steps: CalcStep[] } {
+function computeActualGasFlow(c: OperatingCase): { Qg_m3s: number; steps: CalcStep[]; densityWarning?: string } {
   const steps: CalcStep[] = [];
   let Qg_m3s: number;
+  let densityWarning: string | undefined;
 
   if (c.gasFlowBasis === "actual") {
     Qg_m3s = c.gasFlowRate / 3600;
@@ -387,15 +394,16 @@ function computeActualGasFlow(c: OperatingCase): { Qg_m3s: number; steps: CalcSt
     const P_std = 101325;
     const T_std = 288.15;
     Qg_m3s = Qstd_m3s * (P_std / P_Pa) * (T_K / T_std) * Z;
-    steps.push({ label: "Standard to actual", equation: "Q_act = Q_std \u00D7 (P_std/P) \u00D7 (T/T_std) \u00D7 Z", substitution: `Q_act = ${Qstd_m3s.toFixed(6)} \u00D7 (${P_std}/${P_Pa.toFixed(0)}) \u00D7 (${T_K.toFixed(2)}/${T_std}) \u00D7 ${Z}`, result: Qg_m3s, unit: "m\u00B3/s" });
+    steps.push({ label: "Standard to actual (basis: 15\u00B0C, 1.01325 bar(a) per ISO 13443)", equation: "Q_act = Q_std \u00D7 (P_std/P) \u00D7 (T/T_std) \u00D7 Z", substitution: `Q_act = ${Qstd_m3s.toFixed(6)} \u00D7 (${P_std}/${P_Pa.toFixed(0)}) \u00D7 (${T_K.toFixed(2)}/${T_std}) \u00D7 ${Z}`, result: Qg_m3s, unit: "m\u00B3/s" });
 
     const rho_calc = (P_Pa * c.gasMW) / (8314.46 * T_K * Z);
-    if (c.gasDensity <= 0 || Math.abs(c.gasDensity - rho_calc) / rho_calc > 0.2) {
-      steps.push({ label: "Density cross-check", equation: "\u03C1_calc = P\u00B7MW / (R\u00B7T\u00B7Z)", substitution: `\u03C1_calc = ${P_Pa.toFixed(0)} \u00D7 ${c.gasMW} / (8314.46 \u00D7 ${T_K.toFixed(2)} \u00D7 ${Z})`, result: rho_calc, unit: "kg/m\u00B3" });
+    steps.push({ label: "Density cross-check", equation: "\u03C1_calc = P\u00B7MW / (R\u00B7T\u00B7Z)", substitution: `\u03C1_calc = ${P_Pa.toFixed(0)} \u00D7 ${c.gasMW} / (8314.46 \u00D7 ${T_K.toFixed(2)} \u00D7 ${Z})`, result: rho_calc, unit: "kg/m\u00B3" });
+    if (c.gasDensity > 0 && Math.abs(c.gasDensity - rho_calc) / rho_calc > 0.2) {
+      densityWarning = `Case "${c.name}": User gas density (${c.gasDensity} kg/m\u00B3) deviates >20% from ideal-gas estimate (${rho_calc.toFixed(2)} kg/m\u00B3) \u2014 verify fluid properties and Z-factor`;
     }
   }
 
-  return { Qg_m3s, steps };
+  return { Qg_m3s, steps, densityWarning };
 }
 
 function computeSoudersBrown(
@@ -441,7 +449,7 @@ function computeDropletSettling(
   steps.push({ label: "Particle Reynolds number", equation: "Re_p = \u03C1_g \u00D7 v_t \u00D7 d / \u03BC_g", substitution: `Re_p = ${rhoG} \u00D7 ${v_t.toFixed(6)} \u00D7 ${d_m.toExponential(3)} / ${mu_g.toExponential(3)}`, result: Re_p, unit: "-" });
 
   if (Re_p > 1) {
-    steps.push({ label: "Stokes regime check", equation: "Re_p > 1 \u2192 Stokes law may overpredict v_t", substitution: `Re_p = ${Re_p.toFixed(3)} > 1`, result: Re_p, unit: "-" });
+    steps.push({ label: "Stokes regime check", equation: "Re_p > 1 \u2192 drag underestimated; Stokes OVERPREDICTS v_t (non-conservative: may miss carryover)", substitution: `Re_p = ${Re_p.toFixed(3)} > 1`, result: Re_p, unit: "-" });
   }
 
   const carryoverRisk = v_actual > v_t;
@@ -617,7 +625,7 @@ function assembleGeometry(
       }
     }
 
-    const targetLD = config.maxLD > 0 ? Math.min(config.maxLD, 5) : 4;
+    const targetLD = config.maxLD > 0 ? config.maxLD : 4;
     let L_target = D_mm * targetLD;
 
     const D_final_m = D_mm / 1000;
@@ -649,13 +657,13 @@ function assembleGeometry(
   const L_m = L_mm / 1000;
   const vesselVol_corrected = (PI / 4) * (D_mm / 1000) ** 2 * L_m;
   const actualGasVelocity = gasAreaFraction > 0 ? Qg_m3s / (gasAreaFraction * (PI / 4) * (D_mm / 1000) ** 2) : 0;
-  const mistFaceVelocity = Qg_m3s / ((PI / 4) * (D_mm / 1000) ** 2);
+  const grossFaceVelocity = Qg_m3s / ((PI / 4) * (D_mm / 1000) ** 2);
   const LD_ratio = D_mm > 0 ? L_mm / D_mm : 0;
 
   steps.push({ label: "Vessel volume", equation: "V = \u03C0D\u00B2/4 \u00D7 L", substitution: `V = \u03C0\u00D7${(D_mm / 1000).toFixed(3)}\u00B2/4 \u00D7 ${L_m.toFixed(3)}`, result: vesselVol_corrected, unit: "m\u00B3" });
   steps.push({ label: "L/D ratio", equation: "L/D", substitution: `${L_mm} / ${D_mm}`, result: LD_ratio, unit: "-" });
   steps.push({ label: "Actual gas velocity", equation: "v_gas = Q_g / A_gas", substitution: `v_gas = ${Qg_m3s.toFixed(6)} / ${(gasAreaFraction * (PI / 4) * (D_mm / 1000) ** 2).toFixed(6)}`, result: actualGasVelocity, unit: "m/s" });
-  steps.push({ label: "Mist eliminator face velocity", equation: "v_face = Q_g / A_vessel", substitution: `v_face = ${Qg_m3s.toFixed(6)} / ${((PI / 4) * (D_mm / 1000) ** 2).toFixed(6)}`, result: mistFaceVelocity, unit: "m/s" });
+  steps.push({ label: "Gross vessel face velocity (screening est. \u2014 actual demister face velocity requires vendor pad area)", equation: "v_face = Q_g / A_vessel", substitution: `v_face = ${Qg_m3s.toFixed(6)} / ${((PI / 4) * (D_mm / 1000) ** 2).toFixed(6)}`, result: grossFaceVelocity, unit: "m/s" });
 
   return {
     D_mm, L_mm, D_m: D_mm / 1000, L_m,
@@ -666,7 +674,7 @@ function assembleGeometry(
     holdupCapacity_m3: holdupCapacity,
     surgeCapacity_m3: surgeCapacity,
     totalLiquidCapacity_m3: holdupCapacity + surgeCapacity,
-    mistFaceVelocity,
+    grossFaceVelocity,
     steps,
   };
 }
@@ -809,9 +817,10 @@ function buildRecommendations(flags: EngFlag[], config: SeparatorConfig, geometr
     nextSteps.push("Submit process data sheet to mist eliminator vendor for selection");
   }
   if (flags.includes("THREE_PHASE_PRELIM")) {
-    recs.push("3-phase sizing is preliminary \u2014 detailed design requires weir/baffle sizing, coalescer selection, and emulsion characterization");
-    nextSteps.push("Perform bottle test for oil-water separation characteristics");
-    nextSteps.push("Perform detailed 3-phase separator design including weir placement and coalescer selection");
+    recs.push("3-phase sizing is volumetric retention screening only \u2014 this calculator does NOT design weirs, baffles, oil/water interfaces, emulsion layers, or coalescers; specialist process design review is required before issuing a data sheet");
+    nextSteps.push("Perform bottle test (BS&W separation) for oil-water separation characteristics and retention time validation");
+    nextSteps.push("Perform detailed 3-phase separator design including weir height, baffle placement, coalescer grade selection, and interface level control strategy");
+    nextSteps.push("Submit 3-phase separator design to specialist for review of emulsion, coalescer, and chemical treatment requirements");
   }
   if (flags.includes("EMULSION_RISK")) {
     recs.push("Consider chemical demulsifier injection and coalescing internals");
@@ -884,12 +893,21 @@ function buildAssumptions(config: SeparatorConfig, holdup: HoldupBasis, K_eff: n
   }
   if (holdup.slugVolume > 0) a.push(`Slug volume: ${holdup.slugVolume} m\u00B3`);
   if (config.enableDropletCheck) {
-    a.push(`Droplet settling check enabled (Stokes' law, d = ${config.dropletDiameter_um} \u03BCm)`);
+    a.push(`Droplet settling check enabled (Stokes' law, d = ${config.dropletDiameter_um} \u03BCm) \u2014 valid only for Re_p \u2264 1; Stokes overpredicts terminal velocity when Re_p > 1 (non-conservative)`);
+  }
+  if (config.phaseMode === "three_phase") {
+    a.push("3-phase sizing is volumetric retention screening only \u2014 no weir, baffle, oil/water interface, emulsion, or coalescer design is included; specialist review required for detailed design");
   }
   a.push("Vessel diameter rounded up to nearest 50 mm");
   a.push("No mechanical design (wall thickness, weight, nozzles) considered");
   a.push("Head volumes not included \u2014 cylindrical shell volume only");
-  a.push(`Standard: ${stdRef}${config.serviceType === "production" ? " \u2014 Specification for Oil and Gas Separators" : ", API RP 14E"}`);
+  if (config.phaseMode !== "three_phase") {
+    a.push(`Standard: ${stdRef}${config.serviceType === "production" ? " \u2014 Specification for Oil and Gas Separators" : " / GPSA Section 7"}, Stewart & Arnold: Surface Production Operations`);
+  } else {
+    a.push(`Standard: ${stdRef} / GPSA Section 7, Stewart & Arnold: Surface Production Operations`);
+  }
+  a.push("Standard gas flow basis: 15\u00B0C and 1.01325 bar(a) per ISO 13443");
+  a.push("K-value pressure correction applied per-case using case operating pressure");
 
   return a;
 }
@@ -907,14 +925,11 @@ export function calculateSeparator(
   const isHorizontal = config.orientation === "horizontal";
 
   const anyFoamCase = cases.some(c => c.flagFoam);
-  const maxPressure = Math.max(...cases.map(c => c.gasPressure));
-
-  const { K_eff, pressureCorrected, foamDerated, steps: kSteps } = computeEffectiveK(
-    config.kValue, maxPressure, config.foamFactor, config.applyPressureCorrection, anyFoamCase,
-  );
 
   for (const c of cases) {
-    if (c.gasDensity <= 0) throw new Error(`Case "${c.name}": Gas density must be positive`);
+    if (c.gasDensity <= 0) throw new Error(`Case "${c.name}": Gas density must be positive (check fluid properties)`);
+    if (c.gasPressure <= 0) throw new Error(`Case "${c.name}": Operating pressure must be positive absolute (bar(a))`);
+    if (c.gasTemperature <= -273.15) throw new Error(`Case "${c.name}": Temperature is below absolute zero`);
     if (c.liquidDensity <= 0) throw new Error(`Case "${c.name}": Liquid density must be positive`);
     if (c.liquidDensity <= c.gasDensity) {
       warnings.push(`Case "${c.name}": \u03C1_l (${c.liquidDensity}) \u2264 \u03C1_g (${c.gasDensity}) \u2014 check fluid properties`);
@@ -922,8 +937,21 @@ export function calculateSeparator(
     if (c.gasFlowRate <= 0 && c.liquidFlowRate <= 0) {
       throw new Error(`Case "${c.name}": At least one flow rate must be positive`);
     }
+    if (c.gasFlowRate < 0) throw new Error(`Case "${c.name}": Gas flow rate cannot be negative`);
+    if (c.liquidFlowRate < 0) throw new Error(`Case "${c.name}": Liquid flow rate cannot be negative`);
+    if (config.levelFraction <= 0 || config.levelFraction >= 1) throw new Error("Normal liquid level fraction must be between 0 and 1 (exclusive)");
+    if (holdup.residenceTime < 0) throw new Error("Residence time cannot be negative");
+    if (holdup.surgeTime < 0) throw new Error("Surge time cannot be negative");
+    if (holdup.slugVolume < 0) throw new Error("Slug volume cannot be negative");
+    if (c.waterCut !== undefined && (c.waterCut < 0 || c.waterCut > 1)) throw new Error(`Case "${c.name}": Water cut must be between 0 and 1`);
+    if (config.enableDropletCheck && config.dropletDiameter_um <= 0) throw new Error("Droplet diameter must be positive");
 
-    const { Qg_m3s, steps: flowSteps } = computeActualGasFlow(c);
+    const { K_eff, pressureCorrected, foamDerated, steps: kSteps } = computeEffectiveK(
+      config.kValue, c.gasPressure, config.foamFactor, config.applyPressureCorrection, anyFoamCase,
+    );
+
+    const { Qg_m3s, steps: flowSteps, densityWarning } = computeActualGasFlow(c);
+    if (densityWarning) warnings.push(densityWarning);
 
     let D_req_mm: number;
     let v_s_max: number;
@@ -965,6 +993,7 @@ export function calculateSeparator(
     caseResults.push({
       caseId: c.id, caseName: c.name, Qg_actual_m3s: Qg_m3s,
       v_s_max, A_req, D_req_mm,
+      K_eff, pressureCorrected, foamDerated,
       dropletSettlingVelocity, actualGasVelocity: actualGasVelocityDroplet,
       dropletCarryoverRisk, dropletRe_p,
       steps: allSteps,
@@ -985,11 +1014,15 @@ export function calculateSeparator(
   const { totalVolume_m3, steps: holdupSteps } = computeHoldup(cases, holdup, governingCaseId, config);
 
   const govCaseResult = caseResults[governingIdx];
+  const govK_eff = govCaseResult.K_eff;
+  const govPressureCorrected = govCaseResult.pressureCorrected;
+  const govFoamDerated = govCaseResult.foamDerated;
+
   const geometry = assembleGeometry(maxD, totalVolume_m3, config, govCaseResult.Qg_actual_m3s);
 
-  const flags = collectFlags(cases, config, geometry, govCaseResult.v_s_max, caseResults, pressureCorrected, foamDerated);
+  const flags = collectFlags(cases, config, geometry, govCaseResult.v_s_max, caseResults, govPressureCorrected, govFoamDerated);
   const { recs, nextSteps } = buildRecommendations(flags, config, geometry);
-  const assumptions = buildAssumptions(config, holdup, K_eff, pressureCorrected, foamDerated);
+  const assumptions = buildAssumptions(config, holdup, govK_eff, govPressureCorrected, govFoamDerated);
 
   return {
     project, cases, config, holdup, caseResults,
