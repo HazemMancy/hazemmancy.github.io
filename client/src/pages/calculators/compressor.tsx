@@ -141,7 +141,7 @@ export default function CompressorPage() {
   const handleCalculate = () => {
     setError(null);
     try {
-      const T_K_suction = convertToSI("temperature", parseFloat(form.suctionTemperature), unitSystem);
+      const T_C_suction = convertToSI("temperature", parseFloat(form.suctionTemperature), unitSystem); // °C
       const P_bar_suction = convertToSI("pressureBara", parseFloat(form.suctionPressure), unitSystem);
 
       let MW = parseFloat(form.molecularWeight);
@@ -149,14 +149,13 @@ export default function CompressorPage() {
       let Z  = parseFloat(form.compressibilityFactor);
 
       if (gasPropsMode !== "manual") {
-        const T_C = T_K_suction; // convertToSI("temperature") returns °C; resolveGasProps expects °C
         const manual: ManualGasProps = {
           molecularWeight: isNaN(MW) ? 18.5 : MW,
           specificHeatRatio: isNaN(k) ? 1.27 : k,
           compressibilityFactor: isNaN(Z) ? 1.0 : Z,
           viscosity: 0.012,
         };
-        const resolved = resolveGasProps(gasPropsMode, manual, gasComposition, T_C, P_bar_suction);
+        const resolved = resolveGasProps(gasPropsMode, manual, gasComposition, T_C_suction, P_bar_suction);
         if (resolved.warnings.length > 0) {
           setError(`EoS: ${resolved.warnings.join("; ")}`);
         }
@@ -170,7 +169,7 @@ export default function CompressorPage() {
         molecularWeight: MW,
         suctionPressure: P_bar_suction,
         dischargePressure: convertToSI("pressureBara", parseFloat(form.dischargePressure), unitSystem),
-        suctionTemperature: T_K_suction,
+        suctionTemperature: T_C_suction,
         specificHeatRatio: k,
         compressibilityFactor: Z,
         polytropicEfficiency: parseFloat(form.polytropicEfficiency),
