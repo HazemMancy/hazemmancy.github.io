@@ -172,7 +172,8 @@ export interface ThermalFinalResult {
   trvSelection: TRVSelection;
   inletPiping: ThermalPipingResult | null;
   outletPiping: ThermalPipingResult | null;
-  pressureRiseRate: number;
+  /** Estimated pressure rise per degree C (bar/°C), based on bulk modulus and α */
+  pressureRisePerDegC: number;
   warnings: string[];
   flags: string[];
   actionItems: string[];
@@ -188,7 +189,9 @@ export interface ThermalReliefResult {
   heatInput: number;
   requiredOrificeArea: number;
   recommendedTRVSize: string;
+  /** @deprecated Use pressureRisePerDegC — renamed for clarity */
   pressureRiseRate: number;
+  pressureRisePerDegC: number;
   warnings: string[];
 }
 
@@ -291,7 +294,12 @@ export function validateInputs(
   if (fluid.thermalExpansion <= 0) errors.push("Thermal expansion coefficient must be positive");
   if (fluid.viscosity <= 0) errors.push("Fluid viscosity must be positive");
   if (fluid.bulkModulus < 0) errors.push("Bulk modulus cannot be negative");
-  if (temps.final <= temps.initial) errors.push("Final temperature must exceed initial temperature");
+  // Temperature check: required when the volume/time method will be used (heatingDuration > 0)
+  // or when no heat input is available. Relaxed when using heat-input method only (no duration).
+  const heatInputOnlyMode = heatSource && heatSource.heatInputKW > 0 && heatSource.heatingDuration <= 0;
+  if (!heatInputOnlyMode && temps.final <= temps.initial) {
+    errors.push("Final temperature must exceed initial temperature");
+  }
   if (deviceSizing) {
     if (deviceSizing.kd <= 0 || deviceSizing.kd > 1) errors.push("Kd must be between 0 and 1");
     if (deviceSizing.kw <= 0 || deviceSizing.kw > 1) errors.push("Kw must be between 0 and 1");
@@ -476,6 +484,7 @@ export function calculateThermalPiping(
   density: number,
   viscosity: number,
   setPressure: number,
+  isOutlet = false,
 ): ThermalPipingResult {
   const warnings: string[] = [];
   const D_m = piping.pipeDiameter / 1000;
@@ -502,10 +511,13 @@ export function calculateThermalPiping(
   const dP_Pa = D_m > 0 ? f * (L_eq / D_m) * 0.5 * density * velocity * velocity : 0;
   const dP_bar = dP_Pa / 1e5;
   const pctOfSet = setPressure > 0 ? (dP_bar / setPressure) * 100 : 0;
-  const pass = pctOfSet <= 3;
 
-  if (!pass) warnings.push(`Pressure drop ${pctOfSet.toFixed(1)}% exceeds 3% of set pressure`);
-  if (velocity > 6) warnings.push(`Velocity ${velocity.toFixed(2)} m/s — high for liquid relief piping`);
+  // Inlet: 3% rule per API 520. Outlet: hydraulic estimate only — no pass/fail criterion.
+  const pass = isOutlet ? true : pctOfSet <= 3;
+
+  if (!isOutlet && !pass) warnings.push(`Inlet pressure drop ${pctOfSet.toFixed(1)}% exceeds 3% of set pressure (API 520)`);
+  if (isOutlet) warnings.push(`Outlet: hydraulic estimate only — pressure drop ${dP_bar.toFixed(4)} bar (${pctOfSet.toFixed(1)}% of set). Back pressure compliance depends on device type selection.`);
+  if (velocity > 6) warnings.push(`Velocity ${velocity.toFixed(2)} m/s exceeds FEED screening guidance (6 m/s) for liquid relief piping — verify per project specification`);
 
   return { velocity, reynoldsNumber: Re, frictionFactor: f, pressureDrop_bar: dP_bar, percentOfSet: pctOfSet, pass, warnings };
 }
@@ -680,13 +692,15 @@ function buildCalcTrace(
     },
     assumptions: [
       "Liquid is incompressible and fully trapped between two closed valves",
-      "Thermal expansion coefficient assumed constant over temperature range",
+      "Thermal expansion coefficient α assumed constant over temperature range (may underestimate for wide ΔT — use average α if ΔT > 30°C)",
+      "Governing relief rate taken as max(heat input method, volume/time method) — conservative FEED screening approach per API 521",
       `Solar heat flux per API 521: ${SOLAR_HEAT_FLUX_BARE} W/m² (bare) / ${SOLAR_HEAT_FLUX_INSULATED} W/m² (insulated)`,
       `Discharge coefficient Kd = ${sizingResult.kd}`,
-      `Backpressure correction Kw = ${sizingResult.kw}`,
+      `Backpressure correction Kw = ${sizingResult.kw} — verify per API 520 §5.7.2; depends on device type and service conditions`,
       `Overpressure correction Kp = ${sizingResult.kp.toFixed(3)} (at ${equipment.overpressurePercent}% overpressure)`,
       "No allowance for pipe/vessel flexibility or thermal expansion of metal",
       `Pressure rise rate estimated using bulk modulus K = ${fluid.bulkModulus} MPa`,
+      "Outlet piping check is a hydraulic estimate only — no pass/fail criterion applies; back pressure compliance depends on device type selection",
     ],
     warnings,
     flags,
@@ -719,20 +733,25 @@ export function buildThermalFinalResult(
 
   const trvSelection = selectTRV(sizingResult.requiredOrificeArea_mm2);
   const alpha = fluid.thermalExpansion * 1e-4;
-  const pressureRiseRate = estimatePressureRiseRate(alpha, fluid.bulkModulus);
+  const pressureRisePerDegC = estimatePressureRiseRate(alpha, fluid.bulkModulus);
 
   let inletPiping: ThermalPipingResult | null = null;
   let outletPiping: ThermalPipingResult | null = null;
 
   if (inletPipingInput && inletPipingInput.pipeDiameter > 0) {
-    inletPiping = calculateThermalPiping(inletPipingInput, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, equipment.setPressure);
+    inletPiping = calculateThermalPiping(inletPipingInput, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, equipment.setPressure, false);
   }
   if (outletPipingInput && outletPipingInput.pipeDiameter > 0) {
-    outletPiping = calculateThermalPiping(outletPipingInput, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, equipment.setPressure);
+    outletPiping = calculateThermalPiping(outletPipingInput, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, equipment.setPressure, true);
   }
 
   const flags: string[] = [];
   const warnings = [...reliefRateResult.warnings];
+
+  // Item 1: Viscosity correction disclosure
+  if (fluid.viscosity > 10) {
+    warnings.push(`Fluid viscosity ${fluid.viscosity.toFixed(1)} cP > 10 cP — API 520 liquid sizing equation does not apply a viscosity correction factor. For highly viscous fluids, consult manufacturer data or apply a viscosity correction if applicable.`);
+  }
 
   if (expansionResult.expansionVolume_L < 0.01) {
     flags.push("VERY_SMALL_EXPANSION");
@@ -772,12 +791,9 @@ export function buildThermalFinalResult(
   }
   if (inletPiping && !inletPiping.pass) {
     flags.push("INLET_DP_FAIL");
-    warnings.push("Inlet piping pressure drop exceeds 3% of set pressure");
+    warnings.push("Inlet piping pressure drop exceeds 3% of set pressure (API 520)");
   }
-  if (outletPiping && !outletPiping.pass) {
-    flags.push("OUTLET_DP_FAIL");
-    warnings.push("Outlet piping pressure drop exceeds recommended limits");
-  }
+  // Outlet has no pass/fail — only flag high velocity
   if (inletPiping && inletPiping.velocity > 6) flags.push("HIGH_VELOCITY");
   if (outletPiping && outletPiping.velocity > 6) flags.push("HIGH_VELOCITY");
 
@@ -788,8 +804,8 @@ export function buildThermalFinalResult(
   }
   actionItems.push("Verify thermal expansion coefficient for operating temperature range");
   actionItems.push("Confirm blocked-in scenarios in HAZOP / process review");
-  if (inletPiping && !inletPiping.pass) actionItems.push("Increase inlet pipe size to reduce pressure drop below 3%");
-  if (outletPiping && !outletPiping.pass) actionItems.push("Increase outlet pipe size or reduce back pressure");
+  if (inletPiping && !inletPiping.pass) actionItems.push("Increase inlet pipe size to reduce pressure drop below 3% of set pressure (API 520)");
+  if (outletPiping) actionItems.push("Verify outlet back pressure against device selection — outlet piping check is a hydraulic estimate only");
   if (flags.includes("HIGH_BACKPRESSURE")) actionItems.push("Evaluate balanced bellows or pilot-operated TRV for high backpressure");
   actionItems.push("Cross-reference with detailed thermal analysis for final design");
 
@@ -802,7 +818,7 @@ export function buildThermalFinalResult(
   return {
     project, equipment, heatSource, fluid, temperatures,
     heatResult, expansionResult, reliefRateResult, sizingResult, trvSelection,
-    inletPiping, outletPiping, pressureRiseRate, warnings, flags, actionItems, calcTrace,
+    inletPiping, outletPiping, pressureRisePerDegC, warnings, flags, actionItems, calcTrace,
   };
 }
 
@@ -843,6 +859,7 @@ export function calculateThermalRelief(input: ThermalReliefInput): ThermalRelief
   const trv = selectTRV(sizing.requiredOrificeArea_mm2);
   const alpha = input.thermalExpansion * 1e-4;
 
+  const prRate = estimatePressureRiseRate(alpha, 2200);
   return {
     temperatureRise: expansion.temperatureRise,
     expansionVolume: expansion.expansionVolume_L,
@@ -851,7 +868,8 @@ export function calculateThermalRelief(input: ThermalReliefInput): ThermalRelief
     heatInput: heatResult.heatInput_kW,
     requiredOrificeArea: sizing.requiredOrificeArea_mm2,
     recommendedTRVSize: trv.nps,
-    pressureRiseRate: estimatePressureRiseRate(alpha, 2200),
+    pressureRiseRate: prRate,
+    pressureRisePerDegC: prRate,
     warnings: [...rateResult.warnings],
   };
 }

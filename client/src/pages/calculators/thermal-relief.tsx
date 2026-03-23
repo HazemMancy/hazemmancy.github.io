@@ -23,7 +23,7 @@ import {
   COMMON_FLUIDS, API_526_ORIFICES, FLAG_LABELS,
   calculateHeatInput, calculateExpansion, calculateReliefRate,
   calculateRelievingPressure, calculateTRVSizing, selectTRV,
-  calculateThermalPiping, buildThermalFinalResult,
+  calculateThermalPiping, buildThermalFinalResult, validateInputs,
   THERMAL_RELIEF_TEST_CASE,
 } from "@/lib/engineering/thermalRelief";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
@@ -186,12 +186,17 @@ export default function ThermalReliefPage() {
   const handleCalcReliefRate = () => {
     try {
       setError(null);
-      const hr = calculateHeatInput(heatSource);
-      setHeatResult(hr);
       const tempsInSI: ThermalTemperatures = {
         initial: convertToSI("temperature", temperatures.initial, unitSystem),
         final: convertToSI("temperature", temperatures.final, unitSystem),
       };
+      const validationErrors = validateInputs(equipment, fluid, tempsInSI, undefined, heatSource);
+      if (validationErrors.length > 0) {
+        setError(validationErrors.join("; "));
+        return;
+      }
+      const hr = calculateHeatInput(heatSource);
+      setHeatResult(hr);
       const exp = calculateExpansion(fluid, equipment.trappedVolume, tempsInSI);
       setExpansionResult(exp);
       const rr = calculateReliefRate(exp, hr, fluid, heatSource.heatingDuration, equipment.trappedVolume);
@@ -209,6 +214,15 @@ export default function ThermalReliefPage() {
     }
     try {
       setError(null);
+      const tempsInSI: ThermalTemperatures = {
+        initial: convertToSI("temperature", temperatures.initial, unitSystem),
+        final: convertToSI("temperature", temperatures.final, unitSystem),
+      };
+      const validationErrors = validateInputs(equipment, fluid, tempsInSI, deviceSizing, heatSource);
+      if (validationErrors.length > 0) {
+        setError(validationErrors.join("; "));
+        return;
+      }
       const sp = convertToSI("pressure", equipment.setPressure, unitSystem);
       const bp = convertToSI("pressure", deviceSizing.backPressure, unitSystem);
       const sr = calculateTRVSizing(reliefRateResult, sp, equipment.overpressurePercent, bp, project.atmosphericPressure, fluid, deviceSizing.kd, deviceSizing.kw);
@@ -230,13 +244,13 @@ export default function ThermalReliefPage() {
         pipeLength: convertToSI("length", inletPiping.pipeLength, unitSystem),
         roughness: inletPiping.roughness, fittingsK: inletPiping.fittingsK,
       };
-      setInletPipingResult(calculateThermalPiping(inP, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, sp));
+      setInletPipingResult(calculateThermalPiping(inP, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, sp, false));
       const outP: ThermalPipingInput = {
         pipeDiameter: convertToSI("diameter", outletPiping.pipeDiameter, unitSystem),
         pipeLength: convertToSI("length", outletPiping.pipeLength, unitSystem),
         roughness: outletPiping.roughness, fittingsK: outletPiping.fittingsK,
       };
-      setOutletPipingResult(calculateThermalPiping(outP, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, sp));
+      setOutletPipingResult(calculateThermalPiping(outP, reliefRateResult.reliefRate_m3h, fluid.density, fluid.viscosity, sp, true));
     } catch {
       setInletPipingResult(null); setOutletPipingResult(null);
     }
@@ -325,7 +339,7 @@ export default function ThermalReliefPage() {
       { label: "Effective Area", value: finalResult.trvSelection.area_mm2, unit: "mm²" },
       { label: "Margin", value: `+${finalResult.trvSelection.margin.toFixed(1)}%`, unit: "" },
       { label: "Flanges", value: `${finalResult.trvSelection.inletFlange} x ${finalResult.trvSelection.outletFlange}`, unit: "" },
-      { label: "Pressure Rise Rate", value: finalResult.pressureRiseRate, unit: "bar/°C" },
+      { label: "Pressure Rise per °C (Approx.)", value: finalResult.pressureRisePerDegC, unit: "bar/°C" },
     ] : [],
     assumptions: finalResult?.calcTrace.assumptions || [
       "Liquid is incompressible and fully trapped between two closed valves",
@@ -659,7 +673,7 @@ export default function ThermalReliefPage() {
                   <p className="text-[10px] text-muted-foreground mt-1">Typical: 0.65 for liquid TRV</p></div>
                 <div><Label className="text-xs mb-1.5 block">Backpressure Correction (Kw)</Label>
                   <NumericInput value={deviceSizing.kw} onValueChange={v => setDeviceSizing(d => ({ ...d, kw: v }))} data-testid="input-kw" />
-                  <p className="text-[10px] text-muted-foreground mt-1">1.0 for conventional; &lt;1.0 for balanced bellows</p></div>
+                  <p className="text-[10px] text-muted-foreground mt-1">Verify per API 520 §5.7.2 — depends on device type and service conditions</p></div>
                 <div><Label className="text-xs mb-1.5 block">Back Pressure ({pU}g)</Label>
                   <NumericInput value={deviceSizing.backPressure} onValueChange={v => setDeviceSizing(d => ({ ...d, backPressure: v }))} data-testid="input-back-p" /></div>
               </div>
@@ -775,7 +789,7 @@ export default function ThermalReliefPage() {
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm">Piping Checks</h3>
-              <p className="text-xs text-muted-foreground">Inlet/outlet piping pressure drop check (3% rule)</p>
+              <p className="text-xs text-muted-foreground">Inlet: 3% rule per API 520. Outlet: hydraulic estimate only — no pass/fail criterion (back pressure compliance depends on device type selection).</p>
             </CardHeader>
             <CardContent className="space-y-6 pt-0">
               <div>
@@ -831,13 +845,11 @@ export default function ThermalReliefPage() {
               )}
 
               {outletPipingResult && (
-                <Card className={outletPipingResult.pass ? "border-green-500/30" : "border-destructive/30"}>
+                <Card className="border-blue-500/30">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <Badge variant={outletPipingResult.pass ? "secondary" : "destructive"} className="text-[10px]">
-                        {outletPipingResult.pass ? "PASS" : "FAIL"}
-                      </Badge>
-                      <span className="text-xs font-medium">Outlet Piping</span>
+                      <Badge variant="secondary" className="text-[10px] bg-blue-500/20 text-blue-400">ESTIMATE</Badge>
+                      <span className="text-xs font-medium">Outlet Piping (Hydraulic Estimate — No Pass/Fail)</span>
                     </div>
                     <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                       <span>Pressure Drop:</span><span className="font-mono">{outletPipingResult.pressureDrop_bar.toFixed(4)} bar ({outletPipingResult.percentOfSet.toFixed(1)}% of set)</span>
@@ -958,8 +970,8 @@ export default function ThermalReliefPage() {
                           <span className="font-mono">{finalResult.trvSelection.area_mm2} mm² (+{finalResult.trvSelection.margin.toFixed(1)}%)</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
-                          <span className="text-muted-foreground">Pressure Rise Rate:</span>
-                          <span className="font-mono">{finalResult.pressureRiseRate.toFixed(1)} bar/°C</span>
+                          <span className="text-muted-foreground">Pressure Rise per °C (Approx.):</span>
+                          <span className="font-mono">{finalResult.pressureRisePerDegC.toFixed(1)} bar/°C</span>
                         </div>
                       </div>
                     </CardContent>
@@ -980,10 +992,8 @@ export default function ThermalReliefPage() {
                           )}
                           {finalResult.outletPiping && (
                             <div className="flex items-center gap-2 text-xs">
-                              <Badge variant={finalResult.outletPiping.pass ? "secondary" : "destructive"} className="text-[10px]">
-                                {finalResult.outletPiping.pass ? "PASS" : "FAIL"}
-                              </Badge>
-                              <span>Outlet: {finalResult.outletPiping.pressureDrop_bar.toFixed(4)} bar ({finalResult.outletPiping.percentOfSet.toFixed(1)}%), v={finalResult.outletPiping.velocity.toFixed(2)} m/s</span>
+                              <Badge variant="secondary" className="text-[10px] bg-blue-500/20 text-blue-400">ESTIMATE</Badge>
+                              <span>Outlet: {finalResult.outletPiping.pressureDrop_bar.toFixed(4)} bar ({finalResult.outletPiping.percentOfSet.toFixed(1)}%), v={finalResult.outletPiping.velocity.toFixed(2)} m/s (hydraulic est.)</span>
                             </div>
                           )}
                         </div>
