@@ -26,6 +26,7 @@ import {
   GAS_SIZING_TEST_CASE,
   type GasSizingResult,
 } from "@/lib/engineering/gasSizing";
+import { gasLineSizingSchema } from "@/lib/engineering/validation";
 import { GAS_SERVICE_LIMITS, type GasServiceLimit } from "@/lib/engineering/constants";
 import { checkGasLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
@@ -63,7 +64,7 @@ const defaultForm: FormState = {
 
 const fieldUnitMap: FieldUnitMap = {
   flowRate: "flowMass",
-  pressure: "pressure",
+  pressure: "pressureBara",
   temperature: "temperature",
   innerDiameter: "diameter",
   pipeLength: "length",
@@ -101,16 +102,17 @@ export default function GasLineSizingPage() {
       let k   = parseFloat(form.specificHeatRatio);
       let mu  = parseFloat(form.viscosity);
 
+      const T_C = convertToSI("temperature", parseFloat(form.temperature), unitSystem); // °C
+      const P_bara = convertToSI("pressureBara", parseFloat(form.pressure), unitSystem); // bar(a)
+
       if (gasPropsMode !== "manual") {
-        const T_C = convertToSI("temperature", parseFloat(form.temperature), unitSystem); // returns °C
-        const P_bar = convertToSI("pressure", parseFloat(form.pressure), unitSystem);
         const manual: ManualGasProps = {
           molecularWeight: isNaN(mw) ? 18.5 : mw,
           specificHeatRatio: isNaN(k) ? 1.27 : k,
           compressibilityFactor: isNaN(z) ? 0.92 : z,
           viscosity: isNaN(mu) ? 0.012 : mu,
         };
-        const resolved = resolveGasProps(gasPropsMode, manual, gasComposition, T_C, P_bar);
+        const resolved = resolveGasProps(gasPropsMode, manual, gasComposition, T_C, P_bara);
         if (resolved.warnings.length > 0) setError(`EoS: ${resolved.warnings.join("; ")}`);
         mw = resolved.MW;
         z  = resolved.Z;
@@ -120,8 +122,8 @@ export default function GasLineSizingPage() {
 
       const input = {
         flowRate: convertToSI("flowMass", parseFloat(form.flowRate), unitSystem),
-        pressure: convertToSI("pressure", parseFloat(form.pressure), unitSystem),
-        temperature: convertToSI("temperature", parseFloat(form.temperature), unitSystem),
+        pressure: P_bara,
+        temperature: T_C,
         molecularWeight: mw,
         innerDiameter: convertToSI("diameter", parseFloat(form.innerDiameter), unitSystem),
         pipeLength: convertToSI("length", parseFloat(form.pipeLength), unitSystem),
@@ -130,18 +132,23 @@ export default function GasLineSizingPage() {
         specificHeatRatio: k,
         viscosity: mu,
       };
-      for (const [key, val] of Object.entries(input)) {
-        if (isNaN(val)) throw new Error(`Invalid value for ${key}`);
+
+      // Validate with Zod schema — provides field-specific error messages
+      const validation = gasLineSizingSchema.safeParse(input);
+      if (!validation.success) {
+        const firstIssue = validation.error.issues[0];
+        const fieldLabel = firstIssue.path.length > 0 ? `${firstIssue.path[0]}: ` : "";
+        throw new Error(`${fieldLabel}${firstIssue.message}`);
       }
-      const res = calculateGasLineSizing(input);
+
+      const res = calculateGasLineSizing(validation.data);
       setResult(res);
-      
+
       if (selectedService) {
         const service = GAS_SERVICE_LIMITS.find(s => s.service === selectedService);
         if (service) {
           const dpBarPerKm = res.pressureDropPer100m * 10;
-          const opPressureBar = convertToSI("pressure", parseFloat(form.pressure), unitSystem);
-          const lw = checkGasLimits(service, res.velocity, dpBarPerKm, res.rhoV2, res.machNumber, opPressureBar);
+          const lw = checkGasLimits(service, res.velocity, dpBarPerKm, res.rhoV2, res.machNumber, P_bara);
           setLimitWarnings(lw);
         }
       } else {
@@ -232,7 +239,7 @@ export default function GasLineSizingPage() {
                 </div>
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Operating Pressure ({getUnit("pressure", unitSystem)})
+                    Operating Pressure — absolute ({getUnit("pressureBara", unitSystem)})
                   </Label>
                   <Input
                     type="number"
@@ -362,6 +369,12 @@ export default function GasLineSizingPage() {
                     highlight: true,
                   },
                   {
+                    label: "\u0394P / P\u1D62\u207F",
+                    value: (result.pressureDropFraction * 100).toFixed(2),
+                    unit: "%",
+                    highlight: result.pressureDropFraction > 0.1,
+                  },
+                  {
                     label: "\u0394P per 100m",
                     value: result.pressureDropPer100m,
                     unit: "bar/100m",
@@ -398,7 +411,7 @@ export default function GasLineSizingPage() {
                   calculatorName: "Gas Line Sizing",
                   inputs: [
                     { label: "Mass Flow Rate", value: form.flowRate, unit: getUnit("flowMass", unitSystem) },
-                    { label: "Operating Pressure", value: form.pressure, unit: getUnit("pressure", unitSystem) },
+                    { label: "Operating Pressure (absolute)", value: form.pressure, unit: getUnit("pressureBara", unitSystem) },
                     { label: "Operating Temperature", value: form.temperature, unit: getUnit("temperature", unitSystem) },
                     { label: "Molecular Weight", value: form.molecularWeight, unit: "kg/kmol" },
                     { label: "Inner Diameter", value: form.innerDiameter, unit: getUnit("diameter", unitSystem) },
@@ -412,26 +425,31 @@ export default function GasLineSizingPage() {
                   results: [
                     { label: "Velocity", value: convertFromSI("velocity", result.velocity, unitSystem), unit: getUnit("velocity", unitSystem), highlight: true },
                     { label: "Pressure Drop", value: convertFromSI("pressure", result.pressureDrop, unitSystem), unit: getUnit("pressure", unitSystem), highlight: true },
+                    { label: "ΔP / P_in", value: `${(result.pressureDropFraction * 100).toFixed(2)}%`, unit: "—" },
                     { label: "ΔP per 100m", value: result.pressureDropPer100m, unit: "bar/100m" },
                     { label: "Reynolds Number", value: result.reynoldsNumber, unit: "—" },
                     { label: "Friction Factor (f)", value: result.frictionFactor, unit: "—" },
-                    { label: "Mach Number", value: result.machNumber, unit: "—" },
+                    { label: "Mach Number (approx.)", value: result.machNumber, unit: "—" },
                     { label: "ρv²", value: result.rhoV2, unit: "kg/(m·s²)" },
-                    { label: "Gas Density", value: result.gasDensity, unit: getUnit("density", unitSystem) },
+                    { label: "Gas Density", value: result.gasDensity, unit: "kg/m³" },
                   ],
                   methodology: [
-                    "Darcy-Weisbach equation for compressible gas pressure drop",
-                    "Swamee-Jain approximation for Colebrook-White friction factor",
-                    "Ideal gas law with compressibility factor (Z) for density calculation",
-                    "Mach number calculated from speed of sound in ideal gas",
+                    "Darcy-Weisbach equation for friction pressure drop (constant-density screening approach)",
+                    "Swamee-Jain explicit approximation for Colebrook-White friction factor (4000 < Re < 1×10⁸; 1×10⁻⁶ ≤ ε/D ≤ 0.01)",
+                    "Gas density from real-gas equation of state: ρ = PM / (ZRT)",
+                    "Pressure basis: ABSOLUTE pressure required for gas density — bar(a) / psia",
+                    "Flow basis: MASS flow rate (kg/h or lb/h) — solver is NOT based on standard volumetric flow",
+                    "Mach number: APPROXIMATE screening only — a = √(k·Z·R·T/M); not a rigorous real-gas speed-of-sound model",
+                    "Velocity and erosional limits: engineering best-practice screening per API RP 14E and EPC practice",
                   ],
                   assumptions: [
-                    "Steady-state, single-phase compressible gas flow",
-                    "Isothermal flow assumption (no temperature change along pipe)",
-                    "Darcy-Weisbach equation for pressure drop calculation",
-                    "Swamee-Jain approximation for Colebrook friction factor",
-                    "Ideal gas law with compressibility factor (Z) correction",
-                    "Pipe roughness assumed uniform along pipe length",
+                    "Steady-state, single-phase gas flow (no liquid entrainment)",
+                    "Isothermal flow — temperature constant along pipe length",
+                    "Constant density along pipe (calculated at inlet conditions) — valid only for ΔP/P_in < ~10%",
+                    "Mach number is an approximate screen (ideal-gas speed of sound with Z correction)",
+                    "Velocity and ρv² limits are engineering best-practice screening per API RP 14E — not universal hard code-compliance limits; applies to preliminary design / FEED",
+                    "Pipe roughness: 0.0457 mm default (commercial carbon steel per Moody / GPSA Table 17-7); uniform along pipe",
+                    "Pressure input is ABSOLUTE pressure — gauge pressure must be converted before entry",
                   ],
                   references: [
                     "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
@@ -457,18 +475,22 @@ export default function GasLineSizingPage() {
           <div className="mt-4">
             <AssumptionsPanel
             assumptions={[
-            "Steady-state, single-phase compressible gas flow",
-            "Isothermal flow assumption (no temperature change along pipe)",
-            "Darcy-Weisbach equation for pressure drop calculation",
-            "Swamee-Jain approximation for Colebrook friction factor",
-            "Ideal gas law with compressibility factor (Z) correction",
-            "Pipe roughness assumed uniform along pipe length",
+              "Steady-state, single-phase gas flow — no liquid entrainment assumed",
+              "Isothermal flow — temperature constant along pipe length",
+              "CONSTANT DENSITY screening — density evaluated at inlet conditions only; valid for ΔP/P_in < ~10%; results become increasingly conservative at higher pressure-drop fractions",
+              "APPROXIMATE Mach screening — speed of sound = √(k·Z·R·T/M); not a rigorous real-gas model",
+              "Flow basis: MASS flow rate (kg/h or lb/h) — NOT standard volumetric flow (Sm³/h or MMSCFD)",
+              "Pressure basis: ABSOLUTE pressure required — bar(a) or psia; gauge pressure must be converted before entry",
+              "Velocity and ρv² limits: engineering best-practice screening per API RP 14E and EPC FEED design practice — not universal hard code-compliance limits",
+              "Pipe roughness: 0.0457 mm default (commercial carbon steel, Moody / GPSA Table 17-7); assumed uniform",
+              "Darcy-Weisbach friction factor from Swamee-Jain explicit approximation for Colebrook-White equation",
             ]}
             references={[
-            "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
-            "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
-            "Swamee, P.K. and Jain, A.K. (1976) \u2014 Explicit equations for pipe-flow problems",
-            "Perry's Chemical Engineers' Handbook, 9th Edition",
+              "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
+              "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
+              "Swamee, P.K. and Jain, A.K. (1976) \u2014 Explicit equations for pipe-flow problems. J. Hydraulics Div., ASCE",
+              "GPSA Engineering Data Book, 14th Edition — Sections 17 & 23",
+              "Perry's Chemical Engineers' Handbook, 9th Edition",
             ]}
             />
           </div>

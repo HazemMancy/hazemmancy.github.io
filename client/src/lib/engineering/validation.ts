@@ -7,7 +7,7 @@ export const gasLineSizingSchema = z.object({
   molecularWeight: z.number().min(2, "MW must be >= 2").max(200, "MW must be <= 200"),
   innerDiameter: z.number().positive("Diameter must be positive"),
   pipeLength: z.number().positive("Pipe length must be positive"),
-  roughness: z.number().positive("Roughness must be positive"),
+  roughness: z.number().min(0, "Roughness must be ≥ 0 (0 = hydraulically smooth pipe)"),
   compressibilityFactor: z.number().min(0.1, "Z-factor must be >= 0.1").max(2, "Z-factor must be <= 2"),
   specificHeatRatio: z.number().min(1, "Cp/Cv must be >= 1").max(1.7, "Cp/Cv must be <= 1.7"),
   viscosity: z.number().positive("Viscosity must be positive"),

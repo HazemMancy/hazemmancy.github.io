@@ -7,6 +7,8 @@ export interface GasSizingResult {
   frictionFactor: number;
   pressureDrop: number;
   pressureDropPer100m: number;
+  /** Fraction of inlet absolute pressure lost to friction: dP / P_in (dimensionless) */
+  pressureDropFraction: number;
   machNumber: number;
   rhoV2: number;
   gasDensity: number;
@@ -59,8 +61,16 @@ export function calculateGasLineSizing(input: GasLineSizingInput): GasSizingResu
   const dP_bar = dP_Pa / 1e5;
   const dP_per100m = input.pipeLength > 0 ? (dP_bar / input.pipeLength) * 100 : 0;
 
-  if (dP_bar > input.pressure * 0.4) {
-    warnings.push(`Pressure drop (${dP_bar.toFixed(3)} bar) exceeds 40% of inlet pressure — Darcy-Weisbach constant-density assumption may overestimate ΔP. Consider segmented calculation or process simulator for long pipelines.`);
+  const pressureDropFraction = dP_bar / input.pressure;
+
+  if (pressureDropFraction > 0.4) {
+    warnings.push(
+      `ΔP/P_in = ${(pressureDropFraction * 100).toFixed(1)}% — HIGH: constant-density Darcy screening is unreliable at this pressure drop. Results are indicative only. Use a rigorous compressible-flow solver or process simulator.`
+    );
+  } else if (pressureDropFraction > 0.1) {
+    warnings.push(
+      `ΔP/P_in = ${(pressureDropFraction * 100).toFixed(1)}% — CAUTION: significant fraction of inlet pressure lost. Constant-density screening assumption introduces increasing error. Consider segmented calculation.`
+    );
   }
 
   const sonicVelocity = Math.sqrt(
@@ -97,6 +107,7 @@ export function calculateGasLineSizing(input: GasLineSizingInput): GasSizingResu
     frictionFactor: f,
     pressureDrop: dP_bar,
     pressureDropPer100m: dP_per100m,
+    pressureDropFraction,
     machNumber,
     rhoV2,
     gasDensity: rho,
@@ -108,8 +119,8 @@ export function calculateGasLineSizing(input: GasLineSizingInput): GasSizingResu
 // Sweet natural gas at moderate pressure through 10" Sch 40 CS pipe
 // Expected: velocity ~12–18 m/s, ΔP/100m within API RP 14E limits
 export const GAS_SIZING_TEST_CASE: GasLineSizingInput = {
-  flowRate: 50000,             // Sm³/h — typical gas export/gathering rate
-  pressure: 30,                // bara — medium-pressure export header
+  flowRate: 50000,             // kg/h — mass flow rate (solver basis)
+  pressure: 30,                // bar(a) — absolute inlet pressure (required for gas density)
   temperature: 40,             // °C — typical process temperature
   molecularWeight: 18.5,       // sweet natural gas (GPSA typical composition)
   innerDiameter: 254.5,        // mm — 10" NPS Sch 40 (ID = 254.5 mm per ASME B36.10)
