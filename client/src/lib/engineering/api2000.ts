@@ -151,6 +151,7 @@ export interface EmergencyVentingResult {
   emergencyVenting_Nm3h: number;
   netEmergency_Nm3h: number;
   normalCredit_Nm3h: number;
+  governingScenario: string;
 }
 
 export interface VentSizingResult {
@@ -234,6 +235,17 @@ export const VENT_DEVICE_LABELS: Record<VentDeviceType, string> = {
   rupture_pin: "Rupture Pin Device",
 };
 
+/**
+ * Orifice-equivalent discharge coefficients for free-area screening sizing.
+ * These are PRELIMINARY SCREENING ASSUMPTIONS — not OEM-rated vent-capacity coefficients.
+ * Values are typical for free-area estimation only.
+ * Final PV valve and emergency vent selection requires vendor-rated capacity curves
+ * tested per API 2000 Annex B or EN ISO 28300.
+ *   pv_valve:          Cd = 0.62 (weighted/spring-loaded PV valve, typical)
+ *   open_vent:         Cd = 0.72 (open pipe/flame arrester combination, typical)
+ *   emergency_manhole: Cd = 0.55 (weighted manhole cover, conservative)
+ *   rupture_pin:       Cd = 0.62 (rupture pin device, typical)
+ */
 const VENT_CD: Record<VentDeviceType, number> = {
   pv_valve: 0.62,
   open_vent: 0.72,
@@ -368,17 +380,39 @@ function sizeVentForDP(
   return { area_mm2, dia_mm, nps };
 }
 
+/**
+ * Validate Api2000Input for physical plausibility before solving.
+ * Throws a descriptive Error on the first failed check.
+ */
+export function validateApi2000Input(input: Api2000Input): void {
+  if (input.tankDiameter_m <= 0) throw new Error("Tank diameter must be positive");
+  if (input.tankHeight_m <= 0) throw new Error("Tank height must be positive");
+  if (input.liquidLevel_percent < 0 || input.liquidLevel_percent > 100)
+    throw new Error("Liquid level must be between 0 and 100 %");
+  if (input.maxFillRate_m3_h < 0) throw new Error("Max fill rate must be ≥ 0");
+  if (input.maxEmptyRate_m3_h < 0) throw new Error("Max empty rate must be ≥ 0");
+  if (input.designPressure_mbar <= 0) throw new Error("Design pressure must be positive");
+  if (input.designVacuum_mbar <= 0) throw new Error("Design vacuum must be positive");
+  if (input.vaporMW <= 0) throw new Error("Vapor molecular weight must be positive");
+  if (input.latentHeat_kJ_kg <= 0) throw new Error("Latent heat must be positive");
+  if (input.vaporDensity_kg_m3 <= 0) throw new Error("Vapor density must be positive");
+  if (input.flashFactor < 1.0) throw new Error("Flash factor must be ≥ 1.0 (1.0 = non-volatile)");
+  if (input.drainageFactor < 0 || input.drainageFactor > 1)
+    throw new Error("Drainage factor must be between 0 and 1.0");
+  if (input.tankType === "floating_roof" && input.rimSealHeight_m <= 0)
+    throw new Error(
+      "Floating roof tank: rim seal height must be > 0 for emergency venting (Section 5.4). " +
+      "Enter the seal height to size the emergency vent, or switch to a fixed-roof tank type."
+    );
+}
+
 export function calculateApi2000(input: Api2000Input): Api2000Result {
   const trace: { step: string; value: string }[] = [];
   const assumptions: string[] = [];
   const warnings: string[] = [];
   const scenarios: ScenarioResult[] = [];
 
-  if (input.tankDiameter_m <= 0) throw new Error("Tank diameter must be positive");
-  if (input.tankHeight_m <= 0) throw new Error("Tank height must be positive");
-  if (input.designPressure_mbar <= 0) throw new Error("Design pressure must be positive");
-  if (input.designVacuum_mbar <= 0) throw new Error("Design vacuum must be positive");
-  if (input.vaporMW <= 0) throw new Error("Vapor molecular weight must be positive");
+  validateApi2000Input(input);
 
   const geom = calculateTankGeometry(
     input.tankDiameter_m, input.tankHeight_m, input.tankType, input.liquidLevel_percent
@@ -650,6 +684,7 @@ export function calculateApi2000(input: Api2000Input): Api2000Result {
     emergencyVenting_Nm3h: governingEmergency_Nm3h,
     netEmergency_Nm3h: netEmergency,
     normalCredit_Nm3h: normalCredit,
+    governingScenario: governingEmergencyScenario,
   };
 
   trace.push({ step: "\u2550\u2550\u2550 SCENARIO SUMMARY \u2550\u2550\u2550", value: "" });
@@ -720,14 +755,30 @@ export function calculateApi2000(input: Api2000Input): Api2000Result {
   assumptions.push("Liquid movement: 1:1 volume displacement at atmospheric conditions (Section 4.4)");
   assumptions.push("Fire heat input: Q = 43,200 \u00D7 F \u00D7 drainage \u00D7 A_w^0.82 W (Section 5.2, A_w > 2.8 m\u00B2)");
   assumptions.push(`Normal venting credit applied to emergency per Section 5.3: ${fmtNum(normalCredit)} Nm\u00B3/h`);
-  assumptions.push(`PV valve Cd = ${Cd_pv}; Emergency vent Cd = ${Cd_emerg}`);
+  assumptions.push(
+    `Vent Cd values are preliminary equivalent free-area screening assumptions, not OEM-rated capacities: ` +
+    `PV valve Cd = ${Cd_pv}; Emergency vent Cd = ${Cd_emerg}. ` +
+    `Final sizing requires vendor-rated capacity data.`
+  );
   assumptions.push("Standard conditions: 15\u00B0C (288.15 K), 101.325 kPa for Nm\u00B3/h (API 2000 \u00A73.40)");
+  assumptions.push(
+    "Vent device sizing uses the orifice-equivalent free-area method (A = q / (Cd \u00D7 \u221A(2\u0394P\u03C1))). " +
+    "Results indicate equivalent open-area screening only \u2014 NOT vendor-rated vent capacity. " +
+    "PV valve and emergency vent selection requires manufacturer flow-capacity curves at the rated set pressure."
+  );
+  assumptions.push(
+    `Emergency vent sizing uses the same differential pressure basis as the normal PV vent ` +
+    `(\u0394P = ${input.designPressure_mbar} mbar g). This is conservative preliminary screening. ` +
+    "For large emergency vents, verify the actual set pressure of the emergency device per API 2000 \u00A76."
+  );
+  assumptions.push(
+    "Service limitations: calculator does not model flashing dynamics beyond the simplified flash factor, " +
+    "blanketing/inerting systems, vapor recovery units, flame arrester pressure derating, " +
+    "refrigerated or cryogenic storage, or device accumulation/lift characteristics."
+  );
 
   if (isFloating) {
-    warnings.push("Floating roof tank: emergency venting based on rim seal area only (Section 5.4)");
-    if (input.rimSealHeight_m <= 0) {
-      warnings.push("Rim seal height not specified \u2014 emergency venting may be underestimated");
-    }
+    warnings.push("Floating roof tank: emergency venting based on rim seal area only (Section 5.4). Verify rim seal height with vendor data.");
   }
   if (geom.volume_m3 > 50000) {
     warnings.push("Very large tank (>50,000 m\u00B3): verify thermal breathing with API 2000 Table 2/3 extrapolation");
