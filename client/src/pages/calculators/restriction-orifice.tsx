@@ -306,7 +306,7 @@ export default function RestrictionOrificePage() {
     }
 
     return {
-      calculatorName: "Restriction Orifice Sizing",
+      calculatorName: "Restriction Orifice Screening & Sizing — Preliminary Basis",
       projectInfo: [
         { label: "Case Name", value: project.name },
         { label: "Case ID", value: project.caseId },
@@ -319,37 +319,38 @@ export default function RestrictionOrificePage() {
       calcSteps,
       additionalSections,
       methodology: [
+        "PRELIMINARY / SCREENING SIZING BASIS — Results should be verified by a qualified engineer before use in detailed design.",
         result.phase === "liquid"
-          ? "Incompressible liquid flow through restriction orifice — ISO 5167-2:2003"
+          ? "Incompressible liquid flow through restriction orifice — ISO 5167-informed approach, adapted for RO screening (not certified metering)"
           : result.isChoked
-            ? "Compressible gas flow — CHOKED (sonic) conditions — ISO 5167-2:2003"
-            : "Compressible gas flow — subcritical conditions — ISO 5167-2:2003",
+            ? "Compressible gas flow — CHOKED (sonic) conditions — ISO 5167-informed approach, adapted for RO screening"
+            : "Compressible gas flow — subcritical conditions — ISO 5167-informed approach, adapted for RO screening",
         result.phase === "liquid"
-          ? "W = Cd · E · A · √(2·ρ·ΔP),  E = 1/√(1−β⁴) [ISO 5167-2 Eq.1, velocity-of-approach correction]"
+          ? "W = Cd · E · A · √(2·ρ·ΔP),  E = 1/√(1−β⁴) [velocity-of-approach factor, ISO 5167-2 form]"
           : result.isChoked
             ? "W = Cd · E · A · P₁ · C(k) · √(MW/(Z·Rᵤ·T)),  C(k) = √(k·(2/(k+1))^((k+1)/(k-1)))"
-            : "W = Cd · E · A · Y · √(2·ρ₁·ΔP),  Y = 1−(0.351+0.256β⁴+0.93β⁸)·(1−r^(1/k)) [ISO 5167-2]",
-        `Discharge coefficient: ISO 5167-2:2003 Reader-Harris/Gallagher (RHG) — ${service.orifice.tappingType === "corner" ? "corner taps (L₁=L′₂=0)" : service.orifice.tappingType === "D-D2" ? "D and D/2 taps (L₁=1, L′₂=0.47) — L1/L2 applied" : `flange taps (L₁=L′₂=25.4/D mm) — L1/L2 applied`}`,
-        "Permanent pressure loss: ΔP_perm/ΔP = (√(1−β⁴Cd²) − Cd·β²) / (√(1−β⁴Cd²) + Cd·β²) [ISO 5167-2:2003 Annex D]",
-        "Cavitation index: σ = (P₁−Pv)/ΔP vs σᵢ = 2.7 incipient, σch = 1.5 constant [ISA-RP75.23 / Tullis 1993]",
-        "Erosional velocity: Ve = 122/√ρ [m/s] — API RP 14E, C = 100 continuous service",
-        "Stage distribution: geometric (equal P₂/P₁ per stage) or equal ΔP per stage",
+            : "W = Cd · E · A · Y · √(2·ρ₁·ΔP),  Y = 1−(0.351+0.256β⁴+0.93β⁸)·(1−r^(1/k)) [ISO 5167-2 form, adapted]",
+        `Discharge coefficient: Reader-Harris/Gallagher (RHG) correlation [ISO 5167-2:2003] — iterated jointly with flow in check mode — ${service.orifice.tappingType === "corner" ? "corner taps" : service.orifice.tappingType === "D-D2" ? "D and D/2 taps" : "flange taps"}`,
+        "Permanent pressure loss: ΔP_perm/ΔP = (√(1−β⁴Cd²) − Cd·β²) / (√(1−β⁴Cd²) + Cd·β²) [ISO 5167-2:2003 Annex D form]",
+        "Cavitation index: σ = (P₁−Pv)/ΔP vs σᵢ = 2.7 / σch = 1.5 — APPROXIMATE SCREENING only, adapted from control-valve/hydraulic practice. Not certified RO acceptance criteria.",
+        "Erosional velocity: Ve = 122/√ρ [m/s] — conservative API RP 14E-informed jet velocity screening proxy (C=100). Not a compliance calculation.",
+        "Stage distribution: geometric (equal P₂/P₁ per stage) or equal ΔP per stage. Multi-stage gas model holds properties constant at inlet — simplified.",
         "Solver: bisection root-finding (bracketed, deterministic, tol=1e-6)",
       ],
       assumptions: [
-        `Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined — not corrected for Re or β by engine" : "ISO 5167-2 RHG — iterative convergence on Re and d"})`,
+        `Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined — not corrected for Re or β by engine" : "RHG [ISO 5167-2] — iterated jointly with computed flow in check mode"})`,
         `Basis: ${service.orifice.basisMode === "inPipe" ? "In-pipe flow — E = 1/√(1−β⁴) applied" : "Free discharge — no β correction (E = 1)"}`,
-        `Plate edge: ${service.orifice.edgeType === "sharp" ? "Sharp-edged (Cd ≈ 0.61 turbulent)" : "Rounded edge (Cd ≈ 0.97 — ISA 1932 nozzle type)"}`,
+        `Plate edge: ${service.orifice.edgeType === "sharp" ? "Sharp-edged (Cd ≈ 0.61 turbulent)" : "Rounded / nozzle-type entrance (ISA-1932 approximation, Cd ≈ 0.97 — verify with vendor)"}`,
         result.phase === "gas" ? (service.gasPropsMode && service.gasPropsMode !== "manual" ? `Z from ${service.gasPropsMode === "pr" ? "Peng-Robinson" : "SRK"} EoS = ${result.srkResult?.Z?.toFixed(4) ?? "computed"} (real-gas compressibility)` : `Manual Z = ${service.gasProps.compressibilityFactor} (user-specified compressibility factor)`) : "Liquid treated as incompressible (constant density)",
         "All pressures are absolute (bar(a))",
         "Standard bore rounded up to nearest metric drill size",
-        "Noise estimate is a screening tool only — not certified for acoustic design",
+        "Noise estimate is an order-of-magnitude screening only — not certified for acoustic design",
       ],
       references: [
-        "ISO 5167-2:2003 — Measurement of fluid flow by means of pressure differential devices — Orifice plates",
+        "ISO 5167-2:2003 — Measurement of fluid flow by means of pressure differential devices — Orifice plates (RHG correlation source; adapted for RO screening)",
         "ISO 5167-1:2003 — General principles and requirements",
-        "API RP 14E:2007 — Design of Offshore Production Platform Piping Systems (erosional velocity)",
-        "ISA-RP75.23-1995 — Considerations for control valve cavitation",
+        "API RP 14E:2007 — Design of Offshore Production Platform Piping Systems (erosional velocity screening basis §2.4, C=100)",
+        "ISA-RP75.23-1995 — Considerations for control valve cavitation (cavitation σ thresholds adapted for hydraulic screening)",
         "Crane Technical Paper 410 — Flow of Fluids Through Valves, Fittings, and Pipe",
         "Miller, R.W. Flow Measurement Engineering Handbook, 3rd Ed. (McGraw-Hill)",
         "Reader-Harris, M.J. Orifice Plates and Venturi Tubes (Springer, 2015)",
@@ -374,8 +375,8 @@ export default function RestrictionOrificePage() {
             <CircleDot className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">Restriction Orifice Sizing</h1>
-            <p className="text-xs md:text-sm text-muted-foreground">Liquid & gas with choked-flow, permanent ΔP, Mach & noise screening</p>
+            <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">Restriction Orifice Screening & Sizing</h1>
+            <p className="text-xs md:text-sm text-muted-foreground">Preliminary sizing basis — liquid & gas: choked-flow, permanent ΔP, Mach & noise screening</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -426,7 +427,7 @@ export default function RestrictionOrificePage() {
                 </div>
               </CardContent></Card>
               <Card className="bg-muted/30"><CardContent className="p-3 text-[10px] text-muted-foreground">
-                Basis: Generic RO sizing (engineering approximation). Equations reference ISO 5167 / Crane TP-410 methodology. Not certified for metering-grade compliance.
+                <strong>Preliminary / Screening Sizing Basis.</strong> This tool implements an ISO 5167-informed approach adapted for RO screening — not certified metering. Cd is estimated via Reader-Harris/Gallagher (iterated with flow in check mode). Cavitation σ thresholds are approximate (adapted from control-valve/hydraulic practice). Erosional velocity Ve is a conservative API RP 14E-informed jet velocity proxy (C=100), not a compliance check. Results must be verified by a qualified process engineer before use in detailed design or procurement.
               </CardContent></Card>
             </CardContent>
           </Card>
@@ -654,7 +655,7 @@ export default function RestrictionOrificePage() {
                     <SelectTrigger data-testid="select-edge"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sharp">Sharp-edged (default)</SelectItem>
-                      <SelectItem value="rounded">Rounded (requires vendor data)</SelectItem>
+                      <SelectItem value="rounded">Rounded / Nozzle-type entrance (ISA-1932 approx., Cd ≈ 0.97) — verify with vendor</SelectItem>
                     </SelectContent>
                   </Select></div>
                 <div><Label className="text-xs mb-1.5 block">Basis Mode</Label>
@@ -732,9 +733,9 @@ export default function RestrictionOrificePage() {
 
               <Card className="bg-muted/30"><CardContent className="p-3 text-[10px] text-muted-foreground space-y-1">
                 <p><strong>Size for flow:</strong> Given Q or W, P₁, P₂ → solver finds required orifice diameter d (bisection method).</p>
-                <p><strong>Check orifice:</strong> Given d, P₁, P₂ → computes achievable flow W and resulting conditions.</p>
+                <p><strong>Check orifice:</strong> Given d, P₁, P₂ → computes achievable flow W and resulting conditions. Cd is iterated jointly with computed flow until convergence.</p>
                 <p><strong>Predict ΔP:</strong> Given d, W, P₁ → solver finds required ΔP (and P₂) for the specified flow through the orifice.</p>
-                <p>Permanent pressure loss per ISO 5167-2 Annex D: (√(1−β⁴Cd²) − Cd·β²) / (√(1−β⁴Cd²) + Cd·β²). Cd per Reader-Harris/Gallagher (ISO 5167-2:2003). Cavitation index σ = (P₁−Pv)/ΔP checked against σᵢ = 2.7 (ISA-RP75.23).</p>
+                <p>This is a <strong>preliminary / screening sizing basis</strong>. Permanent pressure loss per ISO 5167-2 Annex D form. Cd per Reader-Harris/Gallagher (ISO 5167-informed; not certified metering). Cavitation σ = (P₁−Pv)/ΔP vs σᵢ = 2.7 — approximate screening, adapted from control-valve/hydraulic practice. Erosional velocity Ve — conservative API RP 14E-informed jet velocity screening only.</p>
               </CardContent></Card>
 
               {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">{error}</div>}
@@ -832,8 +833,8 @@ export default function RestrictionOrificePage() {
                         { label: "Perm ΔP fraction (ISO)", val: (result.permanentPressureLossFraction * 100).toFixed(1) + "%", unit: "" },
                         { label: "Recovery factor", val: (result.recoveryFactor * 100).toFixed(1) + "%", unit: "" },
                         { label: "Orifice velocity", val: convertFromSI("velocity", result.orificeVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
-                        { label: "API 14E Ve limit", val: convertFromSI("velocity", result.erosionalVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
-                        { label: "v / Ve ratio", val: result.erosionalVelocityRatio.toFixed(3), unit: result.erosionalVelocityRatio > 1 ? "⚠ EXCEEDED" : "✓ OK" },
+                        { label: "API RP 14E Ve (screening)", val: convertFromSI("velocity", result.erosionalVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
+                        { label: "v / Ve ratio", val: result.erosionalVelocityRatio.toFixed(3), unit: result.erosionalVelocityRatio > 1 ? "⚠ SCREENING EXCEEDED" : "✓ OK" },
                         { label: "Pipe velocity", val: convertFromSI("velocity", result.pipeVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
                         { label: "Flow coeff. K", val: result.flowCoefficient.toFixed(4), unit: "—" },
                         { label: "Cd effective", val: result.cdEffective.toFixed(4), unit: "—" },
@@ -1054,26 +1055,30 @@ export default function RestrictionOrificePage() {
 
                 <AssumptionsPanel
                   assumptions={[
-                    `${result.phase === "liquid" ? "Incompressible" : "Compressible"} flow through ${service.orifice.edgeType}-edged restriction orifice (ISO 5167-2:2003)`,
+                    `SCREENING TOOL: This calculator implements an ISO 5167-informed approach adapted for RO preliminary sizing — it is NOT a certified flow-metering calculation and does not replace a formally calibrated ISO 5167 measurement device analysis.`,
+                    `${result.phase === "liquid" ? "Incompressible" : "Compressible"} flow through ${service.orifice.edgeType === "rounded" ? "rounded/nozzle-type entrance (ISA-1932 approximation)" : "sharp-edged"} restriction orifice`,
                     result.phase === "liquid"
-                      ? "W = Cd · E · A · √(2·ρ·ΔP), E = 1/√(1−β⁴) — velocity-of-approach factor [ISO 5167-2 Eq. 1]"
+                      ? "W = Cd · E · A · √(2·ρ·ΔP), E = 1/√(1−β⁴) — velocity-of-approach factor [ISO 5167-2 form]"
                       : result.isChoked
-                        ? "W = Cd · E · A · P₁ · C(k) · √(MW/(Z·Rᵤ·T)), C(k) = √(k·(2/(k+1))^((k+1)/(k-1))) — critical (choked) flow"
-                        : "W = Cd · E · A · Y · √(2·ρ₁·ΔP), Y = 1−(0.351+0.256β⁴+0.93β⁸)·(1−r^(1/k)) — ISO 5167-2 expansion factor",
-                    `Discharge coefficient Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined" : "ISO 5167-2:2003 Reader-Harris/Gallagher correlation — validated for β ∈ [0.1,0.75], Re_D ≥ 5000"})`,
+                        ? "W = Cd · E · A · P₁ · C(k) · √(MW/(Z·Rᵤ·T)), C(k) = √(k·(2/(k+1))^((k+1)/(k-1))) — critical (choked) flow [ISO-informed]"
+                        : "W = Cd · E · A · Y · √(2·ρ₁·ΔP), Y = 1−(0.351+0.256β⁴+0.93β⁸)·(1−r^(1/k)) — ISO 5167-2 expansion factor [adapted for RO screening]",
+                    `Discharge coefficient Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined" : "Reader-Harris/Gallagher correlation [ISO 5167-2:2003] — validated for β ∈ [0.1,0.75], Re_D ≥ 5000; iterated jointly with flow in check mode"})`,
                     `Basis mode: ${service.orifice.basisMode === "inPipe" ? "In-pipe (β⁴ velocity-of-approach correction applied)" : "Free discharge (no β correction — Cd acts on orifice area only)"}`,
                     "Permanent pressure loss: ΔP_perm/ΔP = (√(1−β⁴Cd²) − Cd·β²) / (√(1−β⁴Cd²) + Cd·β²) [ISO 5167-2:2003 Annex D]",
-                    `Cavitation (liquid): σ = (P₁−Pv)/ΔP. Incipient threshold σᵢ = 2.7; constant cavitation σch = 1.5 [ISA-RP75.23 / Tullis 1993]`,
-                    "Erosional velocity: Ve = 122/√ρ [m/s] per API RP 14E §2.4, C = 100 (continuous service)",
+                    `Cavitation screening (liquid only): σ = (P₁−Pv)/ΔP. Thresholds σᵢ = 2.7 (incipient) and σch = 1.5 (constant) are APPROXIMATE — adapted from control-valve/hydraulic practice (ISA-RP75.23 / Tullis 1993). These are not certified RO acceptance criteria; use as first-pass indicators only.`,
+                    "Erosional velocity: Ve = 122/√ρ [m/s] — conservative screening check informed by API RP 14E §2.4, C=100. This is a jet-velocity screening proxy, NOT a direct API RP 14E compliance calculation. Verify against project erosion criteria, material, and geometry.",
+                    result.phase === "gas" && (result.numStages ?? 1) > 1
+                      ? "Multi-stage gas sizing: gas properties (MW, k, Z, T) are held constant at upstream inlet conditions for all stages — simplified model. Real behaviour involves property changes between stages; validate with process simulator for final design."
+                      : "Single-stage calculation: actual conditions throughout.",
                     `Plate thickness: ${service.orifice.thickness > 0 ? `e = ${service.orifice.thickness} mm, e/d = ${result.requiredDiameter > 0 ? (service.orifice.thickness / result.requiredDiameter).toFixed(3) : "N/A"} — correction applied per Lienhard/ISO 5167 commentary` : "Plate thickness not specified — thin plate assumed (e/d ≤ 0.5)"}`,
                     `Standard bore: ${result.standardBore.toFixed(2)} mm (rounded up to next standard drill size — metric series)`,
                     "Solver: bisection root-finding (bracketed, deterministic) with 60-step initial bracket search",
                   ]}
                   references={[
-                    "ISO 5167-2:2003 — Measurement of fluid flow by means of pressure differential devices — Orifice plates",
+                    "ISO 5167-2:2003 — Measurement of fluid flow by means of pressure differential devices — Orifice plates (basis for Cd correlation and Y factor; adapted for RO screening)",
                     "ISO 5167-1:2003 — General principles and requirements",
-                    "API RP 14E:2007 — Design of Offshore Production Platform Piping Systems (erosional velocity §2.4)",
-                    "ISA-RP75.23-1995 — Considerations for the application of control valve body styles (cavitation index)",
+                    "API RP 14E:2007 — Design of Offshore Production Platform Piping Systems (erosional velocity screening §2.4, C=100; conservative basis)",
+                    "ISA-RP75.23-1995 — Considerations for the application of control valve body styles (cavitation index — adapted for hydraulic screening only)",
                     "Crane TP-410 — Flow of Fluids Through Valves, Fittings, and Pipe",
                     "Miller, R.W. Flow Measurement Engineering Handbook, 3rd Edition (McGraw-Hill)",
                     "Reader-Harris, M.J. Orifice Plates and Venturi Tubes (Springer, 2015) — RHG correlation",
@@ -1132,7 +1137,7 @@ export default function RestrictionOrificePage() {
                       result.phase === "liquid" && result.sigma < 999 && result.sigma < 2.7
                         ? `⚠ Cavitation: σ = ${result.sigma.toFixed(3)} < σᵢ = 2.7 — specify anti-cavitation material (stellite, WC) or multi-stage` : null,
                       result.erosionalVelocityRatio > 0.75
-                        ? `⚠ Orifice velocity ${result.orificeVelocity.toFixed(1)} m/s — ${result.erosionalVelocityRatio > 1 ? "EXCEEDS" : "approaching"} API 14E erosional limit ${result.erosionalVelocity.toFixed(1)} m/s. Specify erosion-resistant material.` : null,
+                        ? `⚠ Orifice jet velocity ${result.orificeVelocity.toFixed(1)} m/s — ${result.erosionalVelocityRatio > 1 ? "EXCEEDS" : "approaching"} API RP 14E-informed screening threshold Ve = ${result.erosionalVelocity.toFixed(1)} m/s (C=100). Specify erosion-resistant material; verify against project erosion criteria.` : null,
                       result.phase === "gas" ? "Evaluate noise levels per IEC 60534-8-3 or vendor acoustic model — especially for choked or near-choked flow" : null,
                       "Check orifice plate mechanical design — thickness per ASME B16.36 / ISO 5167, material per NACE MR0175 where applicable",
                       "Review downstream piping for acoustic fatigue (ASME B31.3 Appendix X) if SPL > 140 dB in-pipe",

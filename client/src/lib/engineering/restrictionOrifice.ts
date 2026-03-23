@@ -623,16 +623,17 @@ function iterateCd(
 ): { Cd: number; iterations: number; thicknessRegime: string } {
   let Cd = initialCd;
   let regime = "thin plate";
+  let actualIter = maxIter;
   for (let i = 0; i < maxIter; i++) {
     const { Re_D, beta, d_mm } = getReAndBeta(Cd);
     const Cd_thin = cdReaderHarrisGallagher(beta, Re_D, D_mm, edgeType, tappingType);
     const thick   = applyThicknessCorrection(Cd_thin, e_mm, d_mm);
     regime = thick.regime;
     const Cd_new  = thick.Cd;
-    if (Math.abs(Cd_new - Cd) < 1e-6) { Cd = Cd_new; break; }
+    if (Math.abs(Cd_new - Cd) < 1e-6) { Cd = Cd_new; actualIter = i + 1; break; }
     Cd = Cd_new;
   }
-  return { Cd, iterations: maxIter, thicknessRegime: regime };
+  return { Cd, iterations: actualIter, thicknessRegime: regime };
 }
 
 // ─── Multi-Stage Pressure Distribution ───────────────────────────────────────
@@ -763,11 +764,21 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
     d_mm = input.orificeDiameter;
     if (d_mm <= 0) throw new Error("Orifice diameter must be positive in check mode");
     if (estimateCd) {
-      const Re_D_est = rho * (Q_m3h / 3600 / (PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
-      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType, input.orifice.tappingType || "corner");
-      const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
-      Cd = thick.Cd;
-      thicknessRegime = thick.regime;
+      // Iterate Cd and flow together until Cd converges (eliminates stale-Re bias)
+      const pipeArea_m2 = PI / 4 * D_m * D_m;
+      let cdIter = Cd;
+      for (let ci = 0; ci < project.maxIterations; ci++) {
+        const W_iter   = liquidMassFlow(d_mm, D_mm, rho, dP_Pa, cdIter, basisMode);
+        const Q_iter   = W_iter / rho / 3600; // m³/s
+        const vPipe    = pipeArea_m2 > 0 ? Q_iter / pipeArea_m2 : 0;
+        const Re_D_i   = rho * vPipe * D_m / Math.max(mu_cP * 1e-3, 1e-12);
+        const Cd_thin  = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_i, D_mm, input.orifice.edgeType, input.orifice.tappingType || "corner");
+        const thick    = applyThicknessCorrection(Cd_thin, e_mm, d_mm);
+        thicknessRegime = thick.regime;
+        if (Math.abs(thick.Cd - cdIter) < 1e-6) { cdIter = thick.Cd; break; }
+        cdIter = thick.Cd;
+      }
+      Cd = cdIter;
     }
     W_kgh = liquidMassFlow(d_mm, D_mm, rho, dP_Pa, Cd, basisMode);
     Q_m3h = W_kgh / rho;
@@ -848,7 +859,7 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
 
   if (Pv_bar > 0) {
     steps.push({ label: "σ (cavitation index)", equation: "σ = (P₁−Pv)/ΔP", value: sigma < 999 ? sigma.toFixed(3) : "N/A", unit: "—", eqId: "RO-L-21" });
-    steps.push({ label: "σᵢ incipient (sharp)", equation: "σᵢ ≈ 2.7 (ISA-RP75.23)", value: sigma_i.toFixed(1), unit: "—", eqId: "RO-L-22" });
+    steps.push({ label: "σᵢ incipient (screening)", equation: "σᵢ ≈ 2.7 (adapted from control-valve/hydraulic practice, not a certified RO criterion)", value: sigma_i.toFixed(1), unit: "—", eqId: "RO-L-22" });
 
     if (actualP2_bar <= Pv_bar) {
       flags.push("FLASHING_LIKELY");
@@ -856,12 +867,12 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
       recommendations.push("Relocate orifice to higher-pressure section, or use multi-stage reduction to keep P₂ > 1.3×Pv");
     } else if (sigma < sigma_ch) {
       flags.push("CAVITATION_SEVERE");
-      warnings.push(`SEVERE CAVITATION: σ = ${sigma.toFixed(3)} < σch = ${sigma_ch.toFixed(1)} (ISA-RP75.23). Constant bubble collapse — erosion damage likely.`);
-      recommendations.push("Use multi-stage restriction to reduce per-stage ΔP and keep σ > 2.7");
+      warnings.push(`SEVERE CAVITATION (screening): σ = ${sigma.toFixed(3)} < σch = ${sigma_ch.toFixed(1)}. Approximate threshold adapted from control-valve/hydraulic practice. Constant bubble collapse — erosion damage probable. Rigorous RO cavitation assessment required.`);
+      recommendations.push("Use multi-stage restriction to reduce per-stage ΔP and keep σ > 2.7 (screening limit)");
       recommendations.push("Specify hardened (stellite, tungsten carbide) orifice plate material");
     } else if (sigma < sigma_i) {
       flags.push("CAVITATION_INCIPIENT");
-      warnings.push(`INCIPIENT CAVITATION: σ = ${sigma.toFixed(3)} < σᵢ = ${sigma_i.toFixed(1)} (ISA-RP75.23). Cavitation bubbles forming in vena contracta.`);
+      warnings.push(`INCIPIENT CAVITATION (screening): σ = ${sigma.toFixed(3)} < σᵢ = ${sigma_i.toFixed(1)}. Approximate threshold adapted from control-valve/hydraulic practice — cavitation bubbles may form in vena contracta. Verify with hydraulic specialist.`);
       recommendations.push("Monitor vibration and noise at commissioning. Consider anti-cavitation multi-stage restriction if σ approaches 1.5.");
     }
 
@@ -886,11 +897,11 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
 
   if (orificeVel > Ve) {
     flags.push("EROSIONAL_VELOCITY_EXCEEDED");
-    warnings.push(`Orifice velocity ${orificeVel.toFixed(1)} m/s EXCEEDS API 14E erosional limit ${Ve.toFixed(1)} m/s (C=100). Erosion of orifice plate and downstream pipe expected.`);
-    recommendations.push("Increase orifice diameter (or use multi-stage) to reduce jet velocity below API 14E erosional limit");
+    warnings.push(`Orifice jet velocity ${orificeVel.toFixed(1)} m/s exceeds conservative API RP 14E-informed screening threshold Ve = ${Ve.toFixed(1)} m/s (C=100, ρ=${rho.toFixed(2)} kg/m³). Screening check only — verify against project erosion criteria, material, and downstream impingement geometry.`);
+    recommendations.push("Increase orifice diameter (or use multi-stage) to reduce jet velocity. Screening basis per API RP 14E §2.4, C=100.");
   } else if (orificeVel > Ve * 0.75) {
     flags.push("HIGH_ORIFICE_VELOCITY");
-    warnings.push(`Orifice velocity ${orificeVel.toFixed(1)} m/s approaching API 14E erosional limit ${Ve.toFixed(1)} m/s — use corrosion-resistant materials.`);
+    warnings.push(`Orifice jet velocity ${orificeVel.toFixed(1)} m/s approaching API RP 14E-informed screening threshold Ve = ${Ve.toFixed(1)} m/s (C=100, ρ=${rho.toFixed(2)} kg/m³).`);
   }
 
   if (Re > 0 && Re < 5000) {
@@ -1086,10 +1097,21 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
     isChoked = pressureRatio <= xCrit;
     actualDP_bar = P1_bar - P2_bar;
     if (estimateCd) {
-      const Re_D_est = rho1 * (W_kgh / 3600 / (rho1 * PI / 4 * D_m * D_m)) * D_m / Math.max(mu_cP * 1e-3, 1e-12);
-      Cd = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_est, D_mm, input.orifice.edgeType, input.orifice.tappingType || "corner");
-      const thick = applyThicknessCorrection(Cd, e_mm, d_mm);
-      Cd = thick.Cd; thicknessRegime = thick.regime;
+      // Iterate Cd and flow together until Cd converges (eliminates stale-Re bias)
+      const pipeArea_m2 = PI / 4 * D_m * D_m;
+      let cdIter = Cd;
+      for (let ci = 0; ci < project.maxIterations; ci++) {
+        const W_iter   = gasMassFlow(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, cdIter, pressureRatio, isChoked, basisMode);
+        const W_kgs_i  = W_iter / 3600;
+        const vPipe    = pipeArea_m2 > 0 && rho1 > 0 ? W_kgs_i / (rho1 * pipeArea_m2) : 0;
+        const Re_D_i   = rho1 * vPipe * D_m / Math.max(mu_cP * 1e-3, 1e-12);
+        const Cd_thin  = cdReaderHarrisGallagher(d_mm / D_mm, Re_D_i, D_mm, input.orifice.edgeType, input.orifice.tappingType || "corner");
+        const thick    = applyThicknessCorrection(Cd_thin, e_mm, d_mm);
+        thicknessRegime = thick.regime;
+        if (Math.abs(thick.Cd - cdIter) < 1e-6) { cdIter = thick.Cd; break; }
+        cdIter = thick.Cd;
+      }
+      Cd = cdIter;
     }
     W_kgh = gasMassFlow(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, pressureRatio, isChoked, basisMode);
     steps.push({ label: "Flow regime", equation: isChoked ? "r ≤ r_crit → CHOKED" : "Subcritical", value: isChoked ? "CHOKED" : "SUBCRITICAL", unit: "", eqId: "RO-G-12" });
@@ -1177,11 +1199,11 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
   const Ve_ratio = orificeVel / Ve;
   if (orificeVel > Ve) {
     flags.push("EROSIONAL_VELOCITY_EXCEEDED");
-    warnings.push(`Orifice velocity ${orificeVel.toFixed(1)} m/s EXCEEDS API 14E erosional limit ${Ve.toFixed(1)} m/s (ρ=${rho1.toFixed(2)} kg/m³).`);
-    recommendations.push("Increase orifice diameter or split into multiple stages to reduce jet velocity");
+    warnings.push(`Orifice jet velocity ${orificeVel.toFixed(1)} m/s exceeds conservative API RP 14E-informed screening threshold Ve = ${Ve.toFixed(1)} m/s (C=100, ρ=${rho1.toFixed(2)} kg/m³). Screening check only — verify against project erosion criteria, material, and downstream impingement geometry.`);
+    recommendations.push("Increase orifice diameter or split into multiple stages to reduce jet velocity. Screening basis per API RP 14E §2.4, C=100.");
   } else if (orificeVel > Ve * 0.75) {
     flags.push("HIGH_ORIFICE_VELOCITY");
-    warnings.push(`Orifice velocity ${orificeVel.toFixed(1)} m/s approaching API 14E erosional limit ${Ve.toFixed(1)} m/s.`);
+    warnings.push(`Orifice jet velocity ${orificeVel.toFixed(1)} m/s approaching API RP 14E-informed screening threshold Ve = ${Ve.toFixed(1)} m/s (C=100, ρ=${rho1.toFixed(2)} kg/m³).`);
   }
 
   const dpFraction = actualDP_bar > 0 && P1_bar > 0 ? actualDP_bar / P1_bar : 0;
@@ -1223,6 +1245,7 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
   const numStages = Math.max(1, input.numStages || 1);
   const stages: StageResult[] = [];
   if (numStages > 1 && input.sizingMode === "sizeForFlow") {
+    warnings.push(`Multi-stage gas model: upstream properties (MW, k, Z, T) are held constant at inlet conditions for all stages — simplified model. Gas properties change between stages in reality; validate with process simulator (HYSYS, UniSim) for final design.`);
     const stagePs = computeStageP(P1_bar, P1_bar - actualDP_bar, numStages, input.stageDistribution);
     for (const sp of stagePs) {
       const sP1_Pa    = sp.P1 * 1e5;
@@ -1423,7 +1446,7 @@ export const FLAG_LABELS: Record<ROFlag, string> = {
   NEAR_CHOKED:               "NEAR CHOKED CONDITIONS",
   HIGH_MACH:                 "HIGH MACH NUMBER (> 0.8)",
   HIGH_ORIFICE_VELOCITY:     "HIGH ORIFICE VELOCITY",
-  EROSIONAL_VELOCITY_EXCEEDED: "API 14E EROSIONAL VELOCITY EXCEEDED",
+  EROSIONAL_VELOCITY_EXCEEDED: "API RP 14E-INFORMED JET VELOCITY SCREENING EXCEEDED",
   MULTI_STAGE_RECOMMENDED:   "MULTI-STAGE REDUCTION RECOMMENDED",
   THICK_ORIFICE:             "THICK ORIFICE PLATE — Cd CORRECTED",
   LOW_REYNOLDS:              "LOW REYNOLDS NUMBER (Re < 5000)",
