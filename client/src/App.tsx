@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { ChatGPTPopupButton } from "@/components/chatgpt-popup";
+import { GasPropsProvider } from "@/lib/engineering/GasPropsContext";
 
 const Home = lazy(() => import("@/pages/home"));
 const CalculatorsIndexPage = lazy(() => import("@/pages/calculators/index"));
@@ -100,15 +101,17 @@ function App() {
   return (
     <TooltipProvider>
       <ThemeProvider>
-        <div className="min-h-screen flex flex-col bg-background text-foreground">
-          <Navbar />
-          <main className="flex-1">
-            <Router />
-          </main>
-          <Footer />
-        </div>
-        <ChatGPTOverlay />
-        <Toaster />
+        <GasPropsProvider>
+          <div className="min-h-screen flex flex-col bg-background text-foreground">
+            <Navbar />
+            <main className="flex-1">
+              <Router />
+            </main>
+            <Footer />
+          </div>
+          <ChatGPTOverlay />
+          <Toaster />
+        </GasPropsProvider>
       </ThemeProvider>
     </TooltipProvider>
   );

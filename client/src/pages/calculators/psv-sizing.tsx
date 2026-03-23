@@ -16,10 +16,9 @@ import { COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
 import {
-  type GasPropsMode, type ManualGasProps,
-  DEFAULT_EOS_COMPOSITION, resolveGasProps,
+  type GasPropsMode, type ManualGasProps, resolveGasProps,
 } from "@/lib/engineering/eosGasProps";
-import type { CompositionEntry } from "@/lib/engineering/srkEos";
+import { useGasProps } from "@/lib/engineering/GasPropsContext";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import {
   type PRDProject, type PRDEquipment, type PRDScenario, type PRDDevice,
@@ -106,8 +105,7 @@ export default function PSVSizingPage() {
   const [bpResult, setBpResult] = useState<PRDBackpressureResult | null>(null);
   const [finalResult, setFinalResult] = useState<PRDFinalResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [psvGasPropsMode, setPsvGasPropsMode] = useState<GasPropsMode>("manual");
-  const [psvGasComposition, setPsvGasComposition] = useState<CompositionEntry[]>([...DEFAULT_EOS_COMPOSITION]);
+  const { gasPropsMode: psvGasPropsMode, setGasPropsMode: setPsvGasPropsMode, gasComposition: psvGasComposition, setGasComposition: setPsvGasComposition } = useGasProps();
   const [psvEosMW, setPsvEosMW] = useState<number | null>(null);
   const [psvEosZ, setPsvEosZ] = useState<number | null>(null);
 

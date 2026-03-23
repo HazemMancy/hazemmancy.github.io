@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { WarningPanel } from "@/components/engineering/warning-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { FeedbackSection } from "@/components/engineering/feedback-section";
 import { COMMON_GASES, COMMON_LIQUIDS } from "@/lib/engineering/constants";
+import { useGasProps } from "@/lib/engineering/GasPropsContext";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import {
@@ -52,6 +53,18 @@ export default function RestrictionOrificePage() {
   const [service, setService] = useState<ROServiceInput>({ ...DEFAULT_SERVICE });
   const [result, setResult] = useState<ROResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const { gasPropsMode, setGasPropsMode, gasComposition, setGasComposition } = useGasProps();
+
+  useEffect(() => {
+    setService(s => ({ ...s, gasPropsMode, composition: gasComposition }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (service.gasPropsMode) setGasPropsMode(service.gasPropsMode);
+    if (service.composition) setGasComposition(service.composition);
+  }, [service.gasPropsMode, service.composition]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateProject = (field: keyof ROProject, value: string | number | boolean) =>
     setProject(p => ({ ...p, [field]: value }));

@@ -18,10 +18,9 @@ import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { LimitsPanel } from "@/components/engineering/limits-panel";
 import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
 import {
-  type GasPropsMode, type ManualGasProps,
-  DEFAULT_EOS_COMPOSITION, resolveGasProps,
+  type GasPropsMode, type ManualGasProps, resolveGasProps,
 } from "@/lib/engineering/eosGasProps";
-import type { CompositionEntry } from "@/lib/engineering/srkEos";
+import { useGasProps } from "@/lib/engineering/GasPropsContext";
 import {
   calculateGasLineSizing,
   GAS_SIZING_TEST_CASE,
@@ -81,8 +80,7 @@ export default function GasLineSizingPage() {
   const [result, setResult] = useState<GasSizingResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<string>("");
-  const [gasPropsMode, setGasPropsMode] = useState<GasPropsMode>("manual");
-  const [gasComposition, setGasComposition] = useState<CompositionEntry[]>([...DEFAULT_EOS_COMPOSITION]);
+  const { gasPropsMode, setGasPropsMode, gasComposition, setGasComposition } = useGasProps();
   const [limitWarnings, setLimitWarnings] = useState<LimitWarning[]>([]);
 
   const updateField = (field: keyof FormState, value: string) => {

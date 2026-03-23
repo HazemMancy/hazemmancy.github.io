@@ -17,10 +17,9 @@ import { COMMON_LIQUIDS } from "@/lib/engineering/constants";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
 import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
 import {
-  type GasPropsMode, type ManualGasProps,
-  DEFAULT_EOS_COMPOSITION, resolveGasProps,
+  type GasPropsMode, type ManualGasProps, resolveGasProps,
 } from "@/lib/engineering/eosGasProps";
-import type { CompositionEntry } from "@/lib/engineering/srkEos";
+import { useGasProps } from "@/lib/engineering/GasPropsContext";
 import { getUnit, convertToSI, convertFromSI } from "@/lib/engineering/unitConversion";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
@@ -67,8 +66,7 @@ export default function ControlValvePage() {
   const [riskResult, setRiskResult] = useState<CVRiskAssessment | null>(null);
   const [finalResult, setFinalResult] = useState<CVFinalResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cvGasPropsMode, setCvGasPropsMode] = useState<GasPropsMode>("manual");
-  const [cvGasComposition, setCvGasComposition] = useState<CompositionEntry[]>([...DEFAULT_EOS_COMPOSITION]);
+  const { gasPropsMode: cvGasPropsMode, setGasPropsMode: setCvGasPropsMode, gasComposition: cvGasComposition, setGasComposition: setCvGasComposition } = useGasProps();
 
   const pU = getUnit("pressureAbs", unitSystem);
   const tU = getUnit("temperature", unitSystem);

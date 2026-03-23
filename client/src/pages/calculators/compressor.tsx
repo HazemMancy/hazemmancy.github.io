@@ -12,10 +12,9 @@ import { ResultsPanel } from "@/components/engineering/results-panel";
 import { AssumptionsPanel } from "@/components/engineering/assumptions-panel";
 import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
 import {
-  type GasPropsMode, type ManualGasProps,
-  DEFAULT_EOS_COMPOSITION, resolveGasProps,
+  type GasPropsMode, type ManualGasProps, resolveGasProps,
 } from "@/lib/engineering/eosGasProps";
-import type { CompositionEntry } from "@/lib/engineering/srkEos";
+import { useGasProps } from "@/lib/engineering/GasPropsContext";
 import {
   calculateCompressorSizing,
   COMPRESSOR_CENTRIFUGAL_TEST_CASE,
@@ -118,8 +117,7 @@ export default function CompressorPage() {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [result, setResult] = useState<CompressorResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [gasPropsMode, setGasPropsMode] = useState<GasPropsMode>("manual");
-  const [gasComposition, setGasComposition] = useState<CompositionEntry[]>([...DEFAULT_EOS_COMPOSITION]);
+  const { gasPropsMode, setGasPropsMode, gasComposition, setGasComposition } = useGasProps();
 
   const update = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
 
