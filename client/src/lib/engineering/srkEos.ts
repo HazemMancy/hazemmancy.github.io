@@ -62,9 +62,42 @@ export const COMPONENT_DB: Record<string, ComponentData> = {
   H2:     { id: "H2",     name: "Hydrogen",    formula: "H₂",     MW:  2.016,  Tc:  33.2, Pc:  13.13, Vc: 0.0650, omega:-0.2160, Hf:       0,  Cp:  28.86 },
   CO:     { id: "CO",     name: "CO",          formula: "CO",     MW: 28.010,  Tc: 132.9, Pc:  34.99, Vc: 0.0930, omega: 0.0510, Hf: -110530,  Cp:  29.14 },
   Ar:     { id: "Ar",     name: "Argon",       formula: "Ar",     MW: 39.948,  Tc: 150.8, Pc:  48.87, Vc: 0.0749, omega: 0.0000, Hf:       0,  Cp:  20.79 },
+  O2:     { id: "O2",    name: "Oxygen",      formula: "O₂",     MW: 31.999,  Tc: 154.6, Pc:  50.43, Vc: 0.0734, omega: 0.0222, Hf:       0,  Cp:  29.38 },
+  SO2:    { id: "SO2",   name: "SO₂",         formula: "SO₂",    MW: 64.066,  Tc: 430.8, Pc:  78.84, Vc: 0.1220, omega: 0.2451, Hf: -296830,  Cp:  39.84 },
+  C2H4:   { id: "C2H4",  name: "Ethylene",    formula: "C₂H₄",   MW: 28.054,  Tc: 282.3, Pc:  50.41, Vc: 0.1290, omega: 0.0862, Hf:  52500,   Cp:  42.90 },
+  COS:    { id: "COS",   name: "COS",         formula: "COS",    MW: 60.075,  Tc: 378.8, Pc:  63.49, Vc: 0.1380, omega: 0.0978, Hf: -138700,  Cp:  41.28 },
 };
 
 export const COMPONENT_IDS = Object.keys(COMPONENT_DB);
+
+/**
+ * Map from common gas names (as used in COMMON_GASES / gas mixing calculator)
+ * to COMPONENT_DB keys. Covers alternate names used in O&G practice.
+ * Used to bridge gas mixing compositions to the EoS engine.
+ */
+export const NAME_TO_EOS_ID: Record<string, string> = {
+  "Methane":          "CH4",
+  "Ethane":           "C2H6",
+  "Propane":          "C3H8",
+  "i-Butane":         "iC4H10",
+  "n-Butane":         "nC4H10",
+  "i-Pentane":        "iC5H12",
+  "n-Pentane":        "nC5H12",
+  "n-Hexane":         "nC6H14",
+  "n-Heptane":        "nC7H16",
+  "Water":            "H2O",
+  "Water Vapor":      "H2O",
+  "Carbon Dioxide":   "CO2",
+  "Hydrogen Sulfide": "H2S",
+  "Nitrogen":         "N2",
+  "Hydrogen":         "H2",
+  "Carbon Monoxide":  "CO",
+  "Argon":            "Ar",
+  "Oxygen":           "O2",
+  "Sulfur Dioxide":   "SO2",
+  "Ethylene":         "C2H4",
+  "Carbonyl Sulfide": "COS",
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -302,9 +335,10 @@ function solveZCubic(A: number, B: number): number[] {
 export function leeViscosity(T_K: number, rho_kgm3: number, MWg: number): number {
   const T_R = T_K * 1.8; // convert K → °Rankine
   const rho_gcm3 = rho_kgm3 * 1e-3; // kg/m³ → g/cm³
-  const K1 = ((9.4 + 0.02 * MWg) * Math.pow(T_R, 1.5)) / (209 + 19 * MWg + T_R) * 1e-4;
-  const X = 3.5 + 986 / T_R + 0.01 * MWg;
-  const Y = 2.4 - 0.2 * X;
+  // Original Lee, Gonzalez & Eakin (1966) JPT SPE-1340-PA coefficients
+  const K1 = ((9.379 + 0.01607 * MWg) * Math.pow(T_R, 1.5)) / (209.2 + 19.26 * MWg + T_R) * 1e-4;
+  const X = 3.448 + 986.4 / T_R + 0.01009 * MWg;
+  const Y = 2.447 - 0.2224 * X;
   return K1 * Math.exp(X * Math.pow(rho_gcm3, Y));
 }
 
@@ -587,16 +621,16 @@ export function isenthalpicFlash(
   let fHi = fn(T_hi);
 
   // If same sign, try wider bracket
+  let lo = T_lo;
+  let hi = T_hi;
   if (fLo * fHi > 0) {
     const T_lo2 = T1_C - 400;
     fLo = fn(T_lo2);
     if (fLo * fHi > 0) {
       return { T2_C: T1_C, converged: false, iterations: 0 };
     }
+    lo = T_lo2; // use the expanded lower bound
   }
-
-  let lo = T_lo;
-  let hi = T_hi;
   let mid = (lo + hi) / 2;
   let iter = 0;
   const tol = 0.01; // 0.01°C convergence

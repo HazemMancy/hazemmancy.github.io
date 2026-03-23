@@ -1,7 +1,7 @@
 # Hazem El Mancy — Process Engineer Portfolio & Calculator Suite
 
 ## Overview
-This project serves as a professional engineering portfolio for Hazem El Mancy, a Process Engineer, integrated with a suite of validated client-side process engineering calculators. Its primary goal is to demonstrate expertise in Oil & Gas applications, particularly for FEED/EPC projects, and to offer practical, discipline-specific tools. The calculators are designed for client-side execution, ensuring immediate feedback and data privacy.
+This project is a professional engineering portfolio for Hazem El Mancy, a Process Engineer, combined with a suite of client-side process engineering calculators. It aims to showcase expertise in Oil & Gas applications, particularly for FEED/EPC projects, and provide practical, discipline-specific tools. The calculators execute client-side for immediate feedback and data privacy.
 
 ## User Preferences
 ### Engineering Discipline Rules
@@ -56,34 +56,27 @@ Every solver/calc must return a structured trace object containing:
 - Stamp reports with engine version where available
 
 ## System Architecture
-The application is a **pure static single-page application (SPA)** — no backend server. It is built with React, Vite, Tailwind CSS, and shadcn/ui, using a dark navy and golden amber theme. Client-side routing is managed by `wouter`. There is no database; all portfolio content is hardcoded, and all calculator logic and data processing run entirely in the browser. Engineering calculations are strictly modularized into pure functions within `client/src/lib/engineering/`, ensuring clear separation from UI components.
+The application is a pure static single-page application (SPA) with no backend server or database. It is built with React, Vite, Tailwind CSS, and shadcn/ui, using a dark navy and golden amber theme. Client-side routing is managed by `wouter`. All calculator logic and data processing run entirely in the browser, with engineering calculations strictly modularized into pure functions within `client/src/lib/engineering/`.
 
-**Build & Hosting:**
-- `npx vite` — development server (port 5000 on Replit)
-- `npx vite build` — produces static output in `dist/` (HTML, CSS, JS)
-- `dist/404.html` — copy of index.html for GitHub Pages SPA routing
-- `dist/.nojekyll` — prevents Jekyll processing on GitHub Pages
-- The `dist/` folder can be deployed to GitHub Pages, Netlify, Vercel, or any static host
-- No Express server, no server-side code, no API endpoints
-
-Key architectural features and implementations include:
-- **Calculator Suite**: Comprises 16 discipline-specific calculators, featuring complex multi-tab wizard interfaces for guided input (e.g., Separator Sizing, Heat Exchanger, Compressor, Pump Sizing, API 2000 Tank Venting). These wizards include progress bars, step headers, and bottom navigation.
-- **Unified Separator Sizing**: A single, comprehensive 8-tab wizard calculator supports various service types and configurations (2-phase/3-phase, vertical/horizontal), incorporating API 12J and GPSA standards for sizing and providing configuration recommendations based on process conditions.
-- **Flare Knock Out Drum Sizing**: A 7-tab wizard calculator based on API 521 for flare/vent systems, handling multi-scenario liquid accumulation and enforcing minimum vessel diameter.
-- **Heat Exchanger Sizing** (Rev C — engineering-issued): A 5-tab wizard for thermal design and geometry, displaying symbolic equations, LMTD, F-factor calculations, and offering TEMA guidance with detailed warnings for approach temperatures, F-factors, and fouling. Engineering fixes applied: (1) Shell ID formula corrected — clearance values (12/25/35/45 mm) are diametral per Kern §11 / TEMA Table C-5; prior code doubled them; (2) HIGH_OVERDESIGN flag threshold corrected to >30% (was >40%) to match FLAG_LABELS; (3) NTU trace explicitly labelled "counter-current basis, informational" per Kays & London §2; (4) Bundle diameter step now cites Coulson & Richardson Vol.6 §12.5 / HEDH for K1/n1 constants; (5) Shell ID trace step updated to state "diametral clearance"; (6) Co-current ΔT₁/ΔT₂ equation labels are now dynamic — show inlet/outlet pairing for co-current and standard convention for counter-current (was hardcoded); (7) Approach temperature minimum converted as difference (×5/9, no offset) in Field units; (8) Engine trace Ch/Cc equations now show (ṁ/3600)×Cp explicitly [kg/h ÷ 3600 = kg/s]; (9) UI Energy Balance Q equations include /3600 annotation; (10) Governing duty uses max(Qh, Qc) — conservative basis covering both sides — with explicit trace step; (11) Phase/Service selectors (single phase / condensing / boiling) added to both hot and cold stream inputs, activating PHASE_CHANGE_NOT_MODELED flag and TEMA guidance correctly; (12) R and P labels disambiguated — "R (heat capacity ratio, Bowman et al.)" and "P (temperature effectiveness, Bowman et al.)"; C_r renamed "C_r = Cmin/Cmax (NTU-ε method)" to eliminate substring collision; (13) Calc Note HTML expanded — now includes phase/service, both side duties, governing duty basis, R, P, U_clean, cleanliness factor, overdesign %, ε, NTU, and C_r in results table.
-- **Compressor & Pump Sizing** (Rev C — engineering-issued): Multi-tab wizard calculators based on API and GPSA standards, including polytropic/isentropic models, auto-staging, NPSHa assessment, and motor sizing guidance. Engineering fixes applied: (1) Motor nameplate guidance unconditionally displayed for both centrifugal and PD pumps with correct API 610 Table 8 / API 674/676 margins (brake power × margin%; prior code always-true bug eliminated); (2) Compressor motor guidance unconditionally shown per API 617 §5.1.5.6 / API 618 §6.1.5 (110% × shaft power; prior logic fired when η_motor > 90.9% only); (3) Compressor trace: Polytropic Exponent and Polytropic Head steps suppressed in isentropic mode; (4) Gas power equation correctly labels η_is vs η_p by model; (5) Adiabatic efficiency added as explicit trace step with ASME PTC-10 / GPSA §13-2 formula; (6) Standard conditions ISO 13443 / GPSA §13 / API MPMS Ch.14.3 cited in assumptions; (7) Pump speed (rpm) added as optional user input for Ns calculation (HI 1.3); HI 1.3 cited in specific speed warning with "assumed" flag when defaulted.
-- **Unit Management**: A robust unit system allows toggling between SI and Field units with in-place conversion across all calculators.
-- **Piping Components Module**: Provides lookup tables for pipe dimensions, flanges, fittings, gaskets, valves, and olets, along with calculators for pipe flexibility and safe spans using IndexedDB for data persistence.
-- **API 2000 Tank Venting**: A 6-tab wizard calculator comprehensively covers all 8 API 2000 venting scenarios, including normal and emergency venting, scenario applicability logic, and governing case identification.
-- **Pipe Wall Thickness Calculator** (Rev B — engineering-issued): A 5-tab wizard calculator for pressure design of straight pipe per ASME B31.3:2022 §304.1.2 (process piping), B31.4:2019 §403.2.1 (liquid pipelines), and B31.8:2022 §841.11 (gas transmission). Implements temperature-interpolated allowable stress from B31.3 Table A-1, thick-wall Lamé equation check (§304.1.2(c)), ASME B36.10M schedule selection with pass/fail, MAOP back-calculation at corroded end-of-life, hoop stress utilisation, and MAOP margin flag. Material database covers ASTM A106 A/B/C, A333 Gr. 6, A312 TP304/316/316L, and API 5L grades B/X42/X52/X60/X65/X70/X80 (21 NPS sizes ½"–24" including 1-1/4", 3-1/2", 5"). Key engineering fixes: B31.4/B31.8 ERW E=0.80 (not 0.85, per B31.4 Table 403.2.1-1/B31.8 §841.11); Y coefficient boundary corrected to 566°C for Y=0.7 (per Table 304.1.1); separate QUALITY_FACTORS_PIPELINE constant for B31.4/B31.8 with PSL2 ERW option. Located at `/calculators/pipe-wall-thickness`, listed under Piping Components.
-- **Standardized Engineering Basis**: A dedicated reference page (`/engineering-basis`) details all industry standards and calculation methods used throughout the suite, organized by discipline.
-- **Safety Disclaimers**: Specific calculators (e.g., PRD/Flare Relief, Thermal Expansion Relief) feature prominent "Screening Tool Only" banners to emphasize their intended use.
-- **Custom Numeric Input**: A custom `NumericInput` component ensures decimal-safe number entry across all calculator pages, preventing common React controlled input issues.
-- **Restriction Orifice Engine (ISO 5167-2:2003)**: Full ISO 5167-2 Reader-Harris/Gallagher Cd (Eq.1, D-correction, Re-dependent terms) with tapping type selector (corner/D-D2/flange, L₁/L'₂ per ISO 5167-2), ISO 5167-2 Annex D permanent pressure loss fraction, ISO 5167-2 gas expansion factor Y, cavitation assessment (σ=(P₁−Pv)/ΔP vs σᵢ=2.7/σch=1.5 per ISA-RP75.23), API RP 14E erosional velocity (Ve=122/√ρ m/s), plate thickness Cd correction (thin/thick/short-tube regimes), geometric multi-stage pressure distribution (equal P₂/P₁ per stage), and straight-pipe L/D recommendations per ISO 5167-2 Table 3. Gas properties mode: Manual / Peng-Robinson EoS (1976/1978, industry-standard for O&G) / SRK EoS (Soave 1972). Both EoS engines use: Van der Waals mixing rules, Chueh-Prausnitz (1967) BIP from critical volumes, Lee-Gonzalez-Eakin (1966) gas viscosity, and isenthalpic flash for discharge temperature. PR uses Ωa=0.45724/Ωb=0.07780 and the PR residual departure ln[(Z+(1+√2)B)/(Z+(1-√2)B)]/(2√2·bm). Flags: CAVITATION_INCIPIENT, CAVITATION_SEVERE, EROSIONAL_VELOCITY_EXCEEDED, THICK_ORIFICE, LOW_REYNOLDS (17 total).
+**Key architectural features include:**
+- **Calculator Suite**: Comprises 16 discipline-specific calculators with multi-tab wizard interfaces for guided input, including Separator Sizing, Heat Exchanger, Compressor, Pump Sizing, API 2000 Tank Venting, Pipe Wall Thickness, and Restriction Orifice Engine.
+- **Unified Separator Sizing**: An 8-tab wizard supporting various service types (2-phase/3-phase, vertical/horizontal) based on API 12J and GPSA standards.
+- **Flare Knock Out Drum Sizing**: A 7-tab wizard based on API 521 for flare/vent systems.
+- **Heat Exchanger Sizing**: A 5-tab wizard for thermal design and geometry, displaying symbolic equations, LMTD, F-factor calculations, and TEMA guidance.
+- **Compressor & Pump Sizing**: Multi-tab wizard calculators based on API and GPSA standards, including polytropic/isentropic models, NPSHa, and motor sizing.
+- **Unit Management**: Robust system for toggling between SI and Field units with in-place conversion.
+- **Piping Components Module**: Lookup tables and calculators for pipe dimensions, flanges, fittings, and flexibility/safe spans, using IndexedDB for persistence.
+- **API 2000 Tank Venting**: A 6-tab wizard covering all 8 API 2000 venting scenarios.
+- **Pipe Wall Thickness Calculator**: A 5-tab wizard for pressure design per ASME B31.3, B31.4, and B31.8, with a comprehensive material database.
+- **Standardized Engineering Basis**: A dedicated reference page detailing industry standards and calculation methods.
+- **Safety Disclaimers**: Prominent "Screening Tool Only" banners for specific calculators.
+- **Custom Numeric Input**: A custom `NumericInput` component for decimal-safe number entry.
+- **Restriction Orifice Engine (ISO 5167-2:2003)**: Implements Reader-Harris/Gallagher Cd, permanent pressure loss, gas expansion factor Y, cavitation assessment, erosional velocity, and multi-stage pressure distribution. Gas properties are handled via Manual, Peng-Robinson EoS, or SRK EoS modes, with Van der Waals mixing rules, Chueh-Prausnitz BIPs, and Lee-Gonzalez-Eakin gas viscosity.
+- **Gas Mixing Calculator**: Calculates Z, ρ, μ, Cp/Cv, γ, and speed of sound at specified T & P using Peng-Robinson EoS, SRK EoS, or Pitzer correlation, supporting 20 common O&G species.
 
 ## External Dependencies
 - **React**: Frontend UI library.
-- **TypeScript**: For type safety in JavaScript.
+- **TypeScript**: For type safety.
 - **Vite**: Frontend build tool and dev server.
 - **Tailwind CSS**: Utility-first CSS framework.
 - **shadcn/ui**: Reusable UI components.
@@ -91,29 +84,4 @@ Key architectural features and implementations include:
 - **jsPDF & jspdf-autotable**: For PDF report generation.
 - **xlsx**: For Excel data export.
 - **Zod**: For schema validation.
-- **FormSubmit.co**: For calculator feedback submission (client-side POST).
-
-## GitHub Pages Deployment
-
-**How it works:** The Vite build compiles all React/TypeScript source code into pure HTML, CSS, and JavaScript files in the `dist/` folder. The compiled output is pushed to the `gh-pages` branch on GitHub. GitHub Pages (in legacy/classic mode) serves directly from that branch — no build step happens on GitHub's side.
-
-### Branch structure
-- `main` — source code (TypeScript, React, Vite config, etc.)
-- `gh-pages` — compiled output only (HTML, CSS, JS — 103 files). This is what GitHub Pages serves.
-
-### How to deploy updates (after making changes in Replit)
-Run these steps from Replit whenever you want to publish a new version:
-1. Build: `node node_modules/.bin/vite build`
-2. Copy SPA fix: `cp dist/index.html dist/404.html && touch dist/.nojekyll`
-3. Push compiled output to `gh-pages` branch (use the deploy script or agent)
-4. GitHub Pages auto-serves the new files within ~30 seconds
-
-### What the build produces (`dist/` → pushed to `gh-pages` root)
-- `index.html` — pure HTML entry point (no React/TypeScript visible)
-- `404.html` — copy of index.html for SPA routing (any URL works)
-- `.nojekyll` — prevents GitHub Pages from running Jekyll processing
-- `assets/` — all compiled CSS and JavaScript chunks (plain `.css` and `.js` files)
-- `favicon.png` — site icon
-
-### Base path note
-The `vite.config.ts` uses no explicit `base` (defaults to `/`), which is correct for the user pages repo `hazemmancy.github.io`. If this were a project pages repo (e.g., `hazemmancy.github.io/project-name`), `base: '/project-name/'` would be needed.
+- **FormSubmit.co**: For calculator feedback submission.

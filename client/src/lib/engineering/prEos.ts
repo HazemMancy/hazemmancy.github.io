@@ -356,9 +356,11 @@ export function computePRProperties(
 
   // ── Ideal-gas Cp and k ───────────────────────────────────────────────────────
   const { Hid, Cp_mix } = idealMolarEnthalpyPR(comps, T_K);
-  const k = Cp_mix > R_SRK ? Cp_mix / (Cp_mix - R_SRK) : 1.4; // Cp/Cv = Cp/(Cp-R), ideal gas
+  // R in kJ/kmol·K = R_SRK [m³·bar/kmol·K] × 100 [kJ per m³·bar] = 8.314 kJ/kmol·K
+  const R_kJkmolK = R_SRK * 100; // = 8.314 kJ/kmol·K
+  const k = Cp_mix > R_kJkmolK ? Cp_mix / (Cp_mix - R_kJkmolK) : 1.4; // Cp/Cv = Cp/(Cp-R)
   steps.push({ label: "Cp,mix (ideal gas)", equation: "Σxi·Cp,i (constant approximation at 25°C)", value: Cp_mix.toFixed(2), unit: "kJ/kmol·K", eqId: "PR-20" });
-  steps.push({ label: "k = Cp/(Cp−R)", equation: "Ideal-gas Cp/Cv; R = 8.314 kJ/kmol·K", value: k.toFixed(4), unit: "—", eqId: "PR-21" });
+  steps.push({ label: "k = Cp/(Cp−R)", equation: "Ideal-gas Cp/Cv; R = 8.314 kJ/kmol·K (= R_SRK×100)", value: k.toFixed(4), unit: "—", eqId: "PR-21" });
 
   // ── PR residual enthalpy ─────────────────────────────────────────────────────
   const Hm_residual = prResidualEnthalpy(T_K, Z, bm, am, dam_dT, B_dim);
@@ -417,36 +419,39 @@ export function isenthalpicFlashPR(
   // Expand bracket if needed
   const hLo = computePRProperties(composition, lo, P2_bara).Hm;
   const hHi = computePRProperties(composition, hi, P2_bara).Hm;
-  const fLo = hLo - H_target;
-  const fHi = hHi - H_target;
+  let fLo = hLo - H_target;
+  let fHi = hHi - H_target;
 
   // If same sign, try to expand
-  let expanded = false;
   if (fLo * fHi > 0) {
     lo = T1_C - 200;
     hi = T1_C + 50;
-    const h2Lo = computePRProperties(composition, lo, P2_bara).Hm;
-    const h2Hi = computePRProperties(composition, hi, P2_bara).Hm;
-    if ((h2Lo - H_target) * (h2Hi - H_target) > 0) {
-      // Still same sign — fall back to T1
+    const h2Lo = computePRProperties(composition, lo, P2_bara).Hm - H_target;
+    const h2Hi = computePRProperties(composition, hi, P2_bara).Hm - H_target;
+    if (h2Lo * h2Hi > 0) {
       return { T2_C: T1_C, converged: false, iterations: 0 };
     }
-    expanded = true;
+    // Update tracked fLo/fHi for the new bracket
+    fLo = h2Lo;
+    fHi = h2Hi;
   }
-  void expanded;
 
-  // Bisection
+  // Bisection — track fLo to avoid recomputing at lo on every iteration
   for (let iter = 0; iter < MAX_ITER; iter++) {
     const Tmid = (lo + hi) / 2;
-    const Hmid = computePRProperties(composition, Tmid, P2_bara).Hm;
-    const fMid = Hmid - H_target;
+    const fMid = computePRProperties(composition, Tmid, P2_bara).Hm - H_target;
 
     if (Math.abs(fMid) < TOL_kJ || (hi - lo) < 0.001) {
       return { T2_C: Tmid, converged: true, iterations: iter + 1 };
     }
 
-    const fLoVal = computePRProperties(composition, lo, P2_bara).Hm - H_target;
-    if (fLoVal * fMid < 0) hi = Tmid; else lo = Tmid;
+    if (fLo * fMid < 0) {
+      hi = Tmid;
+      fHi = fMid;
+    } else {
+      lo = Tmid;
+      fLo = fMid;
+    }
   }
 
   return { T2_C: (lo + hi) / 2, converged: false, iterations: MAX_ITER };

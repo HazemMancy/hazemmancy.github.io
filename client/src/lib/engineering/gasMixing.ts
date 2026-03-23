@@ -21,6 +21,9 @@
 
 import type { GasMixingInput } from "./validation";
 import { COMMON_GASES, type GasProperties } from "./constants";
+import { NAME_TO_EOS_ID, type CompositionEntry } from "./srkEos";
+import { computeSRKProperties } from "./srkEos";
+import { computePRProperties } from "./prEos";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -911,3 +914,166 @@ export const MULTI_STREAM_TEST = {
 };
 
 export { R_UNIVERSAL, MW_AIR };
+
+// ─── EoS Integration for Gas Mixing ──────────────────────────────────
+
+/**
+ * Result of an EoS-based operating conditions calculation.
+ * Extends ConditionsResult with EoS-specific trace.
+ */
+export interface EoSConditionsResult extends ConditionsResult {
+  eosMode: "pr" | "srk";
+  eosMapped: number;       // number of components mapped to COMPONENT_DB
+  eosTotal:  number;       // total number of components in mixture
+  eosSteps: { label: string; equation: string; value: string; unit: string }[];
+}
+
+/**
+ * Bridge a gas mixing composition to EoS CompositionEntry[].
+ * Maps component names via NAME_TO_EOS_ID.
+ * Returns null for components not in the database (with names in `unmapped`).
+ */
+export function bridgeCompositionToEoS(
+  components: ComponentResult[],
+): { entries: CompositionEntry[]; unmapped: string[] } {
+  const entries: CompositionEntry[] = [];
+  const unmapped: string[] = [];
+
+  for (const c of components) {
+    const id = NAME_TO_EOS_ID[c.name];
+    if (id) {
+      if (c.moleFraction > 0) entries.push({ componentId: id, moleFraction: c.moleFraction });
+    } else {
+      if (c.moleFraction > 0) unmapped.push(`${c.name} (y=${(c.moleFraction * 100).toFixed(2)}%)`);
+    }
+  }
+
+  return { entries, unmapped };
+}
+
+/**
+ * Calculate mixture operating-conditions properties using PR or SRK EoS.
+ *
+ * Falls back to Pitzer if fewer than 2 components can be mapped to COMPONENT_DB.
+ * Partially mappable compositions run EoS on the mappable sub-set and warn about unmapped species.
+ *
+ * EoS references:
+ *   PR: Peng & Robinson (1976/1978)
+ *   SRK: Soave (1972); mixing rules per Graboski & Daubert (1978)
+ *   Viscosity: Lee, Gonzalez & Eakin (1966) SPE-1340-PA
+ *   Flash: isenthalpic bisection, 60 iterations, 1 kJ/kmol tolerance
+ */
+export function calculateMixtureAtConditionsEoS(
+  mixResult: GasMixingResult,
+  conditions: OperatingConditions,
+  eosMode: "pr" | "srk",
+): EoSConditionsResult {
+  const { entries, unmapped } = bridgeCompositionToEoS(mixResult.components);
+  const total = mixResult.components.filter(c => c.moleFraction > 0).length;
+  const mapped = entries.length;
+
+  // Warn about unmapped components; fall back to Pitzer if coverage is too low
+  const baseResult = calculateMixtureAtConditions(mixResult, conditions);
+
+  if (mapped < 2) {
+    const result: EoSConditionsResult = {
+      ...baseResult,
+      eosMode, eosMapped: mapped, eosTotal: total,
+      eosSteps: [],
+    };
+    result.warnings.push(
+      `EoS mode selected but only ${mapped}/${total} components are in the EoS database. ` +
+      `Unmapped: ${unmapped.join(", ")}. Falling back to Pitzer correlation.`
+    );
+    return result;
+  }
+
+  const T_K = conditions.temperatureUnit === "K" ? conditions.temperature
+    : conditions.temperatureUnit === "°C" ? conditions.temperature + 273.15
+    : conditions.temperatureUnit === "°F" ? (conditions.temperature - 32) * 5 / 9 + 273.15
+    : conditions.temperature * 5 / 9; // °R
+
+  const P_bar = conditions.pressureUnit === "bar" || conditions.pressureUnit === "bara" ? conditions.pressure
+    : conditions.pressureUnit === "barg" ? conditions.pressure + conditions.atmosphericPressure
+    : conditions.pressureUnit === "psia" ? conditions.pressure * 0.0689476
+    : conditions.pressureUnit === "psig" ? (conditions.pressure + conditions.atmosphericPressure / 0.0689476) * 0.0689476
+    : conditions.pressureUnit === "kPa" ? conditions.pressure / 100
+    : conditions.pressureUnit === "MPa" ? conditions.pressure * 10
+    : conditions.pressureUnit === "atm" ? conditions.pressure * 1.01325
+    : conditions.pressure;
+
+  const flags: string[] = [];
+  const warnings: string[] = [...baseResult.warnings.filter(w => w.includes("Unmapped") || w.includes("assuming Z = 1"))];
+
+  if (unmapped.length > 0) {
+    warnings.push(
+      `Components not in EoS database (contribution re-distributed): ${unmapped.join(", ")}. ` +
+      `EoS applied to ${mapped}/${total} components.`
+    );
+  }
+
+  try {
+    const eos = eosMode === "pr"
+      ? computePRProperties(entries, T_K - 273.15, P_bar)
+      : computeSRKProperties(entries, T_K - 273.15, P_bar);
+
+    if (eos.warnings.length > 0) warnings.push(...eos.warnings);
+
+    if (eos.phase === "two-phase") flags.push("TWO_PHASE");
+    if (eos.Z < 0.2) flags.push("NEAR_CRITICAL");
+
+    const Rsp = 8314.46 / eos.MWm; // J/(kg·K)
+    const Cp_kJkgK = eos.Cp_mix / eos.MWm; // kJ/kg·K (ideal gas)
+    const Cv_kJkgK = Cp_kJkgK - Rsp / 1000 / eos.Z; // kJ/kg·K
+    const gammaActual = Cv_kJkgK > 0 ? Cp_kJkgK / Cv_kJkgK : null;
+    const speedOfSound = gammaActual != null
+      ? Math.sqrt(gammaActual * eos.Z * Rsp * T_K)
+      : null;
+
+    const density_kgm3 = eos.rho;
+    const molarVolume = eos.Vm;
+    const specificVolume = 1 / density_kgm3;
+    const idealDensity = (P_bar * 1e5 * eos.MWm) / (8314.46 * T_K);
+
+    const eosSteps = eos.steps.map(s => ({
+      label: s.label, equation: s.equation, value: s.value, unit: s.unit,
+    }));
+
+    const result: EoSConditionsResult = {
+      T_K, P_bar,
+      Tr: 0, Pr: 0, // not meaningful for EoS (no single Tc/Pc)
+      Z: eos.Z,
+      density_kgm3,
+      specificVolume_m3kg: specificVolume,
+      molarVolume_m3kmol: molarVolume,
+      viscosity_cP: eos.viscosity_cP,
+      Cp_kJkgK, Cv_kJkgK: Cv_kJkgK > 0 ? Cv_kJkgK : null,
+      gammaActual,
+      speedOfSound_ms: speedOfSound,
+      JT_Kbar: null, // not computed from EoS yet
+      idealDensity_kgm3: idealDensity,
+      calcTrace: [
+        { label: "Temperature", equation: `${conditions.temperature} ${conditions.temperatureUnit}`, value: T_K, unit: "K" },
+        { label: "Pressure", equation: `${conditions.pressure} ${conditions.pressureUnit}`, value: P_bar, unit: "bara" },
+        { label: `EoS Mode`, equation: eosMode === "pr" ? "Peng-Robinson (1976/1978)" : "SRK (Soave 1972)", value: eos.Z, unit: "Z" },
+        { label: "ρ (EoS)", equation: "MWm/Vm", value: density_kgm3, unit: "kg/m³" },
+        { label: "μ (Lee 1966)", equation: "K·exp(X·ρ^Y)", value: eos.viscosity_cP, unit: "cP" },
+        { label: "Cp (ideal gas)", equation: "Σxi·Cp,i / MWm", value: Cp_kJkgK, unit: "kJ/(kg·K)" },
+        { label: "γ (actual)", equation: "Cp/Cv", value: gammaActual ?? 0, unit: "—" },
+        ...(speedOfSound != null ? [{ label: "a (speed of sound)", equation: "√(γ·Z·R·T/MW)", value: speedOfSound, unit: "m/s" }] : []),
+      ],
+      flags, warnings,
+      eosMode, eosMapped: mapped, eosTotal: total, eosSteps,
+    };
+
+    return result;
+  } catch (err) {
+    const result: EoSConditionsResult = {
+      ...baseResult,
+      eosMode, eosMapped: mapped, eosTotal: total,
+      eosSteps: [],
+    };
+    result.warnings.push(`EoS calculation failed: ${err instanceof Error ? err.message : String(err)}. Showing Pitzer fallback.`);
+    return result;
+  }
+}

@@ -14,8 +14,10 @@ import { COMMON_GASES, type GasCategory } from "@/lib/engineering/constants";
 import {
   type GasMixProject, type GasMixComponent, type GasMixStream,
   type GasMixingResult, type MultiStreamResult,
+  type EoSConditionsResult, type OperatingConditions,
   DEFAULT_PROJECT, createEmptyComponent, nextId, loadPreset,
-  calculateGasMixing, calculateMultiStreamMixing,
+  calculateGasMixing, calculateMultiStreamMixing, calculateMixtureAtConditionsEoS,
+  calculateMixtureAtConditions,
   GAS_MIXING_TEST_COMPONENTS, MULTI_STREAM_TEST, R_UNIVERSAL,
   PRESET_COMPOSITIONS, type PresetComposition,
 } from "@/lib/engineering/gasMixing";
@@ -23,7 +25,7 @@ import {
   Blend, Plus, Trash2, FlaskConical, RotateCcw, Copy,
   ChevronLeft, ChevronRight, ClipboardList, Beaker, BarChart3, GitMerge,
   AlertTriangle, CheckCircle2, Download, FileSpreadsheet, FileText,
-  Search, BookOpen,
+  Search, BookOpen, Thermometer, Activity,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -39,6 +41,7 @@ const TABS = [
   { id: "components", label: "Components", icon: Beaker, step: 2 },
   { id: "results", label: "Results", icon: BarChart3, step: 3 },
   { id: "multistream", label: "Multi-Stream", icon: GitMerge, step: 4 },
+  { id: "conditions", label: "Operating Conditions", icon: Thermometer, step: 5 },
 ];
 
 const CATEGORY_ORDER: GasCategory[] = [
@@ -74,6 +77,17 @@ export default function GasMixingPage() {
   const [error, setError] = useState<string | null>(null);
   const [gasFilter, setGasFilter] = useState("");
   const [showLibrary, setShowLibrary] = useState(false);
+
+  // Operating Conditions tab state
+  const [condT, setCondT] = useState(25);
+  const [condTUnit, setCondTUnit] = useState<"°C" | "°F" | "K" | "°R">("°C");
+  const [condP, setCondP] = useState(1.01325);
+  const [condPUnit, setCondPUnit] = useState<"bara" | "barg" | "psia" | "psig" | "kPa" | "MPa" | "atm">("bara");
+  const [condPatm, setCondPatm] = useState(1.01325);
+  const [condEosMode, setCondEosMode] = useState<"pr" | "srk" | "pitzer">("pr");
+  const [condResult, setCondResult] = useState<EoSConditionsResult | null>(null);
+  const [condError, setCondError] = useState<string | null>(null);
+  const [condShowTrace, setCondShowTrace] = useState(false);
 
   const totalMF = components.reduce((s, c) => s + (c.moleFraction || 0), 0);
   const sumOK = Math.abs(totalMF - 1.0) < 5e-4;
@@ -290,6 +304,31 @@ export default function GasMixingPage() {
     if (format === "pdf") exportToCalcNote(data);
     else if (format === "excel") exportToExcel(data);
     else exportToJSON(data);
+  };
+
+  const handleConditionsCalc = () => {
+    setCondError(null);
+    setCondResult(null);
+    if (!result) {
+      setCondError("Calculate mixture composition first (Components tab).");
+      return;
+    }
+    const conditions: OperatingConditions = {
+      temperature: condT, temperatureUnit: condTUnit,
+      pressure: condP, pressureUnit: condPUnit,
+      atmosphericPressure: condPatm,
+    };
+    try {
+      if (condEosMode === "pitzer") {
+        const r = calculateMixtureAtConditions(result, conditions);
+        setCondResult({ ...r, eosMode: "pr", eosMapped: 0, eosTotal: 0, eosSteps: [] });
+      } else {
+        const r = calculateMixtureAtConditionsEoS(result, conditions, condEosMode);
+        setCondResult(r);
+      }
+    } catch (e) {
+      setCondError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const tabIdx = TABS.findIndex(t => t.id === activeTab);
@@ -971,6 +1010,223 @@ export default function GasMixingPage() {
           </Card>
           <div className="mt-4">
             <FeedbackSection calculatorName="Gas Mixing" />
+          </div>
+        </TabsContent>
+
+        {/* TAB 5: OPERATING CONDITIONS */}
+        <TabsContent value="conditions">
+          <div className="space-y-4">
+            {/* Basis note */}
+            <Card className="border-amber-800/40 bg-amber-950/20">
+              <CardContent className="p-3 text-xs text-amber-200/80">
+                <span className="font-medium text-amber-200">Operating Conditions — EoS-based</span>: Computes Z, ρ, μ, Cp/Cv, γ, and speed of sound at specified T &amp; P using Peng-Robinson (recommended) or SRK EoS. Requires a calculated mixture on the Components tab. Components not in the EoS database are excluded and listed as unmapped.
+              </CardContent>
+            </Card>
+
+            {/* Inputs */}
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <h4 className="font-semibold text-sm flex items-center gap-2"><Thermometer className="w-4 h-4 text-primary" />Conditions &amp; Method</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Temperature</Label>
+                    <NumericInput className="h-8 text-xs" value={condT} onValueChange={setCondT} data-testid="input-cond-temp" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">T Unit</Label>
+                    <Select value={condTUnit} onValueChange={v => setCondTUnit(v as typeof condTUnit)}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-cond-tunit"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="°C">°C</SelectItem>
+                        <SelectItem value="°F">°F</SelectItem>
+                        <SelectItem value="K">K</SelectItem>
+                        <SelectItem value="°R">°R</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Pressure (abs)</Label>
+                    <NumericInput className="h-8 text-xs" value={condP} onValueChange={setCondP} data-testid="input-cond-pres" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">P Unit</Label>
+                    <Select value={condPUnit} onValueChange={v => setCondPUnit(v as typeof condPUnit)}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-cond-punit"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bara">bara</SelectItem>
+                        <SelectItem value="barg">barg</SelectItem>
+                        <SelectItem value="psia">psia</SelectItem>
+                        <SelectItem value="psig">psig</SelectItem>
+                        <SelectItem value="kPa">kPa (abs)</SelectItem>
+                        <SelectItem value="MPa">MPa (abs)</SelectItem>
+                        <SelectItem value="atm">atm</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Calculation Method</Label>
+                    <Select value={condEosMode} onValueChange={v => setCondEosMode(v as typeof condEosMode)}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-cond-eos"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pr">Peng-Robinson EoS (recommended for O&amp;G)</SelectItem>
+                        <SelectItem value="srk">SRK EoS (Soave 1972)</SelectItem>
+                        <SelectItem value="pitzer">Pitzer Correlation (screening)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(condPUnit === "barg" || condPUnit === "psig") && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Patm (bara)</Label>
+                      <NumericInput className="h-8 text-xs" value={condPatm} onValueChange={setCondPatm} data-testid="input-cond-patm" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <Button size="sm" onClick={handleConditionsCalc} data-testid="button-calc-conditions">
+                    <Activity className="w-3.5 h-3.5 mr-1.5" /> Calculate
+                  </Button>
+                  {!result && <span className="text-xs text-amber-400">Requires mixture composition — calculate on Components tab first.</span>}
+                </div>
+              </CardContent>
+            </Card>
+
+            {condError && (
+              <div className="flex items-center gap-2 p-3 rounded border border-red-800/60 bg-red-950/30 text-xs text-red-300">
+                <AlertTriangle className="w-4 h-4 shrink-0" />{condError}
+              </div>
+            )}
+
+            {condResult && (
+              <>
+                {condResult.flags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {condResult.flags.map((f, i) => (
+                      <Badge key={i} variant="destructive" className="text-[10px]" data-testid={`cond-flag-${i}`}>{f}</Badge>
+                    ))}
+                  </div>
+                )}
+                <WarningPanel warnings={condResult.warnings} />
+
+                <Card className="border-primary/30">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="font-semibold text-sm">Results at Conditions</h4>
+                      {condEosMode !== "pitzer" && (condResult as EoSConditionsResult).eosMapped != null && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {condEosMode.toUpperCase()} EoS · {(condResult as EoSConditionsResult).eosMapped}/{(condResult as EoSConditionsResult).eosTotal} components mapped
+                        </Badge>
+                      )}
+                      {condEosMode === "pitzer" && <Badge variant="outline" className="text-[10px]">Pitzer Correlation</Badge>}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 text-xs">
+                      {[
+                        { label: "T", val: `${condResult.T_K.toFixed(2)} K  (${(condResult.T_K - 273.15).toFixed(2)} °C)` },
+                        { label: "P (abs)", val: `${condResult.P_bar.toFixed(4)} bara` },
+                        { label: "Z (compressibility)", val: condResult.Z.toFixed(5) },
+                        { label: "ρ (density)", val: `${condResult.density_kgm3.toFixed(4)} kg/m³` },
+                        { label: "ρ_ideal (Z=1)", val: `${condResult.idealDensity_kgm3.toFixed(4)} kg/m³` },
+                        { label: "Vm (molar volume)", val: `${condResult.molarVolume_m3kmol.toFixed(5)} m³/kmol` },
+                        { label: "μ (Lee 1966)", val: `${condResult.viscosity_cP.toFixed(5)} cP` },
+                        { label: "Cp (mass)", val: condResult.Cp_kJkgK != null ? `${condResult.Cp_kJkgK.toFixed(4)} kJ/(kg·K)` : "—" },
+                        { label: "Cv (mass)", val: condResult.Cv_kJkgK != null ? `${condResult.Cv_kJkgK.toFixed(4)} kJ/(kg·K)` : "—" },
+                        { label: "γ = Cp/Cv (actual)", val: condResult.gammaActual != null ? condResult.gammaActual.toFixed(5) : "—" },
+                        { label: "Speed of Sound", val: condResult.speedOfSound_ms != null ? `${condResult.speedOfSound_ms.toFixed(2)} m/s` : "—" },
+                        { label: "JT coefficient", val: condResult.JT_Kbar != null ? `${condResult.JT_Kbar.toFixed(4)} K/bar` : "— (EoS)"},
+                      ].map(({ label, val }) => (
+                        <div key={label} className="flex justify-between py-1.5 border-b border-muted/20">
+                          <span className="text-muted-foreground">{label}</span>
+                          <span className="font-mono font-medium">{val}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* EoS Calculation Trace */}
+                {condEosMode !== "pitzer" && (condResult as EoSConditionsResult).eosSteps?.length > 0 && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <button
+                        className="flex items-center gap-2 text-sm font-medium text-left w-full"
+                        onClick={() => setCondShowTrace(t => !t)}
+                        data-testid="button-toggle-eos-trace"
+                      >
+                        <BookOpen className="w-4 h-4 text-primary" />
+                        EoS Calculation Trace ({(condResult as EoSConditionsResult).eosSteps.length} steps)
+                        <span className="text-xs text-muted-foreground ml-auto">{condShowTrace ? "Hide ▲" : "Show ▼"}</span>
+                      </button>
+                      {condShowTrace && (
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="w-full text-[10px]">
+                            <thead>
+                              <tr className="text-muted-foreground border-b border-muted/20">
+                                <th className="text-left pb-1 pr-3">Step</th>
+                                <th className="text-left pb-1 pr-3">Equation / Basis</th>
+                                <th className="text-right pb-1 pr-3">Value</th>
+                                <th className="text-left pb-1">Unit</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(condResult as EoSConditionsResult).eosSteps.map((s, i) => (
+                                <tr key={i} className="border-b border-muted/10">
+                                  <td className="py-1 pr-3 font-medium">{s.label}</td>
+                                  <td className="py-1 pr-3 text-muted-foreground font-mono">{s.equation}</td>
+                                  <td className="py-1 pr-3 text-right font-mono">{s.value}</td>
+                                  <td className="py-1 text-muted-foreground">{s.unit}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Pitzer trace */}
+                {(condEosMode === "pitzer" || (condResult as EoSConditionsResult).eosMapped === 0) && condResult.calcTrace.length > 0 && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <button
+                        className="flex items-center gap-2 text-sm font-medium text-left w-full"
+                        onClick={() => setCondShowTrace(t => !t)}
+                        data-testid="button-toggle-pitzer-trace"
+                      >
+                        <BookOpen className="w-4 h-4 text-primary" />
+                        Pitzer Calculation Trace ({condResult.calcTrace.length} steps)
+                        <span className="text-xs text-muted-foreground ml-auto">{condShowTrace ? "Hide ▲" : "Show ▼"}</span>
+                      </button>
+                      {condShowTrace && (
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="w-full text-[10px]">
+                            <thead>
+                              <tr className="text-muted-foreground border-b border-muted/20">
+                                <th className="text-left pb-1 pr-3">Property</th>
+                                <th className="text-left pb-1 pr-3">Basis</th>
+                                <th className="text-right pb-1 pr-3">Value</th>
+                                <th className="text-left pb-1">Unit</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {condResult.calcTrace.map((s, i) => (
+                                <tr key={i} className="border-b border-muted/10">
+                                  <td className="py-1 pr-3 font-medium">{s.label}</td>
+                                  <td className="py-1 pr-3 text-muted-foreground">{s.equation}</td>
+                                  <td className="py-1 pr-3 text-right font-mono">{s.value.toFixed(5)}</td>
+                                  <td className="py-1 text-muted-foreground">{s.unit}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
           </div>
         </TabsContent>
       </Tabs>
