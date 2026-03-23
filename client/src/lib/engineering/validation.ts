@@ -19,7 +19,7 @@ export const liquidLineSizingSchema = z.object({
   viscosity: z.number().positive("Viscosity must be positive"),
   innerDiameter: z.number().positive("Diameter must be positive"),
   pipeLength: z.number().positive("Pipe length must be positive"),
-  roughness: z.number().positive("Roughness must be positive"),
+  roughness: z.number().min(0, "Roughness must be ≥ 0 (0 = hydraulically smooth pipe)"),
   elevationChange: z.number(),
 });
 

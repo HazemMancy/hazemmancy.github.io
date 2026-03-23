@@ -5,10 +5,13 @@ export interface LiquidSizingResult {
   velocity: number;
   reynoldsNumber: number;
   frictionFactor: number;
-  frictionLoss: number;
-  staticHead: number;
-  totalPressureDrop: number;
-  pressureDropPer100m: number;
+  frictionLoss: number;       // friction pressure drop [bar]
+  staticHead: number;         // static head pressure equivalent [bar]
+  totalPressureDrop: number;  // friction + static [bar]
+  pressureDropPer100m: number;// friction-only ΔP per 100 m [bar/100m]
+  frictionHeadM: number;      // friction loss expressed as head [m of liquid]
+  staticHeadM: number;        // static head = elevation change [m]
+  totalHeadM: number;         // friction head + static head [m of liquid]
   warnings: string[];
 }
 
@@ -53,6 +56,11 @@ export function calculateLiquidLineSizing(input: LiquidLineSizingInput): LiquidS
   const totalDP_bar = frictionLoss_bar + staticHead_bar;
   const dP_per100m = input.pipeLength > 0 ? (frictionLoss_bar / input.pipeLength) * 100 : 0;
 
+  // Head-based outputs [m of liquid]
+  const frictionHeadM = frictionLoss_Pa / (input.density * GRAVITY);
+  const staticHeadM = input.elevationChange;
+  const totalHeadM = frictionHeadM + staticHeadM;
+
   if (input.elevationChange < 0) {
     warnings.push(`Negative elevation change (${input.elevationChange.toFixed(1)} m) — static head assists flow (downhill)`);
   }
@@ -78,6 +86,9 @@ export function calculateLiquidLineSizing(input: LiquidLineSizingInput): LiquidS
     staticHead: staticHead_bar,
     totalPressureDrop: totalDP_bar,
     pressureDropPer100m: dP_per100m,
+    frictionHeadM,
+    staticHeadM,
+    totalHeadM,
     warnings,
   };
 }

@@ -15,6 +15,7 @@ import {
   LIQUID_SIZING_TEST_CASE,
   type LiquidSizingResult,
 } from "@/lib/engineering/liquidSizing";
+import { liquidLineSizingSchema } from "@/lib/engineering/validation";
 import { LIQUID_SERVICE_LIMITS, type LiquidServiceLimit, getNPSBandFromDiameter } from "@/lib/engineering/constants";
 import { checkLiquidLimits, type LimitWarning } from "@/lib/engineering/limitCheck";
 import type { UnitSystem } from "@/lib/engineering/unitConversion";
@@ -45,7 +46,7 @@ const defaultForm: FormState = {
 };
 
 const fieldUnitMap: FieldUnitMap = {
-  flowRate: "flowVolume",
+  flowRate: "flowLiquid",
   density: "density",
   viscosity: null,
   innerDiameter: "diameter",
@@ -76,7 +77,7 @@ export default function LiquidLineSizingPage() {
     setError(null);
     try {
       const input = {
-        flowRate: convertToSI("flowVolume", parseFloat(form.flowRate), unitSystem),
+        flowRate: convertToSI("flowLiquid", parseFloat(form.flowRate), unitSystem),
         density: convertToSI("density", parseFloat(form.density), unitSystem),
         viscosity: parseFloat(form.viscosity),
         innerDiameter: convertToSI("diameter", parseFloat(form.innerDiameter), unitSystem),
@@ -87,7 +88,16 @@ export default function LiquidLineSizingPage() {
       for (const [key, val] of Object.entries(input)) {
         if (isNaN(val)) throw new Error(`Invalid value for ${key}`);
       }
-      const res = calculateLiquidLineSizing(input);
+
+      // Zod validation — field-specific errors before solver is called
+      const validation = liquidLineSizingSchema.safeParse(input);
+      if (!validation.success) {
+        const firstIssue = validation.error.issues[0];
+        const fieldLabel = firstIssue.path.length > 0 ? `${firstIssue.path[0]}: ` : "";
+        throw new Error(`${fieldLabel}${firstIssue.message}`);
+      }
+
+      const res = calculateLiquidLineSizing(validation.data);
       setResult(res);
 
       if (selectedService) {
@@ -172,7 +182,7 @@ export default function LiquidLineSizingPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label className="text-xs mb-1.5 block">
-                    Volume Flow Rate ({getUnit("flowVolume", unitSystem)})
+                    Liquid Volume Flow Rate ({getUnit("flowLiquid", unitSystem)})
                   </Label>
                   <Input
                     type="number"
@@ -293,12 +303,12 @@ export default function LiquidLineSizingPage() {
                     highlight: true,
                   },
                   {
-                    label: "Friction Loss",
+                    label: "Friction Pressure Drop",
                     value: convertFromSI("pressure", result.frictionLoss, unitSystem),
                     unit: getUnit("pressure", unitSystem),
                   },
                   {
-                    label: "Static Head",
+                    label: "Static Head (pressure equiv.)",
                     value: convertFromSI("pressure", result.staticHead, unitSystem),
                     unit: getUnit("pressure", unitSystem),
                   },
@@ -309,9 +319,25 @@ export default function LiquidLineSizingPage() {
                     highlight: true,
                   },
                   {
-                    label: "ΔP per 100m (friction)",
+                    label: "Friction ΔP per 100 m",
                     value: result.pressureDropPer100m,
                     unit: "bar/100m",
+                  },
+                  {
+                    label: "Friction Head",
+                    value: result.frictionHeadM.toFixed(2),
+                    unit: "m liq.",
+                  },
+                  {
+                    label: "Static Head",
+                    value: result.staticHeadM.toFixed(2),
+                    unit: "m liq.",
+                  },
+                  {
+                    label: "Total Head",
+                    value: result.totalHeadM.toFixed(2),
+                    unit: "m liq.",
+                    highlight: true,
                   },
                   {
                     label: "Reynolds Number",
@@ -328,42 +354,52 @@ export default function LiquidLineSizingPage() {
                 exportData={{
                   calculatorName: "Liquid Line Sizing",
                   inputs: [
-                    { label: "Volume Flow Rate", value: form.flowRate, unit: getUnit("flowVolume", unitSystem) },
+                    { label: "Liquid Volume Flow Rate", value: form.flowRate, unit: getUnit("flowLiquid", unitSystem) },
                     { label: "Liquid Density", value: form.density, unit: getUnit("density", unitSystem) },
-                    { label: "Viscosity", value: form.viscosity, unit: getUnit("viscosity", unitSystem) },
+                    { label: "Viscosity (Newtonian)", value: form.viscosity, unit: getUnit("viscosity", unitSystem) },
                     { label: "Inner Diameter", value: form.innerDiameter, unit: getUnit("diameter", unitSystem) },
                     { label: "Pipe Length", value: form.pipeLength, unit: getUnit("length", unitSystem) },
                     { label: "Roughness", value: form.roughness, unit: "mm" },
-                    { label: "Elevation Change", value: form.elevationChange, unit: getUnit("length", unitSystem) },
+                    { label: "Elevation Change (+ve = uphill)", value: form.elevationChange, unit: getUnit("length", unitSystem) },
                     ...(selectedService ? [{ label: "Service Type", value: selectedService }] : []),
                   ],
                   results: [
                     { label: "Velocity", value: convertFromSI("velocity", result.velocity, unitSystem), unit: getUnit("velocity", unitSystem), highlight: true },
-                    { label: "Friction Loss", value: convertFromSI("pressure", result.frictionLoss, unitSystem), unit: getUnit("pressure", unitSystem) },
-                    { label: "Static Head", value: convertFromSI("pressure", result.staticHead, unitSystem), unit: getUnit("pressure", unitSystem) },
+                    { label: "Friction Pressure Drop", value: convertFromSI("pressure", result.frictionLoss, unitSystem), unit: getUnit("pressure", unitSystem) },
+                    { label: "Static Head (pressure equiv.)", value: convertFromSI("pressure", result.staticHead, unitSystem), unit: getUnit("pressure", unitSystem) },
                     { label: "Total Pressure Drop", value: convertFromSI("pressure", result.totalPressureDrop, unitSystem), unit: getUnit("pressure", unitSystem), highlight: true },
-                    { label: "ΔP per 100m (friction)", value: result.pressureDropPer100m, unit: "bar/100m" },
+                    { label: "Friction ΔP per 100 m (friction only)", value: result.pressureDropPer100m, unit: "bar/100m" },
+                    { label: "Friction Head", value: `${result.frictionHeadM.toFixed(2)}`, unit: "m liq." },
+                    { label: "Static Head", value: `${result.staticHeadM.toFixed(2)}`, unit: "m liq." },
+                    { label: "Total Head", value: `${result.totalHeadM.toFixed(2)}`, unit: "m liq.", highlight: true },
                     { label: "Reynolds Number", value: result.reynoldsNumber, unit: "—" },
                     { label: "Friction Factor (f)", value: result.frictionFactor, unit: "—" },
                   ],
                   methodology: [
-                    "Darcy-Weisbach equation for incompressible liquid friction pressure drop",
-                    "Swamee-Jain approximation for Colebrook-White friction factor",
-                    "Static head calculated as ρ·g·Δz",
-                    "Total pressure drop = friction loss + static head",
+                    "Darcy-Weisbach equation for incompressible liquid friction pressure drop: ΔP_f = f·(L/D)·(ρ·v²/2)",
+                    "Swamee-Jain explicit approximation for Colebrook-White friction factor (4000 < Re < 1×10⁸)",
+                    "Laminar regime (Re < 2300): f = 64/Re (Hagen-Poiseuille)",
+                    "Static head: ΔP_s = ρ·g·Δz — positive Δz = uphill (opposes flow), negative Δz = downhill (assists flow)",
+                    "Total pressure drop = friction loss + static head (may be negative if downhill dominates)",
+                    "Head outputs: H_f = ΔP_f/(ρ·g), H_s = Δz, H_total = H_f + Δz",
+                    "Flow unit: volumetric (m³/h SI / gpm Field) — Newtonian, single-phase liquid assumed",
+                    "Velocity and ΔP/100m limits: engineering best-practice screening per API RP 14E and EPC FEED practice",
                   ],
                   assumptions: [
                     "Steady-state, single-phase incompressible liquid flow",
-                    "Darcy-Weisbach equation for friction pressure drop",
-                    "Swamee-Jain friction factor approximation",
-                    "Static head calculated from elevation change and liquid density",
-                    "Pipe roughness assumed uniform along pipe length",
-                    "No fittings or valves included (straight pipe only)",
+                    "Isothermal flow — density and viscosity constant along pipe",
+                    "Newtonian fluid — viscosity independent of shear rate",
+                    "Darcy-Weisbach major friction losses only — minor losses (fittings, valves, bends) NOT included",
+                    "Static head from elevation change included separately; sign convention: positive = uphill",
+                    "Pipe roughness uniform along pipe length; default 0.0457 mm (commercial carbon steel, Moody / GPSA)",
+                    "Velocity and ΔP/100m limits: engineering best-practice screening informed by API RP 14E — not universal hard code-compliance limits; applies to FEED / preliminary design",
                   ],
                   references: [
                     "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
+                    "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
+                    "Swamee, P.K. and Jain, A.K. (1976) — Explicit equations for pipe-flow problems. J. Hydraulics Div., ASCE",
+                    "GPSA Engineering Data Book, 14th Edition — Section 17",
                     "Perry's Chemical Engineers' Handbook, 9th Edition",
-                    "Swamee, P.K. and Jain, A.K. (1976) — Explicit equations for pipe-flow problems",
                   ],
                   warnings: result.warnings.length > 0 ? result.warnings : undefined,
                 } as ExportDatasheet}
@@ -383,17 +419,23 @@ export default function LiquidLineSizingPage() {
           <div className="mt-4">
             <AssumptionsPanel
             assumptions={[
-            "Steady-state, single-phase incompressible liquid flow",
-            "Darcy-Weisbach equation for friction pressure drop",
-            "Swamee-Jain friction factor approximation",
-            "Static head calculated from elevation change and liquid density",
-            "Pipe roughness assumed uniform along pipe length",
-            "No fittings or valves included (straight pipe only)",
+              "Steady-state, single-phase incompressible liquid flow",
+              "Isothermal flow — fluid density and viscosity constant along pipe length",
+              "Newtonian fluid — viscosity independent of shear rate (non-Newtonian fluids not covered)",
+              "Major friction losses only (Darcy-Weisbach): minor losses from fittings, valves, and bends NOT included",
+              "Static head calculated separately from elevation change: ΔP_static = ρ·g·Δz; sign convention positive = uphill",
+              "Elevation change opposes flow when positive (uphill) and assists flow when negative (downhill)",
+              "Pipe roughness: 0.0457 mm default (commercial carbon steel, Moody chart / GPSA Table 17-7); uniform along pipe",
+              "Friction factor: Swamee-Jain explicit approximation for Colebrook-White (turbulent); f = 64/Re for laminar (Re < 2300)",
+              "Flow input: volumetric (m³/h SI / gpm Field) — mass flow basis not used",
+              "Velocity and friction ΔP/100m limits: engineering best-practice screening per API RP 14E and EPC FEED design practice — not universal hard code-compliance limits",
             ]}
             references={[
-            "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
-            "Perry's Chemical Engineers' Handbook, 9th Edition",
-            "Swamee, P.K. and Jain, A.K. (1976) — Explicit equations for pipe-flow problems",
+              "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
+              "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
+              "Swamee, P.K. and Jain, A.K. (1976) — Explicit equations for pipe-flow problems. J. Hydraulics Div., ASCE",
+              "GPSA Engineering Data Book, 14th Edition — Section 17",
+              "Perry's Chemical Engineers' Handbook, 9th Edition",
             ]}
             />
           </div>
