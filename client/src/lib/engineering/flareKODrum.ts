@@ -98,7 +98,7 @@ export interface GeometryResult {
   actualGasVelocity: number;
   liquidLevelPercent: number;
   LD_ratio: number;
-  mistFaceVelocity: number;
+  grossFaceVelocity: number;
   minimumDiameterApplied: boolean;
   steps: CalcStep[];
 }
@@ -120,20 +120,20 @@ export type EngFlag =
   | "MINIMUM_DIAMETER_APPLIED";
 
 export const FLAG_LABELS: Record<EngFlag, string> = {
-  TRANSIENT_REVIEW: "Flare KO drum service — transient loads may govern; dynamic simulation review required",
-  DYNAMIC_SIM_REQUIRED: "Multiple relief scenarios with overlapping timing — dynamic simulation recommended",
-  DRAIN_INADEQUATE: "Drain rate is insufficient to handle liquid accumulation rate — increase drain capacity",
-  CONSERVATIVE_K: "Conservative K-factor applied per API 521 for flare KO service",
+  TRANSIENT_REVIEW: "Flare KO drum service — transient loads may govern; review with project relief/flare study",
+  DYNAMIC_SIM_REQUIRED: "Multiple scenarios include transient/blowdown events — assess whether overlapping or sequential loads require dynamic review",
+  DRAIN_INADEQUATE: "Instantaneous drain-rate screening (preliminary): drain rate may be insufficient for peak liquid accumulation rate — increase drain capacity and verify with detailed drain system analysis",
+  CONSERVATIVE_K: "Conservative K-factor applied per API 521 screening guidance for flare KO service",
   BARE_VESSEL: "Bare vessel (no mist eliminator) — lowest K-factor, largest diameter expected",
   HIGH_LIQUID_ACCUMULATION: "Total liquid accumulation exceeds 5 m³ — verify vessel volume and drain system",
   K_USER_ASSUMED: "K value is user-assumed — confirm with vendor/internals data",
-  K_TYPICAL_MODE: "K value from typical API 521 guidance — confirm for specific service",
-  VENDOR_MIST_CONFIRM: "Mist eliminator selection requires vendor confirmation",
+  K_TYPICAL_MODE: "K value from typical API 521 screening guidance — confirm for specific service",
+  VENDOR_MIST_CONFIRM: "Mist eliminator selection requires vendor confirmation for final design",
   LD_OUT_OF_RANGE: "L/D ratio outside typical range (2–5)",
-  GAS_VELOCITY_EXCEEDED: "Actual gas velocity exceeds Souders-Brown limit",
+  GAS_VELOCITY_EXCEEDED: "Actual gas velocity exceeds Souders-Brown screening limit",
   HIGH_LIQUID_LEVEL: "Liquid level exceeds 75% — increase vessel size or drain capacity",
-  HIGH_PRESSURE: "High pressure service — wall thickness and weight may govern",
-  MINIMUM_DIAMETER_APPLIED: "API 521 minimum diameter of 1500 mm applied — calculated diameter was smaller",
+  HIGH_PRESSURE: "High pressure service — wall thickness and weight may govern; verify with mechanical design",
+  MINIMUM_DIAMETER_APPLIED: "Flare KO screening minimum diameter of 1500 mm applied per API 521-based screening practice — review if project basis allows a smaller vessel",
 };
 
 export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
@@ -285,7 +285,7 @@ function computeActualGasFlow(s: FlareScenario): { Qg_m3s: number; steps: CalcSt
     const T_std = 288.15;
     Qg_m3s = Qstd_m3s * (P_std / P_Pa) * (T_K / T_std) * Z;
     steps.push({
-      label: "Standard to actual",
+      label: "Standard to actual (std basis: 15\u00B0C, 1.01325 bar(a) per ISO 13443)",
       equation: "Q_act = Q_std \u00D7 (P_std/P) \u00D7 (T/T_std) \u00D7 Z",
       substitution: `Q_act = ${Qstd_m3s.toFixed(6)} \u00D7 (${P_std}/${P_Pa.toFixed(0)}) \u00D7 (${T_K.toFixed(2)}/${T_std}) \u00D7 ${Z}`,
       result: Qg_m3s,
@@ -486,9 +486,9 @@ function computeLiquidAccumulation(
 
   if (!drainAdequate) {
     steps.push({
-      label: "Drain adequacy",
+      label: "Instantaneous drain-rate screening (preliminary only)",
       equation: "Q_drain vs max(Q_l,i)",
-      substitution: `${config.drainRate.toFixed(2)} < ${maxLiquidRate.toFixed(2)} \u2014 INADEQUATE`,
+      substitution: `${config.drainRate.toFixed(2)} < ${maxLiquidRate.toFixed(2)} \u2014 SCREENING INADEQUATE (verify with detailed drain system analysis)`,
       result: config.drainRate,
       unit: "m\u00B3/h",
     });
@@ -537,7 +537,7 @@ function assembleGeometry(
   if (D_mm < API_521_MIN_DIAMETER_MM) {
     minimumDiameterApplied = true;
     steps.push({
-      label: "API 521 minimum diameter",
+      label: "Flare KO screening minimum diameter (API 521-based)",
       equation: "D = max(D_calc, 1500 mm)",
       substitution: `D = max(${D_mm}, ${API_521_MIN_DIAMETER_MM})`,
       result: API_521_MIN_DIAMETER_MM,
@@ -605,7 +605,7 @@ function assembleGeometry(
       }
     }
 
-    const targetLD = config.maxLD > 0 ? Math.min(config.maxLD, 5) : 4;
+    const targetLD = config.maxLD > 0 ? config.maxLD : 4;
     let L_target = D_mm * targetLD;
 
     const D_final_m = D_mm / 1000;
@@ -656,13 +656,13 @@ function assembleGeometry(
   const L_m = L_mm / 1000;
   const vesselVol = (PI / 4) * (D_mm / 1000) ** 2 * L_m;
   const actualGasVelocity = gasAreaFraction > 0 ? Qg_m3s / (gasAreaFraction * (PI / 4) * (D_mm / 1000) ** 2) : 0;
-  const mistFaceVelocity = Qg_m3s / ((PI / 4) * (D_mm / 1000) ** 2);
+  const grossFaceVelocity = Qg_m3s / ((PI / 4) * (D_mm / 1000) ** 2);
   const LD_ratio = D_mm > 0 ? L_mm / D_mm : 0;
 
   steps.push({ label: "Vessel volume", equation: "V = \u03C0D\u00B2/4 \u00D7 L", substitution: `V = \u03C0\u00D7${(D_mm / 1000).toFixed(3)}\u00B2/4 \u00D7 ${L_m.toFixed(3)}`, result: vesselVol, unit: "m\u00B3" });
   steps.push({ label: "L/D ratio", equation: "L/D", substitution: `${L_mm} / ${D_mm}`, result: LD_ratio, unit: "-" });
   steps.push({ label: "Actual gas velocity", equation: "v_gas = Q_g / A_gas", substitution: `v_gas = ${Qg_m3s.toFixed(6)} / ${(gasAreaFraction * (PI / 4) * (D_mm / 1000) ** 2).toFixed(6)}`, result: actualGasVelocity, unit: "m/s" });
-  steps.push({ label: "Mist eliminator face velocity", equation: "v_face = Q_g / A_vessel", substitution: `v_face = ${Qg_m3s.toFixed(6)} / ${((PI / 4) * (D_mm / 1000) ** 2).toFixed(6)}`, result: mistFaceVelocity, unit: "m/s" });
+  steps.push({ label: "Gross vessel face velocity (screening est. — based on gross vessel area, not actual pad area)", equation: "v_face = Q_g / A_vessel", substitution: `v_face = ${Qg_m3s.toFixed(6)} / ${((PI / 4) * (D_mm / 1000) ** 2).toFixed(6)}`, result: grossFaceVelocity, unit: "m/s" });
 
   return {
     D_mm,
@@ -675,7 +675,7 @@ function assembleGeometry(
     actualGasVelocity,
     liquidLevelPercent,
     LD_ratio,
-    mistFaceVelocity,
+    grossFaceVelocity,
     minimumDiameterApplied,
     steps,
   };
@@ -693,7 +693,8 @@ function collectFlags(
   flags.push("TRANSIENT_REVIEW");
   flags.push("CONSERVATIVE_K");
 
-  if (scenarios.length > 1) flags.push("DYNAMIC_SIM_REQUIRED");
+  const hasTransientTypes = scenarios.some(s => s.scenarioType === "blowdown" || s.scenarioType === "depressuring");
+  if (scenarios.length > 1 && hasTransientTypes) flags.push("DYNAMIC_SIM_REQUIRED");
   if (config.internals === "bare") flags.push("BARE_VESSEL");
 
   if (config.kMode === "user") flags.push("K_USER_ASSUMED");
@@ -773,26 +774,28 @@ function generateNextSteps(flags: EngFlag[]): string[] {
 
 function generateAssumptions(config: KODrumConfig, holdup: HoldupBasis): string[] {
   const assumptions: string[] = [
-    "Souders-Brown correlation used for gas capacity sizing per API 521.",
-    `K-factor = ${config.kValue} (${config.kMode === "typical" ? "typical API 521 guidance" : "user-specified"}).`,
+    "SCOPE: This is a preliminary flare KO drum sizing / FEED screening tool only. Results are not final vessel design, not final internals design, and not a substitute for a project-specific flare/relief study.",
+    "Souders\u2013Brown correlation (v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G)) used for gas capacity screening per API 521 guidance. This is preliminary screening only: no inlet-device modeling, no droplet-size distribution, no CFD or internals efficiency modeling, no slug hydrodynamics, and no foam or re-entrainment mechanistic modeling.",
+    `K-factor = ${config.kValue} m/s (${config.kMode === "typical" ? "typical API 521 screening guidance" : "user-specified"}).`,
+    `Pressure correction on K-factor: ${config.applyPressureCorrection ? "ENABLED — approximate screening correction only; verify against project/company flare KO design basis for final design" : "disabled (typical for near-atmospheric flare KO service)"}.`,
     `Vessel orientation: ${config.orientation}.`,
     `Internals: ${config.internals === "bare" ? "bare vessel (no mist eliminator)" : "wire mesh pad"}.`,
-    "Liquid accumulation based on governing (largest) single-scenario accumulation (non-concurrent).",
-    `Holdup time: ${holdup.holdupTime} minutes.`,
-    "Vessel sized to contain net liquid accumulation (after drain credit).",
-    "Steady-state sizing — transient peaks may require additional verification.",
-    "Vessel heads (2:1 ellipsoidal assumed) not included in volume calculation.",
-    "Corrosion allowance, insulation, and weight not included in preliminary sizing.",
-    "API 521 minimum vessel diameter of 1500 mm enforced for flare KO drum service.",
-    `Pressure correction on K-factor: ${config.applyPressureCorrection ? "enabled" : "disabled (typical for near-atmospheric flare KO service)"}.`,
+    "Liquid design volume based on governing scenario net accumulation after drain credit (governing = scenario with largest single-event liquid accumulation). Scenarios are treated as non-concurrent.",
+    "Drain adequacy check is instantaneous drain-rate screening (preliminary only). Final adequacy depends on event duration, total accumulated liquid, operating level philosophy, and actual drain system behavior.",
+    "Gross vessel face velocity reported based on gross vessel cross-sectional area — not actual mist-pad effective area. Demister vendor sizing requires actual pad/net area.",
+    "Standard gas basis (where applicable): 15\u00B0C and 1.01325 bar(a) per ISO 13443.",
+    "Steady-state Souders\u2013Brown sizing — transient peak loads may exceed steady-state estimates; verify with project relief/flare study.",
+    "Vessel heads (2:1 ellipsoidal assumed) not included in vessel volume calculation.",
+    "Corrosion allowance, insulation, nozzle loads, and weight not included in this preliminary sizing.",
+    "Flare KO screening minimum diameter of 1500 mm applied per API 521-based screening practice; review if project basis allows a smaller vessel.",
   ];
 
   if (holdup.rainoutFraction > 0) {
-    assumptions.push(`Rainout fraction: ${(holdup.rainoutFraction * 100).toFixed(1)}% of accumulated liquid.`);
+    assumptions.push(`Rainout fraction: ${(holdup.rainoutFraction * 100).toFixed(1)}% of governing scenario liquid accumulation added as additional rainout contribution.`);
   }
 
   if (config.drainRate > 0) {
-    assumptions.push(`Drain rate: ${config.drainRate} m\u00B3/h credited against liquid accumulation.`);
+    assumptions.push(`Drain rate: ${config.drainRate} m\u00B3/h credited against liquid accumulation over the governing scenario duration (instantaneous drain-rate screening only).`);
   }
 
   return assumptions;
@@ -807,6 +810,30 @@ export function calculateFlareKODrum(
   if (scenarios.length === 0) {
     throw new Error("At least one scenario is required.");
   }
+
+  for (const s of scenarios) {
+    if (s.gasPressure <= 0) throw new Error(`Scenario "${s.name}": gas pressure must be > 0.`);
+    if (s.gasTemperature <= -273.15) throw new Error(`Scenario "${s.name}": gas temperature must be > \u2212273.15 \u00B0C.`);
+    if (s.gasDensity < 0) throw new Error(`Scenario "${s.name}": gas density must be \u2265 0.`);
+    if (s.gasDensity > 0 && s.liquidDensity > 0 && s.liquidDensity <= s.gasDensity) {
+      throw new Error(`Scenario "${s.name}": liquid density must be greater than gas density.`);
+    }
+    if (s.gasFlowBasis === "standard") {
+      if (s.gasMW <= 0) throw new Error(`Scenario "${s.name}": gas MW must be > 0 for standard gas basis conversion.`);
+      if (s.gasZ <= 0) throw new Error(`Scenario "${s.name}": Z factor must be > 0 for standard gas basis conversion.`);
+    }
+    if (s.liquidCarryoverRate < 0) throw new Error(`Scenario "${s.name}": liquid carryover rate must be \u2265 0.`);
+    if (s.duration <= 0) throw new Error(`Scenario "${s.name}": duration must be > 0.`);
+    if (s.liquidDensity <= 0) throw new Error(`Scenario "${s.name}": liquid density must be > 0.`);
+  }
+  if (config.kValue <= 0) throw new Error("K value must be > 0.");
+  if (config.levelFraction <= 0 || config.levelFraction >= 1) throw new Error("Level fraction must be between 0 and 1 (exclusive).");
+  if (config.allowances.inletZone < 0 || config.allowances.disengagementZone < 0 ||
+      config.allowances.mistEliminatorZone < 0 || config.allowances.sumpZone < 0 || config.allowances.nozzleZone < 0) {
+    throw new Error("Allowance heights must be \u2265 0.");
+  }
+  if (holdup.rainoutFraction < 0 || holdup.rainoutFraction > 1) throw new Error("Rainout fraction must be between 0 and 1.");
+  if (config.drainRate < 0) throw new Error("Drain rate must be \u2265 0.");
 
   const isVertical = config.orientation === "vertical";
   const gasAreaFrac = isVertical ? 1.0 : gasAreaFractionForLevel(config.levelFraction);
@@ -831,11 +858,11 @@ export function calculateFlareKODrum(
       K_eff = config.kValue * Cp;
       allSteps = [...allSteps, ...cpSteps];
       allSteps.push({
-        label: "Effective K (pressure-corrected)",
+        label: "Effective K (pressure-corrected, approx. screening)",
         equation: "K_eff = K_base \u00D7 Cp",
         substitution: `K_eff = ${config.kValue} \u00D7 ${Cp.toFixed(4)}`,
         result: K_eff,
-        unit: "-",
+        unit: "m/s",
       });
     }
 
@@ -875,8 +902,7 @@ export function calculateFlareKODrum(
 
   const liquidAccum = computeLiquidAccumulation(scenarios, holdup, config);
 
-  const liquidVolForGeometry = Math.max(liquidAccum.netAccumulation_m3, liquidAccum.totalWithRainout_m3 * (holdup.holdupTime / Math.max(1, scenarios.reduce((sum, s) => sum + s.duration, 0))));
-  const designLiquidVol = Math.max(liquidAccum.netAccumulation_m3, liquidVolForGeometry);
+  const designLiquidVol = liquidAccum.netAccumulation_m3;
 
   const govQg = scenarioResults.find(r => r.scenarioId === governingScenarioId)!.Qg_actual_m3s;
   const geometry = assembleGeometry(maxDReq, designLiquidVol, config, govQg);

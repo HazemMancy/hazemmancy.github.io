@@ -74,6 +74,19 @@ The application is a pure static single-page application (SPA) with no backend s
 - **Restriction Orifice Engine (ISO 5167-2:2003)**: Implements Reader-Harris/Gallagher Cd, permanent pressure loss, gas expansion factor Y, cavitation assessment, erosional velocity, and multi-stage pressure distribution. Gas properties are handled via Manual, Peng-Robinson EoS, or SRK EoS modes, with Van der Waals mixing rules, Chueh-Prausnitz BIPs, and Lee-Gonzalez-Eakin gas viscosity.
 - **Gas Mixing Calculator**: Calculates Z, ρ, μ, Cp/Cv, γ, and speed of sound at specified T & P using Peng-Robinson EoS, SRK EoS, or Pitzer correlation, supporting 20 common O&G species.
 
+## Flare KO Drum — Revision Notes (Task E, March 2026)
+Ten corrections applied to `flareKODrum.ts` and `flare-ko-drum.tsx`:
+1. **K_eff unit label fixed**: "Effective K (pressure-corrected)" step unit corrected from `"-"` to `"m/s"`. Label updated to include "approx. screening".
+2. **K-pressure correction disclosed**: Assumptions log, checkbox label, and methodology all now explicitly state the pressure correction is an approximate screening treatment; verify against project/company design basis for final design.
+3. **Liquid design-volume heuristic replaced**: The hidden `holdupTime / sum(durations)` proportional scaling removed. `designLiquidVol = liquidAccum.netAccumulation_m3` — governing scenario net accumulation after drain credit, directly and traceably.
+4. **Drain adequacy relabeled**: Step label and flag text updated to "instantaneous drain-rate screening (preliminary only)". Note added that final adequacy depends on event duration, total liquid, level philosophy, and drain behavior.
+5. **mistFaceVelocity → grossFaceVelocity**: `GeometryResult` interface, `assembleGeometry` return, calc step label, UI geometry table, and export data all updated. Label reads "Gross Vessel Face Velocity (screening est. — based on gross vessel area, not actual pad area)".
+6. **API 521 minimum diameter wording softened**: Calc step label → "Flare KO screening minimum diameter (API 521-based)". Flag label → "Flare KO screening minimum diameter of 1500 mm applied per API 521-based screening practice".
+7. **Dynamic simulation flag narrowed**: `DYNAMIC_SIM_REQUIRED` now only fires when `scenarios.length > 1` AND at least one blowdown/depressuring scenario is present. Flag text softened: "Multiple scenarios include transient/blowdown events — assess whether overlapping or sequential loads require dynamic review."
+8. **Standard gas basis disclosed**: `computeActualGasFlow` step label now states "std basis: 15°C, 1.01325 bar(a) per ISO 13443". Added to `generateAssumptions`.
+9. **Schema validation added**: Full validation loop in `calculateFlareKODrum` before solve: pressure > 0, temperature > −273.15°C, gas density ≥ 0, liquidDensity > gasDensity where both given, MW > 0 and Z > 0 for standard basis, liquid carryover ≥ 0, duration > 0, liquidDensity > 0, kValue > 0, levelFraction in (0,1), allowances ≥ 0, rainoutFraction in [0,1], drainRate ≥ 0.
+10. **Souders–Brown limitations disclosed**: `generateAssumptions` now explicitly states no inlet-device, droplet-size distribution, CFD, slug, or foam/re-entrainment modeling. Scope banner added to Results tab. Subtitle updated to "Preliminary sizing / FEED screening per API 521 — not final design authority". Methodology section in exports fully updated.
+
 ## Separator Sizing — Revision Notes (Task D, March 2026)
 Ten corrections applied to `separatorSizing.ts` and `separator-sizing.tsx`:
 1. **K-pressure correction abs/gauge fix**: `computeEffectiveK` now accepts `P_bara` and converts internally (`P_barg = P_bara - 1.01325`). Step logged in calc trace.

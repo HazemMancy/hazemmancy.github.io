@@ -200,7 +200,7 @@ export default function FlareKODrumPage() {
       { label: "Net Liquid Accumulation", value: result.liquidAccum.netAccumulation_m3, unit: "m\u00B3" },
       { label: "Gas Area Fraction", value: result.geometry.gasAreaFraction * 100, unit: "%" },
       { label: "Actual Gas Velocity", value: result.geometry.actualGasVelocity, unit: "m/s" },
-      { label: "Mist Face Velocity", value: result.geometry.mistFaceVelocity, unit: "m/s" },
+      { label: "Gross Vessel Face Velocity (screening est.)", value: result.geometry.grossFaceVelocity, unit: "m/s" },
       { label: "Liquid Level", value: result.geometry.liquidLevelPercent, unit: "%" },
     ];
 
@@ -243,11 +243,15 @@ export default function FlareKODrumPage() {
       calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
       additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
       methodology: [
-        "Souders\u2013Brown correlation for maximum allowable gas velocity: v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G)",
-        "Conservative K-factors per API 521 for flare KO drum service",
-        "Liquid accumulation = \u03A3(Q_l,i \u00D7 t_i) for each relief/blowdown scenario",
-        "Drain volume credited against accumulation if drain rate provided",
-        "Vessel geometry assembled from gas capacity + liquid accumulation + allowance zones",
+        "SCOPE: Preliminary flare KO drum sizing / FEED screening tool. Not final vessel design, not final internals design, not a dynamic transient model, and not a substitute for a detailed project relief/flare study.",
+        "Souders\u2013Brown correlation for maximum allowable gas velocity (screening basis): v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G). No inlet-device, droplet-size distribution, CFD, slug, or foam modeling.",
+        "K-factor per API 521 screening guidance. K pressure correction (if enabled) is an approximate screening treatment only; verify against project/company design basis for final design.",
+        "Standard gas conversion basis (where applicable): 15\u00B0C and 1.01325 bar(a) per ISO 13443.",
+        "Liquid design volume = governing scenario net accumulation after drain credit (governing = largest single-event accumulation). Non-concurrent scenario treatment.",
+        "Drain adequacy = instantaneous drain-rate screening only (preliminary). Final adequacy depends on event duration, total liquid, level philosophy, and actual drain behavior.",
+        "Gross vessel face velocity reported on gross vessel cross-sectional area — not actual mist-pad effective area.",
+        "Flare KO screening minimum diameter of 1500 mm applied per API 521-based screening practice.",
+        "Vessel geometry assembled from gas capacity diameter + liquid accumulation volume + user-defined allowance zones.",
       ],
       assumptions: result.assumptions,
       references: [
@@ -271,7 +275,7 @@ export default function FlareKODrumPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-calc-title">Flare Knock Out Drum Sizing</h1>
-            <p className="text-sm text-muted-foreground">Knockout drum sizing per API 521</p>
+            <p className="text-sm text-muted-foreground">Preliminary sizing / FEED screening per API 521 — not final design authority</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -555,7 +559,7 @@ export default function FlareKODrumPage() {
                 <p className="text-xs font-medium text-muted-foreground">K-Factor Corrections</p>
                 <div className="flex items-center gap-2">
                   <Checkbox id="chk-pressure-corr" checked={config.applyPressureCorrection} onCheckedChange={v => updateConfig("applyPressureCorrection", !!v)} data-testid="chk-pressure-correction" />
-                  <Label htmlFor="chk-pressure-corr" className="text-xs">Apply GPSA Fig 7-9 pressure correction (typically disabled for near-atmospheric KO drums)</Label>
+                  <Label htmlFor="chk-pressure-corr" className="text-xs">Apply GPSA Fig 7-9 pressure correction — approximate screening treatment only (typically disabled for near-atmospheric KO drums; verify against project design basis for final design)</Label>
                 </div>
               </div>
 
@@ -781,7 +785,7 @@ export default function FlareKODrumPage() {
                     { label: "Liquid Volume (net accum.)", value: `${result.geometry.liquidVolume_m3.toFixed(3)} m\u00B3` },
                     { label: "Gas Area Fraction", value: `${(result.geometry.gasAreaFraction * 100).toFixed(1)}%` },
                     { label: "Actual Gas Velocity", value: `${result.geometry.actualGasVelocity.toFixed(3)} m/s` },
-                    { label: "Mist Face Velocity", value: `${result.geometry.mistFaceVelocity.toFixed(3)} m/s` },
+                    { label: "Gross Vessel Face Velocity (screening est.)", value: `${result.geometry.grossFaceVelocity.toFixed(3)} m/s` },
                     { label: "Liquid Level", value: `${result.geometry.liquidLevelPercent.toFixed(1)}%` },
                   ].map((r, i) => (
                     <div key={i} className={`p-3 rounded-md border ${r.highlight ? "border-primary/40 bg-primary/5" : ""}`}>
@@ -837,6 +841,12 @@ export default function FlareKODrumPage() {
             </CardContent></Card>
           ) : (
             <div className="space-y-4">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-3 flex items-start gap-2" data-testid="banner-screening-scope">
+                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-400">
+                  <span className="font-semibold">Preliminary Screening Tool Only.</span> Results are for concept / FEED support only. This calculator does not replace a detailed flare/relief study, final mechanical design, mist eliminator vendor sizing, or dynamic transient simulation. All outputs require verification against the project/company design basis before use in final engineering documents.
+                </p>
+              </div>
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
