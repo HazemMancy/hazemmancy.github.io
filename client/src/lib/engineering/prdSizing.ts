@@ -97,8 +97,13 @@ export interface PRDSizingResult {
   requiredArea: number;
   fluidType: SizingFluidType;
   relievingPressure: number;
+  /** Actual relieving/sizing temperature (°C) — from the relief sizing case, NOT normal operating temperature */
+  relievingTemperature?: number;
   cCoefficient?: number;
+  /** Kv — viscosity correction factor (liquid service only) */
   kvFactor?: number;
+  /** Kw — liquid overpressure correction factor (liquid service only, per API 520 §5.7.2) */
+  kwFactor?: number;
   flowRegime?: string;
   warnings: string[];
 }
@@ -286,10 +291,19 @@ export function sizeGasVapor(input: PRDSizingInput): PRDSizingResult {
     warnings.push(`Required area ${A_mm2.toFixed(0)} mm² exceeds largest standard orifice (T: ${API_526_ORIFICES[API_526_ORIFICES.length - 1].area} mm²) — multiple PRDs required`);
   }
 
+  warnings.push(
+    "API-INFORMED GAS SCREENING: Sizing uses API 520 Part I critical/subcritical flow equations. " +
+    "Correction factors (Kd, Kb, Kc) are applied on a screening basis with user-supplied values — not vendor-certified. " +
+    "Complex backpressure and flare-network effects are not modelled. " +
+    "Two-phase, flashing, or mixed-phase discharge is not handled by this branch and requires specialist methodology. " +
+    "Final valve sizing must be confirmed with vendor certified capacity data per API 526."
+  );
+
   return {
     requiredArea: A_mm2,
     fluidType: "gas",
     relievingPressure: relievingPressureAbs,
+    relievingTemperature: input.relievingTemperature,
     cCoefficient: C,
     flowRegime,
     warnings,
@@ -332,10 +346,18 @@ export function sizeSteam(input: PRDSizingInput): PRDSizingResult {
     warnings.push(`Required area ${A_mm2.toFixed(0)} mm² exceeds largest standard orifice — multiple PRDs required`);
   }
 
+  warnings.push(
+    "PRELIMINARY STEAM SIZING ONLY: Steam properties (density, specific enthalpy, superheat correction Ksh) " +
+    "must be verified with steam tables or process simulation at the actual relieving pressure and superheat conditions. " +
+    "The superheat correction factor Ksh entered here is user-supplied — if incorrect, the area result will be in error. " +
+    "This result is a screening estimate only; final steam valve selection requires vendor certified steam capacity data."
+  );
+
   return {
     requiredArea: A_mm2,
     fluidType: "steam",
     relievingPressure: relievingPressureAbs,
+    relievingTemperature: input.relievingTemperature,
     flowRegime: "Steam service",
     warnings,
   };
@@ -395,15 +417,69 @@ export function sizeLiquid(input: PRDSizingInput): PRDSizingResult {
     requiredArea: A_mm2,
     fluidType: "liquid",
     relievingPressure: relievingPressureAbs,
+    relievingTemperature: input.relievingTemperature,
     kvFactor: Kv,
+    kwFactor: kw,
     flowRegime: "Liquid service",
     warnings,
   };
 }
 
+// ─── INPUT VALIDATION ────────────────────────────────────────────────────────────
+
+/**
+ * Validates a PRDSizingInput for physical plausibility before solving.
+ * Throws a descriptive Error on any invalid condition.
+ */
+export function validatePRDSizingInput(input: PRDSizingInput): void {
+  if (input.relievingRate <= 0)
+    throw new Error("Relieving rate must be positive (> 0)");
+  if (input.relievingPressureAbs <= 0)
+    throw new Error("Relieving pressure (absolute) must be positive (> 0 bar(a))");
+  if (input.backPressureAbs < 0)
+    throw new Error("Back pressure (absolute) cannot be negative");
+  if (input.backPressureAbs >= input.relievingPressureAbs)
+    throw new Error("Back pressure must be less than relieving pressure — check pressure basis (abs vs gauge)");
+  if (input.atmosphericPressure <= 0)
+    throw new Error("Atmospheric pressure must be positive");
+  if (input.kd <= 0 || input.kd > 1.0)
+    throw new Error(`Discharge coefficient Kd = ${input.kd} is out of range (0 < Kd ≤ 1.0)`);
+  if (input.kb <= 0 || input.kb > 1.0)
+    throw new Error(`Backpressure/overpressure factor (Kb or Kw) = ${input.kb} is out of range (0 < K ≤ 1.0)`);
+  if (input.kc <= 0 || input.kc > 1.0)
+    throw new Error(`Combination factor Kc = ${input.kc} is out of range (0 < Kc ≤ 1.0)`);
+
+  if (input.fluidType === "gas") {
+    if (input.molecularWeight <= 0)
+      throw new Error("Molecular weight must be positive");
+    if (input.specificHeatRatio <= 1.0)
+      throw new Error(`Specific heat ratio k = ${input.specificHeatRatio} must be > 1.0 for real gases`);
+    if (input.specificHeatRatio > 2.0)
+      throw new Error(`Specific heat ratio k = ${input.specificHeatRatio} is outside the expected range (1.0–2.0) — verify input`);
+    if (input.compressibilityFactor <= 0 || input.compressibilityFactor > 2.0)
+      throw new Error(`Compressibility factor Z = ${input.compressibilityFactor} is outside range (0 < Z ≤ 2.0)`);
+    const T_K = input.relievingTemperature + 273.15;
+    if (T_K <= 0)
+      throw new Error("Relieving temperature is below absolute zero (< −273.15 °C)");
+  }
+
+  if (input.fluidType === "steam") {
+    if (input.ksh <= 0 || input.ksh > 1.0)
+      throw new Error(`Superheat correction Ksh = ${input.ksh} is out of range (0 < Ksh ≤ 1.0)`);
+  }
+
+  if (input.fluidType === "liquid") {
+    if (input.liquidDensity <= 0)
+      throw new Error("Liquid density must be positive");
+    if (input.viscosity < 0)
+      throw new Error("Viscosity must be non-negative");
+  }
+}
+
 // ─── UNIFIED SIZING DISPATCHER ──────────────────────────────────────────────────
 
 export function sizePRD(input: PRDSizingInput): PRDSizingResult {
+  validatePRDSizingInput(input);
   switch (input.fluidType) {
     case "gas": return sizeGasVapor(input);
     case "steam": return sizeSteam(input);
@@ -683,7 +759,17 @@ export function buildFinalResult(
   const governing = governingIndex >= 0 ? scenarios[governingIndex] : null;
 
   if (governing?.type === "fire_exposure") flags.push("FIRE CASE");
-  if (governing?.fluidPhase === "two_phase") flags.push("TWO-PHASE SUSPECTED");
+  if (governing?.fluidPhase === "two_phase") {
+    flags.push("TWO-PHASE — SINGLE-PHASE CALC ONLY");
+    warnings.push(
+      "TWO-PHASE LIMITATION: The governing scenario is tagged as two-phase flow. " +
+      "This calculator performs single-phase relief sizing only (gas, steam, or liquid). " +
+      "The area calculated is based on the single-phase method selected in Tab 6 and does NOT account for two-phase flow behaviour. " +
+      "Two-phase and flashing/flashing-liquid relief requires a dedicated methodology (e.g. API 520 Part I Appendix C, Omega method, or HEM) " +
+      "and must be performed by a qualified relief systems specialist. Do NOT use this result as a final basis for a two-phase case."
+    );
+    actionItems.unshift("CRITICAL: Two-phase governing scenario requires specialist two-phase sizing methodology — this result is indicative only");
+  }
   if (governing?.type === "thermal_expansion") flags.push("THERMAL EXPANSION");
   if (sizingResult.flowRegime?.includes("choked") || sizingResult.flowRegime?.includes("Critical")) flags.push("CHOKED FLOW");
 
@@ -710,7 +796,8 @@ export function buildFinalResult(
     relievingRate: governing?.relievingRate || 0,
     relievingPressureAbs: sizingResult.relievingPressure,
     relievingPressureGauge: sizingResult.relievingPressure - project.atmosphericPressure,
-    relievingTemperature: equipment.normalOpTemp,
+    /** Relieving temperature from the actual sizing case, NOT normal operating temperature */
+    relievingTemperature: sizingResult.relievingTemperature ?? equipment.normalOpTemp,
     requiredArea: sizingResult.requiredArea,
     selectedOrifice: orifice,
     inletCheck,

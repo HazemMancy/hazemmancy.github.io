@@ -343,7 +343,7 @@ export default function PSVSizingPage() {
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">PRD / Flare Relief Calculator</h1>
-            <p className="text-xs md:text-sm text-muted-foreground">API 521 / 520 / 526 — Pressure Relief Device Sizing</p>
+            <p className="text-xs md:text-sm text-muted-foreground">API-Informed Preliminary Screening — Pressure Relief Device Sizing (API 520/521/526)</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -527,6 +527,19 @@ export default function PSVSizingPage() {
                         <div><Label className="text-xs mb-1.5 block">Notes</Label>
                           <Input value={scenario.notes} onChange={e => updateScenario(idx, { notes: e.target.value })} placeholder="Optional notes..." data-testid={`input-scenario-notes-${idx}`} /></div>
                       </div>
+                      {scenario.fluidPhase === "two_phase" && (
+                        <Card className="border-destructive/40 bg-destructive/5">
+                          <CardContent className="p-3 flex items-start gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 text-destructive mt-0.5 shrink-0" />
+                            <p className="text-[11px] text-destructive/90 leading-relaxed">
+                              <strong>Two-phase limitation:</strong> This calculator does NOT perform two-phase relief sizing.
+                              If this scenario becomes the governing case, sizing will use the single-phase fluid type selected in Tab 6 only.
+                              Two-phase and flashing relief requires a specialist methodology (e.g. API 520 Part I Appendix C, Omega method, or HEM).
+                              Mark this result clearly as indicative only and consult a qualified relief systems engineer.
+                            </p>
+                          </CardContent>
+                        </Card>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -644,20 +657,25 @@ export default function PSVSizingPage() {
                 const bpPct = sizing.backPressureAbs > 0 && equipment.setPressure > 0
                   ? (sizing.backPressureAbs / equipment.setPressure) * 100 : 0;
                 const rec = recommendDeviceType(device, bpPct);
-                return (rec.reasons.length > 0 || rec.warnings.length > 0) ? (
-                  <Card className="bg-accent/30">
+                return (
+                  <Card className="bg-accent/30 border-amber-500/20">
                     <CardContent className="p-3">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-1">
                         <Info className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-xs font-medium">Recommendation: <span className="text-primary">{rec.recommended.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span></span>
+                        <span className="text-xs font-medium">
+                          Preliminary Device Preview: <span className="text-primary">{rec.recommended.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
+                        </span>
                       </div>
+                      <p className="text-[10px] text-amber-400/80 mb-2">
+                        Rough preliminary preview only — uses back pressure input value divided by set pressure as a simplified ratio (not based on final calculated total backpressure). Run Piping Checks (Tab 8) for total backpressure calculation before relying on this guidance.
+                      </p>
                       <ul className="space-y-1">
                         {rec.reasons.map((r, i) => <li key={i} className="text-xs text-muted-foreground">- {r}</li>)}
                         {rec.warnings.map((w, i) => <li key={`w${i}`} className="text-xs text-amber-400">- {w}</li>)}
                       </ul>
                     </CardContent>
                   </Card>
-                ) : null;
+                );
               })()}
             </CardContent>
           </Card>
@@ -717,9 +735,23 @@ export default function PSVSizingPage() {
                   )}
 
                   {sizing.fluidType === "steam" && (
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div><Label className="text-xs mb-1.5 block">Superheat Correction Ksh</Label>
-                        <NumericInput value={sizing.ksh} onValueChange={v => setSizing(s => ({ ...s, ksh: v }))} data-testid="input-ksh" /></div>
+                    <div className="space-y-3">
+                      <Card className="border-amber-500/40 bg-amber-500/5">
+                        <CardContent className="p-3 flex items-start gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                          <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                            <strong>Steam sizing — preliminary screening only.</strong> Steam properties (Ksh superheat correction, density at relieving conditions)
+                            must be verified with steam tables or process simulation. The Ksh value entered here is user-supplied and not validated internally.
+                            Final steam valve selection requires vendor-certified steam capacity data.
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div><Label className="text-xs mb-1.5 block">Superheat Correction Ksh</Label>
+                          <NumericInput value={sizing.ksh} onValueChange={v => setSizing(s => ({ ...s, ksh: v }))} data-testid="input-ksh" />
+                          <p className="text-[10px] text-muted-foreground mt-1">Obtain from API 520 Table C-1 or steam tables at relieving P and T</p>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -751,15 +783,36 @@ export default function PSVSizingPage() {
                   <div className="pt-2 border-t">
                     <p className="text-xs font-medium text-muted-foreground mb-3">Correction Factors</p>
                     <div className="grid gap-4 sm:grid-cols-4">
-                      <div><Label className="text-xs mb-1.5 block">Kd (discharge)</Label>
-                        <NumericInput value={sizing.kd} onValueChange={v => setSizing(s => ({ ...s, kd: v }))} data-testid="input-kd" /></div>
-                      <div><Label className="text-xs mb-1.5 block">Kb (backpressure)</Label>
-                        <NumericInput value={sizing.kb} onValueChange={v => setSizing(s => ({ ...s, kb: v }))} data-testid="input-kb" /></div>
-                      <div><Label className="text-xs mb-1.5 block">Kc (combination)</Label>
-                        <NumericInput value={sizing.kc} onValueChange={v => setSizing(s => ({ ...s, kc: v }))} data-testid="input-kc" /></div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">
+                          Kd (discharge)
+                        </Label>
+                        <NumericInput value={sizing.kd} onValueChange={v => setSizing(s => ({ ...s, kd: v }))} data-testid="input-kd" />
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {sizing.fluidType === "liquid" ? "0.65 default (liquid, ASME certified)" : "0.975 default (gas/steam, ASME certified)"}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">
+                          {sizing.fluidType === "liquid" ? "Kw (liquid overpressure)" : "Kb (backpressure)"}
+                        </Label>
+                        <NumericInput value={sizing.kb} onValueChange={v => setSizing(s => ({ ...s, kb: v }))} data-testid="input-kb" />
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {sizing.fluidType === "liquid"
+                            ? "Kw per API 520 §5.7.2 — liquid overpressure correction (typically 1.0 at 10% OP)"
+                            : "Kb per API 520 §5.5 — back pressure correction for gas/steam"}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Kc (combination)</Label>
+                        <NumericInput value={sizing.kc} onValueChange={v => setSizing(s => ({ ...s, kc: v }))} data-testid="input-kc" />
+                        <p className="text-[10px] text-muted-foreground mt-1">1.0 (no RD); 0.9 (with rupture disk upstream)</p>
+                      </div>
                       {sizing.fluidType === "steam" && (
                         <div><Label className="text-xs mb-1.5 block">Ksh (superheat)</Label>
-                          <NumericInput value={sizing.ksh} onValueChange={v => setSizing(s => ({ ...s, ksh: v }))} data-testid="input-ksh-corr" /></div>
+                          <NumericInput value={sizing.ksh} onValueChange={v => setSizing(s => ({ ...s, ksh: v }))} data-testid="input-ksh-corr" />
+                          <p className="text-[10px] text-muted-foreground mt-1">Verify against steam tables at relieving P and T</p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -784,8 +837,10 @@ export default function PSVSizingPage() {
                     { label: "Flow Regime", value: sizingResult.flowRegime || "—", unit: "" },
                     { label: "Relieving Pressure", value: convertFromSI("pressure", sizingResult.relievingPressure - project.atmosphericPressure, unitSystem), unit: `${pU}g`, highlight: true },
                     { label: "Relieving Pressure (abs)", value: convertFromSI("pressureAbs", sizingResult.relievingPressure, unitSystem), unit: `${pU}a` },
-                    ...(sizingResult.cCoefficient ? [{ label: "C Coefficient", value: sizingResult.cCoefficient, unit: "—" }] : []),
-                    ...(sizingResult.kvFactor !== undefined ? [{ label: "Viscosity Factor Kv", value: sizingResult.kvFactor, unit: "—" }] : []),
+                    ...(sizingResult.relievingTemperature !== undefined ? [{ label: "Relieving Temperature (sizing basis)", value: convertFromSI("temperature", sizingResult.relievingTemperature, unitSystem), unit: tU }] : []),
+                    ...(sizingResult.cCoefficient ? [{ label: "C Coefficient (gas)", value: sizingResult.cCoefficient, unit: "—" }] : []),
+                    ...(sizingResult.kwFactor !== undefined ? [{ label: "Kw (liquid overpressure factor)", value: sizingResult.kwFactor.toFixed(4), unit: "—" }] : []),
+                    ...(sizingResult.kvFactor !== undefined ? [{ label: "Kv (viscosity factor)", value: sizingResult.kvFactor.toFixed(4), unit: "—" }] : []),
                   ]} rawData={sizingResult} exportData={{
                     calculatorName: "PRD Sizing Results",
                     projectInfo: [
@@ -810,9 +865,9 @@ export default function PSVSizingPage() {
                       { label: "Specific Heat Ratio (k)", value: sizing.specificHeatRatio },
                       { label: "Compressibility Factor (Z)", value: sizing.compressibilityFactor },
                       { label: "Relieving Temperature", value: sizing.relievingTemperature, unit: tU },
-                      { label: "Kd", value: sizing.kd },
-                      { label: "Kb", value: sizing.kb },
-                      { label: "Kc", value: sizing.kc },
+                      { label: "Kd (discharge)", value: sizing.kd },
+                      { label: sizing.fluidType === "liquid" ? "Kw (liquid overpressure)" : "Kb (backpressure)", value: sizing.kb },
+                      { label: "Kc (combination)", value: sizing.kc },
                       { label: "Device Type", value: device.type },
                       ...(governingIndex >= 0 && scenarios[governingIndex] ? [
                         { label: "Governing Scenario", value: scenarios[governingIndex].type },
@@ -824,21 +879,30 @@ export default function PSVSizingPage() {
                       { label: "Flow Regime", value: sizingResult.flowRegime || "—", unit: "" },
                       { label: "Relieving Pressure (gauge)", value: convertFromSI("pressure", sizingResult.relievingPressure - project.atmosphericPressure, unitSystem), unit: `${pU}g`, highlight: true },
                       { label: "Relieving Pressure (abs)", value: convertFromSI("pressureAbs", sizingResult.relievingPressure, unitSystem), unit: `${pU}a` },
-                      ...(sizingResult.cCoefficient ? [{ label: "C Coefficient", value: sizingResult.cCoefficient, unit: "—" }] : []),
-                      ...(sizingResult.kvFactor !== undefined ? [{ label: "Viscosity Factor Kv", value: sizingResult.kvFactor, unit: "—" }] : []),
+                      ...(sizingResult.relievingTemperature !== undefined ? [{ label: "Relieving Temperature (sizing basis)", value: convertFromSI("temperature", sizingResult.relievingTemperature, unitSystem), unit: tU }] : []),
+                      ...(sizingResult.cCoefficient ? [{ label: "C Coefficient (gas)", value: sizingResult.cCoefficient, unit: "—" }] : []),
+                      ...(sizingResult.kwFactor !== undefined ? [{ label: "Kw (liquid overpressure factor)", value: sizingResult.kwFactor, unit: "—" }] : []),
+                      ...(sizingResult.kvFactor !== undefined ? [{ label: "Kv (viscosity factor)", value: sizingResult.kvFactor, unit: "—" }] : []),
                     ],
                     methodology: [
-                      "Gas/vapor sizing per API 520 Part I, Section 5.6 (critical and subcritical flow)",
-                      "Steam sizing per API 520 Part I with Ksh superheat correction and Kn Napier correction",
-                      "Liquid sizing per API 520 Part I, Section 5.8 with viscosity correction Kv",
+                      "SCREENING TOOL ONLY — This is an API-informed preliminary sizing estimate, not a final certified calculation.",
+                      "Gas/vapor sizing uses API 520 Part I, Section 5.6 critical and subcritical flow equations as a screening basis.",
+                      "Steam sizing uses API 520 Part I steam constant with user-supplied Ksh (must be verified against steam tables).",
+                      "Liquid sizing uses API 520 Part I, Section 5.7.2 with viscosity correction Kv — assumes single-phase liquid.",
+                      "Complex backpressure effects and flare-network interactions are NOT modelled.",
+                      "Two-phase and flashing relief is NOT handled — specialist methodology required for such cases.",
                     ],
                     assumptions: [
-                      "Kd = 0.975 for gas/steam (ASME certified), 0.65 for liquid (default values)",
-                      "Scenario screening per API 521 — user must verify relief rates with process simulation",
+                      "Correction factors (Kd, Kb, Kc) are user-supplied screening values, not vendor-certified capacity data.",
+                      "Kd default: 0.975 for gas/steam, 0.65 for liquid (representative values per API 520 — must be confirmed with vendor).",
+                      "Overpressure scenarios and relief rates are user-defined; verify with rigorous process simulation before use in any design.",
+                      "Piping checks use approximate fluid density (ideal gas law for gas) and default viscosity (0.015 cP for gas); verify with actual properties.",
+                      "Final relief device selection, sizing certification, and procurement specification require qualified relief systems engineer review.",
                     ],
                     references: [
-                      "API 520 Part I, 10th Edition: Sizing, Selection, and Installation of Pressure-Relieving Devices",
-                      "API 521, 7th Edition: Pressure-Relieving and Depressuring Systems",
+                      "API 520 Part I, 10th Edition: Sizing, Selection, and Installation of Pressure-Relieving Devices (reference basis — not full compliance)",
+                      "API 521, 7th Edition: Pressure-Relieving and Depressuring Systems (scenario screening reference)",
+                      "API 526, 7th Edition: Flanged Steel Pressure-Relief Valves (orifice designation reference only)",
                     ],
                     warnings: sizingResult.warnings,
                   } as ExportDatasheet} />
@@ -949,10 +1013,17 @@ export default function PSVSizingPage() {
                     <NumericInput value={inletPiping.elevationChange} onValueChange={v => setInletPiping(p => ({ ...p, elevationChange: v }))} data-testid="input-inlet-elev" /></div>
                 </div>
                 <Card className="bg-accent/30">
-                  <CardContent className="p-3">
+                  <CardContent className="p-3 space-y-2">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Info className="w-3.5 h-3.5 shrink-0" />
                       Inlet piping pressure drop must not exceed 3% of set pressure (API 520 Part II) to prevent valve chatter.
+                    </div>
+                    <div className="flex items-start gap-2 text-xs text-amber-400/80">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Approximate fluid properties:</strong> For gas/vapor service, fluid density is computed from the ideal gas law at relieving temperature and pressure.
+                        Gas viscosity defaults to 0.015 cP (approximate for light hydrocarbon gases). For accurate piping checks, provide actual fluid density and viscosity from process simulation or property data.
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
@@ -1084,6 +1155,7 @@ export default function PSVSizingPage() {
                       { label: "Relieving Rate", value: finalResult.relievingRate, unit: "kg/h", highlight: true },
                       { label: "Relieving Pressure (gauge)", value: convertFromSI("pressure", finalResult.relievingPressureGauge, unitSystem), unit: `${pU}g` },
                       { label: "Relieving Pressure (abs)", value: convertFromSI("pressureAbs", finalResult.relievingPressureAbs, unitSystem), unit: `${pU}a` },
+                      { label: "Relieving Temperature (sizing basis)", value: convertFromSI("temperature", finalResult.relievingTemperature, unitSystem), unit: tU, highlight: true },
                       { label: "Required Area", value: finalResult.requiredArea, unit: "mm²", highlight: true },
                       { label: "Selected Orifice", value: `${finalResult.selectedOrifice.designation} (${finalResult.selectedOrifice.area} mm²)`, unit: "" },
                       { label: "Orifice Margin", value: `${finalResult.selectedOrifice.margin >= 0 ? "+" : ""}${finalResult.selectedOrifice.margin.toFixed(1)}%`, unit: "" },
@@ -1118,9 +1190,9 @@ export default function PSVSizingPage() {
                         { label: "Specific Heat Ratio (k)", value: sizing.specificHeatRatio },
                         { label: "Compressibility Factor (Z)", value: sizing.compressibilityFactor },
                         { label: "Relieving Temperature", value: sizing.relievingTemperature, unit: tU },
-                        { label: "Kd", value: sizing.kd },
-                        { label: "Kb", value: sizing.kb },
-                        { label: "Kc", value: sizing.kc },
+                        { label: "Kd (discharge)", value: sizing.kd },
+                        { label: sizing.fluidType === "liquid" ? "Kw (liquid overpressure)" : "Kb (backpressure)", value: sizing.kb },
+                        { label: "Kc (combination)", value: sizing.kc },
                         { label: "Device Type", value: device.type },
                         ...(governingIndex >= 0 && scenarios[governingIndex] ? [
                           { label: "Governing Scenario", value: scenarios[governingIndex].type },
@@ -1132,6 +1204,7 @@ export default function PSVSizingPage() {
                         { label: "Relieving Rate", value: finalResult.relievingRate, unit: "kg/h", highlight: true },
                         { label: "Relieving Pressure (gauge)", value: convertFromSI("pressure", finalResult.relievingPressureGauge, unitSystem), unit: `${pU}g` },
                         { label: "Relieving Pressure (abs)", value: convertFromSI("pressureAbs", finalResult.relievingPressureAbs, unitSystem), unit: `${pU}a` },
+                        { label: "Relieving Temperature (sizing basis)", value: convertFromSI("temperature", finalResult.relievingTemperature, unitSystem), unit: tU, highlight: true },
                         { label: "Required Area", value: finalResult.requiredArea, unit: "mm²", highlight: true },
                         { label: "Selected Orifice", value: `${finalResult.selectedOrifice.designation} (${finalResult.selectedOrifice.area} mm²)`, unit: "" },
                         { label: "Orifice Margin", value: `${finalResult.selectedOrifice.margin >= 0 ? "+" : ""}${finalResult.selectedOrifice.margin.toFixed(1)}%`, unit: "" },
@@ -1174,29 +1247,33 @@ export default function PSVSizingPage() {
                         }] : []),
                       ],
                       methodology: [
-                        "Gas/vapor sizing per API 520 Part I, Section 5.6 (critical and subcritical flow)",
-                        "Steam sizing per API 520 Part I with Ksh superheat correction and Kn Napier correction",
-                        "Liquid sizing per API 520 Part I, Section 5.8 with viscosity correction Kv",
-                        "Orifice selection per API 526 standard designations (D through T)",
-                        "Inlet piping pressure drop check per API 520 Part II (3% rule)",
-                        "Backpressure assessment per API 521 guidelines",
+                        "SCREENING TOOL ONLY — This is an API-informed preliminary sizing estimate, not a final certified calculation.",
+                        "Gas/vapor sizing uses API 520 Part I, Section 5.6 critical and subcritical flow equations as a screening basis.",
+                        "Steam sizing uses API 520 Part I steam constant with user-supplied Ksh (must be verified against steam tables).",
+                        "Liquid sizing uses API 520 Part I, Section 5.7.2 with viscosity correction Kv — assumes single-phase liquid.",
+                        "Orifice designation per API 526 standard table (D through T) — preliminary selection only.",
+                        "Inlet piping pressure drop check per API 520 Part II (3% rule); density from ideal gas law, viscosity estimated.",
+                        "Backpressure check uses computed piping losses plus user-supplied superimposed backpressure.",
+                        "Complex backpressure effects, flare-network interactions, and two-phase/flashing discharge are NOT modelled.",
                       ],
                       assumptions: [
-                        "Gas/vapor sizing per API 520 Part I, Section 5.6 (critical and subcritical flow)",
-                        "Steam sizing per API 520 Part I with Ksh superheat correction and Kn Napier correction",
-                        "Liquid sizing per API 520 Part I, Section 5.8 with viscosity correction Kv",
-                        "Kd = 0.975 for gas/steam (ASME certified), 0.65 for liquid (default values)",
-                        "Inlet piping loss limit: 3% of set pressure per API 520 Part II",
-                        "Orifice selection per API 526 standard designations (D through T) with flange sizes",
-                        "Fire case heat input per API 521 (simplified wetted area method)",
-                        "Scenario screening per API 521 — user must verify relief rates with process simulation",
+                        "All correction factors (Kd, Kb/Kw, Kc) are user-supplied screening values — not vendor-certified capacity data.",
+                        "Relieving temperature entered by user (sizing basis) — NOT normal operating temperature.",
+                        "Gas/vapor density at relieving conditions approximated by ideal gas law for piping checks.",
+                        "Gas viscosity defaulted to 0.015 cP for piping checks — verify with actual fluid properties.",
+                        "Kd default: 0.975 for gas/steam, 0.65 for liquid — representative values; must be confirmed with valve vendor.",
+                        "Inlet piping loss allowable limit: 3% of set pressure (API 520 Part II guidance).",
+                        "Orifice designation from API 526 standard table (D through T) — final valve body/nozzle must be specified with vendor.",
+                        "Fire case heat input uses simplified API 521 F-factor/wetted-area method (screening only).",
+                        "Scenario relief rates are user-defined — must be verified with rigorous process simulation before any design application.",
+                        "Final relief device selection and certification require independent review by a qualified relief systems engineer.",
                       ],
                       references: [
-                        "API 520 Part I, 10th Edition: Sizing, Selection, and Installation of Pressure-Relieving Devices",
-                        "API 520 Part II, 6th Edition: Installation",
-                        "API 521, 7th Edition: Pressure-Relieving and Depressuring Systems",
-                        "API 526, 7th Edition: Flanged Steel Pressure-Relief Valves",
-                        "ASME BPVC Section VIII, Division 1: Pressure Vessels",
+                        "API 520 Part I, 10th Edition: Sizing, Selection, and Installation of Pressure-Relieving Devices (reference basis — not full compliance)",
+                        "API 520 Part II, 6th Edition: Installation (piping check guidance)",
+                        "API 521, 7th Edition: Pressure-Relieving and Depressuring Systems (scenario screening reference)",
+                        "API 526, 7th Edition: Flanged Steel Pressure-Relief Valves (orifice designation reference only)",
+                        "ASME BPVC Section VIII, Division 1: Pressure Vessels (MAWP/set pressure basis)",
                       ],
                       warnings: [
                         ...finalResult.flags,
