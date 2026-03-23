@@ -526,7 +526,7 @@ export function generateTEMAGuidance(
 
 export interface GeometryCheck {
   aSelected: number;
-  qAchieved: number;
+  screeningDutyKW: number;
   excessArea: number;
 }
 
@@ -673,14 +673,14 @@ function computeEffectivenessNTU(
   }
 
   trace.steps.push({
-    name: "Effectiveness (ε)",
-    equation: "ε = Q / Q_max = Q / (C_min × (Th,in − Tc,in))",
+    name: "Effectiveness (ε) — informational screening metric",
+    equation: "ε = Q / Q_max = Q / (C_min × (Th,in − Tc,in)) [informational; counter-current ideal basis]",
     substitution: `${dutyKW.toFixed(2)} / (${Cmin.toFixed(4)} × ${(tHotIn - tColdIn).toFixed(2)})`,
     result: `${(epsilon * 100).toFixed(1)}%`,
   });
   trace.steps.push({
-    name: "NTU",
-    equation: "NTU = UA / C_min (back-calc. from ε on counter-current basis — informational; Kays & London §2)",
+    name: "NTU — informational screening metric",
+    equation: "NTU = UA / C_min (back-calc. from ε on counter-current ideal basis — informational only; Kays & London §2)",
     substitution: `C_r = ${Cr.toFixed(4)}, ε = ${epsilon.toFixed(4)}`,
     result: `${ntu.toFixed(3)}`,
   });
@@ -694,6 +694,7 @@ function computeEffectivenessNTU(
 
 function computeFactor(
   config: ExchangerConfig,
+  project: HXProject,
   R: number,
   P: number,
   trace: CalcTrace,
@@ -738,6 +739,12 @@ function computeFactor(
         result: `${F.toFixed(4)}`,
       });
     } else {
+      if (!project.allowApproxF) {
+        throw new Error(
+          "Approximate F-factor correlation is disabled. " +
+          "Enable 'Allow approximate F correlation' in the Basis tab, or switch to 'User-entered F' and supply a value from TEMA charts."
+        );
+      }
       if (config.shellPasses > 1) {
         F = correctionFactorNShell(R, P, config.shellPasses);
         trace.flags.push("MULTI_SHELL_F");
@@ -776,6 +783,7 @@ function computeFactor(
 
 function computeUFouled(
   uInput: UInput,
+  project: HXProject,
   trace: CalcTrace,
 ): number {
   let uFouled: number;
@@ -790,6 +798,12 @@ function computeUFouled(
       result: `${uFouled.toFixed(1)} W/(m²·K)`,
     });
   } else if (uInput.mode === "estimated") {
+    if (!project.allowEstimatedU) {
+      throw new Error(
+        "Approximate U estimation from service category is disabled. " +
+        "Enable 'Allow approximate U estimation' in the Basis tab, or switch to 'User-entered U_fouled' or 'U_clean + fouling resistances'."
+      );
+    }
     const svc = TYPICAL_U_VALUES[uInput.serviceCategory];
     if (svc) {
       uFouled = svc.typical;
@@ -836,8 +850,22 @@ function solveOutletTemps(
   const cold = { ...opCase.coldSide };
   let dutyKW = 0;
 
-  if (hot.phaseNote !== "single_phase") trace.flags.push("PHASE_CHANGE_NOT_MODELED");
-  if (cold.phaseNote !== "single_phase") trace.flags.push("PHASE_CHANGE_NOT_MODELED");
+  if (hot.phaseNote !== "single_phase") {
+    trace.flags.push("PHASE_CHANGE_NOT_MODELED");
+    trace.warnings.push(
+      `Hot side: "${hot.phaseNote.replace(/_/g, " ")}" service selected — LMTD method with constant Cp is NOT valid for phase-change services. ` +
+      `Use zone-by-zone analysis, condensation/boiling correlations, or process simulation software. ` +
+      `Results below are indicative only and must NOT be used for final design.`
+    );
+  }
+  if (cold.phaseNote !== "single_phase") {
+    trace.flags.push("PHASE_CHANGE_NOT_MODELED");
+    trace.warnings.push(
+      `Cold side: "${cold.phaseNote.replace(/_/g, " ")}" service selected — LMTD method with constant Cp is NOT valid for phase-change services. ` +
+      `Use zone-by-zone analysis, condensation/boiling correlations, or process simulation software. ` +
+      `Results below are indicative only and must NOT be used for final design.`
+    );
+  }
 
   const Ch = (hot.mDot / 3600) * hot.cp;
   const Cc = (cold.mDot / 3600) * cold.cp;
@@ -935,8 +963,12 @@ function solveOutletTemps(
     }
     const Qh = Ch * (hot.tIn - hot.tOut);
     const Qc = Cc * (cold.tOut - cold.tIn);
-    // Conservative basis: use the larger of Qh and Qc to size for both sides
-    dutyKW = (Qh > 0 && Qc > 0) ? Math.max(Qh, Qc) : (Qh > 0 ? Qh : Qc);
+    // Use average of both sides as the duty basis; any imbalance is captured by checkEnergyBalance
+    if (Qh > 0 && Qc > 0) {
+      dutyKW = (Qh + Qc) / 2;
+    } else {
+      dutyKW = Qh > 0 ? Qh : Qc;
+    }
 
     trace.steps.push({
       name: "Duty (hot side)",
@@ -951,9 +983,9 @@ function solveOutletTemps(
       result: `${Qc.toFixed(2)} kW`,
     });
     trace.steps.push({
-      name: "Governing duty (conservative)",
-      equation: "Q_des = max(Q_h, Q_c) — largest duty governs area; covers both sides",
-      substitution: `max(${Qh.toFixed(2)}, ${Qc.toFixed(2)})`,
+      name: "Duty basis (both outlets known)",
+      equation: "Q_des = (Q_h + Q_c) / 2 — average of hot-side and cold-side computed duties. Imbalance is reported by the energy balance check step.",
+      substitution: `(${Qh.toFixed(2)} + ${Qc.toFixed(2)}) / 2`,
       result: `${dutyKW.toFixed(2)} kW`,
     });
 
@@ -1022,9 +1054,13 @@ function computeCaseResult(
     steps: [],
     intermediateValues: {},
     assumptions: [
-      "LMTD method with correction factor for preliminary sizing",
+      "LMTD method with correction factor for preliminary sizing only — not a detailed rating tool",
       "Single-phase sensible heat transfer assumed unless noted",
       "Constant properties (Cp, U) over temperature range",
+      "No Bell-Delaware shell-side rating, no baffle optimization, no pressure drop calculation",
+      "No shell-side bypassing or maldistribution effects modeled",
+      "No droplet-size distribution, CFD, slug, or foam/re-entrainment effects",
+      "Not final design authority — confirm with detailed thermal-hydraulic rating software and vendor",
     ],
     warnings: [],
     flags: [],
@@ -1077,7 +1113,7 @@ function computeCaseResult(
     result: `R = ${R.toFixed(4)}, P = ${P.toFixed(4)}`,
   });
 
-  const F = computeFactor(config, R, P, trace);
+  const F = computeFactor(config, project, R, P, trace);
   const correctedLMTD = F * lmtd;
 
   trace.steps.push({
@@ -1092,7 +1128,7 @@ function computeCaseResult(
     throw new Error("Corrected LMTD ≤ 0 — infeasible configuration");
   }
 
-  const uFouled = computeUFouled(uInput, trace);
+  const uFouled = computeUFouled(uInput, project, trace);
   const rfTotal = uInput.mode === "clean_plus_fouling" ? uInput.rfHot + uInput.rfCold : 0;
 
   const dutyW = dutyKW * 1000;
@@ -1223,6 +1259,26 @@ export function calculateHeatExchangerFull(
 ): HXFullResult {
   if (cases.length === 0) throw new Error("At least one operating case is required");
 
+  for (let i = 0; i < cases.length; i++) {
+    const c = cases[i];
+    const lbl = `Case ${i + 1} (${c.name})`;
+    if (c.hotSide.mDot <= 0) throw new Error(`${lbl}: Hot side flow rate must be > 0`);
+    if (c.coldSide.mDot <= 0) throw new Error(`${lbl}: Cold side flow rate must be > 0`);
+    if (c.hotSide.cp <= 0) throw new Error(`${lbl}: Hot side Cp must be > 0`);
+    if (c.coldSide.cp <= 0) throw new Error(`${lbl}: Cold side Cp must be > 0`);
+    if (c.dutyMode === "duty_given" && c.dutyKW <= 0) throw new Error(`${lbl}: Duty must be > 0 when duty_given mode is selected`);
+  }
+  if (uInput.mode === "clean_plus_fouling") {
+    if (uInput.uClean <= 0) throw new Error("U_clean must be > 0");
+    if (uInput.rfHot < 0) throw new Error("Rf_hot must be ≥ 0");
+    if (uInput.rfCold < 0) throw new Error("Rf_cold must be ≥ 0");
+  } else if (uInput.mode === "fouled_direct") {
+    if (uInput.uFouled <= 0) throw new Error("U_fouled must be > 0");
+  }
+  if (uInput.designMargin < 0) throw new Error("Design margin must be ≥ 0");
+  if (config.shellPasses < 1) throw new Error("Shell passes must be ≥ 1");
+  if (config.tubePasses < 1) throw new Error("Tube passes must be ≥ 1");
+
   const caseResults: CaseResult[] = [];
   const globalFlags: EngFlag[] = [];
   const globalWarnings: string[] = [];
@@ -1240,9 +1296,9 @@ export function calculateHeatExchangerFull(
 
   let geometry: GeometryCheck | null = null;
   if (geometryArea && geometryArea > 0 && governingCase) {
-    const qAchieved = (governingCase.uFouled * geometryArea * governingCase.correctedLMTD) / 1000;
+    const screeningDutyKW = (governingCase.uFouled * geometryArea * governingCase.correctedLMTD) / 1000;
     const excessArea = ((geometryArea - governingCase.aReq) / governingCase.aReq) * 100;
-    geometry = { aSelected: geometryArea, qAchieved, excessArea };
+    geometry = { aSelected: geometryArea, screeningDutyKW, excessArea };
   }
 
   const recommendations: string[] = [];

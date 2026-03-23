@@ -259,7 +259,7 @@ export default function HeatExchangerPage() {
         title: "Geometry Check",
         items: [
           { label: "A selected", value: result.geometry.aSelected, unit: "m²" },
-          { label: "Q achieved", value: result.geometry.qAchieved, unit: "kW" },
+          { label: "Screening duty (Q = U·A_sel·F·LMTD)", value: result.geometry.screeningDutyKW, unit: "kW" },
           { label: "Excess area", value: result.geometry.excessArea, unit: "%" },
         ],
       });
@@ -276,11 +276,13 @@ export default function HeatExchangerPage() {
       calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
       additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
       methodology: [
-        "LMTD method: Q = U × A × F × LMTD",
-        "F-correction factor for multi-pass configurations (Bowman et al.)",
-        "U_fouled = 1 / (1/U_clean + Rf_hot + Rf_cold)",
+        "LMTD method (preliminary sizing only): Q = U × A × F × LMTD",
+        "Duty basis (both_outlets_known mode): Q_des = (Q_h + Q_c) / 2 — average of both sides; imbalance flagged",
+        "F-correction factor for multi-pass configurations (Bowman et al.) — approximate correlation only; verify against TEMA charts",
+        "U_fouled = 1 / (1/U_clean + Rf_hot + Rf_cold) per TEMA fouling resistances",
         "Design area includes user-specified margin percentage",
         "Energy balance check: Q_hot vs Q_cold within specified tolerance",
+        "No Bell-Delaware shell-side rating, no baffle optimization, no pressure drop calculation — not final design authority",
       ],
       assumptions: gc.trace.assumptions,
       references: [
@@ -1024,7 +1026,7 @@ export default function HeatExchangerPage() {
                         {result?.geometry && (
                           <div className="grid gap-2 grid-cols-3">
                             <ResultBox label="A selected" value={`${fmtN(result.geometry.aSelected)} m²`} />
-                            <ResultBox label="Q achieved" value={`${fmtN(result.geometry.qAchieved)} kW`} />
+                            <ResultBox label="Screening duty" value={`${fmtN(result.geometry.screeningDutyKW)} kW`} />
                             <ResultBox label="Excess area" value={`${fmtN(result.geometry.excessArea)}%`} highlight={result.geometry.excessArea < 0} />
                           </div>
                         )}
@@ -1426,7 +1428,7 @@ function buildCalcNoteHTML(result: HXFullResult, gc: CaseResult, project: HXProj
 <table>
 <tr><td>Hot Side Duty, Q_h</td><td>${gc.hotDutyKW.toFixed(2)} kW</td></tr>
 <tr><td>Cold Side Duty, Q_c</td><td>${gc.coldDutyKW.toFixed(2)} kW</td></tr>
-<tr><td>Governing Duty, Q_des = max(Q_h, Q_c)</td><td>${gc.dutyKW.toFixed(2)} kW</td></tr>
+<tr><td>Design Duty, Q_des = (Q_h + Q_c) / 2 (both-outlets-known: average; imbalance flagged by energy balance check)</td><td>${gc.dutyKW.toFixed(2)} kW</td></tr>
 <tr><td>LMTD</td><td>${gc.lmtd.toFixed(2)} °C</td></tr>
 <tr><td>R (heat capacity ratio, Bowman)</td><td>${gc.R.toFixed(4)}</td></tr>
 <tr><td>P (temperature effectiveness, Bowman)</td><td>${gc.P.toFixed(4)}</td></tr>

@@ -74,6 +74,18 @@ The application is a pure static single-page application (SPA) with no backend s
 - **Restriction Orifice Engine (ISO 5167-2:2003)**: Implements Reader-Harris/Gallagher Cd, permanent pressure loss, gas expansion factor Y, cavitation assessment, erosional velocity, and multi-stage pressure distribution. Gas properties are handled via Manual, Peng-Robinson EoS, or SRK EoS modes, with Van der Waals mixing rules, Chueh-Prausnitz BIPs, and Lee-Gonzalez-Eakin gas viscosity.
 - **Gas Mixing Calculator**: Calculates Z, ρ, μ, Cp/Cv, γ, and speed of sound at specified T & P using Peng-Robinson EoS, SRK EoS, or Pitzer correlation, supporting 20 common O&G species.
 
+## Heat Exchanger Sizing — Revision Notes (Task F, March 2026)
+Nine corrections applied to `heatExchanger.ts` and `heat-exchanger.tsx`:
+1. **`both_outlets_known` duty basis corrected**: `Math.max(Qh, Qc)` replaced with `(Qh + Qc) / 2` (average of both sides). Trace step label updated to "Duty basis (both outlets known) — average". Calc note and export methodology updated accordingly.
+2. **`allowApproxF` enforced in solver**: `computeFactor` now accepts `project: HXProject` and throws a user-readable error if `fMode === "approximate_correlation"` and `project.allowApproxF === false`. UI already conditionally hides the option; engine is the defense-in-depth backstop.
+3. **`allowEstimatedU` enforced in solver**: `computeUFouled` now accepts `project: HXProject` and throws if `mode === "estimated"` and `project.allowEstimatedU === false`. UI conditionally hides the option; engine blocks it as a backstop.
+4. **Phase change warning strengthened**: `solveOutletTemps` now emits a detailed multi-sentence warning for each condensing/boiling stream explaining that LMTD with constant Cp is NOT valid and that results are indicative only and must not be used for final design.
+5. **`qAchieved` renamed to `screeningDutyKW`**: `GeometryCheck` interface, engine assembly, inline UI result box, and export additional section all updated. Label reads "Screening duty (Q = U·A_sel·F·LMTD)".
+6. **Schema validation added**: Full validation loop in `calculateHeatExchangerFull` before case loop: flow > 0, Cp > 0, U > 0, fouling ≥ 0, design margin ≥ 0, shell/tube passes ≥ 1, U_fouled > 0 for fouled_direct mode.
+7. **Geometry screening assumptions expanded**: `computeCaseResult` assumptions array now explicitly states: no Bell-Delaware, no baffle optimization, no pressure drop, no bypassing/maldistribution, no CFD/slug/foam, not final design authority.
+8. **Methodology/export updated**: `buildExportData` methodology array and `buildCalcNoteHTML` duty label both updated to reflect the average duty basis and screening-only scope.
+9. **NTU/effectiveness labeled as informational screening metrics**: Both trace step names and equations now include "informational screening metric" and "counter-current ideal basis" language throughout.
+
 ## Flare KO Drum — Revision Notes (Task E, March 2026)
 Ten corrections applied to `flareKODrum.ts` and `flare-ko-drum.tsx`:
 1. **K_eff unit label fixed**: "Effective K (pressure-corrected)" step unit corrected from `"-"` to `"m/s"`. Label updated to include "approx. screening".
