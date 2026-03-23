@@ -190,8 +190,7 @@ export default function PSVSizingPage() {
       let k  = sizing.specificHeatRatio;
 
       if (sizing.fluidType === "gas" && psvGasPropsMode !== "manual") {
-        const T_K = convertToSI("temperature", sizing.relievingTemperature, unitSystem);
-        const T_C = T_K - 273.15;
+        const T_C = convertToSI("temperature", sizing.relievingTemperature, unitSystem); // returns °C
         const manual: ManualGasProps = { molecularWeight: mw, specificHeatRatio: k, compressibilityFactor: z, viscosity: 0.015 };
         const resolved = resolveGasProps(psvGasPropsMode, manual, psvGasComposition, T_C, rp.abs);
         if (resolved.warnings.length > 0) setError(`EoS: ${resolved.warnings.join("; ")}`);
@@ -218,8 +217,6 @@ export default function PSVSizingPage() {
 
       const orifice = selectAPI526Orifice(result.requiredArea);
       setOrificeSelection(orifice);
-
-      setError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sizing calculation error");
       setSizingResult(null);

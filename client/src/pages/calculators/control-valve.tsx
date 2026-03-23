@@ -190,8 +190,7 @@ export default function ControlValvePage() {
 
       if ((serviceData.fluidType === "gas") && cvGasPropsMode !== "manual") {
         const op0 = sd.operatingPoints[0];
-        const T_K = op0?.temperature ?? 298.15;
-        const T_C = T_K - 273.15;
+        const T_C = op0?.temperature ?? 25.0; // toSIPoints() converts temperature to °C; resolveGasProps expects °C
         const P_bar = op0?.upstreamPressure ?? 1.0;
         const manual: ManualGasProps = {
           molecularWeight: sd.gasProps.molecularWeight,

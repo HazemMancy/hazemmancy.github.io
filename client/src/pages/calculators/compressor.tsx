@@ -149,7 +149,7 @@ export default function CompressorPage() {
       let Z  = parseFloat(form.compressibilityFactor);
 
       if (gasPropsMode !== "manual") {
-        const T_C = T_K_suction - 273.15;
+        const T_C = T_K_suction; // convertToSI("temperature") returns °C; resolveGasProps expects °C
         const manual: ManualGasProps = {
           molecularWeight: isNaN(MW) ? 18.5 : MW,
           specificHeatRatio: isNaN(k) ? 1.27 : k,

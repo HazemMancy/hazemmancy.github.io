@@ -102,8 +102,7 @@ export default function GasLineSizingPage() {
       let mu  = parseFloat(form.viscosity);
 
       if (gasPropsMode !== "manual") {
-        const T_K = convertToSI("temperature", parseFloat(form.temperature), unitSystem);
-        const T_C = T_K - 273.15;
+        const T_C = convertToSI("temperature", parseFloat(form.temperature), unitSystem); // returns °C
         const P_bar = convertToSI("pressure", parseFloat(form.pressure), unitSystem);
         const manual: ManualGasProps = {
           molecularWeight: isNaN(mw) ? 18.5 : mw,
