@@ -201,16 +201,17 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
 
   if (numStages > 1) {
     assumptions.push(`Equal compression ratio per stage: r = ${ratioPerStage.toFixed(4)}`);
-    assumptions.push("Intercooling assumed back to suction temperature between stages");
+    assumptions.push("Perfect intercooling assumed: gas cooled back to suction temperature between stages. No intercooler approach temperature modeled (typical 5\u201310\u00B0C above cooling medium). No interstage pressure drop modeled (typical 0.3\u20130.5 bar per intercooler). These omissions are non-conservative for multi-stage trains \u2014 include in system pressure budget during detailed design.");
   }
   assumptions.push(`Compression model: ${model}`);
   assumptions.push(`Compressor type: ${input.compressorType}`);
   assumptions.push(input.compressorType === "centrifugal"
-    ? "Standard: API 617 (Axial and Centrifugal Compressors), GPSA Section 13"
-    : "Standard: API 618 (Reciprocating Compressors), GPSA Section 13");
+    ? "Reference basis: API 617 (Axial and Centrifugal Compressors), GPSA Section 13 \u2014 preliminary FEED screening only; not a substitute for detailed vendor selection or API compliance review"
+    : "Reference basis: API 618 (Reciprocating Compressors), GPSA Section 13 \u2014 preliminary FEED screening only; not a substitute for detailed vendor selection or API compliance review");
   assumptions.push(`Gas constant R = ${GAS_CONSTANT.toFixed(2)} J/(kmol\u00B7K)`);
-  assumptions.push(`Standard conditions: T_std = ${STANDARD_TEMPERATURE.toFixed(2)} K (15°C), P_std = ${STANDARD_PRESSURE.toFixed(0)} Pa (101.325 kPa) — per ISO 13443 / GPSA Section 13 / API MPMS Chapter 14.3`);
-  assumptions.push("Z-factor applies at suction conditions only; EOS verification recommended for multi-stage or high-pressure service");
+  assumptions.push(`Standard conditions: T_std = ${STANDARD_TEMPERATURE.toFixed(2)} K (15\u00B0C), P_std = ${STANDARD_PRESSURE.toFixed(0)} Pa (101.325 kPa) \u2014 per ISO 13443 / GPSA Section 13 / API MPMS Chapter 14.3`);
+  assumptions.push("Gas properties (k, Z, MW) held constant at suction-condition values across all stages \u2014 no stage-by-stage EOS recalculation. For high-pressure or wide-ratio multi-stage trains, verify with a rigorous EOS simulation tool.");
+  assumptions.push("Z-factor at suction conditions only; actual Z varies per stage \u2014 average Z approximation may understate compression work in wide-ratio multi-stage trains; EOS verification recommended");
 
   const stages: StageResult[] = [];
   let currentP = P1_bar;
@@ -231,7 +232,7 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
       const T2_ideal = currentT * Math.pow(stageRatio, (k - 1) / k);
       traceSteps.push({
         name: `Discharge Temperature${stageLabel}`,
-        equation: "T\u2082 = T\u2081 + (T\u2082_ideal - T\u2081) / \u03B7_is    where T\u2082_ideal = T\u2081 * r^((k-1)/k)    [ASME PTC-10]",
+        equation: "T\u2082 = T\u2081 + (T\u2082_ideal - T\u2081) / \u03B7_is    where T\u2082_ideal = T\u2081 * r^((k-1)/k)    [API-aware screening \u2014 isentropic basis per ASME PTC-10 approach]",
         substitution: `T\u2082_ideal = ${currentT.toFixed(2)} * ${stageRatio.toFixed(4)}^((${k.toFixed(4)}-1)/${k.toFixed(4)}) = ${T2_ideal.toFixed(2)} K;  T\u2082 = ${currentT.toFixed(2)} + (${T2_ideal.toFixed(2)} - ${currentT.toFixed(2)}) / ${eta.toFixed(4)}`,
         result: `T\u2082 = ${T_discharge.toFixed(2)} K (${(T_discharge - 273.15).toFixed(2)} \u00B0C)`,
       });
@@ -248,7 +249,7 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
 
     traceSteps.push({
       name: `Isentropic Head${stageLabel}`,
-      equation: "H_is = Z\u00B7(R/MW)\u00B7T\u2081\u00B7(k/(k-1))\u00B7(r^((k-1)/k) - 1)    [GPSA §13-4, API 617 §5.9.4]",
+      equation: "H_is = Z\u00B7(R/MW)\u00B7T\u2081\u00B7(k/(k-1))\u00B7(r^((k-1)/k) - 1)    [API-aware screening basis \u2014 GPSA \u00A713-4 / API 617 \u00A75.9.4 reference equation]",
       substitution: `H_is = ${Z.toFixed(4)}\u00B7(${GAS_CONSTANT.toFixed(2)}/${MW.toFixed(4)})\u00B7${currentT.toFixed(2)}\u00B7(${k.toFixed(4)}/(${k.toFixed(4)}-1))\u00B7(${stageRatio.toFixed(4)}^((${k.toFixed(4)}-1)/${k.toFixed(4)})-1)`,
       result: `H_is = ${heads.isentropicHead.toFixed(2)} J/kg (${(heads.isentropicHead / 1000).toFixed(4)} kJ/kg)`,
     });
@@ -256,7 +257,7 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
     if (model === "polytropic") {
       traceSteps.push({
         name: `Polytropic Head${stageLabel}`,
-        equation: "H_p = Z\u00B7(R/MW)\u00B7T\u2081\u00B7(n/(n-1))\u00B7(r^((n-1)/n) - 1)    [GPSA §13-4, API 617 §5.9.5]",
+        equation: "H_p = Z\u00B7(R/MW)\u00B7T\u2081\u00B7(n/(n-1))\u00B7(r^((n-1)/n) - 1)    [API-aware screening basis \u2014 GPSA \u00A713-4 / API 617 \u00A75.9.5 reference equation]",
         substitution: `H_p = ${Z.toFixed(4)}\u00B7(${GAS_CONSTANT.toFixed(2)}/${MW.toFixed(4)})\u00B7${currentT.toFixed(2)}\u00B7(${n.toFixed(6)}/(${n.toFixed(6)}-1))\u00B7(${stageRatio.toFixed(4)}^((${n.toFixed(6)}-1)/${n.toFixed(6)})-1)`,
         result: `H_p = ${heads.polytropicHead.toFixed(2)} J/kg (${(heads.polytropicHead / 1000).toFixed(4)} kJ/kg)`,
       });
@@ -275,7 +276,7 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
       gasPower = (massFlowRate_kgs * heads.isentropicHead) / (eta * 1000);
       traceSteps.push({
         name: `Gas Power${stageLabel}  (isentropic)`,
-        equation: "W_gas = \u1E41 \u00D7 H_is / (\u03B7_is \u00D7 1000)    [ASME PTC-10, API 617 §5.9.3]",
+        equation: "W_gas = \u1E41 \u00D7 H_is / (\u03B7_is \u00D7 1000)    [API-aware screening basis \u2014 ASME PTC-10 / API 617 \u00A75.9.3 reference equation]",
         substitution: `W_gas = ${massFlowRate_kgs.toFixed(6)} \u00D7 ${heads.isentropicHead.toFixed(2)} / (${eta.toFixed(4)} \u00D7 1000)`,
         result: `W_gas = ${gasPower.toFixed(4)} kW`,
       });
@@ -396,27 +397,27 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
       warnings.push(`Stage ${s + 1}: discharge temperature ${stages[s].dischargeTemperature.toFixed(0)}°C exceeds limit (${input.maxDischargeTemperature}°C) — intercooling inadequate or ratio too high for single stage.`);
     }
     if (stages[s].compressionRatio > 3.5 && input.compressorType === "centrifugal") {
-      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds typical centrifugal limit of 3.5:1 per GPSA Section 13. Consider adding stages.`);
+      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds typical FEED screening limit for centrifugal compressors (~3.5:1 per GPSA Section 13 guidance). Consider adding stages \u2014 confirm actual per-stage limit with vendor.`);
     }
     if (stages[s].compressionRatio > 4.0 && input.compressorType === "reciprocating") {
-      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds typical reciprocating limit of 4.0:1 per GPSA Section 13.`);
+      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds typical FEED screening limit for reciprocating compressors (~4.0:1 per GPSA Section 13 guidance). Confirm actual limit with cylinder vendor.`);
     }
   }
 
   if (input.compressorType === "centrifugal" && MW > 50) {
-    warnings.push(`High molecular weight (${MW}) — centrifugal impeller tip speed may be limiting. Consider reciprocating for heavy gases per GPSA Section 13.`);
+    warnings.push(`Preliminary screening guidance: high molecular weight (${MW}) \u2014 centrifugal impeller tip speed may be limiting; consider reciprocating for heavy gases (GPSA Section 13). Confirm with vendor.`);
   }
   if (input.compressorType === "centrifugal" && MW < 5) {
-    warnings.push(`Low molecular weight (${MW.toFixed(1)}) — very high polytropic head per stage. Centrifugal may require many stages. Verify feasibility per API 617.`);
+    warnings.push(`Preliminary screening guidance: low molecular weight (${MW.toFixed(1)}) \u2014 very high polytropic head per stage; centrifugal may require many stages. Verify feasibility with vendor per API 617.`);
   }
   if (input.compressorType === "centrifugal" && actualVolumetricFlowRate < 500) {
-    warnings.push(`Low actual inlet volume flow (${actualVolumetricFlowRate.toFixed(0)} m³/h) — centrifugal compressor may not be economical below 500 m³/h. Consider reciprocating per GPSA.`);
+    warnings.push(`Preliminary screening guidance: low actual inlet volume flow (${actualVolumetricFlowRate.toFixed(0)} m\u00B3/h) \u2014 centrifugal compressors are typically uneconomical below ~500 m\u00B3/h; consider reciprocating (GPSA Section 13).`);
   }
   if (input.compressorType === "centrifugal" && actualVolumetricFlowRate > 200000) {
-    warnings.push(`Very high actual inlet volume flow (${actualVolumetricFlowRate.toFixed(0)} m³/h) — verify single-casing capacity. May require parallel units per API 617.`);
+    warnings.push(`Preliminary screening guidance: very high actual inlet flow (${actualVolumetricFlowRate.toFixed(0)} m\u00B3/h) \u2014 verify single-casing capacity with vendor; may require parallel units (API 617 reference).`);
   }
   if (input.compressorType === "reciprocating" && actualVolumetricFlowRate > 10000) {
-    warnings.push(`High actual inlet volume flow (${actualVolumetricFlowRate.toFixed(0)} m³/h) — consider centrifugal compressor for better efficiency and lower maintenance per GPSA Section 13.`);
+    warnings.push(`Preliminary screening guidance: high actual inlet flow (${actualVolumetricFlowRate.toFixed(0)} m\u00B3/h) \u2014 centrifugal compressor may offer better efficiency and lower maintenance at this flow (GPSA Section 13).`);
   }
   if (input.polytropicEfficiency < 70) {
     warnings.push(`Low efficiency (${input.polytropicEfficiency}%) — verify compressor selection. Typical: centrifugal 75–85%, reciprocating 80–90% (GPSA Table 13-2/3).`);
@@ -424,19 +425,23 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
 
   const minNameplate_kW = totalShaftPower * 1.10;
   warnings.push(
-    `Motor nameplate required ≥ ${minNameplate_kW.toFixed(1)} kW ` +
-    `(= 110% \u00D7 shaft power ${totalShaftPower.toFixed(1)} kW per API 617 §5.1.5.6 / API 618 §6.1.5). ` +
+    `Motor nameplate screening minimum \u2265 ${minNameplate_kW.toFixed(1)} kW ` +
+    `(= 110% \u00D7 shaft power ${totalShaftPower.toFixed(1)} kW \u2014 typical driver sizing guidance; ` +
+    `verify required margin against selected standard and project specification). ` +
     `Calculated motor electrical input = ${totalMotorPower.toFixed(1)} kW at \u03B7_motor = ${input.motorEfficiency}%. ` +
     `Select next standard IEC/NEMA motor nameplate \u2265 ${minNameplate_kW.toFixed(1)} kW.`
   );
 
-  warnings.push(`Z-factor used: ${Z.toFixed(3)} (suction conditions). For multi-stage, actual Z varies per stage — average Z may improve accuracy. Verify with EOS at discharge conditions.`);
+  warnings.push(`Z-factor used: ${Z.toFixed(3)} (suction conditions). For multi-stage, actual Z varies per stage \u2014 average Z approximation may understate work in wide-ratio trains; verify with EOS at discharge conditions.`);
 
-  if (input.compressorType === "reciprocating" && numStages > 1) {
-    warnings.push("Reciprocating multi-stage: verify rod load, pin reversal, and pulsation dampener sizing per API 618. Settling-out pressure (SOP) should be checked for emergency shutdown.");
+  if (input.compressorType === "reciprocating") {
+    warnings.push("Reciprocating screening only: this tool calculates compression work and volumetric efficiency only. Rod loads, frame selection, piston speed limits, valve losses, pulsation analysis (API 618 Annex D), cylinder sizing, and settling-out pressure are NOT modeled \u2014 all require detailed vendor engineering per API 618.");
+    if (numStages > 1) {
+      warnings.push("Reciprocating multi-stage: verify inter-stage rod load, pin reversal, and pulsation dampener sizing per API 618. Settling-out pressure (SOP) should be confirmed for emergency shutdown scenarios.");
+    }
   }
   if (input.compressorType === "centrifugal") {
-    warnings.push("Centrifugal: verify surge margin ≥ 10% from operating point to surge line. Anti-surge control system required per API 617.");
+    warnings.push("Centrifugal screening: verify surge margin \u2265 10% from operating point to surge line. Anti-surge control system required per API 617. Surge line shown on chart is schematic only \u2014 actual surge line must be determined by vendor performance testing.");
   }
 
   const trace: CalcTrace = {

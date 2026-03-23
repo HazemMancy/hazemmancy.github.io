@@ -320,7 +320,7 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
       <div className="flex items-stretch">
         <div className="relative w-7 shrink-0">
           <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap tracking-wide">
-            {`Head (${headUnitLabel}) / Eff. (%)`}
+            {`Head (${headUnitLabel})`}
           </span>
         </div>
         <div className="flex-1 h-[420px] border border-border/20 rounded-sm">
@@ -379,6 +379,12 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
               axisLine={{ stroke: COLORS.gridMajor, strokeWidth: 1 }}
               width={52}
             />
+            <YAxis
+              yAxisId="efficiency"
+              orientation="left"
+              domain={[0, 100]}
+              hide={true}
+            />
 
             <Tooltip
               content={
@@ -425,7 +431,7 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
               activeDot={{ r: 4.5, strokeWidth: 2.5, stroke: "#fff", fill: COLORS.head }}
             />
             <Line
-              yAxisId="head"
+              yAxisId="efficiency"
               type="monotone"
               dataKey="efficiency"
               stroke={COLORS.efficiency}
@@ -472,7 +478,7 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
               strokeWidth={1.5}
               strokeDasharray="6 4"
               label={{
-                value: "SURGE",
+                value: "SURGE (schematic)",
                 position: "top",
                 fill: COLORS.surge,
                 fontSize: 9,
@@ -577,11 +583,11 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
       <div className="flex items-start gap-2.5 border-t border-muted/20 pt-3">
         <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
         <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="compressor-curve-note">
-          Illustrative curves based on typical centrifugal compressor characteristics per API 617.
+          Illustrative screening curves — parametric centrifugal compressor shape (NOT a vendor test curve or API 617 compliance check).
           H-Q parabola: H = H_d × (1.12 + 0.28·r − 0.40·r²); anchors: shutoff = 1.12×H_d (r=0),
-          design = H_d (r=1), choke ≈ 0.88×H_d (r=1.20). Shaft power anchored at design point
-          P_d and scaled by (H/H_d)×(η_d/η). Surge line schematic at ~70% Q_d; min. continuous
-          flow at ~75% Q_d. Verify all data against manufacturer test sheets per API 617.
+          design = H_d (r=1), choke ≈ 0.88×H_d (r=1.20). Shaft power anchored at design point P_d.
+          Surge line and min-continuous-flow lines are schematic only; actual surge boundary requires vendor testing.
+          Efficiency shown on its own 0–100% scale (right-side hidden axis). All curves must be verified against manufacturer performance test sheets.
         </p>
       </div>
     </>
@@ -814,11 +820,12 @@ function ReciprocatingChart({ result, unitSystem }: CompressorCurveChartProps) {
       <div className="flex items-start gap-2.5 border-t border-muted/20 pt-3">
         <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
         <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="compressor-curve-note">
-          Illustrative curves for reciprocating compressor characteristics.
-          Volumetric efficiency per clearance model: η_v = 1 − c × (r^(1/k) − 1), c = {(clearanceVol * 100).toFixed(0)}% assumed (API 618 §5.7.2).
-          Shaft power scales with compression work. No surge instability applies to PD machines.
-          Discharge temperature T₂ = {designDischTemp.toFixed(0)} °C (adiabatic) — see summary table; excluded from
-          plot to avoid incompatible axis scales. Verify all against manufacturer test data per API 618.
+          Illustrative screening curves for reciprocating compressor — NOT a vendor performance curve or API 618 compliance check.
+          Volumetric efficiency per simple clearance model: η_v = 1 − c × (r^(1/k) − 1), c = {(clearanceVol * 100).toFixed(0)}% assumed.
+          Shaft power scales with ideal compression work only. NOT modeled: rod loads, piston speed, valve pressure losses,
+          pulsation (API 618 Annex D), cylinder sizing, actual clearance volumes, speed/stroke constraints, or vendor-specific geometry.
+          No surge instability applies to positive-displacement machines. Discharge temperature T₂ = {designDischTemp.toFixed(0)} °C (adiabatic) — see summary table.
+          All results must be verified against manufacturer datasheet and API 618.
         </p>
       </div>
     </>

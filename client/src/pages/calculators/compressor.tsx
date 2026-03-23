@@ -586,7 +586,7 @@ export default function CompressorPage() {
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm">Sizing Calculations</h3>
               <p className="text-xs text-muted-foreground">
-                {compressionModel === "polytropic" ? "Polytropic" : "Isentropic"} head, power & staging per GPSA / API 617-618
+                {compressionModel === "polytropic" ? "Polytropic" : "Isentropic"} head, power & staging — API-aware FEED screening (not final vendor selection)
               </p>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
@@ -697,7 +697,7 @@ export default function CompressorPage() {
                       </table>
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-2">
-                      Intercooling assumed back to suction temperature between stages
+                      Intercooling assumed: gas cooled to suction temperature between stages. No intercooler approach temperature or interstage pressure drop modeled — non-conservative simplification; include in detailed system design.
                     </p>
                   </CardContent>
                 </Card>
@@ -766,19 +766,19 @@ export default function CompressorPage() {
 
               <AssumptionsPanel
                 assumptions={[
-                  "Ideal gas law with compressibility factor (Z) correction",
-                  "Single Z-factor used across all stages (average approximation)",
-                  "Perfect intercooling assumed — gas cooled back to suction temperature between stages",
+                  "Preliminary FEED screening tool — not a substitute for detailed vendor selection or certified API compliance review",
+                  "Ideal gas law with compressibility factor (Z) correction; gas properties (k, Z, MW) held constant at suction-condition values across all stages — no stage-by-stage EOS recalculation",
+                  "Z-factor at suction conditions only; actual Z varies per stage — EOS verification recommended for wide-ratio multi-stage trains",
+                  "Perfect intercooling assumed: gas cooled to suction temperature between stages. No intercooler approach temperature modeled (typical 5–10°C above cooling medium). No interstage pressure drop modeled (typical 0.3–0.5 bar per intercooler) — non-conservative for multi-stage trains",
                   "Stage pressure ratios are equal (balanced staging)",
-                  "No pressure drop in intercoolers or piping between stages",
                   compressionModel === "polytropic"
                     ? "Polytropic process path: PV\u207F = constant, n derived from k and \u03B7_poly"
                     : "Isentropic (adiabatic reversible) compression with efficiency correction",
                   "Mechanical losses accounted via mechanical efficiency factor",
-                  "Motor/driver losses accounted via motor efficiency factor",
+                  "Motor/driver sizing: 110% of shaft power is a typical FEED screening guideline — verify against selected standard and project specification",
                   compressorType === "centrifugal"
-                    ? "Max ratio per stage ~3.5 for centrifugal compressors"
-                    : "Max ratio per stage ~4.0 for reciprocating compressors",
+                    ? "Max ratio per stage ~3.5 for centrifugal compressors (FEED screening guidance — confirm with vendor)"
+                    : "Max ratio per stage ~4.0 for reciprocating compressors (FEED screening guidance — confirm with cylinder vendor). Rod loads, piston speed, valve losses, pulsation (API 618 Annex D), and cylinder sizing are NOT modeled",
                 ]}
                 references={[
                   "GPSA Engineering Data Book, Section 13 — Compressors",
