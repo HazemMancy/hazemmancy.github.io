@@ -96,10 +96,11 @@ interface FormState {
   vaporPressure: string;
   atmosphericPressure: string;
   suctionVesselPressure: string;
+  dischargeVesselPressure: string;
   volumetricEfficiency: string;
   mechanicalEfficiency: string;
   reliefValvePressure: string;
-  dischargePressure: string;
+  pumpDifferentialPressure: string;
 }
 
 const defaultForm: FormState = {
@@ -122,10 +123,11 @@ const defaultForm: FormState = {
   vaporPressure: "",
   atmosphericPressure: "1.01325",
   suctionVesselPressure: "0",
+  dischargeVesselPressure: "0",
   volumetricEfficiency: "90",
   mechanicalEfficiency: "85",
   reliefValvePressure: "",
-  dischargePressure: "",
+  pumpDifferentialPressure: "",
 };
 
 const fieldUnitMap: FieldUnitMap = {
@@ -148,10 +150,11 @@ const fieldUnitMap: FieldUnitMap = {
   vaporPressure: "pressureKpa",
   atmosphericPressure: "pressureAbs",
   suctionVesselPressure: "pressureGauge",
+  dischargeVesselPressure: "pressureGauge",
   volumetricEfficiency: null,
   mechanicalEfficiency: null,
   reliefValvePressure: "pressureGauge",
-  dischargePressure: "pressureGauge",
+  pumpDifferentialPressure: "pressure",
 };
 
 interface FittingEntry {
@@ -256,6 +259,7 @@ export default function PumpSizingPage() {
         vaporPressure: convertToSI("pressureKpa", parseFloat(form.vaporPressure), unitSystem),
         atmosphericPressure: convertToSI("pressureAbs", parseFloat(form.atmosphericPressure), unitSystem),
         suctionVesselPressure: convertToSI("pressureGauge", parseFloat(form.suctionVesselPressure), unitSystem),
+        dischargeVesselPressure: convertToSI("pressureGauge", parseFloat(form.dischargeVesselPressure) || 0, unitSystem),
       };
 
       for (const [key, val] of Object.entries(pipingInput)) {
@@ -283,7 +287,7 @@ export default function PumpSizingPage() {
           mechanicalEfficiency: parseFloat(form.mechanicalEfficiency),
           motorEfficiency: parseFloat(form.motorEfficiency),
           reliefValvePressure: convertToSI("pressureGauge", parseFloat(form.reliefValvePressure) || 0, unitSystem),
-          dischargePressure: convertToSI("pressureGauge", parseFloat(form.dischargePressure) || 0, unitSystem),
+          pumpDifferentialPressure: convertToSI("pressure", parseFloat(form.pumpDifferentialPressure) || 0, unitSystem),
         };
         if (isNaN(input.volumetricEfficiency)) throw new Error("Invalid volumetric efficiency");
         if (isNaN(input.mechanicalEfficiency)) throw new Error("Invalid mechanical efficiency");
@@ -330,6 +334,7 @@ export default function PumpSizingPage() {
         vaporPressure: String(tc.vaporPressure),
         atmosphericPressure: String(tc.atmosphericPressure),
         suctionVesselPressure: String(tc.suctionVesselPressure),
+        dischargeVesselPressure: String(tc.dischargeVesselPressure),
       });
     } else {
       const tc = PD_PUMP_TEST_CASE;
@@ -354,8 +359,9 @@ export default function PumpSizingPage() {
         vaporPressure: String(tc.vaporPressure),
         atmosphericPressure: String(tc.atmosphericPressure),
         suctionVesselPressure: String(tc.suctionVesselPressure),
+        dischargeVesselPressure: String(tc.dischargeVesselPressure),
         reliefValvePressure: String(tc.reliefValvePressure),
-        dischargePressure: String(tc.dischargePressure),
+        pumpDifferentialPressure: String(tc.pumpDifferentialPressure),
       });
     }
     setActiveTab("fluid");
@@ -456,10 +462,12 @@ export default function PumpSizingPage() {
         { label: "Vapor Pressure", value: form.vaporPressure, unit: getUnit("pressureKpa", u) },
         { label: "Atmospheric Pressure", value: form.atmosphericPressure, unit: getUnit("pressureAbs", u) },
         { label: "Suction Vessel Pressure", value: form.suctionVesselPressure, unit: getUnit("pressureGauge", u) },
+        { label: "Discharge Vessel Pressure", value: form.dischargeVesselPressure, unit: getUnit("pressureGauge", u) },
       ],
       results: [
         { label: "Total Dynamic Head (TDH)", value: convertFromSI("head", r.totalDynamicHead, u), unit: getUnit("head", u), highlight: true },
         { label: "Static Head", value: convertFromSI("head", r.staticHead, u), unit: getUnit("head", u) },
+        { label: "Pressure Head Difference (P\u2090\u2091\u209C - P\u209B\u1D64\u1D9C\u1D9C)", value: convertFromSI("head", r.pressureHeadDifference, u), unit: getUnit("head", u) },
         { label: "Suction Friction Loss", value: convertFromSI("head", r.suctionFrictionLoss, u), unit: getUnit("head", u) },
         { label: "Discharge Friction Loss", value: convertFromSI("head", r.dischargeFrictionLoss, u), unit: getUnit("head", u) },
         { label: "Total Friction Loss", value: convertFromSI("head", r.totalFrictionLoss, u), unit: getUnit("head", u) },
@@ -475,28 +483,33 @@ export default function PumpSizingPage() {
         { label: "Discharge f (Darcy)", value: r.dischargeFrictionFactor, unit: "\u2014" },
       ],
       methodology: [
-        "Darcy-Weisbach equation with Swamee-Jain friction factor approximation",
-        "TDH = Static Head + Friction Loss (suction + discharge) + Velocity Head difference",
-        "Hydraulic Power = \u03C1 * g * Q * TDH",
+        "PRELIMINARY HYDRAULIC / POWER SCREENING \u2014 not a substitute for vendor selection or detailed network analysis",
+        "Darcy-Weisbach equation with Swamee-Jain friction factor (turbulent) or 64/Re (laminar)",
+        "TDH = \u0394z + h_f_total + \u0394h_velocity + (P_dest \u2212 P_suction)/(\u03C1g) \u2014 full Bernoulli basis",
+        "Hydraulic Power = \u03C1 \u00D7 g \u00D7 Q \u00D7 TDH",
         "Brake Power = Hydraulic Power / Pump Efficiency",
         "Motor Power = Brake Power / Motor Efficiency",
-        "NPSHa = P_atm + P_vessel + h_suction - hf_suction - P_vapor (all in head of liquid)",
+        "NPSHa = P_atm/(\u03C1g) + P_vessel/(\u03C1g) + z_suction \u2212 h_f_suction \u2212 P_vap/(\u03C1g)",
+        "NPSHr is a vendor pump curve property and is NOT computed here",
       ],
       assumptions: [
+        "Preliminary hydraulic and power screening only \u2014 not a substitute for vendor pump selection",
         "Steady-state, incompressible liquid flow",
-        "Centrifugal pump application",
-        "Darcy-Weisbach equation with Swamee-Jain friction factor",
-        "Minor losses calculated using resistance coefficient (K) method",
-        "NPSHa calculated per HI/API standards",
-        "Atmospheric pressure at sea level unless specified",
-        "Suction vessel pressure is gauge pressure (0 = atmospheric)",
+        "Pipe full (no two-phase flow)",
+        "Darcy-Weisbach equation with Swamee-Jain friction factor approximation",
+        "Minor losses calculated using resistance coefficient (K) method (Crane TP-410)",
+        "TDH includes elevation, friction, velocity head, AND destination vessel pressure head \u2014 full Bernoulli basis",
+        "NPSHa is a suction-side screening only; NPSHr is a vendor property not computed here",
+        "No pump curve, BEP matching, or off-BEP derating performed",
+        "Motor margin is indicative driver sizing guidance \u2014 verify against project specification",
+        "Suction/discharge vessel pressures are gauge (0 bar g = atmospheric)",
       ],
       references: [
         "Hydraulic Institute Standards (HI 1.3) \u2014 Centrifugal Pump Design",
         "API 610 \u2014 Centrifugal Pumps for Petroleum, Petrochemical and Natural Gas Industries",
         "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
         "Cameron Hydraulic Data, 20th Edition",
-        "Perry's Chemical Engineers' Handbook, 9th Edition",
+        "Perry\u2019s Chemical Engineers\u2019 Handbook, 9th Edition",
       ],
       warnings: r.warnings,
     };
@@ -534,15 +547,17 @@ export default function PumpSizingPage() {
         { label: "Volumetric Efficiency", value: form.volumetricEfficiency, unit: "%" },
         { label: "Mechanical Efficiency", value: form.mechanicalEfficiency, unit: "%" },
         { label: "Motor Efficiency", value: form.motorEfficiency, unit: "%" },
-        { label: "Discharge Pressure", value: form.dischargePressure, unit: getUnit("pressureGauge", u) },
+        { label: "Required Pump \u0394P", value: form.pumpDifferentialPressure, unit: getUnit("pressure", u) },
         { label: "Relief Valve Set Pressure", value: form.reliefValvePressure, unit: getUnit("pressureGauge", u) },
         { label: "Vapor Pressure", value: form.vaporPressure, unit: getUnit("pressureKpa", u) },
         { label: "Atmospheric Pressure", value: form.atmosphericPressure, unit: getUnit("pressureAbs", u) },
         { label: "Suction Vessel Pressure", value: form.suctionVesselPressure, unit: getUnit("pressureGauge", u) },
+        { label: "Discharge Vessel Pressure", value: form.dischargeVesselPressure, unit: getUnit("pressureGauge", u) },
       ],
       results: [
-        { label: "Differential Pressure", value: convertFromSI("pressure", r.differentialPressure, u), unit: getUnit("pressure", u), highlight: true },
-        { label: "Total Dynamic Head", value: convertFromSI("head", r.totalDynamicHead, u), unit: getUnit("head", u) },
+        { label: "Pump Differential Pressure (\u0394P)", value: convertFromSI("pressure", r.differentialPressure, u), unit: getUnit("pressure", u), highlight: true },
+        { label: "Actual Discharge-Side Pressure", value: convertFromSI("pressureGauge", r.actualDischargePressure, u), unit: getUnit("pressureGauge", u) },
+        { label: "Total Dynamic Head (informational)", value: convertFromSI("head", r.totalDynamicHead, u), unit: getUnit("head", u) },
         { label: "Static Head", value: convertFromSI("head", r.staticHead, u), unit: getUnit("head", u) },
         { label: "Total Friction Loss", value: convertFromSI("head", r.totalFrictionLoss, u), unit: getUnit("head", u) },
         { label: "Actual Flow (Delivered)", value: convertFromSI("flowLiquid", r.actualFlow, u), unit: getUnit("flowLiquid", u) },
@@ -558,24 +573,29 @@ export default function PumpSizingPage() {
         { label: "Relief Valve Set Pressure", value: r.reliefValvePressure > 0 ? convertFromSI("pressureGauge", r.reliefValvePressure, u) : 0, unit: r.reliefValvePressure > 0 ? getUnit("pressureGauge", u) : "Not set" },
       ],
       methodology: [
-        "Darcy-Weisbach equation with Swamee-Jain friction factor approximation",
-        "Theoretical flow = Required flow / Volumetric Efficiency",
-        "Slip = Theoretical flow - Actual delivered flow",
-        "Hydraulic Power = \u0394P * Q (actual flow)",
+        "HYDRAULIC / POWER SCREENING ONLY \u2014 not full PD pump sizing per API 674/676",
+        "Darcy-Weisbach equation with Swamee-Jain friction factor (turbulent) or 64/Re (laminar)",
+        "Theoretical flow = Actual delivered flow / Volumetric Efficiency",
+        "Slip = Theoretical (displaced) flow \u2212 Actual delivered flow",
+        "Pump \u0394P: user-specified required pressure rise across pump (bar); 0 = estimated from piping TDH",
+        "Actual discharge-side pressure = Suction vessel pressure + Pump \u0394P",
+        "Hydraulic Power = Pump \u0394P \u00D7 Q_actual",
         "Shaft Power = Hydraulic Power / Mechanical Efficiency",
         "Motor Power = Shaft Power / Motor Efficiency",
-        "NPIPa = NPSHa * \u03C1 * g (per API 676 for rotary PD pumps)",
+        "NPIPa = NPSHa \u00D7 \u03C1 \u00D7 g (per API 676 for rotary PD pumps)",
+        "Relief valve check basis: actual discharge-side pressure (suction + pump \u0394P)",
+        "Acceleration head in suction piping NOT included \u2014 assess pulsation effects with vendor",
       ],
       assumptions: [
+        "HYDRAULIC / POWER SCREENING ONLY \u2014 not a substitute for full PD pump design or API 674/676 engineering",
+        "Displacement, stroke/speed selection, plunger dimensions, pulsation bottles, acceleration head NOT calculated",
         "Steady-state, incompressible liquid flow",
-        "Positive displacement pump (reciprocating, gear, screw, or diaphragm)",
-        "Required flow is the actual delivered flow; theoretical flow = required flow / volumetric efficiency",
-        "Slip = Theoretical flow \u2212 Actual delivered flow (internal leakage increases with \u0394P)",
-        "Shaft power = Hydraulic power / Mechanical efficiency",
-        "Motor power = Shaft power / Motor efficiency (user-specified)",
-        "Discharge pressure input is the total differential pressure across the pump",
-        "NPSHa per HI/API standards; NPIPa = NPSHa \u00d7 \u03c1 \u00d7 g (per API 676)",
-        "Relief valve is mandatory for overpressure protection",
+        "pumpDifferentialPressure = required pressure rise across pump (\u0394P) \u2014 NOT destination vessel pressure",
+        "Actual discharge-side pressure = suctionVesselPressure + pumpDifferentialPressure",
+        "Required flow is the actual delivered flow; theoretical (displaced) flow = actual flow / volumetric efficiency",
+        "NPSHa screening only; NPIPr is a vendor property not computed here",
+        "Relief valve mandatory for PD pump overpressure protection (API 674 / API 676)",
+        "Motor margin is indicative driver sizing guidance \u2014 verify against project specification",
       ],
       references: [
         "API 674 \u2014 Positive Displacement Pumps \u2014 Reciprocating",
@@ -615,7 +635,7 @@ export default function PumpSizingPage() {
           <div>
             <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">Pump Sizing Calculator</h1>
             <p className="text-xs md:text-sm text-muted-foreground">
-              {pumpType === "centrifugal" ? "Centrifugal" : "Positive Displacement"} pump hydraulics &mdash; 5-step wizard
+              {pumpType === "centrifugal" ? "Centrifugal" : "Positive Displacement"} pump &mdash; preliminary hydraulic &amp; power screening &mdash; 5-step wizard
             </p>
           </div>
         </div>
@@ -847,8 +867,9 @@ export default function PumpSizingPage() {
                         <Input type="number" value={form.motorEfficiency} onChange={(e) => updateField("motorEfficiency", e.target.value)} placeholder="e.g. 95" data-testid="input-motor-eff" />
                       </div>
                       <div>
-                        <Label className="text-xs mb-1.5 block">Discharge Pressure ({getUnit("pressureGauge", unitSystem)})</Label>
-                        <Input type="number" value={form.dischargePressure} onChange={(e) => updateField("dischargePressure", e.target.value)} placeholder="0 = from TDH" data-testid="input-discharge-pressure" />
+                        <Label className="text-xs mb-1.5 block">Required Pump &Delta;P ({getUnit("pressure", unitSystem)})</Label>
+                        <Input type="number" value={form.pumpDifferentialPressure} onChange={(e) => updateField("pumpDifferentialPressure", e.target.value)} placeholder="0 = estimated from TDH" data-testid="input-discharge-pressure" />
+                        <p className="text-[10px] text-muted-foreground mt-1">Pressure rise across pump only (&Delta;P), not destination vessel pressure</p>
                       </div>
                       <div>
                         <Label className="text-xs mb-1.5 block">Relief Valve Pressure ({getUnit("pressureGauge", unitSystem)})</Label>
@@ -863,6 +884,11 @@ export default function PumpSizingPage() {
                   <div>
                     <Label className="text-xs mb-1.5 block">Suction Vessel Pressure ({getUnit("pressureGauge", unitSystem)})</Label>
                     <Input type="number" value={form.suctionVesselPressure} onChange={(e) => updateField("suctionVesselPressure", e.target.value)} placeholder="0 = atmospheric" data-testid="input-vessel-pressure" />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Discharge Vessel Pressure ({getUnit("pressureGauge", unitSystem)})</Label>
+                    <Input type="number" value={form.dischargeVesselPressure} onChange={(e) => updateField("dischargeVesselPressure", e.target.value)} placeholder="0 = atmospheric" data-testid="input-discharge-vessel-pressure" />
+                    <p className="text-[10px] text-muted-foreground mt-1">Destination / receiving vessel gauge pressure (0 = atmospheric)</p>
                   </div>
                 </div>
               </CardContent>
@@ -992,7 +1018,8 @@ export default function PumpSizingPage() {
                       title="Head & Friction"
                       results={[
                         { label: "Total Dynamic Head (TDH)", value: convertFromSI("head", centrifugalResult.totalDynamicHead, unitSystem), unit: getUnit("head", unitSystem), highlight: true },
-                        { label: "Static Head", value: convertFromSI("head", centrifugalResult.staticHead, unitSystem), unit: getUnit("head", unitSystem) },
+                        { label: "Static Head (\u0394z)", value: convertFromSI("head", centrifugalResult.staticHead, unitSystem), unit: getUnit("head", unitSystem) },
+                        { label: "Pressure Head Diff (P\u2091\u2090\u209C\u209C \u2212 P\u209B\u1D64\u1D9C)/(\u03C1g)", value: convertFromSI("head", centrifugalResult.pressureHeadDifference, unitSystem), unit: getUnit("head", unitSystem) },
                         { label: "Suction Friction Loss", value: convertFromSI("head", centrifugalResult.suctionFrictionLoss, unitSystem), unit: getUnit("head", unitSystem) },
                         { label: "Discharge Friction Loss", value: convertFromSI("head", centrifugalResult.dischargeFrictionLoss, unitSystem), unit: getUnit("head", unitSystem) },
                         { label: "Total Friction Loss", value: convertFromSI("head", centrifugalResult.totalFrictionLoss, unitSystem), unit: getUnit("head", unitSystem) },
@@ -1046,8 +1073,9 @@ export default function PumpSizingPage() {
                     <ResultsPanel
                       title="Pressure & Flow"
                       results={[
-                        { label: "Differential Pressure", value: convertFromSI("pressure", pdResult.differentialPressure, unitSystem), unit: getUnit("pressure", unitSystem), highlight: true },
-                        { label: "Total Dynamic Head", value: convertFromSI("head", pdResult.totalDynamicHead, unitSystem), unit: getUnit("head", unitSystem) },
+                        { label: "Pump Differential Pressure (\u0394P)", value: convertFromSI("pressure", pdResult.differentialPressure, unitSystem), unit: getUnit("pressure", unitSystem), highlight: true },
+                        { label: "Actual Discharge-Side Pressure", value: convertFromSI("pressureGauge", pdResult.actualDischargePressure, unitSystem), unit: getUnit("pressureGauge", unitSystem) },
+                        { label: "Total Dynamic Head (informational)", value: convertFromSI("head", pdResult.totalDynamicHead, unitSystem), unit: getUnit("head", unitSystem) },
                         { label: "Static Head", value: convertFromSI("head", pdResult.staticHead, unitSystem), unit: getUnit("head", unitSystem) },
                         { label: "Total Friction Loss", value: convertFromSI("head", pdResult.totalFrictionLoss, unitSystem), unit: getUnit("head", unitSystem) },
                         { label: "Actual Flow (Delivered)", value: convertFromSI("flowLiquid", pdResult.actualFlow, unitSystem), unit: getUnit("flowLiquid", unitSystem) },
@@ -1090,9 +1118,9 @@ export default function PumpSizingPage() {
                           highlight: pdResult.reliefValvePressure <= 0,
                         },
                         {
-                          label: "Required Discharge Pressure",
-                          value: pdResult.dischargePressure > 0 ? convertFromSI("pressureGauge", pdResult.dischargePressure, unitSystem) : 0,
-                          unit: pdResult.dischargePressure > 0 ? getUnit("pressureGauge", unitSystem) : "From TDH",
+                          label: "Actual Discharge-Side Pressure",
+                          value: convertFromSI("pressureGauge", pdResult.actualDischargePressure, unitSystem),
+                          unit: getUnit("pressureGauge", unitSystem),
                         },
                       ]}
                       rawData={pdResult}
@@ -1140,37 +1168,39 @@ export default function PumpSizingPage() {
                 {pumpType === "centrifugal" ? (
                   <AssumptionsPanel
                     assumptions={[
-                      "Steady-state, incompressible liquid flow",
-                      "Centrifugal pump application",
-                      "Darcy-Weisbach equation with Swamee-Jain friction factor",
-                      "Minor losses calculated using resistance coefficient (K) method",
-                      "NPSHa calculated per HI/API standards",
-                      "Atmospheric pressure at sea level unless specified",
-                      "Suction vessel pressure is gauge pressure (0 = atmospheric)",
+                      "PRELIMINARY HYDRAULIC / POWER SCREENING \u2014 not a substitute for vendor pump selection or detailed hydraulic network analysis",
+                      "Steady-state, incompressible liquid flow; pipe assumed full (no two-phase flow)",
+                      "TDH = \u0394z + h_f_total + \u0394h_velocity + (P_dest \u2212 P_suction)/(\u03C1g) \u2014 full Bernoulli basis including destination pressure head",
+                      "Darcy-Weisbach friction with Swamee-Jain approximation (turbulent) or 64/Re (laminar); fittings via K-factor method (Crane TP-410)",
+                      "NPSHa from suction-side energy balance only \u2014 NPSHr is a vendor pump curve property and is NOT computed here",
+                      "No pump curve, BEP matching, or off-BEP derating is performed",
+                      "Motor margin is indicative driver sizing guidance, API-aware \u2014 verify against project specification and selected motor standard",
+                      "Specific speed Ns is an indicative screening value only \u2014 impeller type selection requires vendor confirmation",
+                      "Suction and discharge vessel pressures are gauge (0 bar g = atmospheric)",
                     ]}
                     references={[
                       "Hydraulic Institute Standards (HI 1.3) \u2014 Centrifugal Pump Design",
                       "API 610 \u2014 Centrifugal Pumps for Petroleum, Petrochemical and Natural Gas Industries",
                       "Crane TP-410: Flow of Fluids Through Valves, Fittings, and Pipe",
                       "Cameron Hydraulic Data, 20th Edition",
-                      "Perry's Chemical Engineers' Handbook, 9th Edition",
+                      "Perry\u2019s Chemical Engineers\u2019 Handbook, 9th Edition",
                     ]}
                   />
                 ) : (
                   <AssumptionsPanel
                     assumptions={[
+                      "HYDRAULIC / POWER SCREENING ONLY \u2014 not full PD pump sizing per API 674/676",
+                      "Displacement, stroke/speed selection, plunger dimensions, pulsation bottle sizing, and acceleration head are NOT calculated",
                       "Steady-state, incompressible liquid flow",
-                      "Positive displacement pump (reciprocating, gear, screw, or diaphragm)",
-                      "Required flow is the actual delivered flow; theoretical flow = required flow / volumetric efficiency",
-                      "Slip = Theoretical flow \u2212 Actual delivered flow (internal leakage increases with \u0394P)",
-                      "Shaft power = Hydraulic power / Mechanical efficiency",
-                      "Motor power = Shaft power / Motor efficiency (user-specified)",
-                      "Discharge pressure input is the total differential pressure across the pump",
-                      "NPSHa calculated per HI/API standards; NPIPa = NPSHa \u00d7 \u03c1 \u00d7 g (per API 676 for rotary PD pumps)",
-                      "Relief valve is mandatory for overpressure protection",
-                      "Performance curves show flow/slip/power variation with differential pressure per API 674/676",
-                      "Darcy-Weisbach equation for piping friction losses",
-                      "Atmospheric pressure at sea level unless specified",
+                      "pumpDifferentialPressure = required pressure rise across the pump (\u0394P in bar) \u2014 NOT the destination vessel pressure",
+                      "Actual discharge-side pressure = suctionVesselPressure + pumpDifferentialPressure",
+                      "Required (delivered) flow = actual flow; theoretical (displaced) flow = actual flow / volumetric efficiency",
+                      "Slip = theoretical flow \u2212 actual delivered flow (internal leakage increases with \u0394P)",
+                      "Hydraulic power = pump \u0394P \u00D7 actual delivered flow",
+                      "Shaft power = hydraulic power / mechanical efficiency; motor power = shaft power / motor efficiency",
+                      "NPSHa screening only; NPIPr is a vendor property; acceleration head in suction NOT included",
+                      "Relief valve check basis: actual discharge-side pressure (suction + pump \u0394P); relief valve mandatory per API 674/676",
+                      "Motor margin is indicative driver sizing guidance \u2014 verify against project specification",
                     ]}
                     references={[
                       "API 674 \u2014 Positive Displacement Pumps \u2014 Reciprocating",

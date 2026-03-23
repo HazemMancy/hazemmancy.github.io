@@ -1,5 +1,10 @@
+// ILLUSTRATIVE SCREENING TREND — NOT VENDOR DATA
+// Flow-vs-pressure trend generated from assumed simplified slip model anchored at the
+// selected design point. Volumetric efficiency (%) is displayed as a scalar result card
+// only — it is NOT plotted on the flow axis to avoid unit mixing. This component is
+// intentionally structured to support future replacement with real vendor curve data points.
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { TrendingUp, Info, CircleDot } from "lucide-react";
+import { TrendingUp, Info, CircleDot, AlertTriangle } from "lucide-react";
 import {
   ComposedChart,
   Line,
@@ -42,7 +47,6 @@ const COLORS = {
   slipGradientMid: "rgba(239, 68, 68, 0.18)",
   slipGradientEnd: "rgba(239, 68, 68, 0.06)",
   power: "#f59e0b",
-  volEfficiency: "#8b5cf6",
   operatingPoint: "#3b82f6",
   operatingPointGlow: "rgba(59, 130, 246, 0.25)",
   grid: "hsl(var(--muted) / 0.15)",
@@ -51,12 +55,12 @@ const COLORS = {
   axisLabel: "hsl(var(--muted-foreground) / 0.9)",
 };
 
+// Legend entries — vol. efficiency deliberately excluded from chart (% ≠ flow units)
 const LEGEND_NAMES: Record<string, string> = {
   theoreticalFlow: "Theoretical Flow (Q\u209C)",
   actualFlow: "Actual Delivered Flow (Q\u2090)",
-  slipFlow: "Slip (Q\u209C \u2212 Q\u2090)",
+  slipFlow: "Illustrative Slip (Q\u209C \u2212 Q\u2090)",
   power: "Shaft Power",
-  volEff: "Vol. Efficiency (%)",
 };
 
 function CustomTooltip({ active, payload, label, flowUnit, pressureUnit, powerUnit }: any) {
@@ -66,7 +70,6 @@ function CustomTooltip({ active, payload, label, flowUnit, pressureUnit, powerUn
   const actualEntry = payload.find((p: any) => p.dataKey === "actualFlow");
   const slipEntry = payload.find((p: any) => p.dataKey === "slipFlow");
   const powerEntry = payload.find((p: any) => p.dataKey === "power");
-  const volEffEntry = payload.find((p: any) => p.dataKey === "volEff");
 
   return (
     <div
@@ -115,18 +118,9 @@ function CustomTooltip({ active, payload, label, flowUnit, pressureUnit, powerUn
         {slipEntry && slipEntry.value != null && slipEntry.value > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
             <div style={{ width: 10, height: 3, borderRadius: "1px", backgroundColor: COLORS.slipFill, borderTop: `2px solid ${COLORS.slipLine}`, flexShrink: 0 }} />
-            <span style={{ color: "hsl(var(--muted-foreground))" }}>Slip</span>
+            <span style={{ color: "hsl(var(--muted-foreground))" }}>Slip (illustrative)</span>
             <span style={{ color: "hsl(var(--foreground))", fontWeight: 600, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>
               {slipEntry.value.toFixed(1)} {flowUnit}
-            </span>
-          </div>
-        )}
-        {volEffEntry && volEffEntry.value != null && volEffEntry.value > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-            <div style={{ width: 10, height: 3, borderRadius: "1px", backgroundColor: "transparent", borderTop: `2px dashed ${COLORS.volEfficiency}`, flexShrink: 0 }} />
-            <span style={{ color: "hsl(var(--muted-foreground))" }}>Vol. Efficiency</span>
-            <span style={{ color: "hsl(var(--foreground))", fontWeight: 600, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>
-              {volEffEntry.value.toFixed(1)}%
             </span>
           </div>
         )}
@@ -150,14 +144,11 @@ function CustomLegend({ payload }: any) {
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: "24px", paddingTop: "12px", flexWrap: "wrap" }}>
       {filtered.map((entry: any) => {
-        const isDashed = entry.dataKey === "volEff";
         const isSlip = entry.dataKey === "slipFlow";
         return (
           <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <svg width="18" height="10" viewBox="0 0 18 10" style={{ flexShrink: 0 }}>
-              {isDashed ? (
-                <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2" strokeDasharray="4 2" />
-              ) : isSlip ? (
+              {isSlip ? (
                 <>
                   <rect x="0" y="2" width="18" height="6" fill={COLORS.slipFill} rx="1" />
                   <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="1.5" strokeDasharray="3 2" />
@@ -192,6 +183,12 @@ export function PDCurveChart({
 }: PDCurveChartProps) {
   if (designFlowSI <= 0 || differentialPressureBar <= 0) return null;
 
+  // ─── Synthetic slip model basis (MUST be disclosed) ─────────────────────────
+  // Slip model: illustrative linear relationship — slip increases ~8% per unit ΔP ratio.
+  // This is NOT a manufacturer-specific slip curve. Actual slip depends on viscosity,
+  // pump type, speed, internal clearances, and wear — none of which are modeled here.
+  // Theoretical flow is constant (set by displacement and speed) in this simplified model.
+  // Replace with manufacturer performance data for final PD pump selection.
   const volEff = volumetricEfficiency / 100;
   const mechEff = mechanicalEfficiency / 100;
   const maxPressureBar = differentialPressureBar * 1.5;
@@ -202,14 +199,13 @@ export function PDCurveChart({
     const dpBar = (maxPressureBar * i) / points;
     const dpRatio = dpBar / differentialPressureBar;
 
+    // Illustrative slip factor: linear increase with ΔP ratio (simplified, not manufacturer-specific)
     const slipFactor = 1 + 0.08 * (dpRatio - 1);
     const currentVolEff = Math.max(0.5, Math.min(1.0, volEff / slipFactor));
 
     const theoreticalFlowSI = designFlowSI / volEff;
     const actualFlowSI = theoreticalFlowSI * currentVolEff;
     const slipFlowSI = theoreticalFlowSI - actualFlowSI;
-
-    const currentVolEffPct = currentVolEff * 100;
 
     const dpPa = dpBar * 1e5;
     const qM3s = actualFlowSI / 3600;
@@ -221,7 +217,8 @@ export function PDCurveChart({
       actualFlow: parseFloat(convertFlow(actualFlowSI).toFixed(2)),
       slipFlow: parseFloat(convertFlow(slipFlowSI).toFixed(2)),
       power: parseFloat(convertPower(powerSI).toFixed(2)),
-      volEff: parseFloat(currentVolEffPct.toFixed(1)),
+      // NOTE: volEff (%) is intentionally NOT included in chart data —
+      // it must not share the flow (m³/h or gpm) Y-axis to avoid unit mixing.
     });
   }
 
@@ -238,18 +235,29 @@ export function PDCurveChart({
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2 flex-wrap">
           <TrendingUp className="w-4 h-4 text-primary" />
-          <h4 className="text-sm font-semibold">PD Pump Performance Curves (per API 674/676)</h4>
-          <span className="text-[10px] text-muted-foreground/60 ml-1 uppercase tracking-wider font-medium">(Illustrative)</span>
+          <h4 className="text-sm font-semibold">Illustrative PD Pump Screening Trend</h4>
+          <span className="text-[10px] text-amber-500/80 ml-1 uppercase tracking-wider font-medium">Generated — Not Vendor Data</span>
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
+
+        {/* Screening disclaimer — visible to user */}
+        <div className="flex items-start gap-2 bg-amber-500/5 border border-amber-500/20 rounded-md px-3 py-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500/70 mt-0.5 shrink-0" />
+          <p className="text-[11px] text-muted-foreground/90 leading-relaxed">
+            <span className="font-semibold text-foreground/80">Screening visualization only.</span>{" "}
+            Curve shown is an illustrative hydraulic trend based on a simplified assumed slip model — it is not manufacturer performance data.
+            Final PD pump selection and performance verification shall be based on manufacturer certified curves and applicable project standards.
+          </p>
+        </div>
+
         <div className="flex items-stretch">
           <div className="relative w-7 shrink-0">
             <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap tracking-wide">
-              {`Flow (${flowUnit}) / Eff (%)`}
+              {`Flow (${flowUnit})`}
             </span>
           </div>
-          <div className="flex-1 h-[420px] border border-border/20 rounded-sm">
+          <div className="flex-1 h-[400px] border border-border/20 rounded-sm">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
@@ -290,6 +298,7 @@ export function PDCurveChart({
                   fontWeight: 600,
                 }}
               />
+              {/* Flow axis — flow units only; vol. efficiency (%) NOT plotted here */}
               <YAxis
                 yAxisId="flow"
                 domain={[0, flowMax]}
@@ -298,6 +307,7 @@ export function PDCurveChart({
                 axisLine={{ stroke: COLORS.gridMajor, strokeWidth: 1 }}
                 width={52}
               />
+              {/* Power axis on right — power units only */}
               <YAxis
                 yAxisId="power"
                 orientation="right"
@@ -320,15 +330,7 @@ export function PDCurveChart({
               />
               <Legend content={<CustomLegend />} />
 
-              <Area
-                yAxisId="flow"
-                type="monotone"
-                dataKey="actualFlow"
-                fill="url(#pdActualFlowGrad)"
-                stroke="none"
-                legendType="none"
-                tooltipType="none"
-              />
+              {/* Illustrative slip band — simplified linear model, not manufacturer-specific */}
               <Area
                 yAxisId="flow"
                 type="monotone"
@@ -351,7 +353,7 @@ export function PDCurveChart({
                 fill="transparent"
                 stroke="none"
                 label={{
-                  value: "Slip Region",
+                  value: "Illustrative Slip Region",
                   position: "insideTop",
                   fill: COLORS.slipLine,
                   fontSize: 8,
@@ -360,6 +362,7 @@ export function PDCurveChart({
                 }}
               />
 
+              {/* Theoretical flow — constant with pressure in this simplified PD model */}
               <Line
                 yAxisId="flow"
                 type="monotone"
@@ -370,27 +373,19 @@ export function PDCurveChart({
                 name="theoreticalFlow"
                 activeDot={{ r: 4.5, strokeWidth: 2.5, stroke: "#fff", fill: COLORS.theoreticalFlow }}
               />
-              <Line
+              {/* Actual delivered flow — Area renders both gradient fill and stroke to avoid duplicate dataKey warning */}
+              <Area
                 yAxisId="flow"
                 type="monotone"
                 dataKey="actualFlow"
+                fill="url(#pdActualFlowGrad)"
                 stroke={COLORS.actualFlow}
                 strokeWidth={2}
                 dot={false}
                 name="actualFlow"
                 activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff", fill: COLORS.actualFlow }}
               />
-              <Line
-                yAxisId="flow"
-                type="monotone"
-                dataKey="volEff"
-                stroke={COLORS.volEfficiency}
-                strokeWidth={1.8}
-                strokeDasharray="6 3"
-                dot={false}
-                name="volEff"
-                activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.volEfficiency }}
-              />
+              {/* Shaft power on right axis — power units only, no efficiency mixing */}
               <Line
                 yAxisId="power"
                 type="monotone"
@@ -402,6 +397,7 @@ export function PDCurveChart({
                 activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.power }}
               />
 
+              {/* Design point region */}
               <ReferenceArea
                 yAxisId="flow"
                 x1={parseFloat(convertPressure(differentialPressureBar * 0.85).toFixed(2))}
@@ -412,7 +408,7 @@ export function PDCurveChart({
                 strokeOpacity={0.12}
                 strokeDasharray="4 4"
                 label={{
-                  value: "Design",
+                  value: "Design Region",
                   position: "insideTop",
                   fill: "#22c55e",
                   fontSize: 7,
@@ -453,7 +449,7 @@ export function PDCurveChart({
                 stroke="#ffffff"
                 strokeWidth={2.5}
                 label={{
-                  value: "OP",
+                  value: "Design Pt",
                   position: "top",
                   offset: 12,
                   fill: COLORS.operatingPoint,
@@ -479,6 +475,7 @@ export function PDCurveChart({
           </div>
         </div>
 
+        {/* Scalar result cards — vol. efficiency shown here, NOT on flow axis */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-xs border-t border-muted/20 pt-3.5 px-2">
           <div className="flex items-center gap-2.5">
             <CircleDot className="w-3.5 h-3.5 shrink-0" style={{ color: COLORS.operatingPoint }} />
@@ -493,17 +490,22 @@ export function PDCurveChart({
             Shaft Power: <span className="text-foreground font-semibold">{displayPower.toFixed(2)} {powerUnit}</span>
           </div>
           <div className="text-muted-foreground">
-            Vol. Efficiency: <span className="text-foreground font-semibold">{volumetricEfficiency.toFixed(0)}%</span>
+            Vol. Efficiency (input): <span className="text-foreground font-semibold">{volumetricEfficiency.toFixed(0)}%</span>
+            <span className="ml-1 text-muted-foreground/50 text-[10px]">(scalar — not plotted on flow axis)</span>
           </div>
         </div>
 
         <div className="flex items-start gap-2.5 border-t border-muted/20 pt-3">
           <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
           <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="pd-curve-note">
-            PD pump curves per API 674/676. Theoretical flow is constant (set by displacement and speed).
-            Actual flow decreases with increasing differential pressure due to internal slip.
-            The shaded slip region shows the gap between theoretical and actual delivery.
-            Power is proportional to differential pressure. Verify against manufacturer data sheets.
+            <span className="font-medium text-foreground/70">Illustrative screening trend only — not API 674/676 performance data.</span>{" "}
+            Theoretical flow is constant (set by displacement and speed) in this simplified model.
+            Actual flow decreases with increasing differential pressure via an assumed linear slip relationship (8% per ΔP/ΔP_design).
+            Slip behavior is illustrative — actual performance depends on viscosity, pump type, speed, internal clearances, and wear.
+            Power is proportional to ΔP × actual flow / mechanical efficiency.
+            Vol. efficiency (%) is shown as a scalar only and is not plotted on the flow axis.
+            This chart does not model pulsation, acceleration head, or valve dynamics.
+            Verify all results against manufacturer certified performance data and applicable project standards.
           </p>
         </div>
       </CardContent>

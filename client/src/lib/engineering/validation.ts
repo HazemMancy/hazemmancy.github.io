@@ -35,6 +35,45 @@ export const multiphaseSchema = z.object({
   { message: "At least one phase must have a positive mass flow rate", path: ["gasMassFlowRate"] }
 );
 
+// ─── Pump sizing schemas ───────────────────────────────────────────────────────
+
+const pumpPipingBase = z.object({
+  flowRate: z.number().positive("Flow rate must be positive"),
+  liquidDensity: z.number().positive("Liquid density must be positive"),
+  viscosity: z.number().positive("Viscosity must be positive"),
+  suctionStaticHead: z.number(),
+  dischargeStaticHead: z.number(),
+  suctionPipeLength: z.number().min(0, "Suction pipe length must be >= 0"),
+  dischargePipeLength: z.number().min(0, "Discharge pipe length must be >= 0"),
+  suctionPipeDiameter: z.number().positive("Suction pipe diameter must be positive"),
+  dischargePipeDiameter: z.number().positive("Discharge pipe diameter must be positive"),
+  suctionRoughness: z.number().min(0, "Roughness must be >= 0"),
+  dischargeRoughness: z.number().min(0, "Roughness must be >= 0"),
+  suctionFittingsK: z.number().min(0, "Fittings K must be >= 0"),
+  dischargeFittingsK: z.number().min(0, "Fittings K must be >= 0"),
+  vaporPressure: z.number().min(0, "Vapor pressure must be >= 0"),
+  atmosphericPressure: z.number().positive("Atmospheric pressure must be positive"),
+  suctionVesselPressure: z.number(),
+  dischargeVesselPressure: z.number(),
+});
+
+export const centrifugalPumpSchema = pumpPipingBase.extend({
+  pumpEfficiency: z.number().min(1, "Pump efficiency must be > 0%").max(100, "Pump efficiency must be <= 100%"),
+  motorEfficiency: z.number().min(1, "Motor efficiency must be > 0%").max(100, "Motor efficiency must be <= 100%"),
+  pumpSpeed: z.number().positive().optional(),
+});
+
+export const pdPumpSchema = pumpPipingBase.extend({
+  volumetricEfficiency: z.number().min(1, "Volumetric efficiency must be > 0%").max(100, "Volumetric efficiency must be <= 100%"),
+  mechanicalEfficiency: z.number().min(1, "Mechanical efficiency must be > 0%").max(100, "Mechanical efficiency must be <= 100%"),
+  motorEfficiency: z.number().min(1, "Motor efficiency must be > 0%").max(100, "Motor efficiency must be <= 100%"),
+  pumpDifferentialPressure: z.number().min(0, "Pump differential pressure must be >= 0"),
+  reliefValvePressure: z.number().min(0, "Relief valve pressure must be >= 0"),
+});
+
+export type CentrifugalPumpInput = z.infer<typeof centrifugalPumpSchema>;
+export type PDPumpInput = z.infer<typeof pdPumpSchema>;
+
 export const gasMixingSchema = z.object({
   components: z.array(z.object({
     name: z.string().min(1),

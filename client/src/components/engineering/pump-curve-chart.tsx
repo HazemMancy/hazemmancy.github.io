@@ -1,5 +1,10 @@
+// SYNTHETIC SCREENING CURVE — NOT VENDOR DATA
+// Pump H-Q curve generated from assumed parabolic characteristic anchored at the selected
+// design point. Efficiency is displayed as a scalar result card only — it is NOT plotted
+// on the head axis to avoid unit mixing. This component is intentionally structured to
+// support future replacement with real vendor curve data points.
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { TrendingUp, Info, CircleDot } from "lucide-react";
+import { TrendingUp, Info, CircleDot, AlertTriangle } from "lucide-react";
 import {
   ComposedChart,
   Line,
@@ -41,10 +46,6 @@ const COLORS = {
   systemCurveGradientStart: "rgba(245, 158, 11, 0.12)",
   systemCurveGradientMid: "rgba(245, 158, 11, 0.04)",
   systemCurveGradientEnd: "rgba(245, 158, 11, 0.01)",
-  efficiency: "#22c55e",
-  efficiencyGradientStart: "rgba(34, 197, 94, 0.14)",
-  efficiencyGradientMid: "rgba(34, 197, 94, 0.05)",
-  efficiencyGradientEnd: "rgba(34, 197, 94, 0.01)",
   power: "#ef4444",
   minMaxRegion: "rgba(59, 130, 246, 0.04)",
   minMaxBorder: "rgba(59, 130, 246, 0.12)",
@@ -56,10 +57,10 @@ const COLORS = {
   axisLabel: "hsl(var(--muted-foreground) / 0.9)",
 };
 
+// Legend entries — efficiency deliberately excluded from chart (% ≠ head units)
 const LEGEND_NAMES: Record<string, string> = {
-  pumpHead: "Pump Curve (H-Q)",
+  pumpHead: "Pump H-Q (generated)",
   systemHead: "System Curve",
-  efficiency: "Efficiency (%)",
   power: "Brake Power",
 };
 
@@ -68,7 +69,6 @@ function CustomTooltip({ active, payload, label, flowUnit, headUnit, powerUnit }
 
   const pumpHeadEntry = payload.find((p: any) => p.dataKey === "pumpHead");
   const systemHeadEntry = payload.find((p: any) => p.dataKey === "systemHead");
-  const effEntry = payload.find((p: any) => p.dataKey === "efficiency");
   const powerEntry = payload.find((p: any) => p.dataKey === "power");
 
   return (
@@ -115,15 +115,6 @@ function CustomTooltip({ active, payload, label, flowUnit, headUnit, powerUnit }
             </span>
           </div>
         )}
-        {effEntry && effEntry.value != null && effEntry.value > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-            <div style={{ width: 10, height: 3, borderRadius: "1px", backgroundColor: "transparent", borderTop: `2px dashed ${COLORS.efficiency}`, flexShrink: 0 }} />
-            <span style={{ color: "hsl(var(--muted-foreground))" }}>Efficiency</span>
-            <span style={{ color: "hsl(var(--foreground))", fontWeight: 600, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>
-              {effEntry.value.toFixed(1)}%
-            </span>
-          </div>
-        )}
         {powerEntry && powerEntry.value != null && powerEntry.value > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
             <div style={{ width: 10, height: 3, borderRadius: "1px", backgroundColor: COLORS.power, flexShrink: 0 }} />
@@ -144,7 +135,7 @@ function CustomLegend({ payload }: any) {
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: "24px", paddingTop: "12px", flexWrap: "wrap" }}>
       {filtered.map((entry: any) => {
-        const isDashed = entry.dataKey === "efficiency" || entry.dataKey === "systemHead";
+        const isDashed = entry.dataKey === "systemHead";
         return (
           <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <svg width="18" height="10" viewBox="0 0 18 10" style={{ flexShrink: 0 }}>
@@ -180,47 +171,46 @@ export function PumpCurveChart({
 }: PumpCurveChartProps) {
   if (designFlowSI <= 0 || tdhSI <= 0) return null;
 
-  // Shutoff head: 120% of TDH — typical per HI 9.6.3 / API 610 Fig. 6.1
+  // ─── Synthetic H-Q curve basis (MUST be disclosed) ──────────────────────────
+  // Parabolic characteristic anchored at 3 points based on typical centrifugal behavior:
+  //   r = 0.00 → H = 1.20 × TDH  (assumed shutoff head)
+  //   r = 1.00 → H = TDH          (selected design / operating point)
+  //   r = 1.20 → H = 0.80 × TDH  (assumed runout end)
+  // Fitted: H = TDH × (1.20 + 0.467·r − 0.667·r²)
+  // This is a GENERATED SYNTHETIC CURVE, not derived from real impeller test data.
+  // Replace with actual vendor H-Q data points for final pump selection.
   const shutoffHeadSI = tdhSI * 1.20;
   const frictionHeadSI = Math.max(0, tdhSI - staticHeadSI);
-  // X-axis extends to runout (130% of design flow) with margin
   const maxFlowSI = designFlowSI * 1.35;
-  const effPeak = pumpEfficiency;
   const points = 80;
 
-  const minFlowFrac = 0.7;
-  const maxFlowFrac = 1.2;
+  // Assumed preferred operating region: 70–120% of design flow (typical HI guidance)
+  // This is an ASSUMED zone centered on the selected design point, not a verified BEP range.
+  const preferredMinFrac = 0.7;
+  const preferredMaxFrac = 1.2;
 
   const data = [];
   for (let i = 0; i <= points; i++) {
     const qSI = (maxFlowSI * i) / points;
     const qRatio = qSI / designFlowSI;
 
-    // H-Q parabola anchored at 3 points per HI typical centrifugal characteristic:
-    //   r=0   → H = 1.20 × TDH  (shutoff head)
-    //   r=1   → H = TDH          (design / operating point)
-    //   r=1.20 → H = 0.80 × TDH  (runout/end-of-curve)
-    // Fitted: H = TDH × (1.20 + 0.467·r − 0.667·r²)
     const pumpHeadSI = Math.max(
       0,
       tdhSI * (1.20 + 0.467 * qRatio - 0.667 * qRatio * qRatio)
     );
-
     const systemHeadSI = staticHeadSI + frictionHeadSI * qRatio * qRatio;
 
-    const effSpread = 0.45;
-    const efficiency = qSI > 0 ? effPeak * Math.exp(-Math.pow((qRatio - 1) / effSpread, 2)) : 0;
-
     const qM3s = qSI / 3600;
-    const powerSI = qM3s > 0 && efficiency > 0
-      ? (liquidDensity * G * pumpHeadSI * qM3s) / (efficiency / 100) / 1000
+    const powerSI = qM3s > 0 && pumpEfficiency > 0
+      ? (liquidDensity * G * pumpHeadSI * qM3s) / (pumpEfficiency / 100) / 1000
       : 0;
 
     data.push({
       flow: parseFloat(convertFlow(qSI).toFixed(2)),
       pumpHead: parseFloat(convertHead(pumpHeadSI).toFixed(2)),
       systemHead: parseFloat(convertHead(systemHeadSI).toFixed(2)),
-      efficiency: parseFloat(efficiency.toFixed(1)),
+      // NOTE: efficiency (%) is intentionally NOT included in chart data —
+      // it must not share the head (m/ft) Y-axis to avoid unit mixing.
       power: parseFloat(convertPower(powerSI).toFixed(2)),
     });
   }
@@ -239,18 +229,29 @@ export function PumpCurveChart({
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2 flex-wrap">
           <TrendingUp className="w-4 h-4 text-primary" />
-          <h4 className="text-sm font-semibold">Pump Performance Curves</h4>
-          <span className="text-[10px] text-muted-foreground/60 ml-1 uppercase tracking-wider font-medium">(Illustrative)</span>
+          <h4 className="text-sm font-semibold">Illustrative Centrifugal Pump Screening Curves</h4>
+          <span className="text-[10px] text-amber-500/80 ml-1 uppercase tracking-wider font-medium">Generated — Not Vendor Data</span>
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
+
+        {/* Screening disclaimer — visible to user */}
+        <div className="flex items-start gap-2 bg-amber-500/5 border border-amber-500/20 rounded-md px-3 py-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500/70 mt-0.5 shrink-0" />
+          <p className="text-[11px] text-muted-foreground/90 leading-relaxed">
+            <span className="font-semibold text-foreground/80">Screening visualization only.</span>{" "}
+            Curve shown is generated from assumed characteristic shape anchored to the selected design point — it is not vendor performance data.
+            Final pump selection shall be based on manufacturer certified performance curves.
+          </p>
+        </div>
+
         <div className="flex items-stretch">
           <div className="relative w-7 shrink-0">
             <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-muted-foreground/70 font-medium whitespace-nowrap tracking-wide">
-              {`Head (${headUnit}) / Eff (%)`}
+              {`Head (${headUnit})`}
             </span>
           </div>
-          <div className="flex-1 h-[420px] border border-border/20 rounded-sm">
+          <div className="flex-1 h-[400px] border border-border/20 rounded-sm">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
@@ -266,11 +267,6 @@ export function PumpCurveChart({
                   <stop offset="0%" stopColor={COLORS.systemCurveGradientStart} />
                   <stop offset="50%" stopColor={COLORS.systemCurveGradientMid} />
                   <stop offset="100%" stopColor={COLORS.systemCurveGradientEnd} />
-                </linearGradient>
-                <linearGradient id="efficiencyGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={COLORS.efficiencyGradientStart} />
-                  <stop offset="50%" stopColor={COLORS.efficiencyGradientMid} />
-                  <stop offset="100%" stopColor={COLORS.efficiencyGradientEnd} />
                 </linearGradient>
               </defs>
 
@@ -326,15 +322,16 @@ export function PumpCurveChart({
               />
               <Legend content={<CustomLegend />} />
 
+              {/* Assumed preferred operating zone — centered on design point, NOT a verified BEP range */}
               <ReferenceArea
                 yAxisId="head"
-                x1={parseFloat(convertFlow(designFlowSI * minFlowFrac).toFixed(2))}
-                x2={parseFloat(convertFlow(designFlowSI * maxFlowFrac).toFixed(2))}
+                x1={parseFloat(convertFlow(designFlowSI * preferredMinFrac).toFixed(2))}
+                x2={parseFloat(convertFlow(designFlowSI * preferredMaxFrac).toFixed(2))}
                 fill={COLORS.minMaxRegion}
                 stroke={COLORS.minMaxBorder}
                 strokeDasharray="3 3"
                 label={{
-                  value: "Preferred Range",
+                  value: "Assumed Preferred Zone",
                   position: "insideTop",
                   fill: COLORS.operatingPoint,
                   fontSize: 7,
@@ -343,35 +340,19 @@ export function PumpCurveChart({
                 }}
               />
 
+              {/* H-Q: synthetic parabolic curve — Area renders both gradient fill and stroke to avoid duplicate dataKey warning */}
               <Area
                 yAxisId="head"
                 type="monotone"
                 dataKey="pumpHead"
                 fill="url(#pumpHeadGrad)"
-                stroke="none"
-                legendType="none"
-                tooltipType="none"
-              />
-              <Area
-                yAxisId="head"
-                type="monotone"
-                dataKey="efficiency"
-                fill="url(#efficiencyGrad)"
-                stroke="none"
-                legendType="none"
-                tooltipType="none"
-              />
-
-              <Line
-                yAxisId="head"
-                type="monotone"
-                dataKey="pumpHead"
                 stroke={COLORS.pumpCurve}
                 strokeWidth={2.5}
                 dot={false}
                 name="pumpHead"
                 activeDot={{ r: 4.5, strokeWidth: 2.5, stroke: "#fff", fill: COLORS.pumpCurve }}
               />
+              {/* System curve: H_sys = H_static + H_friction × (Q/Q_design)² */}
               <Line
                 yAxisId="head"
                 type="monotone"
@@ -383,17 +364,7 @@ export function PumpCurveChart({
                 name="systemHead"
                 activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff", fill: COLORS.systemCurve }}
               />
-              <Line
-                yAxisId="head"
-                type="monotone"
-                dataKey="efficiency"
-                stroke={COLORS.efficiency}
-                strokeWidth={1.8}
-                strokeDasharray="6 3"
-                dot={false}
-                name="efficiency"
-                activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.efficiency }}
-              />
+              {/* Brake power on right axis — power units only, no efficiency mixing */}
               <Line
                 yAxisId="power"
                 type="monotone"
@@ -405,25 +376,6 @@ export function PumpCurveChart({
                 activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.power }}
               />
 
-              <ReferenceArea
-                yAxisId="head"
-                x1={parseFloat((displayFlow * 0.85).toFixed(2))}
-                x2={parseFloat((displayFlow * 1.15).toFixed(2))}
-                fill="#22c55e"
-                fillOpacity={0.06}
-                stroke="#22c55e"
-                strokeOpacity={0.15}
-                strokeDasharray="4 4"
-                label={{
-                  value: "BEP",
-                  position: "insideTop",
-                  fill: "#22c55e",
-                  fontSize: 8,
-                  fontWeight: 600,
-                  opacity: 0.6,
-                }}
-              />
-
               <ReferenceLine
                 yAxisId="head"
                 y={parseFloat(displayShutoff.toFixed(2))}
@@ -431,7 +383,7 @@ export function PumpCurveChart({
                 strokeWidth={0.8}
                 strokeDasharray="4 6"
                 label={{
-                  value: `Shutoff ${displayShutoff.toFixed(0)} ${headUnit}`,
+                  value: `Assumed shutoff ${displayShutoff.toFixed(0)} ${headUnit}`,
                   position: "insideTopRight",
                   fill: COLORS.pumpCurve,
                   fontSize: 8,
@@ -472,7 +424,7 @@ export function PumpCurveChart({
                 stroke="#ffffff"
                 strokeWidth={2.5}
                 label={{
-                  value: "OP",
+                  value: "Design Pt",
                   position: "top",
                   offset: 12,
                   fill: COLORS.operatingPoint,
@@ -498,15 +450,17 @@ export function PumpCurveChart({
           </div>
         </div>
 
+        {/* Scalar result cards — efficiency shown here, NOT on head axis */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-xs border-t border-muted/20 pt-3.5 px-2">
           <div className="flex items-center gap-2.5">
             <CircleDot className="w-3.5 h-3.5 shrink-0" style={{ color: COLORS.operatingPoint }} />
             <span className="text-foreground font-medium" data-testid="text-operating-point">
-              Operating Point: {displayFlow.toFixed(1)} {flowUnit} @ {displayTDH.toFixed(1)} {headUnit}
+              Design Point: {displayFlow.toFixed(1)} {flowUnit} @ {displayTDH.toFixed(1)} {headUnit}
             </span>
           </div>
           <div className="text-muted-foreground">
-            BEP Efficiency: <span className="text-foreground font-semibold">{pumpEfficiency.toFixed(0)}%</span>
+            Pump Efficiency (input): <span className="text-foreground font-semibold">{pumpEfficiency.toFixed(0)}%</span>
+            <span className="ml-1 text-muted-foreground/50 text-[10px]">(scalar — not plotted on head axis)</span>
           </div>
           <div className="text-muted-foreground">
             Brake Power: <span className="text-foreground font-semibold">{displayBrakePower.toFixed(2)} {powerUnit}</span>
@@ -514,18 +468,21 @@ export function PumpCurveChart({
           <div className="text-muted-foreground">
             Static Head: <span className="text-foreground font-semibold">{displayStaticHead.toFixed(1)} {headUnit}</span>
             <span className="mx-1.5 text-muted-foreground/40">|</span>
-            Shutoff: <span className="text-foreground font-semibold">{displayShutoff.toFixed(1)} {headUnit}</span>
+            Assumed shutoff: <span className="text-foreground font-semibold">{displayShutoff.toFixed(1)} {headUnit}</span>
           </div>
         </div>
 
         <div className="flex items-start gap-2.5 border-t border-muted/20 pt-3">
           <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
           <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="pump-curve-note">
-            Illustrative curves based on typical centrifugal pump characteristics per HI 9.6.3 / API 610.
-            H-Q parabola: H = TDH × (1.20 + 0.467·r − 0.667·r²); anchors: shutoff = 1.20×TDH (r=0),
-            design = TDH (r=1), runout ≈ 0.80×TDH (r=1.20). Efficiency Gaussian centered at BEP.
-            Preferred operating range: 70–120% of design flow (HI 9.6.3 / API 610 Table 1).
-            Brake power: P = ρgHQ/η at each flow point. Verify against manufacturer certified curves.
+            <span className="font-medium text-foreground/70">Synthetic curve basis:</span>{" "}
+            H-Q parabola H = TDH × (1.20 + 0.467·r − 0.667·r²) anchored at assumed shutoff = 1.20×TDH (r=0),
+            design point = TDH (r=1), assumed runout ≈ 0.80×TDH (r=1.20).
+            System curve: H_sys = H_static + H_friction × (Q/Q_design)².
+            Brake power: P = ρgHQ/η at each flow point.
+            Preferred zone: 70–120% of design flow — assumed, not vendor-verified.
+            Efficiency (%) is shown as a scalar only and is not plotted on the head axis.
+            Verify all results against manufacturer certified performance curves before pump selection.
           </p>
         </div>
       </CardContent>
