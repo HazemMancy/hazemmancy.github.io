@@ -517,16 +517,21 @@ export default function RestrictionOrificePage() {
                         <SelectTrigger data-testid="select-gas-props-mode-trigger"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="manual">Manual Input (MW, k, Z, μ)</SelectItem>
-                          <SelectItem value="srk">SRK EoS from Composition (auto-computes MW, k, Z, μ, T₂)</SelectItem>
+                          <SelectItem value="pr">Peng-Robinson EoS — Recommended for O&G (auto-computes MW, k, Z, μ, T₂)</SelectItem>
+                          <SelectItem value="srk">SRK EoS — Soave 1972 (auto-computes MW, k, Z, μ, T₂)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  {(service.gasPropsMode === "srk") ? (
+                  {(service.gasPropsMode === "srk" || service.gasPropsMode === "pr") ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-amber-400 font-semibold">SRK EoS Composition (Graboski-Daubert α, Chueh-Prausnitz BIP, Lee viscosity)</span>
+                        <span className="text-[11px] text-amber-400 font-semibold">
+                          {service.gasPropsMode === "pr"
+                            ? "PR EoS Composition (Peng-Robinson 1976/1978, Chueh-Prausnitz BIP, Lee viscosity)"
+                            : "SRK EoS Composition (Graboski-Daubert α, Chueh-Prausnitz BIP, Lee viscosity)"}
+                        </span>
                         <div className="flex gap-2">
                           <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={normalizeComposition} data-testid="btn-normalize-composition">Normalize</Button>
                           <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={addCompositionRow} data-testid="btn-add-component">+ Component</Button>
@@ -820,16 +825,20 @@ export default function RestrictionOrificePage() {
                           ...(result.isChoked ? [{ label: "C(k) critical flow fn", val: result.criticalFlowFunction.toFixed(6), unit: "—" }]
                             : [{ label: "Y expansion (ISO 5167)", val: result.expansionFactor.toFixed(6), unit: "—" }]),
                           ...(result.noiseLevelEstimate > 0 ? [{ label: "Noise SPL (screening)", val: result.noiseLevelEstimate.toFixed(0), unit: "dB(A) @1m" }] : []),
-                          ...(result.dischargeTemperature !== null ? [
-                            { label: "T discharge (SRK isenthalpic flash)", val: result.dischargeTemperature.toFixed(2) + " °C  (ΔT = " + (result.dischargeTemperature - service.temperature).toFixed(2) + " °C)", unit: result.dischargeTemperatureConverged ? "✓ converged" : "⚠ approx" },
-                          ] : []),
-                          ...(result.srkResult ? [
-                            { label: "MW (SRK)", val: result.srkResult.MWm.toFixed(3), unit: "kg/kmol" },
-                            { label: "Z (SRK)", val: result.srkResult.Z.toFixed(4), unit: "—" },
-                            { label: "k (SRK)", val: result.srkResult.k.toFixed(4), unit: "—" },
-                            { label: "μ (SRK/Lee)", val: result.srkResult.viscosity_cP.toFixed(5), unit: "cP" },
-                            { label: "Hm (SRK)", val: result.srkResult.Hm.toFixed(1), unit: "kJ/kmol" },
-                          ] : []),
+                          ...(result.dischargeTemperature !== null ? (() => {
+                            const eosLabel = service.gasPropsMode === "pr" ? "PR" : "SRK";
+                            return [{ label: `T discharge (${eosLabel} isenthalpic flash)`, val: result.dischargeTemperature.toFixed(2) + " °C  (ΔT = " + (result.dischargeTemperature - service.temperature).toFixed(2) + " °C)", unit: result.dischargeTemperatureConverged ? "✓ converged" : "⚠ approx" }];
+                          })() : []),
+                          ...(result.srkResult ? (() => {
+                            const eosLabel = service.gasPropsMode === "pr" ? "PR" : "SRK";
+                            return [
+                              { label: `MW (${eosLabel})`, val: result.srkResult.MWm.toFixed(3), unit: "kg/kmol" },
+                              { label: `Z (${eosLabel})`, val: result.srkResult.Z.toFixed(4), unit: "—" },
+                              { label: `k (${eosLabel})`, val: result.srkResult.k.toFixed(4), unit: "—" },
+                              { label: `μ (${eosLabel}/Lee)`, val: result.srkResult.viscosity_cP.toFixed(5), unit: "cP" },
+                              { label: `Hm (${eosLabel})`, val: result.srkResult.Hm.toFixed(1), unit: "kJ/kmol" },
+                            ];
+                          })() : []),
                         ] : []),
                         ...(result.reynoldsNumber > 0 ? [
                           { label: "Re (orifice, d)", val: result.reynoldsNumber.toFixed(0), unit: "—" },

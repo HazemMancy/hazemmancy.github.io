@@ -65,6 +65,7 @@ import {
   type CompositionEntry, type SRKMixtureResult,
   computeSRKProperties, isenthalpicFlash,
 } from "./srkEos";
+import { computePRProperties, isenthalpicFlashPR } from "./prEos";
 
 export const R_UNIVERSAL = GAS_CONSTANT;
 
@@ -76,7 +77,7 @@ export type CdMode       = "user" | "estimated";
 export type EdgeType     = "sharp" | "rounded";
 export type BasisMode    = "inPipe" | "freeDischarge";
 export type TappingType  = "corner" | "D-D2" | "flange";
-export type GasPropsMode = "manual" | "srk";
+export type GasPropsMode = "manual" | "srk" | "pr";
 
 export interface ROProject {
   name: string;
@@ -981,23 +982,26 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
   let Z       = input.gasProps.compressibilityFactor;
   let mu_cP   = input.gasProps.viscosity;
 
-  if (input.gasPropsMode === "srk" && input.composition && input.composition.length > 0) {
+  const eosMode = input.gasPropsMode;
+  if ((eosMode === "srk" || eosMode === "pr") && input.composition && input.composition.length > 0) {
+    const eosFn = eosMode === "pr" ? computePRProperties : computeSRKProperties;
+    const eosLabel = eosMode === "pr" ? "PR EoS (Peng-Robinson 1976/1978)" : "SRK EoS (Soave 1972)";
+    const eosId    = eosMode === "pr" ? "PR" : "SRK";
     try {
-      srkResult = computeSRKProperties(input.composition, input.temperature, P1_bar);
+      srkResult = eosFn(input.composition, input.temperature, P1_bar);
       MW    = srkResult.MWm;
       k     = srkResult.k;
       Z     = srkResult.Z;
       mu_cP = srkResult.viscosity_cP;
-      // Propagate SRK warnings into main warnings array
-      for (const w of srkResult.warnings) warnings.push(`SRK: ${w}`);
-      steps.push({ label: "── SRK EoS Mode ──", equation: "Properties from SRK EoS + Chueh-Prausnitz BIP + Lee viscosity", value: "", unit: "", eqId: "SRK-00" });
-      steps.push({ label: "MWm (SRK)",   equation: "MWm = Σ xi·MWi", value: MW.toFixed(3), unit: "kg/kmol", eqId: "SRK-01" });
-      steps.push({ label: "Z (SRK)",     equation: "SRK cubic — largest positive root", value: Z.toFixed(4), unit: "—", eqId: "SRK-13" });
-      steps.push({ label: "k (SRK)",     equation: "k = Cp/(Cp−R), ideal-gas Cp", value: k.toFixed(4), unit: "—", eqId: "SRK-28" });
-      steps.push({ label: "μ (SRK/Lee)", equation: "Lee-Gonzalez-Eakin (1966)", value: mu_cP.toFixed(5), unit: "cP", eqId: "SRK-19" });
-      steps.push({ label: "ρ (SRK)",     equation: "ρ = MWm/Vm", value: srkResult.rho.toFixed(3), unit: "kg/m³", eqId: "SRK-15" });
+      for (const w of srkResult.warnings) warnings.push(`${eosId}: ${w}`);
+      steps.push({ label: `── ${eosLabel} Mode ──`, equation: "Properties from EoS + Chueh-Prausnitz BIP + Lee viscosity", value: "", unit: "", eqId: `${eosId}-00` });
+      steps.push({ label: `MWm (${eosId})`,   equation: "MWm = Σ xi·MWi", value: MW.toFixed(3), unit: "kg/kmol", eqId: `${eosId}-01` });
+      steps.push({ label: `Z (${eosId})`,     equation: `${eosId} cubic — largest positive root`, value: Z.toFixed(4), unit: "—", eqId: `${eosId}-13` });
+      steps.push({ label: `k (${eosId})`,     equation: "k = Cp/(Cp−R), ideal-gas Cp", value: k.toFixed(4), unit: "—", eqId: `${eosId}-28` });
+      steps.push({ label: `μ (${eosId}/Lee)`, equation: "Lee-Gonzalez-Eakin (1966)", value: mu_cP.toFixed(5), unit: "cP", eqId: `${eosId}-19` });
+      steps.push({ label: `ρ (${eosId})`,     equation: "ρ = MWm/Vm", value: srkResult.rho.toFixed(3), unit: "kg/m³", eqId: `${eosId}-15` });
     } catch (e: unknown) {
-      warnings.push(`SRK EoS failed: ${e instanceof Error ? e.message : String(e)}. Falling back to manual gas properties.`);
+      warnings.push(`${eosLabel} failed: ${e instanceof Error ? e.message : String(e)}. Falling back to manual gas properties.`);
     }
   }
 
@@ -1258,16 +1262,18 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
 
   if (srkResult && input.composition && input.composition.length > 0) {
     try {
-      const H_inlet = srkResult.Hm; // kJ/kmol at upstream conditions
-      const flashResult = isenthalpicFlash(
-        input.composition, H_inlet, P2_bar > 0 ? P2_bar : P1_bar - actualDP_bar, input.temperature,
+      const H_inlet   = srkResult.Hm; // kJ/kmol at upstream conditions
+      const P_down    = P2_bar > 0 ? P2_bar : P1_bar - actualDP_bar;
+      const flashFn   = eosMode === "pr" ? isenthalpicFlashPR : isenthalpicFlash;
+      const flashResult = flashFn(
+        input.composition, H_inlet, P_down, input.temperature,
       );
       dischargeTemperature = flashResult.T2_C;
       dischargeTemperatureConverged = flashResult.converged;
       const dT = dischargeTemperature - input.temperature;
       steps.push({
         label: "T discharge (isenthalpic flash)",
-        equation: "SRK isenthalpic flash: H(T2,P2) = H(T1,P1) — bisection",
+        equation: `${eosMode === "pr" ? "PR" : "SRK"} isenthalpic flash: H(T2,P2) = H(T1,P1) — bisection`,
         value: `${dischargeTemperature.toFixed(2)} °C  (ΔT = ${dT.toFixed(2)} °C)`,
         unit: "",
         eqId: "SRK-30",
