@@ -10,7 +10,7 @@ import { DatasetImportWizard } from "@/components/piping/dataset-import-wizard";
 import { DimensionTable } from "@/components/piping/dimension-table";
 import { LineBlankSVG } from "@/components/piping/svg-drawings";
 import { loadDataset, deleteDataset } from "@/lib/engineering/piping/datasetManager";
-import { LINE_BLANK_DATA } from "@/lib/engineering/piping/data";
+import { LINE_BLANK_DATA, LINE_BLANK_DATA_PROVENANCE } from "@/lib/engineering/piping/data";
 import type { LineBlankRow, DatasetMeta } from "@/lib/engineering/piping/schemas";
 
 const COLUMNS = [
@@ -23,12 +23,14 @@ const COLUMNS = [
   { key: "handle_length_mm", label: "Handle", unit: "mm" },
 ];
 
+const getLineBlankKey = (r: LineBlankRow) => `${r.nps}|${r.class_rating}|${r.type}`;
+
 export default function LineBlanksPage() {
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
   const [rows, setRows] = useState<LineBlankRow[]>(LINE_BLANK_DATA);
   const [isCustom, setIsCustom] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [filterNPS, setFilterNPS] = useState<string>("all");
   const [filterClass, setFilterClass] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
@@ -42,7 +44,7 @@ export default function LineBlanksPage() {
 
   const handleDelete = async () => {
     await deleteDataset("line-blanks");
-    setMeta(null); setRows(LINE_BLANK_DATA); setSelectedIdx(null); setIsCustom(false);
+    setMeta(null); setRows(LINE_BLANK_DATA); setSelectedKey(null); setIsCustom(false);
   };
 
   const npsValues = useMemo(() => Array.from(new Set(rows.map(r => r.nps))).sort((a, b) => a - b), [rows]);
@@ -57,6 +59,12 @@ export default function LineBlanksPage() {
     return f;
   }, [rows, filterNPS, filterClass, filterType]);
 
+  const selectedIdx = useMemo(() => {
+    if (selectedKey === null) return null;
+    const idx = filtered.findIndex(r => getLineBlankKey(r) === selectedKey);
+    return idx >= 0 ? idx : null;
+  }, [filtered, selectedKey]);
+
   const selected = selectedIdx !== null ? filtered[selectedIdx] : null;
 
   return (
@@ -67,13 +75,13 @@ export default function LineBlanksPage() {
             <Link href="/calculators/piping-components"><Button variant="ghost" size="icon" className="shrink-0" data-testid="button-back-piping"><ArrowLeft className="w-4 h-4" /></Button></Link>
             <div>
               <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="text-lineblanks-title"><Shield className="w-5 h-5 text-primary" /> Line Blank Dimensions</h1>
-              <p className="text-xs text-muted-foreground">ASME B16.48 — Spectacle blinds, spades, spacers</p>
+              <p className="text-xs text-muted-foreground">ASME B16.48 — Spectacle blinds, spades, spacers — dimensional reference only</p>
             </div>
           </div>
 
           <div className="mb-4 flex items-center gap-3 flex-wrap">
             <Badge variant={isCustom ? "default" : "secondary"} className="text-[10px]">
-              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : "Built-in ASME Data"}
+              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : `Built-in: ${LINE_BLANK_DATA_PROVENANCE.edition}`}
             </Badge>
             <span className="text-[10px] text-muted-foreground">{rows.length} records</span>
             <div className="ml-auto flex gap-2">
@@ -88,6 +96,14 @@ export default function LineBlanksPage() {
             </div>
           </div>
 
+          {!isCustom && (
+            <div className="mb-4 p-3 rounded-md border border-blue-900/30 bg-blue-950/10">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                <strong>Data source: {LINE_BLANK_DATA_PROVENANCE.edition}.</strong> {LINE_BLANK_DATA_PROVENANCE.disclaimer}
+              </p>
+            </div>
+          )}
+
           {showImport && <div className="mb-4"><DatasetImportWizard category="line-blanks" onImported={() => { setShowImport(false); loadData(); }} onClose={() => setShowImport(false)} /></div>}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -98,7 +114,9 @@ export default function LineBlanksPage() {
                 <div><Label className="text-xs">Type</Label><Select value={filterType} onValueChange={setFilterType}><SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem>{typeValues.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
                 <Badge variant="secondary" className="text-[10px] ml-auto">{filtered.length} records</Badge>
               </div></CardHeader>
-              <CardContent className="pt-0 max-h-[500px] overflow-y-auto"><DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={setSelectedIdx} /></CardContent>
+              <CardContent className="pt-0 max-h-[500px] overflow-y-auto">
+                <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={idx => setSelectedKey(getLineBlankKey(filtered[idx]))} />
+              </CardContent>
             </Card></div>
             <div><Card><CardHeader className="pb-2"><h3 className="text-sm font-semibold">Line Blank Drawing</h3></CardHeader>
               <CardContent className="flex items-center justify-center">
@@ -106,7 +124,11 @@ export default function LineBlanksPage() {
               </CardContent></Card></div>
           </div>
 
-          <div className="mt-6 p-3 rounded-md border border-muted/30 bg-muted/5"><p className="text-[10px] text-muted-foreground"><strong>Disclaimer:</strong> Built-in dimensions are based on standard reference values. For project-critical applications, verify against your organization's licensed copies of the referenced standards. Reference: ASME B16.48.</p></div>
+          <div className="mt-6 p-3 rounded-md border border-amber-900/30 bg-amber-950/10">
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              <strong>Dimensional Reference Tool — Not for Direct Design Use.</strong> {LINE_BLANK_DATA_PROVENANCE.disclaimer}
+            </p>
+          </div>
         </div>
       </section>
     </div>

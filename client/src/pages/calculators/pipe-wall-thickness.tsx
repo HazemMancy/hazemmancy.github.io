@@ -364,6 +364,7 @@ export default function PipeWallThicknessPage() {
           <p className="text-sm text-muted-foreground mt-0.5">
             ASME B31.3 §304.1.2 · ASME B31.4 §403.2.1 · ASME B31.8 §841.11 · ASME B36.10M
           </p>
+          <p className="text-xs text-amber-500/80 mt-0.5 font-medium">Preliminary Wall Thickness &amp; Schedule Screening Tool — results require engineering review before use in design</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Select onValueChange={loadTestCase}>
@@ -896,6 +897,22 @@ export default function PipeWallThicknessPage() {
           ) : (
             <div className="space-y-4">
               <FlagBanner flags={result.flags} />
+
+              {result.flags.includes("USER_OVERRIDE_ACTIVE") && (
+                <div className="flex items-start gap-2 rounded border border-orange-600/60 bg-orange-950/30 px-4 py-3 text-sm text-orange-200" data-testid="banner-user-override">
+                  <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0 text-orange-400" />
+                  <div>
+                    <strong className="text-orange-300">User-Defined Override Active.</strong> One or more design parameters (allowable stress S, quality factor E, or design factor F) have been entered manually, bypassing the built-in material and standard lookup tables. These values must be traceable to ASME B31.3 Table A-1, API 5L, or equivalent recognised standards and must be documented in the formal design record. See Engineering Warnings below for details.
+                  </div>
+                </div>
+              )}
+
+              {result.flags.includes("PRELIMINARY_DATA") && (
+                <div className="flex items-start gap-2 rounded border border-amber-600/60 bg-amber-950/30 px-4 py-2 text-xs text-amber-200" data-testid="banner-preliminary">
+                  <TriangleAlert className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-400" />
+                  <span><strong>Preliminary data quality selected.</strong> Results are for estimation and concept screening only. Confirm all inputs (P, T, material, allowances) before advancing to detailed design.</span>
+                </div>
+              )}
 
               {/* Summary Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

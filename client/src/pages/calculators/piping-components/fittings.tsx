@@ -10,7 +10,7 @@ import { DatasetImportWizard } from "@/components/piping/dataset-import-wizard";
 import { DimensionTable } from "@/components/piping/dimension-table";
 import { FittingSVG } from "@/components/piping/svg-drawings";
 import { loadDataset, deleteDataset } from "@/lib/engineering/piping/datasetManager";
-import { FITTING_DATA } from "@/lib/engineering/piping/data";
+import { FITTING_DATA, FITTING_DATA_PROVENANCE } from "@/lib/engineering/piping/data";
 import type { FittingRow, DatasetMeta } from "@/lib/engineering/piping/schemas";
 
 const FITTING_TYPE_LABELS: Record<string, string> = {
@@ -30,12 +30,14 @@ const COLUMNS = [
   { key: "od_mm", label: "OD", unit: "mm" },
 ];
 
+const getFittingKey = (r: FittingRow) => `${r.nps}|${r.nps2 ?? ''}|${r.type}|${r.schedule ?? ''}|${r.end_type ?? ''}`;
+
 export default function FittingsPage() {
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
   const [rows, setRows] = useState<FittingRow[]>(FITTING_DATA);
   const [isCustom, setIsCustom] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [filterNPS, setFilterNPS] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
 
@@ -48,7 +50,7 @@ export default function FittingsPage() {
 
   const handleDelete = async () => {
     await deleteDataset("fittings");
-    setMeta(null); setRows(FITTING_DATA); setSelectedIdx(null); setIsCustom(false);
+    setMeta(null); setRows(FITTING_DATA); setSelectedKey(null); setIsCustom(false);
   };
 
   const npsValues = useMemo(() => Array.from(new Set(rows.map(r => r.nps))).sort((a, b) => a - b), [rows]);
@@ -60,6 +62,12 @@ export default function FittingsPage() {
     if (filterType !== "all") f = f.filter(r => r.type === filterType);
     return f;
   }, [rows, filterNPS, filterType]);
+
+  const selectedIdx = useMemo(() => {
+    if (selectedKey === null) return null;
+    const idx = filtered.findIndex(r => getFittingKey(r) === selectedKey);
+    return idx >= 0 ? idx : null;
+  }, [filtered, selectedKey]);
 
   const selected = selectedIdx !== null ? filtered[selectedIdx] : null;
 
@@ -75,13 +83,13 @@ export default function FittingsPage() {
               <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="text-fittings-title">
                 <GitBranch className="w-5 h-5 text-primary" /> Fitting Dimensions
               </h1>
-              <p className="text-xs text-muted-foreground">ASME B16.9 / B16.11 — Elbows, Tees, Reducers dimensions</p>
+              <p className="text-xs text-muted-foreground">ASME B16.9 / B16.11 — Elbows, Tees, Reducers dimensions — dimensional reference only</p>
             </div>
           </div>
 
           <div className="mb-4 flex items-center gap-3 flex-wrap">
             <Badge variant={isCustom ? "default" : "secondary"} className="text-[10px]">
-              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : "Built-in ASME Data"}
+              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : `Built-in: ${FITTING_DATA_PROVENANCE.edition}`}
             </Badge>
             <span className="text-[10px] text-muted-foreground">{rows.length} records</span>
             <div className="ml-auto flex gap-2">
@@ -95,6 +103,14 @@ export default function FittingsPage() {
               )}
             </div>
           </div>
+
+          {!isCustom && (
+            <div className="mb-4 p-3 rounded-md border border-blue-900/30 bg-blue-950/10">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                <strong>Data source: {FITTING_DATA_PROVENANCE.edition}.</strong> {FITTING_DATA_PROVENANCE.disclaimer}
+              </p>
+            </div>
+          )}
 
           {showImport && <div className="mb-4"><DatasetImportWizard category="fittings" onImported={() => { setShowImport(false); loadData(); }} onClose={() => setShowImport(false)} /></div>}
 
@@ -115,7 +131,7 @@ export default function FittingsPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0 max-h-[500px] overflow-y-auto">
-                  <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
+                  <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={idx => setSelectedKey(getFittingKey(filtered[idx]))} />
                 </CardContent>
               </Card>
             </div>
@@ -128,8 +144,10 @@ export default function FittingsPage() {
             </div>
           </div>
 
-          <div className="mt-6 p-3 rounded-md border border-muted/30 bg-muted/5">
-            <p className="text-[10px] text-muted-foreground leading-relaxed"><strong>Disclaimer:</strong> Built-in dimensions are based on standard reference values. For project-critical applications, verify against your organization's licensed copies of the referenced standards. Reference: ASME B16.9, ASME B16.11.</p>
+          <div className="mt-6 p-3 rounded-md border border-amber-900/30 bg-amber-950/10">
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              <strong>Dimensional Reference Tool — Not for Direct Design Use.</strong> {FITTING_DATA_PROVENANCE.disclaimer}
+            </p>
           </div>
         </div>
       </section>

@@ -1,0 +1,37 @@
+Final recommendations — Gas Mixing Calculator
+
+1. Enforce normalization policy inside the solver
+   - Strict vs normalize mode must affect the actual calculation logic, not only the page behavior.
+
+2. Fix multi-stream composition handling
+   - Do not continue with materially off-spec stream compositions using warning-only logic. Use strict reject or explicit per-stream normalization.
+
+3. Handle stream flow unit honestly
+   - Either implement real flow-unit conversion per stream or remove/de-emphasize the flowUnit field if the solver uses one fixed molar basis only.
+
+4. Strengthen disclosure for approximate thermodynamic properties
+   - Make it clear that Z, viscosity, gamma, Cp/Cv, JT, and speed-of-sound outputs are screening-level estimates, not full EOS/property-package results.
+
+5. Clarify gamma / Cp-Cv mixing approximation
+   - State explicitly that caloric properties are approximated and should not be used as high-accuracy design properties for compression, nozzle, or acoustic work.
+
+6. Make sour-gas pseudocritical limitation highly visible
+   - If Wichert–Aziz or equivalent sour-gas correction is not implemented, state clearly that pseudocritical properties are uncorrected for sour gas.
+
+7. Strengthen EOS coverage disclosure
+   - If PR/SRK mapping is incomplete, report that clearly and note reduced confidence when fallback handling is used.
+
+8. Separate “mixing” from “properties at conditions” in methodology
+   - Make it explicit that the tool performs both composition mixing and screening-level property estimation, and that these are different levels of rigor.
+
+9. Improve duplicate-component handling
+   - Auto-merge duplicates, block them in strict mode, or otherwise resolve them explicitly rather than warning only.
+
+10. Add schema-based validation in the actual solve path
+   - This remains one of the main governance upgrades needed.
+
+11. Keep the module positioned as a strong screening tool
+   - It is worth keeping, but it should remain clearly framed as:
+   - Gas Mixing / Gas Property Screening Tool
+   - not a full thermodynamic simulator,
+   - not a substitute for rigorous EOS or process-simulation property work.

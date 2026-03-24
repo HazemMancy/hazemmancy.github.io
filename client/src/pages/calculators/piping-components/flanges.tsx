@@ -10,7 +10,7 @@ import { DatasetImportWizard } from "@/components/piping/dataset-import-wizard";
 import { DimensionTable } from "@/components/piping/dimension-table";
 import { FlangeSectionSVG } from "@/components/piping/svg-drawings";
 import { loadDataset, deleteDataset } from "@/lib/engineering/piping/datasetManager";
-import { FLANGE_DATA } from "@/lib/engineering/piping/data";
+import { FLANGE_DATA, FLANGE_DATA_PROVENANCE } from "@/lib/engineering/piping/data";
 import type { FlangeRow, DatasetMeta } from "@/lib/engineering/piping/schemas";
 
 const COLUMNS = [
@@ -25,12 +25,14 @@ const COLUMNS = [
   { key: "bore_mm", label: "Bore", unit: "mm" },
 ];
 
+const getFlangeKey = (r: FlangeRow) => `${r.nps}|${r.class_rating}|${r.type}`;
+
 export default function FlangesPage() {
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
   const [rows, setRows] = useState<FlangeRow[]>(FLANGE_DATA);
   const [isCustom, setIsCustom] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [filterNPS, setFilterNPS] = useState<string>("all");
   const [filterClass, setFilterClass] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
@@ -44,7 +46,7 @@ export default function FlangesPage() {
 
   const handleDelete = async () => {
     await deleteDataset("flanges");
-    setMeta(null); setRows(FLANGE_DATA); setSelectedIdx(null); setIsCustom(false);
+    setMeta(null); setRows(FLANGE_DATA); setSelectedKey(null); setIsCustom(false);
   };
 
   const npsValues = useMemo(() => Array.from(new Set(rows.map(r => r.nps))).sort((a, b) => a - b), [rows]);
@@ -58,6 +60,12 @@ export default function FlangesPage() {
     if (filterType !== "all") f = f.filter(r => r.type === filterType);
     return f;
   }, [rows, filterNPS, filterClass, filterType]);
+
+  const selectedIdx = useMemo(() => {
+    if (selectedKey === null) return null;
+    const idx = filtered.findIndex(r => getFlangeKey(r) === selectedKey);
+    return idx >= 0 ? idx : null;
+  }, [filtered, selectedKey]);
 
   const selected = selectedIdx !== null ? filtered[selectedIdx] : null;
 
@@ -73,13 +81,13 @@ export default function FlangesPage() {
               <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="text-flanges-title">
                 <Disc3 className="w-5 h-5 text-primary" /> Flange Dimensions
               </h1>
-              <p className="text-xs text-muted-foreground">ASME B16.5 / B16.47 — WN, SO, BL flange dimensions by NPS and class</p>
+              <p className="text-xs text-muted-foreground">ASME B16.5 / B16.47 — WN, SO, BL flange dimensions by NPS and class — dimensional reference only</p>
             </div>
           </div>
 
           <div className="mb-4 flex items-center gap-3 flex-wrap">
             <Badge variant={isCustom ? "default" : "secondary"} className="text-[10px]">
-              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : "Built-in ASME Data"}
+              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : `Built-in: ${FLANGE_DATA_PROVENANCE.edition}`}
             </Badge>
             <span className="text-[10px] text-muted-foreground">{rows.length} records</span>
             <div className="ml-auto flex gap-2">
@@ -93,6 +101,14 @@ export default function FlangesPage() {
               )}
             </div>
           </div>
+
+          {!isCustom && (
+            <div className="mb-4 p-3 rounded-md border border-blue-900/30 bg-blue-950/10">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                <strong>Data source: {FLANGE_DATA_PROVENANCE.edition}.</strong> {FLANGE_DATA_PROVENANCE.disclaimer}
+              </p>
+            </div>
+          )}
 
           {showImport && <div className="mb-4"><DatasetImportWizard category="flanges" onImported={() => { setShowImport(false); loadData(); }} onClose={() => setShowImport(false)} /></div>}
 
@@ -117,7 +133,7 @@ export default function FlangesPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0 max-h-[500px] overflow-y-auto">
-                  <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
+                  <DimensionTable rows={filtered} columns={COLUMNS} selectedIndex={selectedIdx} onSelect={idx => setSelectedKey(getFlangeKey(filtered[idx]))} />
                 </CardContent>
               </Card>
             </div>
@@ -142,8 +158,10 @@ export default function FlangesPage() {
             </div>
           </div>
 
-          <div className="mt-6 p-3 rounded-md border border-muted/30 bg-muted/5">
-            <p className="text-[10px] text-muted-foreground leading-relaxed"><strong>Disclaimer:</strong> Built-in dimensions are based on standard reference values. For project-critical applications, verify against your organization's licensed copies of the referenced standards. Reference: ASME B16.5, ASME B16.47.</p>
+          <div className="mt-6 p-3 rounded-md border border-amber-900/30 bg-amber-950/10">
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              <strong>Dimensional Reference Tool — Not for Direct Design Use.</strong> {FLANGE_DATA_PROVENANCE.disclaimer}
+            </p>
           </div>
         </div>
       </section>

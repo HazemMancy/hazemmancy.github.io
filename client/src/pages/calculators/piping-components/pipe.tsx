@@ -10,7 +10,7 @@ import { DatasetImportWizard } from "@/components/piping/dataset-import-wizard";
 import { DimensionTable } from "@/components/piping/dimension-table";
 import { PipeSectionSVG } from "@/components/piping/svg-drawings";
 import { loadDataset, deleteDataset } from "@/lib/engineering/piping/datasetManager";
-import { PIPE_DATA } from "@/lib/engineering/piping/data";
+import { PIPE_DATA, PIPE_DATA_PROVENANCE } from "@/lib/engineering/piping/data";
 import type { PipeRow, DatasetMeta } from "@/lib/engineering/piping/schemas";
 
 const PIPE_COLUMNS = [
@@ -24,12 +24,14 @@ const PIPE_COLUMNS = [
   { key: "material", label: "Material" },
 ];
 
+const getPipeKey = (r: PipeRow) => `${r.nps}|${r.schedule}`;
+
 export default function PipePage() {
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
   const [rows, setRows] = useState<PipeRow[]>(PIPE_DATA);
   const [isCustom, setIsCustom] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [filterNPS, setFilterNPS] = useState<string>("all");
   const [filterSchedule, setFilterSchedule] = useState<string>("all");
 
@@ -51,11 +53,17 @@ export default function PipePage() {
     return f;
   }, [rows, filterNPS, filterSchedule]);
 
+  const selectedIdx = useMemo(() => {
+    if (selectedKey === null) return null;
+    const idx = filtered.findIndex(r => getPipeKey(r) === selectedKey);
+    return idx >= 0 ? idx : null;
+  }, [filtered, selectedKey]);
+
   const selected = selectedIdx !== null ? filtered[selectedIdx] : null;
 
   const handleDelete = async () => {
     await deleteDataset("pipe");
-    setMeta(null); setRows(PIPE_DATA); setSelectedIdx(null); setIsCustom(false);
+    setMeta(null); setRows(PIPE_DATA); setSelectedKey(null); setIsCustom(false);
   };
 
   return (
@@ -73,13 +81,13 @@ export default function PipePage() {
                 <Cylinder className="w-5 h-5 text-primary" />
                 Pipe Dimensions
               </h1>
-              <p className="text-xs text-muted-foreground">ASME B36.10M / B36.19M — Pipe OD, ID, wall thickness by NPS and schedule</p>
+              <p className="text-xs text-muted-foreground">ASME B36.10M / B36.19M — Pipe OD, ID, wall thickness by NPS and schedule — dimensional reference only</p>
             </div>
           </div>
 
           <div className="mb-4 flex items-center gap-3 flex-wrap">
             <Badge variant={isCustom ? "default" : "secondary"} className="text-[10px]">
-              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : "Built-in ASME Data"}
+              {isCustom ? `Custom: ${meta?.name ?? "Imported"}` : `Built-in: ${PIPE_DATA_PROVENANCE.edition}`}
             </Badge>
             <span className="text-[10px] text-muted-foreground">{rows.length} records</span>
             <div className="ml-auto flex gap-2">
@@ -93,6 +101,14 @@ export default function PipePage() {
               )}
             </div>
           </div>
+
+          {!isCustom && (
+            <div className="mb-4 p-3 rounded-md border border-blue-900/30 bg-blue-950/10">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                <strong>Data source: {PIPE_DATA_PROVENANCE.edition}.</strong> {PIPE_DATA_PROVENANCE.disclaimer}
+              </p>
+            </div>
+          )}
 
           {showImport && (
             <div className="mb-4">
@@ -133,7 +149,12 @@ export default function PipePage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0 max-h-[500px] overflow-y-auto">
-                  <DimensionTable rows={filtered} columns={PIPE_COLUMNS} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
+                  <DimensionTable
+                    rows={filtered}
+                    columns={PIPE_COLUMNS}
+                    selectedIndex={selectedIdx}
+                    onSelect={idx => setSelectedKey(getPipeKey(filtered[idx]))}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -182,10 +203,9 @@ export default function PipePage() {
             </div>
           </div>
 
-          <div className="mt-6 p-3 rounded-md border border-muted/30 bg-muted/5">
+          <div className="mt-6 p-3 rounded-md border border-amber-900/30 bg-amber-950/10">
             <p className="text-[10px] text-muted-foreground leading-relaxed">
-              <strong>Disclaimer:</strong> Built-in dimensions are based on standard reference values. For project-critical applications, verify against your organization's licensed copies of the referenced standards.
-              Reference standards: ASME B36.10M (Carbon Steel Pipe), ASME B36.19M (Stainless Steel Pipe).
+              <strong>Dimensional Reference Tool — Not for Direct Design Use.</strong> {PIPE_DATA_PROVENANCE.disclaimer}
             </p>
           </div>
         </div>
