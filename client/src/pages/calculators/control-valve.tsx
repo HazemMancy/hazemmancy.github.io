@@ -34,6 +34,10 @@ import {
   CV_TEST_CASE, CV_GAS_TEST, STEAM_PROPS,
 } from "@/lib/engineering/controlValve";
 import {
+  cvEnabledPointsSchema, cvLiquidPropsSchema, cvGasPropsSchema,
+  cvValveDataSchema, cvInstallationSchema,
+} from "@/lib/engineering/validation";
+import {
   Gauge, FlaskConical, RotateCcw,
   ChevronLeft, ChevronRight, ClipboardList, Droplets,
   Settings2, Calculator, Wrench, ShieldAlert, CheckCircle2,
@@ -211,7 +215,42 @@ export default function ControlValvePage() {
         };
       }
 
+      // ── Schema-based validation before solver ─────────────────────────────
+      const enabledPoints = sd.operatingPoints.filter(p => p.enabled);
+      const ptParse = cvEnabledPointsSchema.safeParse(enabledPoints);
+      if (!ptParse.success) {
+        setError(ptParse.error.errors.map(e => e.message).join("; "));
+        return;
+      }
+
+      if (sd.fluidType === "liquid") {
+        const propsParse = cvLiquidPropsSchema.safeParse(sd.liquidProps);
+        if (!propsParse.success) {
+          setError(propsParse.error.errors.map(e => e.message).join("; "));
+          return;
+        }
+      } else {
+        const propsParse = cvGasPropsSchema.safeParse(sd.gasProps);
+        if (!propsParse.success) {
+          setError(propsParse.error.errors.map(e => e.message).join("; "));
+          return;
+        }
+      }
+
       const vd = toSIValve();
+      const valveParse = cvValveDataSchema.safeParse(vd);
+      if (!valveParse.success) {
+        setError(valveParse.error.errors.map(e => e.message).join("; "));
+        return;
+      }
+
+      const instParse = cvInstallationSchema.safeParse(installation);
+      if (!instParse.success) {
+        setError(instParse.error.errors.map(e => e.message).join("; "));
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const result = computeMultiPointSizing(sd, vd, installation);
       setSizingResult(result);
       setActiveTab("results");
@@ -349,25 +388,31 @@ export default function ControlValvePage() {
       results,
       additionalSections,
       methodology: [
-        "IEC 60534-informed preliminary sizing — screening tool only; not a substitute for final vendor sizing",
+        "PRELIMINARY CONTROL VALVE SIZING — ISA/IEC-style screening framework only. Not a substitute for final vendor sizing, trim selection, cavitation/noise verification, or IEC 60534 compliance verification.",
         sd.fluidType === "liquid"
-          ? "Liquid: Cv = Q·√(ρ/ΔP) / (N1·Fp), choked check via FL²(P1-FF·Pv) per IEC 60534-2-1"
-          : "Gas: Cv = W / (N8·Fp·P1·Y·√(x·Fk·M/(T·Z))), choked check via Fk·xT per IEC 60534-2-1",
-        "Piping geometry factor Fp based on reducers (sum K = 1.5(1-β²)); FLP iterative per IEC 60534-2-1",
+          ? "Liquid branch: IEC 60534-2-1 sizing equations used as a preliminary screening framework. Cv = Q/(N1·Fp·√(ΔP/ρr)); choked check via (FLP/Fp)²·(P1−FF·Pv). Cavitation assessed via Kc = 0.80·FL² (approximate threshold per IEC 60534-2-2 §5.2 — screening only, not final trim selection)."
+          : sd.fluidType === "gas"
+            ? "Gas branch: ISA/IEC-style compressible-flow screening framework. Cv = W/(N8·Fp·P1·Y·√(x·MW/(T·Z))); choked check via Fk·xTP. Gas properties based on user/EOS input. Choked and noise indications are screening-level only — vendor acoustic analysis required for final design."
+            : "Steam branch: APPROXIMATE PRELIMINARY SIZING ONLY. Fixed approximated steam properties (MW=18.015, k=1.3, Z=0.95). Not valid for wet steam, near-saturation, or high-superheat service. Final steam-valve sizing requires vendor methods and IAPWS-IF97 steam-property basis.",
+        "Piping geometry factor Fp = 1/√(1 + ΣK·Cv²/(N2·d⁴)); FLP = FL/√(1 + FL²·K1'·Cv²/(N2·d⁴)); xTP iterative — all per IEC 60534-2-1. If Fp override is active, user-supplied Fp replaces auto-calculated Fp in Cv equation; FLP and xTP are still derived from geometry.",
+        "Reducer/fitting effects included per IEC 60534-2-1 Figure 11 (K1, K2, KB1, KB2). No fitting effects included beyond standard reducers.",
+        "Viscosity/Reynolds correction (FR): simplified approximation — full iterative Rev correction per IEC 60534-2-1 §5.9 requires vendor-confirmed Fd value (not used in this screening tool).",
+        "Authority screening estimate: heuristic indicator only. Formula: ΔP_valve_normal / (2 × max valve ΔP). True valve authority requires system hydraulic analysis.",
         sd.fluidType === "gas"
-          ? "Normal volumetric gas flow converted to mass flow at 0°C, 1.01325 bar (STP) via 22.414 m³/kmol"
-          : "",
-        sd.fluidType === "steam"
-          ? "PRELIMINARY — steam uses fixed approximate properties (MW=18.015, k=1.3, Z=0.95). Verify with IAPWS-IF97 steam tables."
+          ? "Normal volumetric gas flow (Nm³/h) converted to mass flow at 0°C, 1.01325 bar (STP) per ISO 13443 — molar volume 22.414 m³/kmol."
           : "",
       ].filter(Boolean),
       assumptions: [
-        "PRELIMINARY SIZING BASIS — results are for screening/FEED purposes only; verify with vendor confirmed data",
-        "FL, xT values are typical defaults unless vendor-confirmed; Fd shown for reference only (not used in Cv calculation)",
-        "Valve opening estimated from inherent characteristic (not installed characteristic)",
-        "Valve authority is a heuristic screening indicator (assumes total system ΔP ≈ 2 × max valve ΔP — confirm with system curve)",
-        "Cavitation Kc = 0.80·FL² is an approximate IEC 60534-2-2 screening threshold — obtain vendor σ_mr, σ_id for specification",
-        sd.fluidType === "steam" ? "Steam sizing PRELIMINARY — approximate properties only; final sizing requires IAPWS-IF97 and vendor steam trim data" : "",
+        "PRELIMINARY SIZING BASIS — IEC 60534-informed screening only; not a substitute for final vendor sizing with confirmed fluid properties",
+        "Not a final valve selection authority; not a final cavitation trim selection; not a final noise verification; not a final IEC 60534 compliance verification",
+        "FL, xT values are typical style defaults unless vendor-confirmed; Fd is displayed for reference only — Fd is NOT used in the Cv calculation (simplified viscosity treatment; full Fd-based Rev correction requires vendor data)",
+        "Fp override (when active) is applied in the Cv equation and choked-flow check; FLP and xTP remain geometry-based — Fp and FLP are NOT interchangeable",
+        "Valve opening estimated from inherent characteristic (not installed characteristic — installed characteristic depends on system curve)",
+        "Authority screening estimate is a heuristic indicator only (assumes system ΔP ≈ 2 × max valve ΔP) — confirm with actual system hydraulic curve",
+        "Cavitation Kc = 0.80·FL² is an approximate IEC 60534-2-2 screening threshold; obtain vendor σ_mr, σ_id values for specification",
+        sd.fluidType === "liquid" ? "Liquid branch: choked flow, cavitation, and flashing are screening indications only — anti-cavitation trim selection and verification require vendor cavitation data and IEC 60534-2-2 analysis" : "",
+        sd.fluidType === "gas" || sd.fluidType === "steam" ? "Gas/steam branch: noise risk is a preliminary screening indicator — acoustic analysis and final noise compliance require vendor prediction per IEC 60534-8-3" : "",
+        sd.fluidType === "steam" ? "STEAM PRELIMINARY: Fixed MW=18.015, k=1.3, Z=0.95 — not valid for wet steam or near-saturation service; final sizing requires IAPWS-IF97 and vendor steam trim data" : "",
       ].filter(Boolean),
       references: [
         "IEC 60534-2-1: Industrial-process control valves — Sizing equations (primary standard)",
@@ -667,8 +712,13 @@ export default function ControlValvePage() {
                 <div className="grid gap-4 sm:grid-cols-2 mt-3">
                   <div><Label className="text-xs mb-1.5 block">Valve Size ({dU}) — blank=line-size</Label>
                     <NumericInput value={valveData.valveSize} onValueChange={v => setValveData(vd => ({ ...vd, valveSize: v }))} placeholder="Line-size" data-testid="input-valve-size" /></div>
-                  <div><Label className="text-xs mb-1.5 block">Fp Override (0=auto)</Label>
-                    <NumericInput value={installation.fpOverride} onValueChange={v => setInstallation(inst => ({ ...inst, fpOverride: v }))} placeholder="Auto-calculate" data-testid="input-fp" /></div>
+                  <div>
+                    <Label className="text-xs mb-1.5 block">Fp Override (0=auto-calculate)</Label>
+                    <NumericInput value={installation.fpOverride} onValueChange={v => setInstallation(inst => ({ ...inst, fpOverride: v }))} placeholder="0 = auto" data-testid="input-fp" />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      When set (0.0–1.0), this value replaces the auto-calculated Fp in the Cv equation and choked-flow check. FLP and xTP are still derived from pipe geometry. Use only with vendor-confirmed Fp per IEC 60534-2-1 Annex A.
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -752,7 +802,7 @@ export default function ControlValvePage() {
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm">Valve Selection & Rating</h3>
-              <p className="text-xs text-muted-foreground">Check opening %, rangeability, and valve authority</p>
+              <p className="text-xs text-muted-foreground">Check opening %, rangeability, and authority screening estimate</p>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               {valveData.ratedCv <= 0 && (
@@ -976,19 +1026,21 @@ export default function ControlValvePage() {
 
                   <AssumptionsPanel
                     assumptions={[
-                      "PRELIMINARY SIZING BASIS — IEC 60534-informed screening only; not a substitute for final vendor sizing with confirmed fluid properties",
+                      "PRELIMINARY CONTROL VALVE SIZING — ISA/IEC-style screening framework only. Not a final valve selection authority; not a final cavitation/trim/noise design tool; not an IEC 60534 compliance verification.",
                       "N1=0.865, N8=94.8, N2=0.00214 per IEC 60534-2-1 Table 1 (SI units: m³/h, bar, kg/h, K, mm)",
-                      "Piping geometry factor: Fp = 1/√(1 + ΣK·Cv²/(N2·d⁴)); ΣK = K1+K2+KB1+KB2 per IEC 60534-2-1 Figure 11",
-                      "FLP = FL/√(1 + FL²·K1'·Cv²/(N2·d⁴)) per IEC 60534-2-1 §5.4; iterative 3-pass convergence",
+                      "Piping geometry factor: Fp = 1/√(1 + ΣK·Cv²/(N2·d⁴)); ΣK = K1+K2+KB1+KB2 per IEC 60534-2-1 Figure 11; Fp iterative 3-pass",
+                      "FLP = FL/√(1 + FL²·K1'·Cv²/(N2·d⁴)) per IEC 60534-2-1 §5.4; computed from geometry independent of any Fp override",
+                      "Fp override (when active) replaces auto-calculated Fp in the Cv equation and choked-flow check only — FLP and xTP remain geometry-based; Fp and FLP are NOT interchangeable",
                       "Liquid choked: ΔP_max = (FLP/Fp)²·(P1 − FF·Pv); FF = 0.96 − 0.28·√(Pv/Pc) per IEC 60534-2-1 §5.5",
                       "Gas/vapor: Y = 1 − x/(3·Fk·xTP·Fp²), Fk = k/1.4 per IEC 60534-2-1 §5.6; xTP iterative per §5.8",
                       "Gas normal volumetric flow (Nm³/h) converted to mass flow at 0°C, 1.01325 bar (STP) per ISO 13443 — 22.414 m³/kmol",
-                      "Cavitation: Kc = 0.80·FL² is an approximate screening threshold per IEC 60534-2-2 §5.2; σ = (P1−Pv)/ΔP; obtain vendor σ_mr, σ_id for specification",
-                      "FL, xT: typical defaults — must be replaced by confirmed vendor data for final design. Fd shown for reference only (not used in Cv calculation)",
-                      "Viscosity correction (FR) is approximate — full iterative Rev per IEC 60534-2-1 §5.9 requires vendor-confirmed Fd value",
-                      "Valve opening estimated from inherent characteristic (not installed characteristic)",
-                      "Valve authority is a heuristic screening indicator only; assumes total system ΔP ≈ 2 × max valve ΔP — confirm with actual system curve",
-                      serviceData.fluidType === "steam" ? "STEAM PRELIMINARY: Uses fixed MW=18.015, k=1.3, Z=0.95 — not valid for wet steam or near-saturation. Verify with IAPWS-IF97 and vendor steam trim data" : "",
+                      "Cavitation screening: Kc = 0.80·FL² (approximate threshold per IEC 60534-2-2 §5.2); σ = (P1−Pv)/ΔP. Screening indications only — anti-cavitation trim selection requires vendor σ_mr, σ_id values",
+                      "FL, xT: typical style defaults unless vendor-confirmed — must be replaced by confirmed vendor data for final design",
+                      "Fd displayed for reference only — NOT used in Cv calculation. Simplified viscosity correction (FR) is approximate; full iterative Rev correction per IEC 60534-2-1 §5.9 requires vendor-confirmed Fd",
+                      "Valve opening estimated from inherent characteristic (not installed characteristic — installed characteristic depends on system curve)",
+                      "Authority screening estimate: heuristic indicator only (assumes system ΔP ≈ 2 × max valve ΔP — confirm with actual system hydraulic curve)",
+                      "Choked, cavitation, and noise outputs are screening/risk indicators — final confirmation requires vendor sizing software, trim data, and acoustic/cavitation testing",
+                      serviceData.fluidType === "steam" ? "STEAM PRELIMINARY: Fixed MW=18.015, k=1.3, Z=0.95 — NOT valid for wet steam or near-saturation service. Final sizing MUST use IAPWS-IF97 steam tables and vendor steam trim data" : "",
                     ].filter(Boolean)}
                     references={[
                       "IEC 60534-2-1:2011: Industrial-process control valves — Sizing equations for fluid flow (primary sizing standard)",

@@ -174,3 +174,60 @@ export type HXCaseValidInput = z.infer<typeof hxCaseSchema>;
 export type HXUValidInput = z.infer<typeof hxUInputSchema>;
 export type HXConfigValidInput = z.infer<typeof hxConfigSchema>;
 export type HXSchemaInput = z.infer<typeof hxInputSchema>;
+
+// ─── Control Valve Sizing Schemas ─────────────────────────────────────────────
+
+export const cvOperatingPointSchema = z.object({
+  label: z.string(),
+  flowRate: z.number().positive("Flow rate must be positive"),
+  flowUnit: z.enum(["volumetric", "mass"]),
+  upstreamPressure: z.number().positive("P1 (upstream pressure) must be positive (absolute pressure)"),
+  downstreamPressure: z.number().nonnegative("P2 (downstream pressure) must be non-negative"),
+  temperature: z.number().gt(-273.15, "Temperature must be above absolute zero"),
+  enabled: z.boolean(),
+}).refine(d => d.upstreamPressure > d.downstreamPressure, {
+  message: "P1 must exceed P2 (upstream pressure must be greater than downstream)",
+  path: ["downstreamPressure"],
+});
+
+export const cvLiquidPropsSchema = z.object({
+  density: z.number().positive("Liquid density must be positive (kg/m³)"),
+  viscosity: z.number().positive("Liquid viscosity must be positive (cP)"),
+  vaporPressure: z.number().nonnegative("Vapor pressure must be ≥ 0 (kPa)"),
+  criticalPressure: z.number().positive("Critical pressure must be positive (bar abs)"),
+});
+
+export const cvGasPropsSchema = z.object({
+  molecularWeight: z.number().positive("Molecular weight must be positive (kg/kmol)"),
+  specificHeatRatio: z.number().gt(1.0, "Specific heat ratio k must be > 1.0"),
+  compressibilityFactor: z.number().positive("Compressibility factor Z must be positive"),
+  viscosity: z.number().positive("Gas viscosity must be positive (cP)"),
+  criticalPressure: z.number().positive("Critical pressure must be positive (bar abs)"),
+});
+
+export const cvValveDataSchema = z.object({
+  fl: z.number().gt(0, "FL must be > 0").lte(1.0, "FL must be ≤ 1.0"),
+  xt: z.number().gt(0, "xT must be > 0").lte(1.0, "xT must be ≤ 1.0"),
+  fd: z.number().gte(0, "Fd must be ≥ 0"),
+  ratedCv: z.number().gte(0, "Rated Cv must be ≥ 0"),
+  pipeSize: z.number().positive("Pipe size must be positive (mm)"),
+  valveSize: z.number().gte(0, "Valve size must be ≥ 0 (mm)"),
+  rangeability: z.number().positive("Rangeability must be positive"),
+  style: z.enum(["globe", "ball", "butterfly"]),
+  characteristic: z.enum(["equal_pct", "linear", "quick_open"]),
+});
+
+export const cvInstallationSchema = z.object({
+  hasReducers: z.boolean(),
+  upstreamPipeSize: z.number().positive("Upstream pipe size must be positive (mm)"),
+  downstreamPipeSize: z.number().positive("Downstream pipe size must be positive (mm)"),
+  fpOverride: z.number().gte(0, "Fp override must be ≥ 0").lte(1.0, "Fp override must be ≤ 1.0 (0 = auto-calculate)"),
+});
+
+export const cvEnabledPointsSchema = z.array(cvOperatingPointSchema).min(1, "At least one operating point must be enabled");
+
+export type CVOperatingPointInput = z.infer<typeof cvOperatingPointSchema>;
+export type CVLiquidPropsInput = z.infer<typeof cvLiquidPropsSchema>;
+export type CVGasPropsInput = z.infer<typeof cvGasPropsSchema>;
+export type CVValveDataInput = z.infer<typeof cvValveDataSchema>;
+export type CVInstallationInput = z.infer<typeof cvInstallationSchema>;

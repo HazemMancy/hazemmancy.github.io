@@ -672,18 +672,18 @@ export function computeGasPoint(
   if (Y < 0.667 + 0.01) {
     warnings.push(
       `Expansion factor Y = ${Y.toFixed(3)} at minimum (0.667 per IEC 60534-2-1 §5.6). ` +
-      "Valve operating at choked limit — mandatory vendor noise prediction per IEC 60534-8-3."
+      "Valve operating at choked limit — vendor noise prediction strongly recommended per IEC 60534-8-3."
     );
   }
 
   if (x > 0.8) {
     warnings.push(
       `Very high pressure ratio x = ${x.toFixed(3)} (x/xT = ${(x/(Fk*xt)).toFixed(2)}) — ` +
-      "sonic velocity and aerodynamic noise likely. Request vendor noise prediction per IEC 60534-8-3."
+      "sonic velocity and aerodynamic noise likely (screening indication only). Vendor noise prediction recommended per IEC 60534-8-3 before final design."
     );
   } else if (x > 0.5 && !isChoked) {
     warnings.push(
-      `Elevated pressure ratio x = ${x.toFixed(3)} — verify noise levels per IEC 60534-8-3, especially near personnel areas.`
+      `Elevated pressure ratio x = ${x.toFixed(3)} — noise risk screening indicator. Verify with vendor noise prediction per IEC 60534-8-3, especially near occupied areas.`
     );
   }
   if (x < 0.05) {
@@ -955,23 +955,23 @@ export function computeRiskAssessment(
         chokedGas     = true;
         highNoiseRisk = true;
         warnings.push(
-          `${pr.label}: CHOKED GAS FLOW — sonic velocity at vena contracta. Y = 0.667. ` +
-          "Noise prediction mandatory per IEC 60534-8-3."
+          `${pr.label}: CHOKED GAS FLOW — sonic velocity at vena contracta (screening indication). Y = 0.667. ` +
+          "Vendor noise prediction recommended per IEC 60534-8-3 before final design."
         );
-        mitigations.push("Install downstream diffuser/silencer for noise attenuation per IEC 60534-8-3");
-        mitigations.push("Use multi-stage low-noise trim to reduce per-stage pressure ratio below Fk·xT per IEC 60534");
-        mitigations.push("Verify pipe wall thickness for acoustic fatigue if SPL >110 dBA per IEC 60534-8-4");
+        mitigations.push("Install downstream diffuser/silencer for noise attenuation — verify per IEC 60534-8-3");
+        mitigations.push("Evaluate multi-stage low-noise trim to reduce per-stage pressure ratio below Fk·xT — obtain vendor data");
+        mitigations.push("Check pipe wall thickness for acoustic fatigue if SPL likely >110 dBA — per IEC 60534-8-4 / project fatigue criteria");
       }
       if (pr.xActual > 0.5 && !pr.isChoked) {
         highNoiseRisk = true;
         warnings.push(
-          `${pr.label}: Elevated pressure ratio x = ${pr.xActual.toFixed(3)} — aerodynamic noise risk. ` +
-          "Vendor noise calculation recommended per IEC 60534-8-3."
+          `${pr.label}: Elevated pressure ratio x = ${pr.xActual.toFixed(3)} — aerodynamic noise risk (screening indication only). ` +
+          "Vendor noise prediction recommended per IEC 60534-8-3."
         );
-        mitigations.push("Request vendor noise prediction per IEC 60534-8-3");
-        mitigations.push("Consider low-noise trim (multi-path, multi-stage) if predicted noise >85 dBA");
+        mitigations.push("Request vendor noise prediction per IEC 60534-8-3 — screening only, not a substitute for vendor acoustic analysis");
+        mitigations.push("Consider low-noise trim (multi-path, multi-stage) if vendor predicted noise >85 dBA");
       } else if (pr.xActual > 0.3 && pr.xActual <= 0.5) {
-        warnings.push(`${pr.label}: Moderate pressure ratio x = ${pr.xActual.toFixed(3)} — standard noise assessment recommended.`);
+        warnings.push(`${pr.label}: Moderate pressure ratio x = ${pr.xActual.toFixed(3)} — standard noise screening recommended.`);
       }
     }
   }
