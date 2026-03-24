@@ -278,3 +278,29 @@ export const roServiceInputSchema = z.object({
 export type ROLiquidPropsInput = z.infer<typeof roLiquidPropsSchema>;
 export type ROGasPropsInput = z.infer<typeof roGasPropsSchema>;
 export type ROServiceValidInput = z.infer<typeof roServiceInputSchema>;
+
+// ─── PRD / Pressure Relief Device Sizing Schemas ──────────────────────────────
+
+export const prdSizingInputSchema = z.object({
+  fluidType: z.enum(["gas", "steam", "liquid"]),
+  relievingRate: z.number().positive("Relieving rate must be positive (kg/h)"),
+  molecularWeight: z.number().positive("Molecular weight must be positive (g/mol)"),
+  specificHeatRatio: z.number().gt(1.0, "Specific heat ratio k must be > 1.0"),
+  compressibilityFactor: z.number().min(0.1, "Z-factor must be >= 0.1").max(2.0, "Z-factor must be <= 2.0"),
+  relievingTemperature: z.number().gt(-273.15, "Relieving temperature must be above absolute zero"),
+  liquidDensity: z.number().positive("Liquid density must be positive (kg/m³)"),
+  viscosity: z.number().positive("Viscosity must be positive (cP)"),
+  vaporPressure: z.number().nonnegative("Vapor pressure must be ≥ 0"),
+  kd: z.number().gt(0, "Kd must be > 0").lte(1.0, "Kd must be ≤ 1.0"),
+  kb: z.number().gt(0, "Kb/Kw must be > 0").lte(1.0, "Kb/Kw must be ≤ 1.0"),
+  kc: z.number().gt(0, "Kc must be > 0").lte(1.0, "Kc must be ≤ 1.0"),
+  ksh: z.number().gt(0, "Ksh must be > 0").lte(1.0, "Ksh must be ≤ 1.0"),
+  relievingPressureAbs: z.number().positive("Relieving pressure (abs) must be positive (bar abs)"),
+  backPressureAbs: z.number().nonnegative("Back pressure must be ≥ 0 (bar abs)"),
+  atmosphericPressure: z.number().positive("Atmospheric pressure must be positive (bar abs)"),
+}).refine(
+  (d) => d.backPressureAbs < d.relievingPressureAbs,
+  { message: "Back pressure must be less than relieving pressure", path: ["backPressureAbs"] }
+);
+
+export type PRDSizingValidInput = z.infer<typeof prdSizingInputSchema>;

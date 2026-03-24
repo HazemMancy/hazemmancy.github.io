@@ -1,11 +1,22 @@
 /**
- * PRD (Pressure Relief Device) Calculator — API 521/520/526
+ * PRD (Pressure Relief Device) Calculator — Preliminary Screening Tool
  *
- * Code Basis:
- * - API 521: Overpressure scenario identification and relief load determination
- * - API 520 Part I: PRV sizing equations (gas/vapor, steam, liquid)
- * - API 520 Part II: Inlet pressure loss and outlet backpressure assessment
- * - API 526: Standard orifice selection (effective discharge area)
+ * PURPOSE: API-informed preliminary / screening sizing of pressure relief devices.
+ * This module is NOT a rigorous relief system design tool and SHALL NOT be used
+ * as the sole basis for final PRD specification, procurement, or code compliance.
+ *
+ * Code Basis (screening reference only — not full compliance implementation):
+ * - API 521 (7th Ed.): Overpressure scenario identification — scenarios are user-supplied, not auto-calculated
+ * - API 520 Part I (10th Ed.): PRV sizing equations for gas/vapor, steam, and single-phase liquid
+ * - API 520 Part II: Inlet pressure loss and outlet backpressure assessment — approximate fluid properties
+ * - API 526 (7th Ed.): Standard orifice designation reference only (effective area, not certified capacity)
+ *
+ * Limitations:
+ * - Two-phase and flashing relief is NOT handled — specialist methodology required
+ * - Steam properties (Ksh, density) are user-supplied and not internally validated against steam tables
+ * - Complex backpressure and flare network interactions are NOT modelled
+ * - Gas/steam sizing equations assume ideal C-coefficient behavior; correction factors are user-supplied
+ * - Relief loads (kg/h) are user-entered; rigorous scenario quantification requires process simulation
  */
 
 import { PI, GRAVITY } from "./constants";
@@ -796,8 +807,8 @@ export function buildFinalResult(
     relievingRate: governing?.relievingRate || 0,
     relievingPressureAbs: sizingResult.relievingPressure,
     relievingPressureGauge: sizingResult.relievingPressure - project.atmosphericPressure,
-    /** Relieving temperature from the actual sizing case, NOT normal operating temperature */
-    relievingTemperature: sizingResult.relievingTemperature ?? equipment.normalOpTemp,
+    /** Relieving temperature from the actual sizing input — always populated by the solver */
+    relievingTemperature: sizingResult.relievingTemperature ?? 0,
     requiredArea: sizingResult.requiredArea,
     selectedOrifice: orifice,
     inletCheck,

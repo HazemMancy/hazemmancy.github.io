@@ -31,6 +31,7 @@ import {
   calculateBackpressure, recommendDeviceType, buildFinalResult,
   estimateFireCaseReliefRate, PRD_TEST_CASE,
 } from "@/lib/engineering/prdSizing";
+import { prdSizingInputSchema } from "@/lib/engineering/validation";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { exportToExcel, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
@@ -211,6 +212,12 @@ export default function PSVSizingPage() {
         backPressureAbs: bpAbs,
         atmosphericPressure: project.atmosphericPressure,
       };
+
+      const validation = prdSizingInputSchema.safeParse(input);
+      if (!validation.success) {
+        const msgs = validation.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join("; ");
+        throw new Error(`Input validation: ${msgs}`);
+      }
 
       const result = sizePRD(input);
       setSizingResult(result);
@@ -655,8 +662,10 @@ export default function PSVSizingPage() {
               </div>
 
               {(() => {
-                const bpPct = sizing.backPressureAbs > 0 && equipment.setPressure > 0
-                  ? (sizing.backPressureAbs / equipment.setPressure) * 100 : 0;
+                const bpAbsSI = sizing.backPressureAbs > 0 ? convertToSI("pressureAbs", sizing.backPressureAbs, unitSystem) : 0;
+                const setPSI = equipment.setPressure > 0 ? convertToSI("pressure", equipment.setPressure, unitSystem) : 0;
+                const bpGaugeSI = Math.max(0, bpAbsSI - project.atmosphericPressure);
+                const bpPct = setPSI > 0 && bpGaugeSI > 0 ? (bpGaugeSI / setPSI) * 100 : 0;
                 const rec = recommendDeviceType(device, bpPct);
                 return (
                   <Card className="bg-accent/30 border-amber-500/20">
@@ -665,10 +674,11 @@ export default function PSVSizingPage() {
                         <Info className="w-4 h-4 text-muted-foreground" />
                         <span className="text-xs font-medium">
                           Preliminary Device Preview: <span className="text-primary">{rec.recommended.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
+                          {bpPct > 0 && <span className="text-muted-foreground font-normal ml-2">(superimposed BP ≈ {bpPct.toFixed(0)}% of set)</span>}
                         </span>
                       </div>
                       <p className="text-[10px] text-amber-400/80 mb-2">
-                        Rough preliminary preview only — uses back pressure input value divided by set pressure as a simplified ratio (not based on final calculated total backpressure). Run Piping Checks (Tab 8) for total backpressure calculation before relying on this guidance.
+                        Preliminary guidance only — based on superimposed (user-entered) back pressure gauge vs. set pressure. Does not include built-up back pressure from outlet piping. Run Piping Checks (Tab 8) for total back pressure before finalising device type.
                       </p>
                       <ul className="space-y-1">
                         {rec.reasons.map((r, i) => <li key={i} className="text-xs text-muted-foreground">- {r}</li>)}
