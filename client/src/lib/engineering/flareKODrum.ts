@@ -52,7 +52,6 @@ export interface KODrumAllowances {
 }
 
 export interface HoldupBasis {
-  holdupTime: number;
   rainoutFraction: number;
 }
 
@@ -120,20 +119,20 @@ export type EngFlag =
   | "MINIMUM_DIAMETER_APPLIED";
 
 export const FLAG_LABELS: Record<EngFlag, string> = {
-  TRANSIENT_REVIEW: "Flare KO drum service — transient loads may govern; review with project relief/flare study",
-  DYNAMIC_SIM_REQUIRED: "Multiple scenarios include transient/blowdown events — assess whether overlapping or sequential loads require dynamic review",
-  DRAIN_INADEQUATE: "Instantaneous drain-rate screening (preliminary): drain rate may be insufficient for peak liquid accumulation rate — increase drain capacity and verify with detailed drain system analysis",
-  CONSERVATIVE_K: "Conservative K-factor applied per API 521 screening guidance for flare KO service",
-  BARE_VESSEL: "Bare vessel (no mist eliminator) — lowest K-factor, largest diameter expected",
-  HIGH_LIQUID_ACCUMULATION: "Total liquid accumulation exceeds 5 m³ — verify vessel volume and drain system",
-  K_USER_ASSUMED: "K value is user-assumed — confirm with vendor/internals data",
-  K_TYPICAL_MODE: "K value from typical API 521 screening guidance — confirm for specific service",
-  VENDOR_MIST_CONFIRM: "Mist eliminator selection requires vendor confirmation for final design",
-  LD_OUT_OF_RANGE: "L/D ratio outside typical range (2–5)",
-  GAS_VELOCITY_EXCEEDED: "Actual gas velocity exceeds Souders-Brown screening limit",
-  HIGH_LIQUID_LEVEL: "Liquid level exceeds 75% — increase vessel size or drain capacity",
-  HIGH_PRESSURE: "High pressure service — wall thickness and weight may govern; verify with mechanical design",
-  MINIMUM_DIAMETER_APPLIED: "Flare KO screening minimum diameter of 1500 mm applied per API 521-based screening practice — review if project basis allows a smaller vessel",
+  TRANSIENT_REVIEW: "Transient relief/blowdown scenarios present — steady-state Souders–Brown sizing is a conservative screening basis; transient peak loads should be confirmed with project relief/flare study",
+  DYNAMIC_SIM_REQUIRED: "Multiple transient (blowdown/depressuring) scenarios — assess whether overlapping or simultaneous loads could occur; if so, dynamic review of transient interaction may be warranted",
+  DRAIN_INADEQUATE: "Instantaneous drain-rate screening (preliminary indicator only): drain rate may be insufficient for peak liquid accumulation rate — verify with detailed drain system analysis before finalising drain design",
+  CONSERVATIVE_K: "K-factor from typical API 521 screening guidance — applied as conservative screening basis for this service",
+  BARE_VESSEL: "Bare vessel (no mist eliminator) — gravity-settling K-factor applied; results in largest required diameter",
+  HIGH_LIQUID_ACCUMULATION: "Gross liquid accumulation exceeds 5 m³ — verify vessel liquid volume and drain system capacity",
+  K_USER_ASSUMED: "K value is user-specified — ensure it is traceable to vendor data, internals specification, or project design basis",
+  K_TYPICAL_MODE: "K value from typical API 521 screening guidance — confirm suitability for specific service conditions",
+  VENDOR_MIST_CONFIRM: "Mist eliminator (wire mesh pad) selected — actual pad area, capacity, and pressure drop must be confirmed with vendor for final design",
+  LD_OUT_OF_RANGE: "L/D ratio outside typical range (2–5) — review vessel layout, weight, and plot space constraints",
+  GAS_VELOCITY_EXCEEDED: "Actual gas velocity exceeds Souders–Brown screening limit — increase vessel diameter or reduce gas flow rate",
+  HIGH_LIQUID_LEVEL: "Calculated liquid level exceeds 75% of vessel — increase vessel size or improve drain capacity",
+  HIGH_PRESSURE: "High operating pressure (>30 bar abs) — wall thickness and vessel weight may govern; confirm with mechanical design",
+  MINIMUM_DIAMETER_APPLIED: "API 521-based flare KO screening minimum diameter of 1500 mm applied because the gas-capacity calculation yielded a smaller vessel — this is a commonly-used screening guideline, not an unconditional universal requirement; review against project design basis",
 };
 
 export const FLAG_SEVERITY: Record<EngFlag, "info" | "warning" | "error"> = {
@@ -218,7 +217,6 @@ export const DEFAULT_CONFIG: KODrumConfig = {
 };
 
 export const DEFAULT_HOLDUP: HoldupBasis = {
-  holdupTime: 20,
   rainoutFraction: 0,
 };
 
@@ -415,9 +413,9 @@ function computeLiquidAccumulation(
     scenarioVolumes.push({ scenarioId: s.id, scenarioName: s.name, volume_m3: vol });
 
     steps.push({
-      label: `${s.name}: liquid accumulation`,
-      equation: "V_i = Q_l,i / 3600 \u00D7 t_i \u00D7 60",
-      substitution: `V_i = ${s.liquidCarryoverRate} / 3600 \u00D7 ${s.duration} \u00D7 60`,
+      label: `${s.name}: governing-scenario carryover accumulation (non-concurrent, single-event basis)`,
+      equation: "V_i = (Q_l,i / 3600) \u00D7 (t_i \u00D7 60)",
+      substitution: `V_i = (${s.liquidCarryoverRate} / 3600) \u00D7 (${s.duration} \u00D7 60)`,
       result: vol,
       unit: "m\u00B3",
     });
@@ -432,9 +430,9 @@ function computeLiquidAccumulation(
   const governingScenarioName = scenarios.find(s => s.id === governingLiquidScenarioId)?.name || "Unknown";
 
   steps.push({
-    label: "Governing liquid scenario",
+    label: "Governing scenario (largest single-event liquid accumulation)",
     equation: "V_governing = max(V_i)",
-    substitution: `V_governing = ${governingScenarioName} = ${governingAccumulation.toFixed(4)}`,
+    substitution: `V_governing = ${governingScenarioName} = ${governingAccumulation.toFixed(4)} m\u00B3`,
     result: governingAccumulation,
     unit: "m\u00B3",
   });
@@ -444,7 +442,7 @@ function computeLiquidAccumulation(
   const rainoutVolume = totalAccum * holdup.rainoutFraction;
   if (holdup.rainoutFraction > 0) {
     steps.push({
-      label: "Rainout volume",
+      label: "Rainout allowance (fraction of governing event carryover)",
       equation: "V_rainout = V_governing \u00D7 f_rainout",
       substitution: `V_rainout = ${totalAccum.toFixed(4)} \u00D7 ${holdup.rainoutFraction}`,
       result: rainoutVolume,
@@ -454,9 +452,9 @@ function computeLiquidAccumulation(
 
   const totalWithRainout = totalAccum + rainoutVolume;
   steps.push({
-    label: "Total with rainout",
-    equation: "V_total = V_governing + V_rainout",
-    substitution: `V_total = ${totalAccum.toFixed(4)} + ${rainoutVolume.toFixed(4)}`,
+    label: "Total gross accumulation (carryover + rainout)",
+    equation: "V_gross = V_governing + V_rainout",
+    substitution: `V_gross = ${totalAccum.toFixed(4)} + ${rainoutVolume.toFixed(4)}`,
     result: totalWithRainout,
     unit: "m\u00B3",
   });
@@ -464,9 +462,9 @@ function computeLiquidAccumulation(
   const drainVolume = config.drainRate > 0 ? (config.drainRate / 3600) * governingDuration * 60 : 0;
   if (config.drainRate > 0) {
     steps.push({
-      label: "Drain volume (over governing duration)",
-      equation: "V_drain = Q_drain / 3600 \u00D7 t_governing \u00D7 60",
-      substitution: `V_drain = ${config.drainRate} / 3600 \u00D7 ${governingDuration} \u00D7 60`,
+      label: "Drain credit (over governing event duration — instantaneous screening only, not final drain design)",
+      equation: "V_drain = (Q_drain / 3600) \u00D7 (t_governing \u00D7 60)",
+      substitution: `V_drain = (${config.drainRate} / 3600) \u00D7 (${governingDuration} \u00D7 60)`,
       result: drainVolume,
       unit: "m\u00B3",
     });
@@ -474,8 +472,8 @@ function computeLiquidAccumulation(
 
   const netAccum = Math.max(0, totalWithRainout - drainVolume);
   steps.push({
-    label: "Net liquid accumulation",
-    equation: "V_net = max(0, V_total \u2212 V_drain)",
+    label: "Net design liquid accumulation (above sump dead volume — sump handled separately in geometry allowances)",
+    equation: "V_net = max(0, V_gross \u2212 V_drain)",
     substitution: `V_net = max(0, ${totalWithRainout.toFixed(4)} \u2212 ${drainVolume.toFixed(4)})`,
     result: netAccum,
     unit: "m\u00B3",
@@ -486,9 +484,9 @@ function computeLiquidAccumulation(
 
   if (!drainAdequate) {
     steps.push({
-      label: "Instantaneous drain-rate screening (preliminary only)",
-      equation: "Q_drain vs max(Q_l,i)",
-      substitution: `${config.drainRate.toFixed(2)} < ${maxLiquidRate.toFixed(2)} \u2014 SCREENING INADEQUATE (verify with detailed drain system analysis)`,
+      label: "Instantaneous drain-rate check (preliminary screening only — not a substitute for detailed drain system analysis)",
+      equation: "Q_drain vs max(Q_l,i) — screening indicator only",
+      substitution: `Q_drain ${config.drainRate.toFixed(2)} < max(Q_l) ${maxLiquidRate.toFixed(2)} m\u00B3/h — SCREENING FLAG (verify adequacy with detailed drain analysis)`,
       result: config.drainRate,
       unit: "m\u00B3/h",
     });
@@ -690,11 +688,15 @@ function collectFlags(
 ): EngFlag[] {
   const flags: EngFlag[] = [];
 
-  flags.push("TRANSIENT_REVIEW");
   flags.push("CONSERVATIVE_K");
 
   const hasTransientTypes = scenarios.some(s => s.scenarioType === "blowdown" || s.scenarioType === "depressuring");
-  if (scenarios.length > 1 && hasTransientTypes) flags.push("DYNAMIC_SIM_REQUIRED");
+  if (hasTransientTypes) flags.push("TRANSIENT_REVIEW");
+
+  const transientScenarioCount = scenarios.filter(s => s.scenarioType === "blowdown" || s.scenarioType === "depressuring").length;
+  const highLiquidAccum = liquidAccum.totalWithRainout_m3 > 2;
+  if (transientScenarioCount >= 2 || (hasTransientTypes && highLiquidAccum)) flags.push("DYNAMIC_SIM_REQUIRED");
+
   if (config.internals === "bare") flags.push("BARE_VESSEL");
 
   if (config.kMode === "user") flags.push("K_USER_ASSUMED");
@@ -720,10 +722,10 @@ function generateRecommendations(flags: EngFlag[], config: KODrumConfig): string
   const recs: string[] = [];
 
   if (flags.includes("TRANSIENT_REVIEW")) {
-    recs.push("Review transient relief loads with dynamic simulation to confirm steady-state sizing is adequate.");
+    recs.push("Transient scenarios present — confirm with project relief/flare study that the steady-state Souders–Brown sizing is adequate for the peak instantaneous load.");
   }
   if (flags.includes("DYNAMIC_SIM_REQUIRED")) {
-    recs.push("Multiple relief scenarios identified — consider dynamic simulation to evaluate overlapping events.");
+    recs.push("Multiple transient scenarios or significant liquid accumulation identified — evaluate whether simultaneous or overlapping events are credible; if so, a dynamic transient simulation may be warranted to confirm the steady-state vessel sizing.");
   }
   if (flags.includes("DRAIN_INADEQUATE")) {
     recs.push("Increase drain line size or add pumped drain to handle liquid accumulation rate.");
@@ -755,18 +757,19 @@ function generateRecommendations(flags: EngFlag[], config: KODrumConfig): string
 
 function generateNextSteps(flags: EngFlag[]): string[] {
   const steps: string[] = [
-    "Confirm relief loads with process simulation (steady-state and dynamic).",
-    "Verify fluid properties (density, MW, viscosity) with PVT analysis.",
-    "Issue vessel datasheet for mechanical design (wall thickness, nozzle sizing).",
-    "Coordinate with flare system designer for header sizing and back-pressure.",
-    "Review drain system design — gravity vs. pumped, routing, and material selection.",
+    "Confirm relief/blowdown loads with project process simulation (steady-state and, where applicable, dynamic).",
+    "Verify gas and liquid physical properties (density, MW, viscosity, Z-factor) against PVT analysis or simulation output.",
+    "Issue vessel datasheet for mechanical design — wall thickness, nozzle loads, and weight per ASME VIII or project code.",
+    "Coordinate with flare system designer for flare header sizing, back-pressure budget, and seal-leg design.",
+    "Confirm drain system design: gravity vs. pumped drainage, line sizing, routing, and material selection.",
+    "Clarify project liquid accumulation philosophy (sump volume, HLL, pumping philosophy) with piping/instrument discipline.",
   ];
 
   if (flags.includes("DYNAMIC_SIM_REQUIRED")) {
-    steps.push("Perform dynamic simulation for overlapping relief scenarios.");
+    steps.push("Evaluate whether overlapping or simultaneous transient events are credible — if so, perform dynamic simulation to confirm steady-state vessel sizing is adequate for peak transient load.");
   }
   if (flags.includes("HIGH_PRESSURE")) {
-    steps.push("Perform wall thickness calculation per ASME VIII Div 1 or 2.");
+    steps.push("High-pressure service: perform formal wall-thickness calculation per ASME VIII Div 1 or 2 — vessel weight may be significant.");
   }
 
   return steps;
@@ -774,28 +777,25 @@ function generateNextSteps(flags: EngFlag[]): string[] {
 
 function generateAssumptions(config: KODrumConfig, holdup: HoldupBasis): string[] {
   const assumptions: string[] = [
-    "SCOPE: This is a preliminary flare KO drum sizing / FEED screening tool only. Results are not final vessel design, not final internals design, and not a substitute for a project-specific flare/relief study.",
-    "Souders\u2013Brown correlation (v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G)) used for gas capacity screening per API 521 guidance. This is preliminary screening only: no inlet-device modeling, no droplet-size distribution, no CFD or internals efficiency modeling, no slug hydrodynamics, and no foam or re-entrainment mechanistic modeling.",
-    `K-factor = ${config.kValue} m/s (${config.kMode === "typical" ? "typical API 521 screening guidance" : "user-specified"}).`,
-    `Pressure correction on K-factor: ${config.applyPressureCorrection ? "ENABLED — approximate screening correction only; verify against project/company flare KO design basis for final design" : "disabled (typical for near-atmospheric flare KO service)"}.`,
-    `Vessel orientation: ${config.orientation}.`,
-    `Internals: ${config.internals === "bare" ? "bare vessel (no mist eliminator)" : "wire mesh pad"}.`,
-    "Liquid design volume based on governing scenario net accumulation after drain credit (governing = scenario with largest single-event liquid accumulation). Scenarios are treated as non-concurrent.",
-    "Drain adequacy check is instantaneous drain-rate screening (preliminary only). Final adequacy depends on event duration, total accumulated liquid, operating level philosophy, and actual drain system behavior.",
-    "Gross vessel face velocity reported based on gross vessel cross-sectional area — not actual mist-pad effective area. Demister vendor sizing requires actual pad/net area.",
-    "Standard gas basis (where applicable): 15\u00B0C and 1.01325 bar(a) per ISO 13443.",
-    "Steady-state Souders\u2013Brown sizing — transient peak loads may exceed steady-state estimates; verify with project relief/flare study.",
-    "Vessel heads (2:1 ellipsoidal assumed) not included in vessel volume calculation.",
-    "Corrosion allowance, insulation, nozzle loads, and weight not included in this preliminary sizing.",
-    "Flare KO screening minimum diameter of 1500 mm applied per API 521-based screening practice; review if project basis allows a smaller vessel.",
+    "SCOPE: Flare KO Drum Preliminary Sizing / Screening Tool. This tool is NOT: final vessel or internals design; a dynamic transient flare-hydraulics model; a substitute for detailed flare-system and mechanical verification.",
+    "Gas capacity: Souders\u2013Brown correlation v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G) per API 521 Section 5.4.2 — screening only. Not modelled: inlet device, droplet-size distribution, CFD, internals efficiency, slug hydrodynamics, foam or re-entrainment.",
+    `K-factor = ${config.kValue} m/s (${config.kMode === "typical" ? "typical API 521 screening guidance" : "user-specified — must be traceable to vendor data or project design basis"}).`,
+    `K-factor pressure correction: ${config.applyPressureCorrection ? "ENABLED — GPSA Fig 7-9 approximate screening correction. This is NOT a rigorous universal correction for all flare KO service; verify against project/company design basis for final design" : "disabled (typical for near-atmospheric flare KO drum service)"}.`,
+    `Vessel orientation: ${config.orientation}. Internals: ${config.internals === "bare" ? "bare vessel (no mist eliminator) — gravity settling only" : "wire mesh pad — vendor to confirm actual pad area, capacity, and pressure drop"}.`,
+    "Liquid design volume: governing scenario net accumulation after drain credit. Governing scenario = single event with the largest product of (liquid carryover rate × event duration). Scenarios treated as non-concurrent (worst single event). Sump dead volume handled via sump zone height allowance in vessel geometry — not included in net accumulation figure.",
+    holdup.rainoutFraction > 0
+      ? `Rainout allowance: ${(holdup.rainoutFraction * 100).toFixed(1)}% of governing event carryover volume added to represent liquid raining out of the flare header during the event.`
+      : "No rainout allowance applied (rainout fraction = 0). If header condensation or slug formation is expected, add a rainout fraction.",
+    "Drain adequacy check is an instantaneous drain-rate screening indicator (preliminary only). Final adequacy depends on: total accumulated liquid vs. vessel sump volume; event duration; pump start-up / level-controller response; actual drain system hydraulics and level philosophy. This check does not replace drain system design.",
+    "Gross vessel face velocity computed on gross vessel cross-sectional area — not actual mist-pad effective (net) area. Mist-pad vendor sizing requires confirmed pad dimensions and net area.",
+    "Standard gas basis (where applicable for standard-flow inputs): 15\u00B0C and 1.01325 bar(a) per ISO 13443.",
+    "Sizing basis is steady-state (worst single scenario). Transient peak loads during blowdown/depressuring may briefly exceed steady-state estimates; confirm with project relief/flare study.",
+    "API 521-based screening minimum diameter of 1500 mm applied where gas-capacity calculation yields a smaller vessel. This is a commonly used guideline for flare KO screening, not an unconditional universal rule; verify against project basis.",
+    "Vessel heads, corrosion allowance, insulation, nozzle loads, and weight not included. These must be addressed in the formal mechanical design.",
   ];
 
-  if (holdup.rainoutFraction > 0) {
-    assumptions.push(`Rainout fraction: ${(holdup.rainoutFraction * 100).toFixed(1)}% of governing scenario liquid accumulation added as additional rainout contribution.`);
-  }
-
   if (config.drainRate > 0) {
-    assumptions.push(`Drain rate: ${config.drainRate} m\u00B3/h credited against liquid accumulation over the governing scenario duration (instantaneous drain-rate screening only).`);
+    assumptions.push(`Drain credit: ${config.drainRate} m\u00B3/h credited over the governing event duration (instantaneous screening only — not final drain system design).`);
   }
 
   return assumptions;
@@ -975,6 +975,6 @@ export const TEST_CASES = {
       },
     ],
     config: { ...DEFAULT_CONFIG },
-    holdup: { ...DEFAULT_HOLDUP },
+    holdup: { rainoutFraction: 0 },
   },
 };

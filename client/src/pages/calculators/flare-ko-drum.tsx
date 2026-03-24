@@ -34,8 +34,11 @@ import {
   Flame, ClipboardList, AlertCircle, Settings2, BarChart3, Gauge,
   ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  FileText, FileSpreadsheet, Container, Droplets, Compass, Calculator,
+  FileText, FileSpreadsheet, Container, Droplets, Compass, Calculator, TriangleAlert,
 } from "lucide-react";
+import {
+  flareKOScenarioSchema, flareKOConfigSchema, flareKOHoldupSchema,
+} from "@/lib/engineering/validation";
 
 const TABS = [
   { id: "project", label: "Project", icon: ClipboardList, step: 1, desc: "Project setup & options" },
@@ -112,6 +115,26 @@ export default function FlareKODrumPage() {
 
   const handleCalculate = () => {
     setError(null);
+
+    const scenarioErrors: string[] = [];
+    for (const s of scenarios) {
+      const r = flareKOScenarioSchema.safeParse(s);
+      if (!r.success) {
+        scenarioErrors.push(`Scenario "${s.name}": ${r.error.issues.map(i => i.message).join("; ")}`);
+      }
+    }
+    const configResult = flareKOConfigSchema.safeParse(config);
+    const holdupResult = flareKOHoldupSchema.safeParse(holdup);
+    const allErrors = [
+      ...scenarioErrors,
+      ...(configResult.success ? [] : configResult.error.issues.map(i => i.message)),
+      ...(holdupResult.success ? [] : holdupResult.error.issues.map(i => i.message)),
+    ];
+    if (allErrors.length > 0) {
+      setError(allErrors.join("\n"));
+      return;
+    }
+
     try {
       const convertedScenarios = scenarios.map(s => {
         const cs = { ...s };
@@ -243,15 +266,17 @@ export default function FlareKODrumPage() {
       calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
       additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
       methodology: [
-        "SCOPE: Preliminary flare KO drum sizing / FEED screening tool. Not final vessel design, not final internals design, not a dynamic transient model, and not a substitute for a detailed project relief/flare study.",
-        "Souders\u2013Brown correlation for maximum allowable gas velocity (screening basis): v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G). No inlet-device, droplet-size distribution, CFD, slug, or foam modeling.",
-        "K-factor per API 521 screening guidance. K pressure correction (if enabled) is an approximate screening treatment only; verify against project/company design basis for final design.",
+        "SCOPE: Flare KO Drum Preliminary Sizing / Screening Tool per API 521 Section 5.4.2. This is NOT: final vessel or internals design; a dynamic transient flare-hydraulics model; a substitute for project-specific relief/flare study or mechanical verification.",
+        "Gas capacity: Souders\u2013Brown correlation v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G). Not modelled: inlet devices, droplet-size distribution, CFD, internals efficiency, slug hydrodynamics, foam or re-entrainment. Screening basis only.",
+        "K-factor: per API 521 screening guidance. K-factor pressure correction (GPSA Fig 7-9, if enabled) is an approximate screening treatment only — NOT a rigorous universal correction for all flare KO service; verify against project/company design basis.",
+        "K_eff reported in m/s with separate K_base, pressure-correction factor Cp, and corrected K_eff = K_base \u00D7 Cp shown in calculation steps for traceability.",
         "Standard gas conversion basis (where applicable): 15\u00B0C and 1.01325 bar(a) per ISO 13443.",
-        "Liquid design volume = governing scenario net accumulation after drain credit (governing = largest single-event accumulation). Non-concurrent scenario treatment.",
-        "Drain adequacy = instantaneous drain-rate screening only (preliminary). Final adequacy depends on event duration, total liquid, level philosophy, and actual drain behavior.",
-        "Gross vessel face velocity reported on gross vessel cross-sectional area — not actual mist-pad effective area.",
-        "Flare KO screening minimum diameter of 1500 mm applied per API 521-based screening practice.",
-        "Vessel geometry assembled from gas capacity diameter + liquid accumulation volume + user-defined allowance zones.",
+        "Liquid design volume: governing scenario net accumulation (Q_l \u00D7 event duration) + rainout allowance \u2212 drain credit. Governing = single non-concurrent worst-case event. Sump dead volume addressed via sump zone height in geometry \u2014 not included in net accumulation figure.",
+        "Drain adequacy check: instantaneous screening indicator (Q_drain vs. peak Q_l). Not a final drain design check \u2014 final adequacy depends on event duration, total volume, sump capacity, pump start-up, level philosophy, and actual hydraulics.",
+        "Gross vessel face velocity computed on gross cross-sectional area \u2014 NOT actual mist-pad effective area. Demister vendor sizing requires actual pad dimensions and net area.",
+        "API 521-based flare KO screening minimum diameter of 1500 mm applied where gas-capacity result is smaller. This is a screening guideline, not an unconditional universal rule; verify against project design basis.",
+        "Dynamic simulation: recommended only if multiple transient scenarios could overlap or if severe accumulation risk is identified. Not automatically required for all multi-scenario cases.",
+        "Vessel geometry: gas capacity diameter + net liquid accumulation volume + user-defined allowance zones (inlet, disengagement, mist eliminator, sump, nozzle). Vessel heads not included in volume.",
       ],
       assumptions: result.assumptions,
       references: [
@@ -268,14 +293,14 @@ export default function FlareKODrumPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-md bg-primary/20 flex items-center justify-center">
             <Flame className="w-5 h-5 text-primary" />
           </div>
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-calc-title">Flare Knock Out Drum Sizing</h1>
-            <p className="text-sm text-muted-foreground">Preliminary sizing / FEED screening per API 521 — not final design authority</p>
+            <p className="text-sm text-muted-foreground">Flare KO Drum Preliminary Sizing / Screening Tool — API 521 Section 5.4.2</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -283,6 +308,21 @@ export default function FlareKODrumPage() {
           <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-md border border-amber-700/40 bg-amber-950/20 px-4 py-3" data-testid="banner-screening-tool">
+        <div className="flex items-start gap-2">
+          <TriangleAlert className="w-4 h-4 mt-0.5 shrink-0 text-amber-400" />
+          <div className="text-xs text-amber-200 space-y-0.5">
+            <p className="font-semibold text-amber-300">Preliminary Screening Tool — Not for Direct Design Use</p>
+            <ul className="list-disc list-inside space-y-0.5 text-amber-200/80">
+              <li>Not final vessel or internals design — wall thickness, nozzle loads, and weight require formal mechanical design</li>
+              <li>Not a dynamic transient flare-hydraulics model — transient peak loads may exceed the steady-state basis</li>
+              <li>Not a substitute for a project-specific relief/flare study or detailed drain-system design</li>
+              <li>Gross vessel face velocity is reported on gross cross-sectional area — actual mist-pad sizing requires vendor confirmation</li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -406,14 +446,22 @@ export default function FlareKODrumPage() {
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <div><Label className="text-xs mb-1 block">Gas Flow Rate ({s.gasFlowBasis === "actual" ? pU("flowActualGas", unitSystem) : pU("flowGas", unitSystem)})</Label>
                       <NumericInput value={s.gasFlowRate} onValueChange={v => updateScenario(idx, "gasFlowRate", v)} data-testid={`input-gas-flow-${idx}`} /></div>
-                    <div><Label className="text-xs mb-1 block">Flow Basis</Label>
+                    <div>
+                      <Label className="text-xs mb-1 block">Flow Basis</Label>
                       <Select value={s.gasFlowBasis} onValueChange={v => updateScenario(idx, "gasFlowBasis", v)}>
                         <SelectTrigger data-testid={`select-gas-basis-${idx}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="actual">Actual (at vessel P,T)</SelectItem>
-                          <SelectItem value="standard">Standard (Sm\u00B3/h or MMSCFD)</SelectItem>
+                          <SelectItem value="standard">Standard (Sm³/h or MMSCFD)</SelectItem>
                         </SelectContent>
-                      </Select></div>
+                      </Select>
+                      {s.gasFlowBasis === "standard" && (
+                        <p className="text-[10px] text-blue-400/80 mt-1 flex items-center gap-1">
+                          <Info className="w-3 h-3 shrink-0" />
+                          Standard gas basis: 15°C and 1.01325 bar(a) per ISO 13443. Requires P, T, Z, and MW inputs.
+                        </p>
+                      )}
+                    </div>
                     <div><Label className="text-xs mb-1 block">Gas Density ({pU("density", unitSystem)})</Label>
                       <NumericInput value={s.gasDensity} onValueChange={v => updateScenario(idx, "gasDensity", v)} data-testid={`input-gas-density-${idx}`} /></div>
                     <div><Label className="text-xs mb-1 block">MW (kg/kmol)</Label>
@@ -675,15 +723,15 @@ export default function FlareKODrumPage() {
               <h3 className="font-semibold text-sm flex items-center gap-2"><Droplets className="w-4 h-4" /> Liquid Accumulation</h3>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
-              <p className="text-xs text-muted-foreground">Define holdup time and rainout fraction. Typical holdup: 20\u201330 min per API 521 / company practice.</p>
+              <div className="rounded-md border border-blue-900/30 bg-blue-950/10 p-3 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground/80 mb-1">Liquid Design Volume Basis</p>
+                <p>Design volume = governing scenario accumulation (Q_liquid × event duration) + rainout allowance − drain credit. Governing = single non-concurrent event with the largest carryover volume. Sump dead volume is handled via the Sump Zone height allowance in Design tab, and is <em>not</em> included in the net accumulation figure.</p>
+              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div><Label className="text-xs mb-1.5 block">Holdup Time (min)</Label>
-                  <NumericInput value={holdup.holdupTime} onValueChange={v => updateHoldup("holdupTime", v)} data-testid="input-holdup-time" />
-                  <p className="text-xs text-muted-foreground mt-1">Typical: 20\u201330 min (API 521)</p></div>
-                <div><Label className="text-xs mb-1.5 block">Rainout Fraction (0\u20131)</Label>
-                  <NumericInput step="0.01" value={holdup.rainoutFraction} onValueChange={v => updateHoldup("rainoutFraction", v)} data-testid="input-rainout" />
-                  <p className="text-xs text-muted-foreground mt-1">Fraction of liquid that rains out from flare header</p></div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Rainout Fraction (0–1)</Label>
+                <NumericInput step="0.01" value={holdup.rainoutFraction} onValueChange={v => updateHoldup("rainoutFraction", v)} data-testid="input-rainout" />
+                <p className="text-xs text-muted-foreground mt-1">Fraction of governing event carryover volume attributed to header rainout/condensation. Set to 0 if not applicable or unknown.</p>
               </div>
 
               {result && (
@@ -729,7 +777,7 @@ export default function FlareKODrumPage() {
 
                   {!result.liquidAccum.drainAdequate && (
                     <div className="text-xs text-destructive bg-destructive/10 p-2 rounded-md">
-                      <AlertTriangle className="w-3 h-3 inline mr-1" />Drain rate is insufficient to handle liquid accumulation rate.
+                      <AlertTriangle className="w-3 h-3 inline mr-1" /><strong>Drain-rate screening flag (preliminary indicator only):</strong> Instantaneous drain rate appears insufficient for peak carryover rate. This is a preliminary screening indicator — final drain adequacy requires detailed drain system analysis (line sizing, pump selection, level philosophy, event duration).
                     </div>
                   )}
 

@@ -367,3 +367,50 @@ export const prdSizingInputSchema = z.object({
 );
 
 export type PRDSizingValidInput = z.infer<typeof prdSizingInputSchema>;
+
+export const flareKOScenarioSchema = z.object({
+  id: z.string().min(1, "Scenario ID is required"),
+  name: z.string().min(1, "Scenario name is required"),
+  scenarioType: z.enum(["normal_flaring", "fire_case", "blowdown", "depressuring", "blocked_outlet", "custom"]),
+  gasFlowRate: z.number().nonnegative("Gas flow rate must be ≥ 0"),
+  gasFlowBasis: z.enum(["actual", "standard"]),
+  gasDensity: z.number().nonnegative("Gas density must be ≥ 0"),
+  gasMW: z.number().positive("Gas MW must be > 0"),
+  gasPressure: z.number().positive("Gas pressure must be > 0 (bar abs)"),
+  gasTemperature: z.number().gt(-273.15, "Gas temperature must be above absolute zero"),
+  gasZ: z.number().min(0.1, "Z-factor must be ≥ 0.1").max(2.0, "Z-factor must be ≤ 2.0"),
+  liquidCarryoverRate: z.number().nonnegative("Liquid carryover rate must be ≥ 0"),
+  liquidDensity: z.number().positive("Liquid density must be > 0"),
+  duration: z.number().positive("Duration must be > 0 (minutes)"),
+  notes: z.string(),
+});
+
+export const flareKOAllowancesSchema = z.object({
+  inletZone: z.number().nonneg("Inlet zone allowance must be ≥ 0"),
+  disengagementZone: z.number().nonneg("Disengagement zone allowance must be ≥ 0"),
+  mistEliminatorZone: z.number().nonneg("Mist eliminator zone allowance must be ≥ 0"),
+  sumpZone: z.number().nonneg("Sump zone allowance must be ≥ 0"),
+  nozzleZone: z.number().nonneg("Nozzle zone allowance must be ≥ 0"),
+});
+
+export const flareKOConfigSchema = z.object({
+  orientation: z.enum(["vertical", "horizontal"]),
+  internals: z.enum(["bare", "wire_mesh"]),
+  kValue: z.number().positive("K-value must be > 0 (m/s)").max(0.5, "K-value > 0.5 m/s is unusually large — check input"),
+  kMode: z.enum(["user", "typical"]),
+  levelFraction: z.number().gt(0).lt(1, "Level fraction must be between 0 and 1 (exclusive)"),
+  maxDiameter: z.number().nonneg("Max diameter must be ≥ 0"),
+  maxLD: z.number().nonneg("Max L/D must be ≥ 0"),
+  drainLineSize: z.number().positive("Drain line size must be > 0"),
+  drainRate: z.number().nonneg("Drain rate must be ≥ 0"),
+  allowances: flareKOAllowancesSchema,
+  applyPressureCorrection: z.boolean(),
+});
+
+export const flareKOHoldupSchema = z.object({
+  rainoutFraction: z.number().min(0, "Rainout fraction must be ≥ 0").max(1, "Rainout fraction must be ≤ 1"),
+});
+
+export type FlareKOScenarioValidInput = z.infer<typeof flareKOScenarioSchema>;
+export type FlareKOConfigValidInput = z.infer<typeof flareKOConfigSchema>;
+export type FlareKOHoldupValidInput = z.infer<typeof flareKOHoldupSchema>;
