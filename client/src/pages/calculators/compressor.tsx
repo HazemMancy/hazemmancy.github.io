@@ -17,6 +17,7 @@ import {
 import { useGasProps } from "@/lib/engineering/GasPropsContext";
 import {
   calculateCompressorSizing,
+  validateCompressorInput,
   COMPRESSOR_CENTRIFUGAL_TEST_CASE,
   COMPRESSOR_RECIPROCATING_TEST_CASE,
   COMMON_COMPRESSOR_GASES,
@@ -34,7 +35,7 @@ import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering
 import {
   Cog, FlaskConical, RotateCcw, ChevronLeft, ChevronRight,
   ClipboardList, Wind, Calculator, Layers, CheckCircle2,
-  Download, FileText, FileSpreadsheet,
+  Download, FileText, FileSpreadsheet, AlertTriangle, Info,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -117,6 +118,7 @@ export default function CompressorPage() {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [result, setResult] = useState<CompressorResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [eosWarnings, setEosWarnings] = useState<string[]>([]);
   const { gasPropsMode, setGasPropsMode, gasComposition, setGasComposition } = useGasProps();
 
   const update = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -140,8 +142,9 @@ export default function CompressorPage() {
 
   const handleCalculate = () => {
     setError(null);
+    setEosWarnings([]);
     try {
-      const T_C_suction = convertToSI("temperature", parseFloat(form.suctionTemperature), unitSystem); // °C
+      const T_C_suction = convertToSI("temperature", parseFloat(form.suctionTemperature), unitSystem);
       const P_bar_suction = convertToSI("pressureBara", parseFloat(form.suctionPressure), unitSystem);
 
       let MW = parseFloat(form.molecularWeight);
@@ -157,7 +160,7 @@ export default function CompressorPage() {
         };
         const resolved = resolveGasProps(gasPropsMode, manual, gasComposition, T_C_suction, P_bar_suction);
         if (resolved.warnings.length > 0) {
-          setError(`EoS: ${resolved.warnings.join("; ")}`);
+          setEosWarnings(resolved.warnings);
         }
         MW = resolved.MW;
         k  = resolved.k;
@@ -180,8 +183,10 @@ export default function CompressorPage() {
         maxDischargeTemperature: convertToSI("temperature", parseFloat(form.maxDischargeTemperature), unitSystem),
       };
 
-      for (const [key, val] of Object.entries(input)) {
-        if (typeof val === "number" && isNaN(val)) throw new Error(`Invalid value for ${key}`);
+      const validation = validateCompressorInput(input);
+      if (!validation.valid) {
+        setError(validation.errors.join(" | "));
+        return;
       }
 
       const res = calculateCompressorSizing(input);
@@ -222,6 +227,7 @@ export default function CompressorPage() {
     setProject({ ...defaultProject });
     setResult(null);
     setError(null);
+    setEosWarnings([]);
     setActiveTab("project");
   };
 
@@ -601,6 +607,19 @@ export default function CompressorPage() {
                 </div>
               )}
 
+              {eosWarnings.length > 0 && (
+                <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1" data-testid="text-eos-warnings">
+                  <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-medium text-xs">
+                    <Info className="h-3.5 w-3.5 shrink-0" />
+                    EOS Gas Property Advisory
+                  </div>
+                  {eosWarnings.map((w, i) => (
+                    <p key={i} className="text-xs text-amber-700 dark:text-amber-300 leading-snug pl-5">{w}</p>
+                  ))}
+                  <p className="text-[10px] text-amber-600 dark:text-amber-500 pl-5">Calculation proceeds with best-available EOS estimate.</p>
+                </div>
+              )}
+
               {result && (
                 <>
                   <Card className="border-primary/30">
@@ -663,6 +682,17 @@ export default function CompressorPage() {
         <TabsContent value="stages">
           {result && (
             <div className="space-y-4">
+              <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1" data-testid="text-stage-constancy-note">
+                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-medium text-xs">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  Constant-Property Screening Assumption
+                </div>
+                <p className="text-xs text-amber-700 dark:text-amber-300 leading-snug pl-5">
+                  Gas properties <strong>k</strong>, <strong>Z</strong>, and <strong>MW</strong> are held constant at suction-condition values across all {result.numberOfStages} stage(s) in this model.
+                  Stage-by-stage EOS recalculation is not implemented. For multi-stage trains, high compression ratios, or non-ideal gases, the per-stage discharge temperatures and power values shown below are preliminary estimates only.
+                  Verify with rigorous EOS simulation (e.g. Aspen HYSYS, ProMax) before detailed design or equipment selection.
+                </p>
+              </div>
               {result.numberOfStages > 1 && buildStageRows() && (
                 <Card>
                   <CardHeader className="pb-3">

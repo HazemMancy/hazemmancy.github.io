@@ -1,0 +1,224 @@
+SYSTEM PROMPT — REVISE COMPRESSOR SIZING + CENTRIFUGAL COMPRESSOR CURVE MODULES
+
+You are updating the existing Compressor Sizing calculator and Centrifugal Compressor Curve visualization in a Process Engineering web application. Do NOT rebuild them from scratch. Revise the current implementation so the module remains a strong preliminary compressor screening tool while correcting the remaining technical, validation, and presentation issues.
+
+TARGET FILES
+- client/src/lib/engineering/compressorSizing.ts
+- client/src/pages/calculators/compressor.tsx
+- client/src/components/engineering/compressor-curve-chart.tsx
+- any related validation / helper / export files used by these modules
+
+PRIMARY GOAL
+Preserve the current strengths:
+- staging and discharge-temperature screening
+- preliminary power estimation
+- standard-gas-to-mass-flow conversion
+- suction actual volumetric flow screening
+- centrifugal vs reciprocating suitability guidance
+- illustrative compressor curve visualization
+
+But implement the remaining high-priority fixes so the module is clearly and credibly positioned as:
+- Preliminary Compressor Sizing / Screening Tool
+- suitable for concept / FEED / early design support
+- not final compressor selection
+- not OEM compressor map prediction
+- not final anti-surge / rod-load / pulsation / mechanical design
+- not a substitute for vendor curves, OEM tools, or detailed thermodynamic stage modeling
+
+NON-NEGOTIABLE POSITIONING
+This module must be presented as:
+- screening / preliminary sizing tool
+- not final compressor design authority
+- not final vendor performance map
+- not a substitute for OEM compressor selection and detailed design
+
+Do NOT overstate rigor or standards compliance.
+
+--------------------------------------------------
+MANDATORY HIGH-PRIORITY FIXES
+--------------------------------------------------
+
+1) ADD SCHEMA-BASED VALIDATION — CRITICAL
+Current issue:
+The page still relies mainly on parseFloat and manual NaN checks.
+
+Required correction:
+Create and use a real validation schema in the actual solve path for compressor sizing inputs.
+
+Validation must cover, as applicable:
+- suction pressure > 0
+- discharge pressure > suction pressure
+- suction temperature in valid engineering range
+- gas flow > 0
+- MW > 0
+- k > 1
+- Z > 0
+- compressor efficiency values within valid range
+- mechanical and motor efficiencies within valid range
+- selected compressor type valid
+- standard gas basis / flow basis consistency
+
+Apply schema validation before calling the sizing solver.
+Do NOT leave validation as page-level parsing only.
+
+2) MOVE EOS WARNINGS OUT OF ERROR STATE — CRITICAL
+Current issue:
+If EOS/property-resolution logic returns warnings, they are being routed to the page error state even when calculation continues successfully.
+
+Required correction:
+- EOS / property warnings must be displayed as warnings/advisories, not as blocking errors
+- use a dedicated warning/advisory mechanism or warning panel
+- reserve the error state only for true calculation failure / invalid input / unresolvable property errors
+
+Do NOT show results and an “error” state simultaneously for non-fatal EOS warnings.
+
+3) SOFTEN STANDARDS WORDING IN WARNINGS / NOTES — CRITICAL
+Current issue:
+Some warnings / notes still read too much like hard API requirements or exact compliance statements.
+
+Required correction:
+Review warnings, notes, assumptions, chart notes, and export/report wording and revise them to use language such as:
+- API-aware screening guidance
+- common FEED / industry practice
+- preliminary guidance; verify with OEM data and project specification
+- verify against selected standard edition
+
+Do NOT use wording that implies:
+- final API 617 compliance
+- final API 618 compliance
+- exact OEM/vendor performance behavior
+unless truly implemented and verified.
+
+This applies especially to:
+- stage ratio guidance
+- discharge temperature warnings
+- driver / nameplate margin notes
+- curve notes
+- compressor suitability messages
+
+4) MAKE STAGE-PROPERTY CONSTANCY MORE PROMINENT — CRITICAL
+Current issue:
+The solver uses constant gas properties (k, Z, MW) across all stages, but this limitation is not prominent enough.
+
+Required correction:
+Make this assumption more visible in:
+- methodology / assumptions panel
+- result notes
+- export/report text
+- warnings where multi-stage or high-ratio service exists
+
+Must state clearly:
+- stage calculations assume constant gas properties based on suction or representative values
+- stage-by-stage EOS/property recalculation is not implemented
+- final multi-stage design must be verified with vendor/OEM or rigorous EOS-based stage evaluation
+
+Do NOT let multi-stage results appear like rigorous stage-by-stage thermodynamic design.
+
+5) FIX CENTRIFUGAL CURVE AXIS DISCIPLINE — CRITICAL
+Current issue:
+The centrifugal compressor chart still plots efficiency on the same axis as head.
+
+Required correction:
+Implement one of the following, preferred in this order:
+
+OPTION A — PREFERRED
+- Put efficiency on a separate axis clearly labeled in %
+- Keep head and efficiency on different numeric axes
+
+OPTION B
+- Remove the efficiency curve from the main chart
+- Show efficiency as a separate scalar/result card instead
+
+Do NOT leave efficiency plotted on the same axis as head.
+
+--------------------------------------------------
+ADDITIONAL REQUIRED IMPROVEMENTS
+--------------------------------------------------
+
+6) KEEP CURVES CLEARLY LABELED AS ILLUSTRATIVE
+The centrifugal curve must remain clearly labeled as:
+- illustrative screening curve
+- generated from assumed characteristic behavior anchored to the design point
+- not OEM performance map / not vendor curve
+
+Revise chart notes if needed so they do NOT imply that the generated shape is directly “per API 617”.
+
+Use wording such as:
+- illustrative screening curve inspired by typical centrifugal compressor behavior
+- final compressor map verification requires OEM data
+
+7) KEEP RECIPROCATING BRANCH HONESTLY POSITIONED
+Ensure methodology / assumptions / warnings continue to state that the reciprocating branch is:
+- preliminary compression/power/staging screening
+- not full reciprocating compressor mechanical design
+- not rod-load / pulsation / frame selection / detailed cylinder sizing
+
+8) EXPORT / REPORT DISCIPLINE
+Revise export/report language so it reflects the corrected scope:
+- screening / preliminary only
+- constant gas-property assumption across stages
+- EOS/property warnings shown as advisories
+- illustrative curves not vendor data
+- standards wording softened to screening guidance
+
+--------------------------------------------------
+METHODOLOGY / ASSUMPTIONS PANEL REQUIREMENTS
+--------------------------------------------------
+
+For compressor sizing, include:
+- equal-ratio stage splitting for screening
+- constant gas properties across stages unless otherwise implemented
+- ideal intercooling back to suction temperature unless otherwise implemented
+- preliminary power and temperature screening only
+- final selection requires OEM/vendor verification
+
+For centrifugal curves, include:
+- illustrative/generated screening curve only
+- not OEM map
+- not final anti-surge or stonewall verification
+
+For the whole module, include:
+- preliminary compressor screening tool
+- not final compressor design authority
+- final design requires vendor/OEM data and project-specific verification
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1) Preserve the current strong workflow and result traceability.
+
+2) Make EOS/property warnings visible but non-blocking.
+
+3) Make stage-property constancy difficult to miss, especially for:
+- multi-stage
+- high discharge pressure
+- high compression ratio
+- heavy gas
+
+4) Ensure chart titles and notes clearly communicate “illustrative” / “screening”.
+
+5) Ensure efficiency-axis presentation is technically honest.
+
+--------------------------------------------------
+CODE QUALITY REQUIREMENTS
+--------------------------------------------------
+
+- Preserve existing architecture
+- Keep solver logic in engineering libraries, not UI
+- Keep chart logic modular
+- Add comments where approximation boundaries are important
+- Improve rigor and honesty without degrading FEED usefulness
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+The revision is complete only if:
+- schema-based validation is used in the actual solve path
+- EOS/property warnings no longer appear as blocking errors
+- standards wording is softened to screening guidance where appropriate
+- stage-property constancy is prominently disclosed in assumptions/results/exports
+- centrifugal curve no longer plots efficiency on the head axis
+- chart notes clearly state that curves are illustrative/generated and not OEM performance maps
+- assumptions, warnings, exports, and chart labels match the real implemented screening scope

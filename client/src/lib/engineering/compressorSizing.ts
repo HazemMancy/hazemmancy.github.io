@@ -106,6 +106,50 @@ function calcHeads(
   return { isentropicHead, polytropicHead };
 }
 
+export interface CompressorValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export function validateCompressorInput(input: Partial<CompressorInput>): CompressorValidationResult {
+  const errors: string[] = [];
+  if (input.gasFlowRate === undefined || isNaN(input.gasFlowRate) || input.gasFlowRate <= 0)
+    errors.push("Gas flow rate must be a positive number");
+  if (input.molecularWeight === undefined || isNaN(input.molecularWeight) || input.molecularWeight <= 0)
+    errors.push("Molecular weight must be > 0");
+  if (input.suctionPressure === undefined || isNaN(input.suctionPressure) || input.suctionPressure <= 0)
+    errors.push("Suction pressure must be > 0");
+  if (input.dischargePressure === undefined || isNaN(input.dischargePressure) || input.dischargePressure <= 0)
+    errors.push("Discharge pressure must be > 0");
+  if (
+    input.suctionPressure !== undefined && !isNaN(input.suctionPressure) &&
+    input.dischargePressure !== undefined && !isNaN(input.dischargePressure) &&
+    input.dischargePressure <= input.suctionPressure
+  ) errors.push("Discharge pressure must exceed suction pressure");
+  if (input.suctionTemperature !== undefined && !isNaN(input.suctionTemperature) &&
+    (input.suctionTemperature < -100 || input.suctionTemperature > 500))
+    errors.push("Suction temperature outside valid engineering range (−100 to 500 °C)");
+  if (input.specificHeatRatio === undefined || isNaN(input.specificHeatRatio) || input.specificHeatRatio <= 1)
+    errors.push("Specific heat ratio (k) must be > 1");
+  if (input.compressibilityFactor === undefined || isNaN(input.compressibilityFactor) ||
+    input.compressibilityFactor <= 0 || input.compressibilityFactor > 2)
+    errors.push("Compressibility factor (Z) must be between 0 and 2");
+  if (input.polytropicEfficiency === undefined || isNaN(input.polytropicEfficiency) ||
+    input.polytropicEfficiency <= 0 || input.polytropicEfficiency >= 100)
+    errors.push("Compressor efficiency must be between 0 and 100 %");
+  if (input.mechanicalEfficiency === undefined || isNaN(input.mechanicalEfficiency) ||
+    input.mechanicalEfficiency <= 0 || input.mechanicalEfficiency > 100)
+    errors.push("Mechanical efficiency must be between 0 and 100 %");
+  if (input.motorEfficiency === undefined || isNaN(input.motorEfficiency) ||
+    input.motorEfficiency <= 0 || input.motorEfficiency > 100)
+    errors.push("Motor/driver efficiency must be between 0 and 100 %");
+  if (input.compressorType && !["centrifugal", "reciprocating"].includes(input.compressorType))
+    errors.push("Compressor type must be 'centrifugal' or 'reciprocating'");
+  if (input.compressionModel && !["isentropic", "polytropic"].includes(input.compressionModel))
+    errors.push("Compression model must be 'isentropic' or 'polytropic'");
+  return { valid: errors.length === 0, errors };
+}
+
 export function calculateCompressorSizing(input: CompressorInput): CompressorResult {
   const warnings: string[] = [];
 
@@ -377,16 +421,23 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
   intermediateValues["totalMotorPower_kW"] = totalMotorPower;
   intermediateValues["adiabaticEfficiency"] = adiabaticEff * 100;
 
+  // Stage-property constancy — added as first warning so it is most visible
+  warnings.push(
+    `SCREENING ASSUMPTION — Constant gas properties: k = ${k.toFixed(3)}, Z = ${Z.toFixed(3)}, MW = ${MW.toFixed(1)} kg/kmol are held constant at suction-condition values across ALL ${numStages} stage(s). ` +
+    `Stage-by-stage EOS recalculation is NOT implemented. ` +
+    `For multi-stage trains, high-ratio service, or heavy/lean gases, verify with rigorous EOS simulation (e.g. Aspen HYSYS, ProMax) or vendor thermodynamic modeling before detailed design.`
+  );
+
   if (overallRatio > 10) {
-    warnings.push(`High overall compression ratio (${overallRatio.toFixed(1)}) — verify mechanical feasibility and consider additional staging per GPSA Section 13.`);
+    warnings.push(`High overall compression ratio (${overallRatio.toFixed(1)}) — verify mechanical feasibility and consider additional staging. FEED screening guidance; confirm with vendor.`);
   }
   if (finalDischargeTemp > input.maxDischargeTemperature) {
-    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)}°C exceeds specified limit (${input.maxDischargeTemperature}°C) — additional intercooling required or special materials needed. Verify material suitability per API 617/618 and project specifications.`);
+    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)} °C exceeds user-specified limit (${input.maxDischargeTemperature} °C) — additional intercooling may be required or materials upgrade needed. Verify per project specification and applicable standard edition.`);
   } else if (finalDischargeTemp > input.maxDischargeTemperature * 0.9) {
-    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)}°C approaching specified limit (${input.maxDischargeTemperature}°C) — verify material suitability and consider intercooling.`);
+    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)} °C approaching user-specified limit (${input.maxDischargeTemperature} °C) — verify material suitability and consider intercooling in detailed design.`);
   }
   if (finalDischargeTemp > 150 && input.compressorType === "reciprocating") {
-    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)}°C exceeds 150°C — API 618 recommends max 150°C for packing and valve life. Add intercooling stage.`);
+    warnings.push(`Discharge temperature ${finalDischargeTemp.toFixed(0)} °C exceeds 150 °C — typical industry guidance limits reciprocating discharge temperature to ~150 °C for packing and valve life; verify against project specification and applicable standard edition. Consider adding an intercooling stage.`);
   }
   if (numStages > 1) {
     warnings.push(`${numStages} compression stages required — intercooling assumed back to suction temperature between stages. Actual intercooler approach is typically 5–10°C above cooling medium. Allow 0.3–0.5 bar pressure drop per intercooler in system design.`);
@@ -397,10 +448,10 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
       warnings.push(`Stage ${s + 1}: discharge temperature ${stages[s].dischargeTemperature.toFixed(0)}°C exceeds limit (${input.maxDischargeTemperature}°C) — intercooling inadequate or ratio too high for single stage.`);
     }
     if (stages[s].compressionRatio > 3.5 && input.compressorType === "centrifugal") {
-      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds typical FEED screening limit for centrifugal compressors (~3.5:1 per GPSA Section 13 guidance). Consider adding stages \u2014 confirm actual per-stage limit with vendor.`);
+      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds the FEED screening guideline of ~3.5:1 for centrifugal compressors (common industry practice). Consider adding stages — confirm actual per-stage limit with compressor vendor.`);
     }
     if (stages[s].compressionRatio > 4.0 && input.compressorType === "reciprocating") {
-      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds typical FEED screening limit for reciprocating compressors (~4.0:1 per GPSA Section 13 guidance). Confirm actual limit with cylinder vendor.`);
+      warnings.push(`Stage ${s + 1}: compression ratio ${stages[s].compressionRatio.toFixed(2)} exceeds the FEED screening guideline of ~4.0:1 for reciprocating compressors (common industry practice). Confirm actual limit with cylinder vendor.`);
     }
   }
 
@@ -425,23 +476,22 @@ export function calculateCompressorSizing(input: CompressorInput): CompressorRes
 
   const minNameplate_kW = totalShaftPower * 1.10;
   warnings.push(
-    `Motor nameplate screening minimum \u2265 ${minNameplate_kW.toFixed(1)} kW ` +
-    `(= 110% \u00D7 shaft power ${totalShaftPower.toFixed(1)} kW \u2014 typical driver sizing guidance; ` +
-    `verify required margin against selected standard and project specification). ` +
-    `Calculated motor electrical input = ${totalMotorPower.toFixed(1)} kW at \u03B7_motor = ${input.motorEfficiency}%. ` +
-    `Select next standard IEC/NEMA motor nameplate \u2265 ${minNameplate_kW.toFixed(1)} kW.`
+    `Driver / nameplate screening minimum \u2265 ${minNameplate_kW.toFixed(1)} kW ` +
+    `(= 110% \u00D7 shaft power ${totalShaftPower.toFixed(1)} kW \u2014 common FEED screening practice for driver sizing margin; ` +
+    `verify required service factor and nameplate margin against project specification and applicable standard edition). ` +
+    `Calculated electrical input = ${totalMotorPower.toFixed(1)} kW at \u03B7_motor = ${input.motorEfficiency}%.`
   );
 
-  warnings.push(`Z-factor used: ${Z.toFixed(3)} (suction conditions). For multi-stage, actual Z varies per stage \u2014 average Z approximation may understate work in wide-ratio trains; verify with EOS at discharge conditions.`);
+  warnings.push(`Z-factor used: ${Z.toFixed(3)} (suction conditions only). Actual Z varies per stage — this is a known simplification. For wide-ratio multi-stage trains, verify with EOS-based simulation at each stage's discharge conditions.`);
 
   if (input.compressorType === "reciprocating") {
-    warnings.push("Reciprocating screening only: this tool calculates compression work and volumetric efficiency only. Rod loads, frame selection, piston speed limits, valve losses, pulsation analysis (API 618 Annex D), cylinder sizing, and settling-out pressure are NOT modeled \u2014 all require detailed vendor engineering per API 618.");
+    warnings.push("RECIPROCATING SCREENING ONLY: This tool provides preliminary compression work and volumetric efficiency screening. NOT modeled: rod loads, frame/cylinder sizing, piston speed limits, valve pressure losses, pulsation (consult applicable standard), or settling-out pressure. Full mechanical design requires detailed vendor engineering per applicable project standards.");
     if (numStages > 1) {
-      warnings.push("Reciprocating multi-stage: verify inter-stage rod load, pin reversal, and pulsation dampener sizing per API 618. Settling-out pressure (SOP) should be confirmed for emergency shutdown scenarios.");
+      warnings.push("Reciprocating multi-stage screening: inter-stage rod load, pin reversal, pulsation dampener sizing, and settling-out pressure (SOP) for emergency shutdown all require detailed vendor engineering. This tool does not model these items.");
     }
   }
   if (input.compressorType === "centrifugal") {
-    warnings.push("Centrifugal screening: verify surge margin \u2265 10% from operating point to surge line. Anti-surge control system required per API 617. Surge line shown on chart is schematic only \u2014 actual surge line must be determined by vendor performance testing.");
+    warnings.push("CENTRIFUGAL SCREENING: Surge margin should typically be \u2265 10% from the operating point to the estimated surge boundary — verify with vendor performance map. Anti-surge control philosophy should be confirmed during detailed design. Surge line shown on illustrative chart is schematic only; actual surge boundary requires vendor performance testing per applicable standard and project specification.");
   }
 
   const trace: CalcTrace = {

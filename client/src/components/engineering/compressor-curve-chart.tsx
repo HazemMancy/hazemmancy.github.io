@@ -167,28 +167,23 @@ function ReciprocatingTooltip({ active, payload, label, powerUnitLabel }: any) {
   );
 }
 
-function CentrifugalLegend({ payload, legendNames }: any) {
+function CentrifugalLegend({ payload }: any) {
   if (!payload) return null;
-  const filtered = payload.filter((entry: any) => entry.dataKey !== "surgeRegion");
+  const filtered = payload.filter(
+    (entry: any) => entry.dataKey !== "surgeRegion" && entry.dataKey !== "efficiency"
+  );
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: "24px", paddingTop: "12px", flexWrap: "wrap" }}>
-      {filtered.map((entry: any) => {
-        const isDashed = entry.dataKey === "efficiency";
-        return (
-          <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <svg width="18" height="10" viewBox="0 0 18 10" style={{ flexShrink: 0 }}>
-              {isDashed ? (
-                <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2" strokeDasharray="4 2" />
-              ) : (
-                <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2.5" strokeLinecap="round" />
-              )}
-            </svg>
-            <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))", fontWeight: 500, letterSpacing: "0.01em" }}>
-              {legendNames[entry.dataKey] || entry.value}
-            </span>
-          </div>
-        );
-      })}
+      {filtered.map((entry: any) => (
+        <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <svg width="18" height="10" viewBox="0 0 18 10" style={{ flexShrink: 0 }}>
+            <line x1="0" y1="5" x2="18" y2="5" stroke={entry.color} strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+          <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))", fontWeight: 500, letterSpacing: "0.01em" }}>
+            {entry.value === "head" ? "Head" : entry.value === "power" ? "Shaft Power" : entry.value}
+          </span>
+        </div>
+      ))}
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <svg width="18" height="10" viewBox="0 0 18 10" style={{ flexShrink: 0 }}>
           <line x1="0" y1="5" x2="18" y2="5" stroke={COLORS.surge} strokeWidth="1.5" strokeDasharray="4 3" />
@@ -379,13 +374,6 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
               axisLine={{ stroke: COLORS.gridMajor, strokeWidth: 1 }}
               width={52}
             />
-            <YAxis
-              yAxisId="efficiency"
-              orientation="left"
-              domain={[0, 100]}
-              hide={true}
-            />
-
             <Tooltip
               content={
                 <CentrifugalTooltip
@@ -429,17 +417,6 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
               dot={false}
               name="head"
               activeDot={{ r: 4.5, strokeWidth: 2.5, stroke: "#fff", fill: COLORS.head }}
-            />
-            <Line
-              yAxisId="efficiency"
-              type="monotone"
-              dataKey="efficiency"
-              stroke={COLORS.efficiency}
-              strokeWidth={1.8}
-              strokeDasharray="6 3"
-              dot={false}
-              name="efficiency"
-              activeDot={{ r: 3.5, strokeWidth: 2, stroke: "#fff", fill: COLORS.efficiency }}
             />
             <Line
               yAxisId="power"
@@ -568,10 +545,12 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
           </span>
         </div>
         <div className="text-muted-foreground">
-          {isPolytropic ? "Polytropic" : "Isentropic"} Eff: <span className="text-foreground font-semibold">{designEff.toFixed(1)}%</span>
+          Shaft Power: <span className="text-foreground font-semibold">{displayPower.toFixed(1)} {powerUnitLabel}</span>
         </div>
         <div className="text-muted-foreground">
-          Shaft Power: <span className="text-foreground font-semibold">{displayPower.toFixed(1)} {powerUnitLabel}</span>
+          {isPolytropic ? "Polytropic" : "Isentropic"} Eff at BEP:{" "}
+          <span className="text-foreground font-semibold" data-testid="text-design-efficiency">{designEff.toFixed(1)}%</span>
+          <span className="ml-1.5 text-[10px] text-muted-foreground/60">(design-point value; bell-curve shape assumed)</span>
         </div>
         <div className="text-muted-foreground">
           Stages: <span className="text-foreground font-semibold">{result.numberOfStages}</span>
@@ -583,11 +562,12 @@ function CentrifugalChart({ result, unitSystem }: CompressorCurveChartProps) {
       <div className="flex items-start gap-2.5 border-t border-muted/20 pt-3">
         <Info className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
         <p className="text-[11px] text-muted-foreground/80 leading-relaxed" data-testid="compressor-curve-note">
-          Illustrative screening curves — parametric centrifugal compressor shape (NOT a vendor test curve or API 617 compliance check).
+          Illustrative screening curves only — parametric centrifugal compressor characteristic (NOT a vendor test curve).
           H-Q parabola: H = H_d × (1.12 + 0.28·r − 0.40·r²); anchors: shutoff = 1.12×H_d (r=0),
           design = H_d (r=1), choke ≈ 0.88×H_d (r=1.20). Shaft power anchored at design point P_d.
-          Surge line and min-continuous-flow lines are schematic only; actual surge boundary requires vendor testing.
-          Efficiency shown on its own 0–100% scale (right-side hidden axis). All curves must be verified against manufacturer performance test sheets.
+          Efficiency (Gaussian bell, peak at BEP) is displayed as a scalar stat above — removed from the chart to avoid dual-axis confusion.
+          Surge line and min-continuous-flow lines are schematic; actual surge boundary requires vendor performance testing.
+          All curves must be verified against manufacturer data sheets before equipment selection.
         </p>
       </div>
     </>
