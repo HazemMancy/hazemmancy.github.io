@@ -100,3 +100,77 @@ export type LiquidLineSizingInput = z.infer<typeof liquidLineSizingSchema>;
 export type MultiphaseInput = z.infer<typeof multiphaseSchema>;
 export type GasMixingInput = z.infer<typeof gasMixingSchema>;
 export type GasVolumeInput = z.infer<typeof gasVolumeSchema>;
+
+// ─── Heat Exchanger schemas ────────────────────────────────────────────────────
+
+export const hxStreamSchema = z.object({
+  name: z.string(),
+  mDot: z.number().positive("Flow rate must be > 0"),
+  cp: z.number().positive("Cp must be > 0"),
+  tIn: z.number().min(-273, "Inlet temperature below absolute zero"),
+  tOut: z.number().min(-273, "Outlet temperature below absolute zero"),
+  tOutKnown: z.boolean(),
+  phaseNote: z.enum(["single_phase", "condensing", "boiling"]),
+});
+
+export const hxCaseSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Case name is required"),
+  caseType: z.string(),
+  hotSide: hxStreamSchema,
+  coldSide: hxStreamSchema,
+  dutyMode: z.enum(["both_outlets_known", "one_outlet_unknown", "duty_given"]),
+  dutyKW: z.number(),
+}).refine(
+  (c) => c.dutyMode !== "duty_given" || c.dutyKW > 0,
+  { message: "Duty must be > 0 when duty_given mode is selected", path: ["dutyKW"] }
+);
+
+const hxUBaseFields = {
+  uClean: z.number(),
+  uFouled: z.number(),
+  rfHot: z.number(),
+  rfCold: z.number(),
+  serviceCategory: z.string(),
+  designMargin: z.number().min(0, "Design margin must be >= 0"),
+};
+
+export const hxUInputSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("clean_plus_fouling"),
+    ...hxUBaseFields,
+    uClean: z.number().positive("U_clean must be > 0"),
+    rfHot: z.number().min(0, "Rf_hot must be >= 0"),
+    rfCold: z.number().min(0, "Rf_cold must be >= 0"),
+  }),
+  z.object({
+    mode: z.literal("fouled_direct"),
+    ...hxUBaseFields,
+    uFouled: z.number().positive("U_fouled must be > 0"),
+  }),
+  z.object({
+    mode: z.literal("estimated"),
+    ...hxUBaseFields,
+  }),
+]);
+
+export const hxConfigSchema = z.object({
+  arrangement: z.enum(["counter_current", "co_current", "1_2_pass", "custom_F"]),
+  fMode: z.enum(["user_entered", "approximate_correlation"]),
+  fValue: z.number().min(0.3, "F-factor must be >= 0.3").max(1.0, "F-factor must be <= 1.0"),
+  approachTempMin: z.number().min(0, "Min approach temperature must be >= 0"),
+  shellPasses: z.number().int().min(1, "Shell passes must be >= 1"),
+  tubePasses: z.number().int().min(1, "Tube passes must be >= 1"),
+});
+
+export const hxInputSchema = z.object({
+  cases: z.array(hxCaseSchema).min(1, "At least one operating case is required"),
+  config: hxConfigSchema,
+  uInput: hxUInputSchema,
+});
+
+export type HXStreamValidInput = z.infer<typeof hxStreamSchema>;
+export type HXCaseValidInput = z.infer<typeof hxCaseSchema>;
+export type HXUValidInput = z.infer<typeof hxUInputSchema>;
+export type HXConfigValidInput = z.infer<typeof hxConfigSchema>;
+export type HXSchemaInput = z.infer<typeof hxInputSchema>;

@@ -32,11 +32,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { exportToExcel, exportToJSON } from "@/lib/engineering/exportUtils";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
+import { hxInputSchema } from "@/lib/engineering/validation";
 import {
   Thermometer, ClipboardList, Droplets, Settings2, BarChart3,
   ShieldCheck, ChevronLeft, ChevronRight, RotateCcw, FlaskConical,
   Plus, Trash2, AlertTriangle, CheckCircle2, Download, Info,
-  Calculator, Gauge, Box, FileText, FileSpreadsheet, Zap,
+  Calculator, Gauge, Box, FileText, FileSpreadsheet, Zap, FlameKindling,
 } from "lucide-react";
 
 const TABS = [
@@ -74,6 +75,10 @@ export default function HeatExchangerPage() {
   const [temaGuidance, setTemaGuidance] = useState<TEMAGuidance | null>(null);
   const [result, setResult] = useState<HXFullResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [phaseChangeAck, setPhaseChangeAck] = useState(false);
+
+  const hasPhaseChange = () =>
+    cases.some(c => c.hotSide.phaseNote !== "single_phase" || c.coldSide.phaseNote !== "single_phase");
 
   const updateProject = (k: keyof HXProject, v: unknown) => setProject(p => ({ ...p, [k]: v }));
   const updateConfig = (k: keyof ExchangerConfig, v: unknown) => setConfig(p => ({ ...p, [k]: v }));
@@ -111,27 +116,41 @@ export default function HeatExchangerPage() {
 
   const handleCalculate = () => {
     setError(null);
-    try {
-      const convertedCases = cases.map(c => {
-        const cc = { ...c };
-        cc.hotSide = { ...c.hotSide };
-        cc.coldSide = { ...c.coldSide };
-        if (unitSystem !== "SI") {
-          cc.hotSide.tIn = convertToSI("temperature", c.hotSide.tIn, unitSystem);
-          cc.hotSide.tOut = convertToSI("temperature", c.hotSide.tOut, unitSystem);
-          cc.coldSide.tIn = convertToSI("temperature", c.coldSide.tIn, unitSystem);
-          cc.coldSide.tOut = convertToSI("temperature", c.coldSide.tOut, unitSystem);
-          cc.hotSide.mDot = convertToSI("flowMass", c.hotSide.mDot, unitSystem);
-          cc.coldSide.mDot = convertToSI("flowMass", c.coldSide.mDot, unitSystem);
-        }
-        return cc;
-      });
 
+    if (hasPhaseChange() && !phaseChangeAck) {
+      setError("Phase-change service detected. Read and acknowledge the screening-only disclaimer below before calculating.");
+      return;
+    }
+
+    const convertedCases = cases.map(c => {
+      const cc = { ...c };
+      cc.hotSide = { ...c.hotSide };
+      cc.coldSide = { ...c.coldSide };
+      if (unitSystem !== "SI") {
+        cc.hotSide.tIn = convertToSI("temperature", c.hotSide.tIn, unitSystem);
+        cc.hotSide.tOut = convertToSI("temperature", c.hotSide.tOut, unitSystem);
+        cc.coldSide.tIn = convertToSI("temperature", c.coldSide.tIn, unitSystem);
+        cc.coldSide.tOut = convertToSI("temperature", c.coldSide.tOut, unitSystem);
+        cc.hotSide.mDot = convertToSI("flowMass", c.hotSide.mDot, unitSystem);
+        cc.coldSide.mDot = convertToSI("flowMass", c.coldSide.mDot, unitSystem);
+      }
+      return cc;
+    });
+
+    const convertedConfig = unitSystem !== "SI"
+      ? { ...config, approachTempMin: config.approachTempMin * 5 / 9 }
+      : config;
+
+    // Schema-based validation before calling the solver
+    const validation = hxInputSchema.safeParse({ cases: convertedCases, config: convertedConfig, uInput });
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      setError(`Input validation: ${firstError.path.join(" → ") ? `[${firstError.path.join(" → ")}] ` : ""}${firstError.message}`);
+      return;
+    }
+
+    try {
       const geo = geoArea ? parseFloat(geoArea) : undefined;
-      // approachTempMin is a temperature DIFFERENCE — convert with multiplier only (no offset)
-      const convertedConfig = unitSystem !== "SI"
-        ? { ...config, approachTempMin: config.approachTempMin * 5 / 9 }
-        : config;
       const r = calculateHeatExchangerFull(project, convertedCases, convertedConfig, uInput, geo);
       setResult(r);
 
@@ -153,7 +172,7 @@ export default function HeatExchangerPage() {
   };
 
   const loadTestCase = () => {
-    setUnitSystem("SI"); setError(null); setResult(null);
+    setUnitSystem("SI"); setError(null); setResult(null); setPhaseChangeAck(false);
     setProject({ ...DEFAULT_PROJECT, name: "Oil Cooler HX", caseId: "HX-001", engineer: "HEM" });
     setCases([{ ...HX_TEST_CASE_OIL_COOLER }]);
     setConfig({ ...HX_TEST_CONFIG });
@@ -168,7 +187,7 @@ export default function HeatExchangerPage() {
     setUInput({ ...DEFAULT_U_INPUT });
     setGeoArea("");
     setTubeGeoResult(null); setTemaGuidance(null);
-    setResult(null); setError(null);
+    setResult(null); setError(null); setPhaseChangeAck(false);
     setActiveTab("basis");
   };
 
@@ -276,13 +295,19 @@ export default function HeatExchangerPage() {
       calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
       additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
       methodology: [
-        "LMTD method (preliminary sizing only): Q = U × A × F × LMTD",
-        "Duty basis (both_outlets_known mode): Q_des = (Q_h + Q_c) / 2 — average of both sides; imbalance flagged",
-        "F-correction factor for multi-pass configurations (Bowman et al.) — approximate correlation only; verify against TEMA charts",
-        "U_fouled = 1 / (1/U_clean + Rf_hot + Rf_cold) per TEMA fouling resistances",
+        "PRELIMINARY THERMAL SIZING ONLY — not a final rating tool. For concept / FEED / early design support.",
+        "Sizing basis: LMTD method with F-correction factor — Q = U × A × F × LMTD",
+        "Duty basis (both_outlets_known): Q_des = (Q_h + Q_c) / 2 — average of hot-side and cold-side computed duties; imbalance flagged separately",
+        "F-correction for 1-2 pass (Bowman et al. correlation) — screening approximation only; verify with TEMA charts or vendor software before final design",
+        "Multi-shell F-factor: approximate P₁ transformation + Bowman — verify with TEMA charts",
+        "U_fouled = 1 / (1/U_clean + Rf_hot + Rf_cold) per TEMA RGP-T-2.4 fouling resistances",
+        "Estimated U from service category is preliminary screening only — HIGH UNCERTAINTY; verify with vendor data or detailed calculation",
         "Design area includes user-specified margin percentage",
-        "Energy balance check: Q_hot vs Q_cold within specified tolerance",
-        "No Bell-Delaware shell-side rating, no baffle optimization, no pressure drop calculation — not final design authority",
+        "Energy balance check: Q_hot vs Q_cold within specified tolerance — imbalance flagged if exceeded",
+        "NTU / effectiveness: informational screening metrics on counter-current ideal basis — not rigorous rating for multi-pass configurations",
+        "Phase-change services (condensing / boiling): constant-Cp LMTD treatment is NOT rigorous — screening estimate only; final design requires zone-by-zone / latent-heat analysis",
+        "Geometry screening (tube count, bundle, shell ID): preliminary estimates — no Bell-Delaware shell-side rating, no baffle optimization, no pressure drop, no vibration analysis",
+        "NOT final design authority — confirm with HTRI, Aspen EDR, vendor thermal rating software, and mechanical engineering review",
       ],
       assumptions: gc.trace.assumptions,
       references: [
@@ -718,6 +743,34 @@ export default function HeatExchangerPage() {
           <div className="space-y-4">
             <StepHeader step={3} title="Thermal Design Calculation" desc="Calculate heat duty, LMTD, F-correction factor, and required heat transfer area." />
 
+            {hasPhaseChange() && (
+              <div className="rounded-lg border-2 border-amber-500/60 bg-amber-950/30 p-4 space-y-3" data-testid="banner-phase-change">
+                <div className="flex items-start gap-3">
+                  <FlameKindling className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-amber-300">Phase-Change Service — Screening Mode Only</p>
+                    <ul className="text-xs text-amber-200/80 space-y-1 list-disc list-inside">
+                      <li>Phase change (condensing or boiling) is <strong>not rigorously modeled</strong> by this tool.</li>
+                      <li>The LMTD method with constant Cp is <strong>not suitable</strong> for final condenser or reboiler thermal design.</li>
+                      <li>Results are <strong>indicative screening estimates only</strong> — not final design authority.</li>
+                      <li>Final design requires latent-heat / zone-by-zone analysis and vendor or specialist thermal rating software (HTRI, Aspen EDR, or equivalent).</li>
+                    </ul>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Checkbox
+                        id="phase-change-ack"
+                        checked={phaseChangeAck}
+                        onCheckedChange={v => setPhaseChangeAck(!!v)}
+                        data-testid="check-phase-change-ack"
+                      />
+                      <Label htmlFor="phase-change-ack" className="text-xs text-amber-200 cursor-pointer">
+                        I understand this is a screening estimate only and not a final phase-change exchanger design.
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <Card className="border-primary/20">
               <CardContent className="py-6">
                 <div className="flex flex-col items-center gap-3">
@@ -728,10 +781,19 @@ export default function HeatExchangerPage() {
                     {result ? "Results computed. Modify inputs and recalculate, or proceed to Geometry."
                       : "Configure basis and settings in the previous tabs, then run the thermal design calculation."}
                   </p>
-                  <Button size="lg" onClick={handleCalculate} data-testid="button-calculate" className="min-w-[220px]">
+                  <Button
+                    size="lg"
+                    onClick={handleCalculate}
+                    data-testid="button-calculate"
+                    className="min-w-[220px]"
+                    disabled={hasPhaseChange() && !phaseChangeAck}
+                  >
                     <Calculator className="w-4 h-4 mr-2" />
                     {result ? "Recalculate" : "Calculate Heat Exchanger"}
                   </Button>
+                  {hasPhaseChange() && !phaseChangeAck && (
+                    <p className="text-xs text-amber-300/70">Acknowledge the phase-change disclaimer above to continue.</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -764,12 +826,19 @@ export default function HeatExchangerPage() {
                     <div className="space-y-1">
                       <EqLine eq="Q_hot = (ṁ_hot/3600) × Cp_hot × (Th,in − Th,out)  [kg/h → kW]" val={`${fmtN(cr.hotDutyKW)} kW`} />
                       <EqLine eq="Q_cold = (ṁ_cold/3600) × Cp_cold × (Tc,out − Tc,in)  [kg/h → kW]" val={`${fmtN(cr.coldDutyKW)} kW`} />
-                      <EqLine eq="Q_design (governing)" val={`${fmtN(cr.dutyKW)} kW`} highlight />
+                      {(() => {
+                        const caseData = result?.cases[idx];
+                        const basisLabel = caseData?.trace?.intermediateValues?.["Q_hot_kW"] !== undefined
+                          && caseData?.trace?.intermediateValues?.["Q_cold_kW"] !== undefined
+                          ? "Q_des = (Q_hot + Q_cold) / 2  [avg basis — both outlets known]"
+                          : "Q_design (governing)";
+                        return <EqLine eq={basisLabel} val={`${fmtN(cr.dutyKW)} kW`} highlight />;
+                      })()}
                     </div>
-                    {Math.abs(cr.hotDutyKW - cr.coldDutyKW) / Math.max(cr.hotDutyKW, cr.coldDutyKW) > 0.01 && (
+                    {cr.hotDutyKW > 0 && cr.coldDutyKW > 0 && Math.abs(cr.hotDutyKW - cr.coldDutyKW) / Math.max(cr.hotDutyKW, cr.coldDutyKW) > 0.01 && (
                       <p className="text-[10px] text-amber-300 mt-1">
                         <AlertTriangle className="w-3 h-3 inline mr-1" />
-                        Energy imbalance: {((Math.abs(cr.hotDutyKW - cr.coldDutyKW) / Math.max(cr.hotDutyKW, cr.coldDutyKW)) * 100).toFixed(1)}%
+                        Energy imbalance: {((Math.abs(cr.hotDutyKW - cr.coldDutyKW) / Math.max(cr.hotDutyKW, cr.coldDutyKW)) * 100).toFixed(1)}% — review stream data (flow rates, Cp, temperatures)
                       </p>
                     )}
                   </CardContent>
@@ -1098,9 +1167,20 @@ export default function HeatExchangerPage() {
                   </Card>
                 )}
 
-                <div className="text-xs text-muted-foreground p-3 bg-muted/30 rounded-md">
-                  <Info className="w-3 h-3 inline mr-1" />
-                  Tube count and shell diameter are preliminary. Detailed thermal-hydraulic analysis requires vendor software (HTRI, Aspen EDR).
+                <div className="text-xs text-muted-foreground p-3 bg-muted/30 rounded-md space-y-1">
+                  <p className="font-medium text-foreground/70">
+                    <Info className="w-3 h-3 inline mr-1" />
+                    Geometry Screening — Limitations
+                  </p>
+                  <p>Tube count and shell diameter estimates are preliminary screening values only. This module does <strong>not</strong> calculate:</p>
+                  <ul className="list-disc list-inside ml-1 space-y-0.5">
+                    <li>Shell-side pressure drop or heat-transfer coefficient (Bell-Delaware)</li>
+                    <li>Baffle cut, spacing, or bypass optimization</li>
+                    <li>Tube vibration / unsupported span (TEMA RCB-4.6)</li>
+                    <li>Detailed TEMA mechanical layout or nozzle sizing</li>
+                    <li>Final shell sizing authority</li>
+                  </ul>
+                  <p>Final exchanger geometry requires detailed thermal-hydraulic rating software (HTRI, Aspen EDR, or equivalent vendor tools).</p>
                 </div>
               </>
             )}
@@ -1262,7 +1342,8 @@ export default function HeatExchangerPage() {
           )}
           {activeTab === "thermal" && (
             <>
-              <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-main">
+              <Button size="sm" onClick={handleCalculate} data-testid="button-calculate-main"
+                disabled={hasPhaseChange() && !phaseChangeAck}>
                 <Calculator className="w-3.5 h-3.5 mr-1" /> {result ? "Recalculate" : "Calculate"}
               </Button>
               {result && (

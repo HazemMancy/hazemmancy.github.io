@@ -1,0 +1,262 @@
+SYSTEM PROMPT — REVISE EXISTING HEAT EXCHANGER MODULE (CURRENT REPO STATE)
+
+You are updating the existing Heat Exchanger calculator in a Process Engineering web application. Do NOT rebuild it from scratch. Revise the current implementation based on the current repo state so it remains a strong FEED / preliminary thermal sizing tool while correcting the remaining technical, governance, and wording issues.
+
+TARGET FILES
+- client/src/lib/engineering/heatExchanger.ts
+- client/src/pages/calculators/heat-exchanger.tsx
+- any related validation / export / helper files used by this module
+
+PRIMARY GOAL
+Preserve the current strengths:
+- LMTD-based thermal sizing
+- F-correction handling
+- direct U / clean U + fouling / estimated U options
+- multi-case comparison
+- optional tube-count / bundle / shell-ID screening
+- useful calculation trace and assumptions display
+
+But correct the remaining weaknesses so the module is clearly and credibly positioned as:
+- Heat Exchanger Preliminary Thermal Sizing / Screening Tool
+- suitable for concept / FEED / early design support
+- not a rating tool
+- not Bell-Delaware shell-side design
+- not a substitute for HTRI / Aspen EDR / vendor rating
+- not final condenser / reboiler / phase-change exchanger design
+
+NON-NEGOTIABLE POSITIONING
+This module must be presented as:
+- preliminary thermal sizing / screening only
+- not final exchanger rating
+- not final shell-side hydraulic design
+- not final mechanical design
+- not final phase-change exchanger design authority
+
+Do NOT overstate rigor.
+
+--------------------------------------------------
+MANDATORY HIGH-PRIORITY FIXES
+--------------------------------------------------
+
+1) FIX BOTH-OUTLETS-KNOWN DUTY POLICY — CRITICAL
+Current issue:
+In both_outlets_known mode, the solver still computes Q_hot and Q_cold and then defaults to max(Q_hot, Q_cold).
+
+This is not an acceptable implicit default.
+
+Required correction:
+Replace the current max-duty behavior with an explicit duty-basis policy.
+
+Preferred implementation:
+- compute Q_hot
+- compute Q_cold
+- compute mismatch %
+- if mismatch exceeds tolerance, raise a visible inconsistency warning
+- then apply a defined policy such as:
+  - hot-side basis
+  - cold-side basis
+  - average basis
+  - strict reject/block
+
+Minimum acceptable implementation:
+- use average(Q_hot, Q_cold), not max(...)
+- show mismatch clearly
+- show a warning when mismatch exceeds tolerance
+- record the selected duty basis in results, trace, and export
+
+Do NOT continue using max(Q_hot, Q_cold) as the hidden default.
+
+2) ENFORCE PROJECT CONTROLS IN THE SOLVER — CRITICAL
+Current issue:
+Project settings such as:
+- allowApproxF
+- allowEstimatedU
+
+are still effectively UI controls only and are not reliably enforced inside the actual solve path.
+
+Required correction:
+Enforce these settings inside the real calculation path.
+
+Behavior required:
+- if allowApproxF is false, reject or block approximate F methods at solver level
+- if allowEstimatedU is false, reject or block estimated U mode at solver level
+
+Do NOT rely on UI hiding alone.
+The engineering solver must enforce project restrictions.
+
+3) PHASE-CHANGE SERVICE CONTROL — CRITICAL
+Current issue:
+Phase-change services are still too easy to run through a sensible-heat LMTD workflow with only a warning.
+
+Required correction:
+Strengthen phase-change control significantly.
+
+Required behavior:
+- if either side is condensing or boiling, show a prominent banner/warning
+- clearly state:
+  - phase change is not rigorously modeled
+  - constant-Cp sensible-heat treatment is not suitable for final condenser/reboiler sizing
+  - final design requires proper latent-heat/zone analysis and vendor or specialist software
+
+Preferred implementation:
+- require explicit user acknowledgement for phase-change screening mode
+OR
+- block final calculation unless the user confirms screening-only intent
+
+Do NOT allow phase-change results to appear equivalent to normal sensible-heat exchanger sizing.
+
+4) RELABEL “Q ACHIEVED” / AREA CHECK OUTPUTS — CRITICAL
+Current issue:
+The geometry/area check still uses wording such as “Q achieved,” which overstates rigor.
+
+Required correction:
+Rename these outputs everywhere to screening language, for example:
+- Thermal Duty Estimate from Selected Area
+- Screening Duty from Selected Area and Assumed U
+- Preliminary Thermal Duty Estimate
+
+Update:
+- result labels
+- export/report labels
+- calculation trace wording
+- UI cards/sections
+
+Do NOT use wording that sounds like a full exchanger rating result.
+
+5) ADD SCHEMA-BASED VALIDATION IN THE ACTUAL SOLVE PATH — CRITICAL
+Current issue:
+The module still lacks strong schema-based validation in the actual solve path.
+
+Required correction:
+Create and use schema-based validation before calling the main solver.
+
+Validation must cover, as applicable:
+- hot/cold flow > 0
+- hot/cold inlet temperatures valid
+- outlet temperatures valid when required
+- Cp > 0
+- U > 0 where required
+- fouling resistances >= 0
+- F-factor in valid range where user-entered
+- geometry area > 0 where entered
+- tube OD / pitch / length / passes valid where geometry module is used
+- both-outlets-known consistency structure valid
+- no impossible thermal input combinations
+
+Use schema validation in the real solve path, not only passive definitions.
+
+--------------------------------------------------
+IMPORTANT ADDITIONAL CORRECTIONS
+--------------------------------------------------
+
+6) STRENGTHEN F-CORRECTION DISCLOSURE
+Keep current F-correction capability, but clearly state in assumptions/methodology:
+- 1–2 pass F is a screening correlation/chart approximation
+- multi-shell handling is approximate
+- final F should be checked with vendor/software methods where required
+
+Do NOT imply full rigorous correction coverage for all arrangements.
+
+7) NTU / EFFECTIVENESS LABEL DISCIPLINE
+If NTU/effectiveness values remain, keep them but label clearly as:
+- informational screening metric
+- counter-current-equivalent screening metric where applicable
+- not a rigorous rating metric for all exchanger configurations
+
+8) GEOMETRY MODULE LIMITATIONS MUST REMAIN EXPLICIT
+The geometry module is useful, but assumptions/results must clearly state it does NOT calculate:
+- shell-side pressure drop
+- shell-side heat-transfer coefficient
+- Bell-Delaware corrections
+- baffle cut / spacing optimization
+- vibration / unsupported span
+- detailed TEMA mechanical layout
+- final shell sizing authority
+
+Do NOT let shell-ID or bundle results read like final exchanger geometry selection.
+
+9) APPROACH TEMPERATURE / AREA WARNINGS — WORDING DISCIPLINE
+Keep the practical warnings, but ensure they remain clearly:
+- FEED screening guidance
+- typical practice
+- economics / practicality indicators
+- not hard universal limits
+
+10) EXPORT / REPORT DISCIPLINE
+Revise export/report wording so it reflects the corrected scope:
+- preliminary thermal sizing only
+- selected duty basis is explicitly shown
+- mismatch warning shown where both outlets are known
+- approximate F/U modes clearly identified
+- phase-change limitation clearly shown
+- area-check output labeled as screening thermal duty estimate
+- geometry output labeled as screening only
+
+--------------------------------------------------
+METHODOLOGY / ASSUMPTIONS PANEL REQUIREMENTS
+--------------------------------------------------
+
+For thermal sizing, include:
+- LMTD preliminary thermal sizing basis
+- selected duty basis (especially if both outlets are known)
+- selected F-correction method and approximation level
+- selected U basis (direct / clean + fouling / estimated)
+- phase change not rigorously modeled unless explicitly implemented
+
+For fouling/U treatment, include:
+- fouled U or clean U + fouling basis
+- estimated U is preliminary screening only
+
+For geometry screening, include:
+- tube-count / bundle / shell-ID are screening estimates only
+- no shell-side rating / Bell-Delaware / pressure-drop design
+- not final mechanical layout
+
+For the whole module, include:
+- preliminary heat exchanger thermal sizing tool
+- final design/rating requires HTRI, Aspen EDR, vendor software, or equivalent detailed methods
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1) Preserve the current useful workflow and multi-case structure.
+
+2) If both outlets are known:
+- display Q_hot
+- display Q_cold
+- display mismatch %
+- display selected duty basis clearly
+
+3) If project controls disallow approximate F or estimated U:
+- solver must reject them even if UI state is bypassed
+
+4) Add a strong visible phase-change warning/acknowledgement flow.
+
+5) Update labels from “Q achieved” to screening-duty language everywhere.
+
+6) Keep outputs professional, FEED-oriented, and technically honest.
+
+--------------------------------------------------
+CODE QUALITY REQUIREMENTS
+--------------------------------------------------
+
+- Preserve existing architecture
+- Keep solver logic in engineering library, not UI
+- Do not remove useful calc steps, case comparison, or traceability
+- Add comments where approximation boundaries are important
+- Improve methodological honesty without overcomplicating the module
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+The revision is complete only if:
+- both_outlets_known mode no longer defaults to max(Q_hot, Q_cold)
+- selected duty basis is explicit and traceable
+- allowApproxF and allowEstimatedU are enforced in the actual solve path
+- phase-change services are strongly disclosed/restricted
+- “Q achieved” wording is fully replaced with screening-duty wording
+- schema-based validation is used in the actual solve path
+- assumptions, warnings, exports, and methodology match the real implemented screening scope
+- geometry and F-correction limitations remain clearly disclosed

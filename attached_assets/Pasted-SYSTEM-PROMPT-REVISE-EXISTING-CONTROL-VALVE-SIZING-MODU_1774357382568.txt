@@ -1,0 +1,272 @@
+SYSTEM PROMPT — REVISE EXISTING CONTROL VALVE SIZING MODULE (CURRENT REPO STATE)
+
+You are updating an existing Control Valve Sizing calculator in a Process Engineering web application. Do NOT rebuild it from scratch. Revise the current implementation so it remains a strong FEED / preliminary control-valve screening tool while correcting the remaining technical, validation, and wording issues.
+
+TARGET FILES
+- client/src/lib/engineering/controlValve.ts
+- client/src/pages/calculators/control-valve.tsx
+- any related validation / export / helper files used by this module
+
+PRIMARY GOAL
+Preserve the current strengths:
+- liquid / gas / steam branch separation
+- multi-point sizing workflow
+- reducer / piping factor treatment
+- choked-flow / cavitation / flashing screening
+- selection / opening / rangeability review
+- risk assessment structure
+- pressure-basis discipline
+- export / reporting structure
+
+But correct the remaining weaknesses so the module is clearly and credibly positioned as:
+- Control Valve Preliminary Sizing / Screening Tool
+- suitable for concept / FEED / early detailed engineering support
+- not final control-valve selection authority
+- not final cavitation trim selection
+- not final noise verification
+- not final vendor-grade IEC 60534 implementation
+- not a substitute for vendor sizing software, trim data, and acoustic/cavitation verification
+
+NON-NEGOTIABLE POSITIONING
+This module must be presented as:
+- standards-aware screening / preliminary sizing tool
+- not final valve selection authority
+- not final trim/noise/cavitation design authority
+- not final IEC compliance verification
+
+Do NOT overstate rigor or standards compliance.
+
+--------------------------------------------------
+MANDATORY HIGH-PRIORITY FIXES
+--------------------------------------------------
+
+1) FIX MANUAL Fp OVERRIDE SO IT AFFECTS REAL SIZING — CRITICAL
+Current issue:
+Manual Fp override is still cosmetic. It changes reported factors after sizing but does not recalculate the actual sizing result.
+
+Required correction:
+If manual Fp override is enabled, it must be applied inside the actual sizing calculation path before final sizing results are produced.
+
+It must affect, where relevant:
+- cvRequired
+- deltaPChoked
+- xChoked
+- isChoked
+- yFactor
+- other dependent sizing outputs
+
+Do NOT leave Fp override as a display-only change.
+
+2) DO NOT COPY Fp OVERRIDE INTO FLP — CRITICAL
+Current issue:
+The implementation still forces flpFactor = fpOverride, which is not technically justified.
+
+Required correction:
+- remove any direct copying of Fp override into FLP
+- apply Fp override only where Fp belongs
+- compute FLP properly from the implemented model, or keep FLP as calculated by the solver without fake override substitution
+
+Do NOT treat Fp and FLP as interchangeable.
+
+3) HANDLE Fd HONESTLY — CRITICAL
+Current issue:
+Fd is still exposed in the UI/results/export but is not meaningfully used in the actual solver logic.
+
+Required correction:
+Choose ONE of the following and implement it consistently:
+
+OPTION A — PREFERRED
+Implement Fd where it truly belongs in the low-Re / viscosity-related correction logic if the selected methodology supports it.
+
+OPTION B — ACCEPTABLE
+If full Fd-based treatment is not implemented:
+- remove or de-emphasize Fd from active user-facing calculation inputs/results
+- revise methodology and assumptions to state that viscosity/Reynolds correction is simplified
+- explicitly state that full vendor-specific Fd treatment is not implemented
+
+Do NOT leave Fd user-facing in a way that implies active use if it is not actually used.
+
+4) REPLACE “VALVE AUTHORITY” WITH AN EXPLICIT SCREENING METRIC — CRITICAL
+Current issue:
+The current authority result is still a heuristic and not a true hydraulic-system valve authority calculation. Export wording is also inconsistent with the implemented formula.
+
+Required correction:
+Rename the result everywhere to one of:
+- Estimated Authority Screening Factor
+- Authority Screening Estimate
+- Preliminary Authority Indicator
+
+Also:
+- update warnings
+- update UI labels
+- update export/report fields
+- update assumptions text
+
+The wording must clearly state:
+- this is a heuristic screening indicator
+- true valve authority requires real system pressure-loss distribution / hydraulic modeling
+
+Do NOT present the current result as rigorous valve authority.
+
+5) ADD SCHEMA-BASED VALIDATION IN THE ACTUAL SOLVE PATH — CRITICAL
+Current issue:
+The page still relies on parseFloat/manual assembly rather than real schema validation.
+
+Required correction:
+Create and use schema-based validation before solving.
+
+Validation must cover, as applicable:
+- positive flow
+- valid temperatures
+- P1 > P2 where required
+- MW > 0
+- k > 1
+- Z > 0
+- density > 0
+- viscosity > 0 where required
+- FL / xT / Fd / Fp / correction factors in valid ranges
+- operating points complete and consistent
+- branch consistency (liquid / gas / steam)
+
+Use schema validation in the actual solve path, not only passive definitions.
+
+--------------------------------------------------
+IMPORTANT ADDITIONAL CORRECTIONS
+--------------------------------------------------
+
+6) SOFTEN CAVITATION / TRIM WORDING
+Current issue:
+Warnings still read too much like final trim-selection authority.
+
+Required correction:
+Retain cavitation screening, but rewrite language as:
+- severe cavitation risk
+- cavitation likely based on screening criteria
+- anti-cavitation or multi-stage trim may be required; verify with vendor data
+
+Do NOT present these outputs as final trim-selection conclusions.
+
+7) STRENGTHEN STEAM BRANCH LIMITATION DISCLOSURE
+Current issue:
+Steam sizing remains approximate but is not prominent enough as such.
+
+Required correction:
+Make steam branch limitations highly visible in:
+- assumptions panel
+- methodology
+- warning banner
+- export/report
+
+Must state:
+- preliminary steam sizing approximation only
+- final steam-valve sizing requires vendor methods / steam-property basis
+
+8) ALIGN EXPORT/REPORT WORDING WITH ACTUAL SOLVER BEHAVIOR
+Current issue:
+Export/assumptions wording does not fully match the implemented authority method and active solver logic.
+
+Required correction:
+Ensure export/report text matches:
+- actual authority screening metric formula
+- whether Fd is active or not
+- whether Fp override truly affects sizing
+- steam branch approximation
+- cavitation screening scope
+
+Do NOT allow exports to overstate rigor or describe formulas not actually used.
+
+9) SOFTEN STANDARDS WORDING THROUGHOUT
+Required correction:
+Review warnings, methodology, assumptions, results, and exports.
+
+Use wording such as:
+- IEC 60534-informed screening
+- ISA/IEC-style preliminary sizing framework
+- verify with vendor sizing software and selected standard edition
+- preliminary FEED guidance
+
+Do NOT use wording that implies:
+- final IEC compliance verification
+- final trim/noise/cavitation compliance
+- final selection authority
+unless truly implemented and verified.
+
+10) GAS/STEAM VELOCITY REPORTING DISCIPLINE
+If gas/steam velocity is not meaningfully calculated, do one of the following:
+- remove it from displayed results for those branches, or
+- clearly label only the velocity that is actually being estimated and its basis
+
+Do NOT leave placeholder or ambiguous velocity reporting.
+
+--------------------------------------------------
+METHODOLOGY / ASSUMPTIONS PANEL REQUIREMENTS
+--------------------------------------------------
+
+For liquid branch, include:
+- IEC/ISA-style preliminary sizing framework
+- simplified low-Re / viscosity treatment unless full Fd logic is implemented
+- cavitation screening only, not final trim selection
+- reducer / fitting effects included only per implemented factors
+- authority result is a screening indicator only
+
+For gas branch, include:
+- IEC/ISA-style compressible-flow screening framework
+- gas properties based on selected user/EOS input basis
+- choked/noise indications are screening-level only
+- authority result is a screening indicator only
+
+For steam branch, include:
+- approximate preliminary steam sizing
+- not a substitute for final vendor steam-valve sizing
+- verify with vendor tools / detailed steam-property methods
+
+For the whole module, include:
+- preliminary control valve sizing tool
+- final selection requires vendor data, cavitation/noise verification, and project-specific criteria
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1) Preserve the current strong multi-tab workflow and useful result traceability.
+
+2) If manual Fp override is offered:
+- make clear what it changes
+- ensure it truly affects sizing
+- remove or disable it if not truly functional
+
+3) If Fd is not actively used:
+- do not expose it as if it drives the solver
+- revise helper text and exports accordingly
+
+4) Rename authority displays and warnings to screening language everywhere.
+
+5) Make steam approximation visible enough that users cannot miss it.
+
+6) Keep results professional, FEED-oriented, and technically honest.
+
+--------------------------------------------------
+CODE QUALITY REQUIREMENTS
+--------------------------------------------------
+
+- Preserve existing architecture
+- Keep solver logic in engineering library, not UI
+- Do not remove useful workflow or traceability
+- Add comments where approximation boundaries are important
+- Improve rigor and honesty without oversimplifying the module
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+The revision is complete only if:
+- manual Fp override materially affects the actual sizing calculation
+- Fp override no longer falsely sets FLP by copy
+- Fd is either implemented meaningfully or de-emphasized honestly
+- the current “Valve Authority” output is renamed and treated as a screening metric
+- schema-based validation is used in the actual solve path
+- cavitation wording is softened to screening/risk language
+- steam branch is clearly positioned as approximate preliminary sizing
+- export/report wording matches the real implemented solver behavior
+- standards wording is disciplined and does not overclaim compliance
+- gas/steam result reporting avoids ambiguous velocity presentation
