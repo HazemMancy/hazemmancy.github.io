@@ -33,12 +33,12 @@ const C_FACTOR_PRESETS: Record<CFactorPreset, { label: string; value: number | n
   "continuous-clean": {
     label: "Continuous – solids-free service",
     value: 100,
-    description: "C = 100 — conservative recommendation for continuous solids-free service (API RP 14E)",
+    description: "C = 100 — conservative screening value for continuous solids-free service (informed by API RP 14E practice)",
   },
   "intermittent-clean": {
     label: "Intermittent – solids-free service",
     value: 125,
-    description: "C = 125 — conservative recommendation for intermittent solids-free service (API RP 14E)",
+    description: "C = 125 — conservative screening value for intermittent solids-free service (informed by API RP 14E practice)",
   },
   "corrosion-controlled": {
     label: "Corrosion-controlled / CRA service",
@@ -54,8 +54,8 @@ const C_FACTOR_PRESETS: Record<CFactorPreset, { label: string; value: number | n
 
 // ─── Form state ───────────────────────────────────────────────────────────────
 interface FormState {
-  gasMassFlowRate: string;
-  liquidMassFlowRate: string;
+  gasActualVolumetricFlow: string;
+  liquidActualVolumetricFlow: string;
   gasDensity: string;
   liquidDensity: string;
   innerDiameter: string;
@@ -63,17 +63,20 @@ interface FormState {
 }
 
 const defaultForm: FormState = {
-  gasMassFlowRate: "",
-  liquidMassFlowRate: "",
+  gasActualVolumetricFlow: "",
+  liquidActualVolumetricFlow: "",
   gasDensity: "",
   liquidDensity: "",
   innerDiameter: "",
   cFactor: "100",
 };
 
+// ─── Field → unit family mapping ─────────────────────────────────────────────
+// Gas uses "flowActualGas": SI = m³/h, Field = ACFM  (NOT a liquid-style volumetric unit)
+// Liquid uses "flowLiquid": SI = m³/h, Field = gpm
 const fieldUnitMap: FieldUnitMap = {
-  gasMassFlowRate: "flowMass",
-  liquidMassFlowRate: "flowMass",
+  gasActualVolumetricFlow: "flowActualGas",
+  liquidActualVolumetricFlow: "flowLiquid",
   gasDensity: "density",
   liquidDensity: "density",
   innerDiameter: "diameter",
@@ -130,8 +133,8 @@ export default function MultiphaseLinePage() {
     setError(null);
     try {
       const raw = {
-        gasMassFlowRate: convertToSI("flowMass", parseFloat(form.gasMassFlowRate), unitSystem),
-        liquidMassFlowRate: convertToSI("flowMass", parseFloat(form.liquidMassFlowRate), unitSystem),
+        gasActualVolumetricFlow: convertToSI("flowActualGas", parseFloat(form.gasActualVolumetricFlow), unitSystem),
+        liquidActualVolumetricFlow: convertToSI("flowLiquid", parseFloat(form.liquidActualVolumetricFlow), unitSystem),
         gasDensity: convertToSI("density", parseFloat(form.gasDensity), unitSystem),
         liquidDensity: convertToSI("density", parseFloat(form.liquidDensity), unitSystem),
         innerDiameter: convertToSI("diameter", parseFloat(form.innerDiameter), unitSystem),
@@ -142,7 +145,7 @@ export default function MultiphaseLinePage() {
         if (isNaN(val)) throw new Error(`Invalid value for ${key}`);
       }
 
-      // Zod validation — field-specific errors before solver is called
+      // Zod schema validation — field-specific errors before solver is called
       const validation = multiphaseSchema.safeParse(raw);
       if (!validation.success) {
         const firstIssue = validation.error.issues[0];
@@ -173,8 +176,8 @@ export default function MultiphaseLinePage() {
     setUnitSystem("SI");
     setCFactorPreset("custom");
     setForm({
-      gasMassFlowRate: String(tc.gasMassFlowRate),
-      liquidMassFlowRate: String(tc.liquidMassFlowRate),
+      gasActualVolumetricFlow: String(tc.gasActualVolumetricFlow),
+      liquidActualVolumetricFlow: String(tc.liquidActualVolumetricFlow),
       gasDensity: String(tc.gasDensity),
       liquidDensity: String(tc.liquidDensity),
       innerDiameter: String(tc.innerDiameter),
@@ -196,22 +199,12 @@ export default function MultiphaseLinePage() {
 
   const cVal = parseFloat(form.cFactor);
   const cAdvisory = !isNaN(cVal) ? getCFactorAdvisory(cVal) : { level: "none" as const, message: "" };
-  const massFlowUnit = getUnit("flowMass", unitSystem);
-  const densityUnit = getUnit("density", unitSystem);
-  const velocityUnit = getUnit("velocity", unitSystem);
-  const diamUnit = getUnit("diameter", unitSystem);
 
-  // Derived volumetric flows for display (from result, already in m³/h SI)
-  const displayGasVol = result
-    ? unitSystem === "SI"
-      ? `${result.actualGasVolumetricFlow.toFixed(1)} m³/h`
-      : `${(result.actualGasVolumetricFlow * 0.588578).toFixed(1)} ACFM`
-    : null;
-  const displayLiqVol = result
-    ? unitSystem === "SI"
-      ? `${result.actualLiquidVolumetricFlow.toFixed(2)} m³/h`
-      : `${(result.actualLiquidVolumetricFlow * 4.40287).toFixed(2)} gpm`
-    : null;
+  const gasFlowUnit  = getUnit("flowActualGas", unitSystem);  // m³/h (SI) or ACFM (Field)
+  const liqFlowUnit  = getUnit("flowLiquid",    unitSystem);  // m³/h (SI) or gpm  (Field)
+  const densityUnit  = getUnit("density",        unitSystem);
+  const velocityUnit = getUnit("velocity",       unitSystem);
+  const diamUnit     = getUnit("diameter",       unitSystem);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
@@ -226,14 +219,24 @@ export default function MultiphaseLinePage() {
               Multiphase Line Screening
             </h1>
             <p className="text-sm text-muted-foreground">
-              Homogeneous no-slip screening — mass-flow basis — API RP 14E erosional velocity
+              Homogeneous no-slip screening — actual volumetric flow basis — API RP 14E erosional velocity
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">Screening Tool</Badge>
+          <Badge variant="outline" className="text-xs">Screening Tool Only</Badge>
           <UnitSelector value={unitSystem} onChange={handleUnitToggle} />
         </div>
+      </div>
+
+      {/* ── Screening scope disclaimer ─────────────────────────────────────── */}
+      <div className="mb-5 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3" data-testid="panel-scope-disclaimer">
+        <p className="text-xs text-amber-700 dark:text-amber-300 font-medium mb-1">Homogeneous No-Slip Screening Model — Scope Limitations</p>
+        <p className="text-xs text-amber-700 dark:text-amber-300 leading-snug">
+          This tool computes superficial velocities, no-slip liquid fraction, mixture density, erosional velocity screening, and ρv² screening only.
+          It is <strong>NOT</strong> a pressure-drop model, mechanistic flow-regime predictor, or substitute for rigorous flow assurance analysis (OLGA / PIPESIM / Ledaflow).
+          For final multiphase pipeline design, slugging, terrain effects, or transient behavior — use dedicated flow assurance tools.
+        </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5 items-start">
@@ -258,7 +261,7 @@ export default function MultiphaseLinePage() {
 
               {/* Service type selector */}
               <div>
-                <Label className="text-xs mb-1.5 block">Service Type (for ρv² limit check)</Label>
+                <Label className="text-xs mb-1.5 block">Service Type (for ρv² screening check)</Label>
                 <Select value={selectedService} onValueChange={setSelectedService}>
                   <SelectTrigger data-testid="select-service">
                     <SelectValue placeholder="Select service type for limit check..." />
@@ -271,37 +274,48 @@ export default function MultiphaseLinePage() {
                 </Select>
               </div>
 
-              {/* ── Phase mass flowrates ─────────────────────────────────── */}
+              {/* ── Actual phase volumetric flowrates ────────────────────────── */}
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Phase Mass Flowrates</p>
+                <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">
+                  Actual Phase Volumetric Flowrates at Operating Conditions
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <Label className="text-xs mb-1.5 block">
-                      Gas Mass Flowrate ({massFlowUnit})
+                      Actual Gas Flow ({gasFlowUnit})
                     </Label>
                     <Input
                       type="number"
-                      value={form.gasMassFlowRate}
-                      onChange={(e) => updateField("gasMassFlowRate", e.target.value)}
-                      placeholder="e.g. 125000"
-                      data-testid="input-gas-mass-flow"
+                      value={form.gasActualVolumetricFlow}
+                      onChange={(e) => updateField("gasActualVolumetricFlow", e.target.value)}
+                      placeholder={unitSystem === "SI" ? "e.g. 5000" : "e.g. 2943"}
+                      data-testid="input-gas-actual-flow"
                     />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Actual gas at line P/T{unitSystem === "Field" ? " (ACFM = actual cubic feet/min)" : ""}
+                    </p>
                   </div>
                   <div>
                     <Label className="text-xs mb-1.5 block">
-                      Liquid Mass Flowrate ({massFlowUnit})
+                      Actual Liquid Flow ({liqFlowUnit})
                     </Label>
                     <Input
                       type="number"
-                      value={form.liquidMassFlowRate}
-                      onChange={(e) => updateField("liquidMassFlowRate", e.target.value)}
-                      placeholder="e.g. 40000"
-                      data-testid="input-liquid-mass-flow"
+                      value={form.liquidActualVolumetricFlow}
+                      onChange={(e) => updateField("liquidActualVolumetricFlow", e.target.value)}
+                      placeholder={unitSystem === "SI" ? "e.g. 50" : "e.g. 220"}
+                      data-testid="input-liquid-actual-flow"
                     />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Actual liquid at line P/T
+                    </p>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  At least one phase must have a positive mass flowrate. Enter 0 for a single-phase line.
+                  Enter <strong>actual volumetric flowrates at operating pressure and temperature</strong> — not standard or reference conditions.
+                  For gas: convert from Sm³/h using Z-factor ratio (Qactual = Qstd × Z_actual / Z_std × (P_std / P) × (T / T_std)),
+                  or use PVT report / process simulation output.
+                  Enter 0 for a single-phase line.
                 </p>
               </div>
 
@@ -317,7 +331,7 @@ export default function MultiphaseLinePage() {
                       type="number"
                       value={form.gasDensity}
                       onChange={(e) => updateField("gasDensity", e.target.value)}
-                      placeholder="e.g. 25"
+                      placeholder={unitSystem === "SI" ? "e.g. 25" : "e.g. 1.56"}
                       data-testid="input-gas-density"
                     />
                   </div>
@@ -329,7 +343,7 @@ export default function MultiphaseLinePage() {
                       type="number"
                       value={form.liquidDensity}
                       onChange={(e) => updateField("liquidDensity", e.target.value)}
-                      placeholder="e.g. 800"
+                      placeholder={unitSystem === "SI" ? "e.g. 800" : "e.g. 49.9"}
                       data-testid="input-liquid-density"
                     />
                   </div>
@@ -354,7 +368,7 @@ export default function MultiphaseLinePage() {
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    API RP 14E Erosional Velocity C-Factor
+                    Erosional Velocity C-Factor (API RP 14E Screening)
                   </p>
                   <button
                     type="button"
@@ -371,16 +385,16 @@ export default function MultiphaseLinePage() {
                 {/* C-factor guidance panel */}
                 {showCGuidance && (
                   <div className="mb-3 p-3 rounded-md bg-muted/50 border text-xs space-y-2" data-testid="panel-c-guidance">
-                    <p className="font-medium">API RP 14E C-Factor Selection Guidance</p>
+                    <p className="font-medium">C-Factor Selection Guidance (Engineering Best Practice)</p>
                     <ul className="space-y-1 list-none">
-                      <li><span className="font-mono font-semibold">C = 100</span> — Conservative recommendation for <strong>continuous solids-free</strong> service</li>
-                      <li><span className="font-mono font-semibold">C = 125</span> — Conservative recommendation for <strong>intermittent solids-free</strong> service</li>
+                      <li><span className="font-mono font-semibold">C = 100</span> — Conservative screening default for <strong>continuous solids-free</strong> service</li>
+                      <li><span className="font-mono font-semibold">C = 125</span> — Conservative screening default for <strong>intermittent solids-free</strong> service</li>
                       <li><span className="font-mono font-semibold">C = 150–200</span> — May be considered where corrosion is controlled by chemical inhibition or CRA materials; requires project/company approval</li>
                       <li><span className="font-mono font-semibold">C up to 250 (intermittent)</span> — Only in explicitly controlled clean service with documented project/company acceptance</li>
                       <li><span className="font-mono text-destructive font-semibold">Solids-bearing service:</span> Reduce C-factor and follow project/company-specific criteria; no universal default applies</li>
                     </ul>
                     <p className="text-muted-foreground">
-                      C-factor selection is an engineering judgment input. Final selection must be verified against service conditions, corrosion control strategy, solids content assessment, and project/company requirements.
+                      C-factor selection is an engineering judgment input. These values are informed by API RP 14E and EPC/process design practice — they are recommended screening defaults, not universal code-compliance requirements. Final selection must be verified against service conditions, corrosion control strategy, solids content assessment, and project/company requirements.
                     </p>
                   </div>
                 )}
@@ -484,14 +498,14 @@ export default function MultiphaseLinePage() {
                 title="Multiphase Screening Results"
                 results={[
                   {
-                    label: "Derived Actual Gas Flow (Qg)",
-                    value: result.actualGasVolumetricFlow,
-                    unit: "m³/h",
+                    label: "Actual Gas Flow (Qg)",
+                    value: convertFromSI("flowActualGas", result.actualGasVolumetricFlow, unitSystem),
+                    unit: gasFlowUnit,
                   },
                   {
-                    label: "Derived Actual Liquid Flow (Ql)",
-                    value: result.actualLiquidVolumetricFlow,
-                    unit: "m³/h",
+                    label: "Actual Liquid Flow (Ql)",
+                    value: convertFromSI("flowLiquid", result.actualLiquidVolumetricFlow, unitSystem),
+                    unit: liqFlowUnit,
                   },
                   {
                     label: "Superficial Gas Velocity (Vsg)",
@@ -510,7 +524,7 @@ export default function MultiphaseLinePage() {
                     highlight: true,
                   },
                   {
-                    label: "Erosional Velocity (Ve)",
+                    label: "Erosional Velocity (Ve = C/√ρm)",
                     value: convertFromSI("velocity", result.erosionalVelocity, unitSystem),
                     unit: velocityUnit,
                     highlight: true,
@@ -522,72 +536,79 @@ export default function MultiphaseLinePage() {
                     highlight: result.velocityRatio > 0.8,
                   },
                   {
-                    label: "Mixture Density ρm (homogeneous)",
+                    label: "Mixture Density ρm (homogeneous no-slip)",
                     value: result.mixtureDensity,
                     unit: "kg/m³",
                   },
                   {
-                    label: "No-slip liquid fraction (λL)",
+                    label: "No-slip Liquid Fraction (λL)",
                     value: result.noSlipLiquidFraction,
                     unit: "—",
                   },
                   {
-                    label: "ρv²",
+                    label: "ρv² (momentum flux)",
                     value: result.rhoV2,
-                    unit: "kg/(m·s²)",
+                    unit: "Pa",
                   },
                 ]}
                 rawData={result}
                 exportData={{
                   calculatorName: "Multiphase Line Screening",
                   inputs: [
-                    { label: "Gas Mass Flowrate", value: form.gasMassFlowRate, unit: massFlowUnit },
-                    { label: "Liquid Mass Flowrate", value: form.liquidMassFlowRate, unit: massFlowUnit },
+                    { label: "Actual Gas Flow at Operating P/T", value: form.gasActualVolumetricFlow, unit: gasFlowUnit },
+                    { label: "Actual Liquid Flow at Operating P/T", value: form.liquidActualVolumetricFlow, unit: liqFlowUnit },
                     { label: "Gas Density at Operating P/T", value: form.gasDensity, unit: densityUnit },
                     { label: "Liquid Density at Operating P/T", value: form.liquidDensity, unit: densityUnit },
                     { label: "Inner Diameter", value: form.innerDiameter, unit: diamUnit },
-                    { label: "C-Factor (API RP 14E)", value: form.cFactor },
+                    { label: "C-Factor (erosional velocity screening)", value: form.cFactor },
                     ...(selectedService ? [{ label: "Service Type", value: selectedService }] : []),
                   ],
                   results: [
-                    { label: "Derived Actual Gas Flow (Qg = ṁg / ρg)", value: result.actualGasVolumetricFlow, unit: "m³/h" },
-                    { label: "Derived Actual Liquid Flow (Ql = ṁl / ρl)", value: result.actualLiquidVolumetricFlow, unit: "m³/h" },
+                    { label: "Actual Gas Flow (Qg)", value: convertFromSI("flowActualGas", result.actualGasVolumetricFlow, unitSystem), unit: gasFlowUnit },
+                    { label: "Actual Liquid Flow (Ql)", value: convertFromSI("flowLiquid", result.actualLiquidVolumetricFlow, unitSystem), unit: liqFlowUnit },
                     { label: "Superficial Gas Velocity (Vsg)", value: convertFromSI("velocity", result.superficialGasVelocity, unitSystem), unit: velocityUnit },
                     { label: "Superficial Liquid Velocity (Vsl)", value: convertFromSI("velocity", result.superficialLiquidVelocity, unitSystem), unit: velocityUnit },
                     { label: "Mixture Velocity (Vm)", value: convertFromSI("velocity", result.mixtureVelocity, unitSystem), unit: velocityUnit, highlight: true },
-                    { label: "Erosional Velocity (Ve)", value: convertFromSI("velocity", result.erosionalVelocity, unitSystem), unit: velocityUnit, highlight: true },
+                    { label: "Erosional Velocity (Ve = C/√ρm)", value: convertFromSI("velocity", result.erosionalVelocity, unitSystem), unit: velocityUnit, highlight: true },
                     { label: "Vm / Ve Ratio", value: result.velocityRatio, unit: "—" },
-                    { label: "Mixture Density ρm (homogeneous)", value: result.mixtureDensity, unit: "kg/m³" },
-                    { label: "No-slip liquid fraction (λL)", value: result.noSlipLiquidFraction, unit: "—" },
-                    { label: "ρv²", value: result.rhoV2, unit: "kg/(m·s²)" },
+                    { label: "Mixture Density ρm (homogeneous no-slip)", value: result.mixtureDensity, unit: "kg/m³" },
+                    { label: "No-slip Liquid Fraction (λL)", value: result.noSlipLiquidFraction, unit: "—" },
+                    { label: "ρv² (momentum flux)", value: result.rhoV2, unit: "Pa" },
                   ],
                   methodology: [
-                    "HOMOGENEOUS NO-SLIP SCREENING MODEL — not a mechanistic multiphase model, not a flow-regime predictor",
-                    "Step 1 — Convert mass flowrates to actual volumetric flowrates at operating P/T:",
-                    "  Qg_actual [m³/h] = ṁg [kg/h] / ρg [kg/m³]",
-                    "  Ql_actual [m³/h] = ṁl [kg/h] / ρl [kg/m³]",
-                    "Step 2 — Compute superficial velocities:",
-                    "  Vsg [m/s] = Qg_actual [m³/s] / A [m²]",
-                    "  Vsl [m/s] = Ql_actual [m³/s] / A [m²]",
-                    "Step 3 — Mixture velocity: Vm = Vsg + Vsl",
-                    "Step 4 — No-slip liquid volume fraction: λL = Vsl / Vm",
-                    "Step 5 — Homogeneous mixture density: ρm = ρL·λL + ρG·(1 − λL)",
-                    "Step 6 — API RP 14E erosional velocity: Ve = C / √ρm",
-                    "Step 7 — Momentum flux: ρv² = ρm · Vm²",
-                    "Velocity and ρv² screening limits: engineering best-practice informed by API RP 14E and EPC FEED practice — not universal hard code-compliance limits; for preliminary design / FEED screening only",
+                    "HOMOGENEOUS NO-SLIP SCREENING MODEL — velocity and density screening only",
+                    "NOT a pressure-drop model. NOT a mechanistic flow-regime predictor. NOT a substitute for rigorous flow assurance analysis (OLGA / PIPESIM / Ledaflow).",
+                    "Gas flow basis: actual gas volumetric flow at operating P/T conditions (user input — NOT standard/reference flow)",
+                    "Liquid flow basis: actual liquid volumetric flow at operating P/T conditions (user input)",
+                    "Step 1 — Convert actual volumetric flows from input units to m³/s:",
+                    "  Qg [m³/s] = gasActualVolumetricFlow [m³/h] / 3600",
+                    "  Ql [m³/s] = liquidActualVolumetricFlow [m³/h] / 3600",
+                    "Step 2 — Pipe cross-section: A = π × (D/2)² [m²]",
+                    "Step 3 — Superficial velocities: Vsg = Qg / A, Vsl = Ql / A  [m/s]",
+                    "Step 4 — Mixture velocity: Vm = Vsg + Vsl  [m/s]",
+                    "Step 5 — No-slip liquid fraction: λL = Vsl / Vm  (screening estimate — NOT true in-situ holdup)",
+                    "Step 6 — Homogeneous mixture density: ρm = ρL·λL + ρG·(1 − λL)  [kg/m³]",
+                    "Step 7 — Erosional velocity (screening): Ve = C / √ρm  [m/s]  (C-factor per engineering judgment)",
+                    "Step 8 — Momentum flux: ρv² = ρm · Vm²  [Pa]",
+                    "Erosional velocity and ρv² screening limits are recommended engineering best-practice informed by API RP 14E and EPC FEED practice — not universal hard code-compliance limits; suitable for preliminary design / FEED screening only.",
                     "C-factor selection is an engineering judgment input. Verify against service conditions, corrosion control strategy, solids content, and project/company criteria.",
+                    "No flow-regime identification — Beggs & Brill, TPFL, and similar mechanistic methods are NOT implemented.",
+                    "No pressure-drop calculation — no Moody friction factor, no elevation effects, no acceleration losses.",
+                    "Screening limit check (if selected) covers ρv² only — it is not a full mixed-phase design verification.",
                   ],
                   assumptions: [
                     "HOMOGENEOUS NO-SLIP SCREENING ONLY — both phases assumed to travel at the same velocity (no slip between phases)",
-                    "Actual volumetric flowrates are internally derived: Qg = ṁg / ρg, Ql = ṁl / ρl",
-                    "Phase densities must be ACTUAL values at operating P/T — not reference/standard-condition densities",
-                    "No-slip liquid fraction λL = Vsl / Vm — screening estimate only, NOT equal to true in-situ liquid holdup",
+                    "Gas flow basis = actual gas volumetric flow at line conditions — NOT standard/reference flow. User must supply correct actual flow.",
+                    "Liquid flow basis = actual liquid volumetric flow at line conditions. User must supply correct actual flow.",
+                    "Phase densities must be ACTUAL values at operating P/T — not reference or standard-condition densities",
+                    "No-slip liquid fraction λL = Vsl / Vm — a screening estimate ONLY; NOT equal to true in-situ liquid holdup (actual holdup is higher in stratified/slug flow)",
                     "This is NOT a detailed pressure-drop model, mechanistic multiphase correlation, or flow-regime predictor",
-                    "NOT a substitute for rigorous flow assurance analysis (OLGA / PIPESIM / Ledaflow)",
+                    "NOT a substitute for rigorous multiphase flow assurance analysis (OLGA / PIPESIM / Ledaflow / similar)",
                     "No flow-regime mapping — Beggs & Brill and similar mechanistic methods are NOT implemented",
-                    "No terrain profile, elevation effects, or transient slug tracking — steady-state homogeneous model only",
-                    "Screening velocity and ρv² limits are recommended engineering best-practice (API RP 14E / EPC FEED) — not universal hard code-compliance requirements",
-                    "C-factor is a user engineering judgment input; default C = 100 is conservative for continuous solids-free service; must be verified against project/company criteria",
+                    "No terrain profile, elevation effects, slugging transients, or pipeline inventory — steady-state homogeneous model only",
+                    "Erosional velocity and ρv² screening limits are recommended engineering best-practice (informed by API RP 14E and EPC FEED practice) — not universal hard code-compliance requirements",
+                    "C-factor (default = 100) is an engineering judgment input; must be verified against service conditions, corrosion control strategy, solids content assessment, and project/company requirements",
+                    "Service ρv² limit check (if selected) covers ρv² screening only — it is not a full mixed-phase design verification",
                   ],
                   references: [
                     "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",
@@ -611,16 +632,18 @@ export default function MultiphaseLinePage() {
           <div className="mt-4">
             <AssumptionsPanel
               assumptions={[
-                "HOMOGENEOUS NO-SLIP SCREENING ONLY — both phases assumed to travel at the same velocity (no slip between phases)",
-                "Actual volumetric flowrates are internally derived from mass flowrates and actual densities: Qg = ṁg / ρg, Ql = ṁl / ρl",
+                "HOMOGENEOUS NO-SLIP SCREENING ONLY — both phases assumed to travel at the same velocity; no slip between phases",
+                "Gas flow basis = actual gas volumetric flow at line conditions (m³/h or ACFM) — NOT standard or reference-condition flow",
+                "Liquid flow basis = actual liquid volumetric flow at line conditions (m³/h or gpm) — NOT mass flow",
                 "Phase densities must be ACTUAL values at operating P/T — not reference or standard-condition densities",
-                "No-slip liquid fraction λL = Vsl / Vm — screening estimate only; NOT equal to true in-situ liquid holdup",
-                "This is NOT a detailed pressure-drop model, mechanistic multiphase correlation, or flow-regime predictor",
+                "No-slip liquid fraction λL = Vsl / Vm — screening estimate ONLY; NOT equal to true in-situ liquid holdup",
+                "NOT a pressure-drop model — no friction, elevation, or acceleration losses are calculated",
+                "NOT a flow-regime predictor — Beggs & Brill and similar mechanistic methods are NOT implemented",
                 "NOT a substitute for rigorous multiphase flow assurance analysis (OLGA / PIPESIM / Ledaflow)",
-                "No flow-regime mapping — Beggs & Brill and similar mechanistic methods are NOT implemented",
-                "No terrain profile, elevation effects, or transient slug tracking — steady-state homogeneous model only",
-                "Screening velocity and ρv² limits are engineering best-practice (API RP 14E / EPC FEED) — not universal hard code-compliance limits; for preliminary design / FEED screening only",
-                "C-factor (default = 100) is a user engineering judgment input; must be verified against service conditions, corrosion control strategy, solids content assessment, and project/company requirements",
+                "No terrain profile, elevation effects, slugging transients, or pipeline inventory modeled — steady-state only",
+                "Erosional velocity and ρv² limits are engineering best-practice informed by API RP 14E and EPC FEED practice — not universal hard code-compliance requirements",
+                "C-factor is a user engineering judgment input — must be verified against service conditions, corrosion control strategy, solids content, and project/company requirements",
+                "Service ρv² limit check (if selected) covers ρv² screening only — not a full mixed-phase design verification",
               ]}
               references={[
                 "API RP 14E: Recommended Practice for Design and Installation of Offshore Production Platform Piping Systems",

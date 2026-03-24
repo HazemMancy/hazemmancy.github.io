@@ -1,0 +1,254 @@
+SYSTEM PROMPT — REVISE EXISTING MIXED PHASE SCREENING TOOL
+
+You are updating an existing Mixed Phase Screening calculator in a Process Engineering web application. Do NOT rebuild it from scratch. Revise the current implementation so it becomes a technically honest, FEED-level **homogeneous no-slip screening tool** and no longer overstates its capabilities.
+
+TARGET FILES
+- client/src/lib/engineering/multiphase.ts
+- client/src/pages/calculators/multiphase-line.tsx
+- client/src/lib/engineering/validation.ts
+- client/src/lib/engineering/unitConversion.ts
+- client/src/lib/engineering/limitCheck.ts
+- any related export / helper / results-panel files used by this calculator
+
+PRIMARY GOAL
+Preserve the current useful screening outputs:
+- superficial gas velocity
+- superficial liquid velocity
+- mixture velocity
+- no-slip liquid fraction
+- mixture density
+- erosional-velocity screening
+- rho*v² screening
+- practical warnings
+
+But correct the known weaknesses so the module is clearly and credibly positioned as:
+- Homogeneous No-Slip Multiphase Screening Tool
+- suitable for preliminary FEED / concept screening only
+- not a detailed multiphase hydraulics calculator
+- not a pressure-drop model
+- not a flow-regime map / mechanistic model
+- not a substitute for OLGA / PIPESIM / rigorous flow assurance analysis
+
+NON-NEGOTIABLE POSITIONING
+This calculator must be presented as:
+- simple velocity / density / erosional screening only
+- not a detailed multiphase simulator
+- not a rigorous slugging / mist / annular / churn regime predictor
+- not a pressure-drop sizing tool unless pressure-drop equations are actually implemented
+
+Do NOT overstate rigor.
+
+--------------------------------------------------
+MANDATORY TECHNICAL CORRECTIONS
+--------------------------------------------------
+
+1) FIX GAS FLOW BASIS AND UNITS — CRITICAL
+Current issue:
+Gas flow is still mapped through a generic volumetric unit family that becomes inappropriate in field mode and creates basis ambiguity.
+
+Required correction:
+Make gas flow basis explicit and technically correct.
+
+Preferred implementation:
+- Gas flow input must be ACTUAL GAS VOLUMETRIC FLOW
+- Use a gas-specific actual-flow unit family, such as:
+  - SI: m³/h
+  - Field: ACFM
+- Do NOT use a generic liquid-style volumetric unit family for gas
+- Do NOT allow gas field units to become bbl/d or similar liquid units
+
+Update:
+- form labels
+- field unit map
+- conversions
+- methodology
+- test cases
+- exports
+
+Required label example:
+- Actual Gas Flow
+
+2) FIX TEST CASE BASIS — CRITICAL
+Current issue:
+The built-in test case/commentary still implies standard gas flow while the solver directly uses volumetric flow for superficial velocity.
+
+Required correction:
+Make the test case fully consistent with the implemented model.
+
+Do one of the following:
+- define the gas test case explicitly as actual gas flow at operating conditions, or
+- if you intend to use standard gas flow, implement standard-to-actual conversion before velocity calculation
+
+Do NOT leave test cases/comments inconsistent with solver basis.
+
+3) REMOVE DEAD INPUTS — CRITICAL
+Current issue:
+The page still exposes inputs such as:
+- pipeLength
+- roughness
+
+but the solver does not use them.
+
+Required correction:
+Remove all unused inputs from:
+- UI form
+- schema
+- state
+- unit mapping
+- test case loading
+- exports/results
+- assumptions panel
+
+Do NOT collect engineering inputs that have no influence on the result.
+
+4) USE SCHEMA VALIDATION IN THE ACTUAL SOLVE PATH — CRITICAL
+Current issue:
+The page still relies mainly on parseFloat and manual NaN checks.
+
+Required correction:
+Create/update a schema that matches the actual implemented model and use it in the real solve path with safeParse.
+
+Validation must cover, as applicable:
+- gasFlowRate >= 0
+- liquidFlowRate >= 0
+- at least one phase flow > 0
+- gasDensity > 0
+- liquidDensity > 0
+- innerDiameter > 0
+- cFactor > 0
+- no obsolete fields such as pipeLength or roughness unless they are truly implemented
+
+Use schema validation before calling the solver.
+Do NOT leave validation as page-level parsing only.
+
+5) RENAME “LIQUID HOLDUP” — CRITICAL
+Current issue:
+The solver/UI uses “Liquid Holdup” for a value that is only the no-slip volumetric liquid fraction based on superficial velocities.
+
+Required correction:
+Rename everywhere to one of:
+- No-slip Liquid Fraction
+- Estimated Liquid Fraction (No-Slip)
+
+Do NOT call this quantity “Liquid Holdup” unless a real in-situ holdup model is implemented.
+
+Apply this change in:
+- solver result keys if practical
+- page labels
+- exports
+- methodology
+- warnings
+
+6) REMOVE OVER-ASSERTIVE FLOW REGIME CLAIMS — CRITICAL
+Current issue:
+The tool currently implies specific regimes such as slug flow or mist flow from a simple no-slip fraction.
+
+Required correction:
+Replace any explicit regime claims with softer screening wording.
+
+Acceptable wording examples:
+- gas-dominated flow; detailed multiphase analysis recommended
+- liquid-rich screening result; slugging risk should be verified with detailed analysis
+- simplified homogeneous model does not predict actual flow regime
+
+Do NOT state that this calculator predicts slug, mist, annular, or other specific regimes unless a proper regime model is implemented.
+
+7) STRENGTHEN MODEL SCOPE DISCLOSURE — CRITICAL
+The assumptions/methodology must explicitly state:
+- homogeneous no-slip model
+- superficial-velocity-based screening only
+- no pressure-drop model implemented
+- no mechanistic flow-regime correlation implemented
+- no inclination effects unless explicitly coded
+- not a substitute for OLGA / PIPESIM / rigorous flow assurance analysis
+
+This must be visible enough that a process engineer cannot miss it.
+
+8) PRESERVE RECOMMENDED LIMIT PHILOSOPHY, BUT WORD IT CORRECTLY
+Do NOT remove the current recommended screening philosophy around:
+- API RP 14E-style erosional velocity screening
+- rho*v² best-practice screening
+
+Required wording discipline:
+Describe these as:
+- recommended engineering best-practice screening limits
+- informed by API RP 14E and EPC/process design practice
+- suitable for preliminary design / FEED screening
+
+Do NOT present them as universal hard code-compliance limits.
+
+9) RESULT / UNIT DISCIPLINE
+Review all displayed result values and ensure:
+- any SI result shown under field units is properly converted before display
+- unit labels match the actual numeric value shown
+- gas and liquid fields use physically appropriate unit families
+
+Do NOT display SI values with field-unit labels.
+
+10) LIMIT-CHECK DISCIPLINE
+If service-based limit checking currently uses only rho*v², that is acceptable for this simplified tool.
+But the UI/methodology must state clearly:
+- service check is limited to implemented screening parameters only
+- it is not a full mixed-phase design verification
+
+--------------------------------------------------
+METHODOLOGY / ASSUMPTIONS PANEL REQUIREMENTS
+--------------------------------------------------
+
+The calculator must explicitly state:
+- Homogeneous no-slip screening model
+- Gas flow basis = actual gas volumetric flow at line conditions
+- Liquid flow basis = actual liquid volumetric flow
+- No pressure-drop model
+- No flow-regime correlation
+- No-slip liquid fraction is not true in-situ holdup
+- Recommended screening limits are engineering best practice informed by API RP 14E and EPC/process design practice
+- Final multiphase design / slugging / transient behavior requires detailed analysis tools
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1) Preserve the calculator as a simple, usable screening tool.
+
+2) Update labels clearly:
+- Actual Gas Flow
+- Liquid Flow
+- No-slip Liquid Fraction
+
+3) Remove unused inputs visibly and completely.
+
+4) Make the screening-only disclaimer prominent.
+
+5) Keep erosional velocity and rho*v² outputs if already implemented, but position them as screening results.
+
+6) If warnings are shown, separate:
+- data/validation errors
+- engineering warnings
+- methodology limitations
+
+--------------------------------------------------
+CODE QUALITY REQUIREMENTS
+--------------------------------------------------
+
+- Preserve existing architecture
+- Keep solver logic in engineering library, not UI
+- Remove dead code related to obsolete inputs
+- Add comments where basis and approximation limits matter
+- Improve technical honesty without overcomplicating the tool
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+The revision is complete only if:
+- gas flow basis is explicit and technically correct
+- gas field units are no longer drawn from a liquid volumetric unit family
+- test cases match the implemented solver basis
+- unused inputs are fully removed
+- schema validation is used in the actual solve path
+- “Liquid Holdup” is replaced with “No-slip Liquid Fraction” or equivalent
+- flow-regime statements are softened to match real model capability
+- assumptions and warnings clearly state homogeneous no-slip screening only
+- API RP 14E / rho*v² checks remain as best-practice screening, not hard code-compliance claims
+- displayed units match displayed values correctly

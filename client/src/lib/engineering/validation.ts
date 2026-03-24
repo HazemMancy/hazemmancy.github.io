@@ -24,15 +24,15 @@ export const liquidLineSizingSchema = z.object({
 });
 
 export const multiphaseSchema = z.object({
-  gasMassFlowRate: z.number().min(0, "Gas mass flow must be >= 0"),
-  liquidMassFlowRate: z.number().min(0, "Liquid mass flow must be >= 0"),
+  gasActualVolumetricFlow: z.number().min(0, "Actual gas flow must be >= 0"),
+  liquidActualVolumetricFlow: z.number().min(0, "Actual liquid flow must be >= 0"),
   gasDensity: z.number().positive("Gas density must be positive"),
   liquidDensity: z.number().positive("Liquid density must be positive"),
   innerDiameter: z.number().positive("Diameter must be positive"),
   cFactor: z.number().min(1, "C-factor must be > 0").max(300, "C-factor must be <= 300"),
 }).refine(
-  (d) => d.gasMassFlowRate > 0 || d.liquidMassFlowRate > 0,
-  { message: "At least one phase must have a positive mass flow rate", path: ["gasMassFlowRate"] }
+  (d) => d.gasActualVolumetricFlow > 0 || d.liquidActualVolumetricFlow > 0,
+  { message: "At least one phase must have a positive actual flow rate", path: ["gasActualVolumetricFlow"] }
 );
 
 // ─── Pump sizing schemas ───────────────────────────────────────────────────────
