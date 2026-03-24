@@ -1,11 +1,13 @@
 /**
  * Restriction Orifice Sizing Engine
  *
- * Standards:
- *   ISO 5167-2:2003 — Measurement of fluid flow, Orifice plates
- *   Crane Technical Paper 410 (TP-410) — Flow of Fluids
- *   API RP 14E — Design of Offshore Production Platform Piping Systems (erosional velocity)
- *   ISA-RP75.23 — Considerations for the application of control valve body styles (cavitation)
+ * Scope: Preliminary / screening sizing only — NOT certified metering, NOT final RO design.
+ *
+ * Standards basis (informing only — not compliance verification):
+ *   ISO 5167-2:2003 — Reader-Harris/Gallagher Cd correlation source (adapted; not metering certification)
+ *   Crane Technical Paper 410 (TP-410) — Flow of Fluids (reference)
+ *   API RP 14E §2.4 — Erosional velocity screening proxy (C=100); not a code-compliance calculation
+ *   ISA-RP75.23 / Tullis (1993) — Cavitation σ thresholds adapted from hydraulic practice (approximate screening)
  *
  * Sizing Modes:
  *   sizeForFlow  — Given flow + ΔP, solve for orifice diameter d
@@ -75,7 +77,7 @@ export const R_UNIVERSAL = GAS_CONSTANT;
 export type Phase        = "liquid" | "gas";
 export type SizingMode   = "sizeForFlow" | "checkOrifice" | "predictDP";
 export type CdMode       = "user" | "estimated";
-export type EdgeType     = "sharp" | "rounded";
+export type EdgeType     = "sharp" | "nozzle";
 export type BasisMode    = "inPipe" | "freeDischarge";
 export type TappingType  = "corner" | "D-D2" | "flange";
 export type { GasPropsMode };
@@ -345,14 +347,17 @@ export function roundToStandardBore(d_mm: number): number {
  *     Flange taps:   L1 = L'2 = 25.4/D [mm]   (D in mm)
  *
  * Valid: 0.1 ≤ β ≤ 0.75, Re_D ≥ 5000, 50 mm ≤ D ≤ 1000 mm
- * For rounded-edge (ISA 1932 nozzle type): Cd ≈ 0.97 (Cd is flat vs Re).
+ * For "nozzle" edge type (ISA-1932 nozzle-like entrance approximation): Cd ≈ 0.97.
+ *   NOTE: This is NOT a generic "rounded edge" — it approximates an ISA-1932 nozzle-type
+ *   inlet (well-rounded contraction, Cd flat w.r.t. Re). It is NOT applicable to a
+ *   slightly-deburred sharp orifice or a shallow chamfer. Verify with vendor.
  *
  * Ref: ISO 5167-2:2003 §8.3.2, Table 1; Reader & Harris (1995) Flow Meas. Instrum.
  *
  * @param beta        d/D ratio
  * @param Re_D        pipe Reynolds number
  * @param D_mm        pipe internal diameter [mm]
- * @param edgeType    "sharp" | "rounded"
+ * @param edgeType    "sharp" | "nozzle"  ("nozzle" = ISA-1932 nozzle-type entrance approximation)
  * @param tappingType "corner" | "D-D2" | "flange"
  */
 function cdReaderHarrisGallagher(
@@ -362,7 +367,7 @@ function cdReaderHarrisGallagher(
   edgeType: EdgeType,
   tappingType: TappingType = "corner",
 ): number {
-  if (edgeType === "rounded") return 0.97;
+  if (edgeType === "nozzle") return 0.97;
 
   if (beta < 0.05 || beta > 0.95) return 0.61;
   if (Re_D < 100) return 0.50;
@@ -1182,7 +1187,7 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
     warnings.push(`Flow is CHOKED (sonic): P₂/P₁ = ${pressureRatio.toFixed(4)} ≤ r_crit = ${xCrit.toFixed(4)}. Downstream pressure does not affect flow. Y = 0.667 (min).`);
     warnings.push(`Sonic gas jet — high aerodynamic noise expected. SPL > 100 dB(A) likely at orifice exit.`);
     recommendations.push("Use multi-stage restriction to avoid sonic conditions per stage");
-    recommendations.push("Request vendor acoustic analysis per IEC 60534-8 / API RP 521 for noise and vibration");
+    recommendations.push("Vendor acoustic analysis recommended per IEC 60534-8 / API RP 521 for noise and vibration assessment");
     recommendations.push("Downstream pipe wall thickness check for acoustic fatigue (ASME B31.3)");
   } else if (pressureRatio < xCrit * 1.1) {
     flags.push("NEAR_CHOKED");
@@ -1245,7 +1250,7 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
   const numStages = Math.max(1, input.numStages || 1);
   const stages: StageResult[] = [];
   if (numStages > 1 && input.sizingMode === "sizeForFlow") {
-    warnings.push(`Multi-stage gas model: upstream properties (MW, k, Z, T) are held constant at inlet conditions for all stages — simplified model. Gas properties change between stages in reality; validate with process simulator (HYSYS, UniSim) for final design.`);
+    warnings.push(`MULTI-STAGE GAS SIMPLIFICATION: This is staged pressure-drop screening only — NOT rigorous stage-by-stage thermodynamic modeling. Upstream gas properties (MW, k, Z, T) are held constant at overall inlet conditions for all stages. In reality, gas properties (density, compressibility, k) change progressively with pressure between stages. For final design, validate each stage independently with a process simulator (HYSYS, UniSim, PRO/II).`);
     const stagePs = computeStageP(P1_bar, P1_bar - actualDP_bar, numStages, input.stageDistribution);
     for (const sp of stagePs) {
       const sP1_Pa    = sp.P1 * 1e5;

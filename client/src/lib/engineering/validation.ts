@@ -231,3 +231,50 @@ export type CVLiquidPropsInput = z.infer<typeof cvLiquidPropsSchema>;
 export type CVGasPropsInput = z.infer<typeof cvGasPropsSchema>;
 export type CVValveDataInput = z.infer<typeof cvValveDataSchema>;
 export type CVInstallationInput = z.infer<typeof cvInstallationSchema>;
+
+// ─── Restriction Orifice Schemas ───────────────────────────────────────────────
+
+export const roLiquidPropsSchema = z.object({
+  density: z.number().positive("Liquid density must be positive (kg/m³)"),
+  viscosity: z.number().positive("Viscosity must be positive (cP)"),
+  vaporPressure: z.number().nonnegative("Vapor pressure must be ≥ 0 (bar abs)"),
+});
+
+export const roGasPropsSchema = z.object({
+  molecularWeight: z.number().positive("Molecular weight must be positive (kg/kmol)"),
+  specificHeatRatio: z.number().gt(1.0, "Specific heat ratio k must be > 1.0"),
+  compressibilityFactor: z.number().positive("Compressibility factor Z must be positive"),
+  viscosity: z.number().positive("Gas viscosity must be positive (cP)"),
+});
+
+export const roServiceInputSchema = z.object({
+  phase: z.enum(["liquid", "gas"]),
+  sizingMode: z.enum(["sizeForFlow", "checkOrifice", "predictDP"]),
+  flowBasis: z.enum(["mass", "volume"]),
+  upstreamPressure: z.number().positive("Upstream pressure must be positive (bar abs)"),
+  downstreamPressure: z.number().nonnegative("Downstream pressure must be ≥ 0 (bar abs)"),
+  temperature: z.number().gt(-273.15, "Temperature must be above absolute zero"),
+  pipeDiameter: z.number().positive("Pipe diameter must be positive (mm)"),
+  orificeDiameter: z.number().min(0, "Orifice diameter must be ≥ 0"),
+  numStages: z.number().int().min(1, "Number of stages must be ≥ 1").max(20, "Number of stages must be ≤ 20"),
+  betaMin: z.number().min(0.05, "β min must be ≥ 0.05").max(0.94, "β min must be ≤ 0.94"),
+  betaMax: z.number().min(0.06, "β max must be ≥ 0.06").max(0.95, "β max must be ≤ 0.95"),
+}).refine(
+  (d) => d.sizingMode === "predictDP" || d.upstreamPressure > d.downstreamPressure,
+  { message: "P1 (upstream) must exceed P2 (downstream)", path: ["downstreamPressure"] },
+).refine(
+  (d) => d.betaMin < d.betaMax,
+  { message: "β min must be less than β max", path: ["betaMax"] },
+).refine(
+  (d) => {
+    if (d.sizingMode === "checkOrifice" || d.sizingMode === "predictDP") {
+      return d.orificeDiameter > 0;
+    }
+    return true;
+  },
+  { message: "Orifice diameter must be positive in check/predict modes", path: ["orificeDiameter"] },
+);
+
+export type ROLiquidPropsInput = z.infer<typeof roLiquidPropsSchema>;
+export type ROGasPropsInput = z.infer<typeof roGasPropsSchema>;
+export type ROServiceValidInput = z.infer<typeof roServiceInputSchema>;

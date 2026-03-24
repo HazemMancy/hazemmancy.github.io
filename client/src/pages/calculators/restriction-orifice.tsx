@@ -28,6 +28,7 @@ import {
 import { COMPONENT_DB } from "@/lib/engineering/srkEos";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
+import { roServiceInputSchema, roLiquidPropsSchema, roGasPropsSchema } from "@/lib/engineering/validation";
 import {
   CircleDot, FlaskConical, RotateCcw, ChevronLeft, ChevronRight,
   ClipboardList, Droplets, Settings2, BarChart3, ShieldCheck,
@@ -180,6 +181,37 @@ export default function RestrictionOrificePage() {
           input.liquidProps = { ...input.liquidProps, vaporPressure: convertToSI("pressureAbs", input.liquidProps.vaporPressure, unitSystem) };
         }
       }
+
+      // Schema-based validation before invoking solver
+      const svcValidation = roServiceInputSchema.safeParse(input);
+      if (!svcValidation.success) {
+        setError(svcValidation.error.errors.map(e => e.message).join("; "));
+        return;
+      }
+      if (input.phase === "liquid") {
+        const liqValidation = roLiquidPropsSchema.safeParse(input.liquidProps);
+        if (!liqValidation.success) {
+          setError(liqValidation.error.errors.map(e => e.message).join("; "));
+          return;
+        }
+        if (input.sizingMode !== "checkOrifice") {
+          const flow = input.flowBasis === "volume" ? input.volFlowRate : input.massFlowRate;
+          if (flow <= 0) { setError("Flow rate must be positive"); return; }
+        }
+      } else {
+        if (input.gasPropsMode === "manual") {
+          const gasValidation = roGasPropsSchema.safeParse(input.gasProps);
+          if (!gasValidation.success) {
+            setError(gasValidation.error.errors.map(e => e.message).join("; "));
+            return;
+          }
+        }
+        if (input.sizingMode !== "checkOrifice" && input.massFlowRate <= 0) {
+          setError("Mass flow rate must be positive");
+          return;
+        }
+      }
+
       const r = calculateRO(input, project);
       setResult(r);
       setActiveTab("results");
@@ -231,7 +263,7 @@ export default function RestrictionOrificePage() {
       { label: "Tapping Type", value: service.orifice.tappingType === "corner" ? "Corner taps" : service.orifice.tappingType === "flange" ? "Flange taps (25.4 mm)" : "D–D/2 taps" },
       { label: "Cd Value (effective)", value: result.cdEffective, unit: "" },
       { label: "Cd Mode", value: service.orifice.cdMode === "user" ? "User-Defined" : "Estimated (ISO 5167-2 RHG)" },
-      { label: "Edge Type", value: service.orifice.edgeType === "sharp" ? "Sharp-edged" : "Rounded" },
+      { label: "Edge Type", value: service.orifice.edgeType === "sharp" ? "Sharp-edged (standard orifice plate)" : "ISA-1932 nozzle-type entrance (Cd ≈ 0.97 — NOT a generic rounded edge)" },
       { label: "Basis Mode", value: service.orifice.basisMode === "inPipe" ? "In-pipe with β correction" : "Free discharge" },
       ...(service.numStages > 1 ? [{ label: "Number of Stages", value: service.numStages, unit: "" }] : []),
     ];
@@ -340,7 +372,7 @@ export default function RestrictionOrificePage() {
       assumptions: [
         `Cd = ${result.cdEffective.toFixed(4)} (${service.orifice.cdMode === "user" ? "user-defined — not corrected for Re or β by engine" : "RHG [ISO 5167-2] — iterated jointly with computed flow in check mode"})`,
         `Basis: ${service.orifice.basisMode === "inPipe" ? "In-pipe flow — E = 1/√(1−β⁴) applied" : "Free discharge — no β correction (E = 1)"}`,
-        `Plate edge: ${service.orifice.edgeType === "sharp" ? "Sharp-edged (Cd ≈ 0.61 turbulent)" : "Rounded / nozzle-type entrance (ISA-1932 approximation, Cd ≈ 0.97 — verify with vendor)"}`,
+        `Plate edge: ${service.orifice.edgeType === "sharp" ? "Sharp-edged (standard orifice plate, Cd ≈ 0.61 turbulent, iterated via RHG)" : "ISA-1932 nozzle-type entrance (well-rounded contraction, Cd ≈ 0.97 fixed — NOT a slightly-deburred or chamfered edge; verify geometry with vendor before adopting this Cd)"}`,
         result.phase === "gas" ? (service.gasPropsMode && service.gasPropsMode !== "manual" ? `Z from ${service.gasPropsMode === "pr" ? "Peng-Robinson" : "SRK"} EoS = ${result.srkResult?.Z?.toFixed(4) ?? "computed"} (real-gas compressibility)` : `Manual Z = ${service.gasProps.compressibilityFactor} (user-specified compressibility factor)`) : "Liquid treated as incompressible (constant density)",
         "All pressures are absolute (bar(a))",
         "Standard bore rounded up to nearest metric drill size",
@@ -655,7 +687,7 @@ export default function RestrictionOrificePage() {
                     <SelectTrigger data-testid="select-edge"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sharp">Sharp-edged (default)</SelectItem>
-                      <SelectItem value="rounded">Rounded / Nozzle-type entrance (ISA-1932 approx., Cd ≈ 0.97) — verify with vendor</SelectItem>
+                      <SelectItem value="nozzle">ISA-1932 nozzle-type entrance (well-rounded contraction, Cd ≈ 0.97) — NOT a generic rounded edge; verify with vendor</SelectItem>
                     </SelectContent>
                   </Select></div>
                 <div><Label className="text-xs mb-1.5 block">Basis Mode</Label>
@@ -735,7 +767,7 @@ export default function RestrictionOrificePage() {
                 <p><strong>Size for flow:</strong> Given Q or W, P₁, P₂ → solver finds required orifice diameter d (bisection method).</p>
                 <p><strong>Check orifice:</strong> Given d, P₁, P₂ → computes achievable flow W and resulting conditions. Cd is iterated jointly with computed flow until convergence.</p>
                 <p><strong>Predict ΔP:</strong> Given d, W, P₁ → solver finds required ΔP (and P₂) for the specified flow through the orifice.</p>
-                <p>This is a <strong>preliminary / screening sizing basis</strong>. Permanent pressure loss per ISO 5167-2 Annex D form. Cd per Reader-Harris/Gallagher (ISO 5167-informed; not certified metering). Cavitation σ = (P₁−Pv)/ΔP vs σᵢ = 2.7 — approximate screening, adapted from control-valve/hydraulic practice. Erosional velocity Ve — conservative API RP 14E-informed jet velocity screening only.</p>
+                <p>This is a <strong>preliminary / screening sizing basis — not final certified RO design</strong>. Permanent pressure loss per ISO 5167-2 Annex D form. Cd per Reader-Harris/Gallagher (ISO 5167-informed; not certified metering). Cavitation σ = (P₁−Pv)/ΔP vs σᵢ = 2.7 — approximate screening only, adapted from control-valve/hydraulic practice, not RO acceptance criteria. Erosional velocity Ve — conservative API RP 14E-informed jet velocity screening proxy only; not a compliance check. Multi-stage gas model holds properties constant at inlet (simplified staged pressure-drop screening — not rigorous stage-by-stage thermodynamic modeling).</p>
               </CardContent></Card>
 
               {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">{error}</div>}
@@ -1056,7 +1088,7 @@ export default function RestrictionOrificePage() {
                 <AssumptionsPanel
                   assumptions={[
                     `SCREENING TOOL: This calculator implements an ISO 5167-informed approach adapted for RO preliminary sizing — it is NOT a certified flow-metering calculation and does not replace a formally calibrated ISO 5167 measurement device analysis.`,
-                    `${result.phase === "liquid" ? "Incompressible" : "Compressible"} flow through ${service.orifice.edgeType === "rounded" ? "rounded/nozzle-type entrance (ISA-1932 approximation)" : "sharp-edged"} restriction orifice`,
+                    `${result.phase === "liquid" ? "Incompressible" : "Compressible"} flow through ${service.orifice.edgeType === "nozzle" ? "ISA-1932 nozzle-type entrance (well-rounded contraction, Cd ≈ 0.97 — not a generic rounded edge; verify with vendor)" : "sharp-edged"} restriction orifice`,
                     result.phase === "liquid"
                       ? "W = Cd · E · A · √(2·ρ·ΔP), E = 1/√(1−β⁴) — velocity-of-approach factor [ISO 5167-2 form]"
                       : result.isChoked
