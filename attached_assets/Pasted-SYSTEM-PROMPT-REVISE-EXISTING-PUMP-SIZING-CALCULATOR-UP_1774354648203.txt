@@ -1,0 +1,239 @@
+SYSTEM PROMPT — REVISE EXISTING PUMP SIZING CALCULATOR (UPDATED SCREENING CORRECTIONS)
+
+You are updating an existing Pump Sizing calculator in a Process Engineering web application. Do NOT rebuild it from scratch. Revise the current implementation so it remains a strong FEED / preliminary hydraulic screening tool while correcting the remaining technical, validation, and wording issues.
+
+TARGET FILES
+- client/src/lib/engineering/pumpSizing.ts
+- client/src/pages/calculators/pump-sizing.tsx
+- any related validation / helper / export files used by this calculator
+
+PRIMARY GOAL
+Preserve the current strengths:
+- suction/discharge hydraulic breakdown
+- Darcy + K-factor loss model
+- NPSHa screening
+- centrifugal vs PD branching
+- power estimation
+- good traceability / calculation steps
+
+But correct the remaining weaknesses so the module is clearly and credibly positioned as:
+- Pump Hydraulic / NPSH / Power Screening Tool
+- suitable for concept / FEED / early design support
+- not final pump selection
+- not final PD pump design
+- not final relief set-pressure verification
+- not a substitute for vendor curves, API compliance review, or detailed mechanical design
+
+NON-NEGOTIABLE POSITIONING
+This calculator must be presented as:
+- screening / preliminary hydraulic tool
+- not final pump design authority
+- not final vendor selection tool
+- not final API 610 / API 674 / API 676 compliance verification
+
+Do NOT overstate rigor or standards compliance.
+
+--------------------------------------------------
+MANDATORY HIGH-PRIORITY FIXES
+--------------------------------------------------
+
+1) ADD SCHEMA-BASED VALIDATION — CRITICAL
+Current issue:
+The page still relies on parseFloat and manual isNaN checks.
+
+Required correction:
+Create and use real schema-based validation in the actual calculation path.
+
+Validation must cover, as applicable:
+- flow > 0
+- density > 0
+- viscosity > 0
+- positive diameters
+- non-negative lengths
+- non-negative K-factors / fitting inputs
+- valid efficiency values
+- valid pressure basis fields
+- PD-specific inputs such as differential pressure / relief pressure
+- geometry inputs and suction/discharge conditions
+
+Use safeParse (or equivalent) before calling the solver.
+Do NOT leave validation as page-level parsing only.
+
+2) ADDRESS CENTRIFUGAL TDH OMISSION OF DISCHARGE PRESSURE HEAD — CRITICAL
+Current issue:
+The centrifugal TDH currently includes:
+- static head
+- friction losses
+- velocity-head difference
+
+but does NOT include destination/discharge pressure-head difference.
+
+Required correction:
+Implement one of the following, preferred in this order:
+
+OPTION A — PREFERRED
+Add explicit destination/discharge vessel pressure input and include pressure-head difference in TDH:
+TDH = pressure-head difference + static head + friction losses + velocity-head difference
+
+OPTION B — ACCEPTABLE
+If pressure-head difference is intentionally excluded for now:
+- state this clearly and prominently in the methodology / assumptions / results
+- make it explicit that current TDH assumes no destination-pressure difference beyond static/friction effects
+
+Do NOT leave this limitation implicit.
+
+3) RENAME PD “DISCHARGE PRESSURE” TO DIFFERENTIAL PRESSURE BASIS — CRITICAL
+Current issue:
+The PD branch solver uses the input as differential pressure across the pump, but the UI label is still misleading.
+
+Required correction:
+Rename the input everywhere to one of:
+- Required Pump Differential Pressure
+- Required Differential Pressure Across Pump
+- Required Pump DP
+
+Update:
+- UI label
+- helper text
+- assumptions panel
+- result/report label
+- export wording
+- any related warnings
+
+Do NOT continue using the ambiguous label “Discharge Pressure” if the solver uses differential pressure.
+
+4) FIX OR EXPLICITLY LIMIT PD RELIEF SET-PRESSURE LOGIC — CRITICAL
+Current issue:
+The PD branch compares relief set pressure to differential pressure, not necessarily to actual discharge pressure.
+
+Required correction:
+Implement one of the following:
+
+OPTION A — PREFERRED
+If suction-side gauge pressure is available, compute actual discharge pressure:
+actual discharge pressure = suction-side pressure + pump differential pressure
+Then compare relief set pressure against actual discharge pressure.
+
+OPTION B — ACCEPTABLE
+If true discharge pressure is not implemented:
+- keep the current check only as a simplified differential-pressure screening
+- clearly state this limitation in assumptions, warnings, and result text
+- do NOT present it as rigorous discharge-pressure verification
+
+Do NOT let the current logic appear more rigorous than it is.
+
+5) SOFTEN STANDARDS WORDING THROUGHOUT — CRITICAL
+Current issue:
+Several warnings and notes still read too much like hard standards requirements or exact compliance statements.
+
+Required correction:
+Review and revise wording across:
+- warnings
+- methodology
+- assumptions
+- results
+- exports
+
+Use language such as:
+- API-aware screening guidance
+- common industry / HI / EPC preliminary practice
+- verify against vendor data, project specification, and selected standard edition
+
+Do NOT use wording that implies:
+- final API 610 compliance
+- final API 674 compliance
+- final API 676 compliance
+- exact standards enforcement
+unless truly implemented and verified.
+
+This applies especially to:
+- NPSH margin wording
+- suction/discharge velocity wording
+- motor margin wording
+- PD suitability wording
+- specific-speed interpretation wording
+
+6) MAKE NPSH MESSAGING VENDOR-MARGIN-ORIENTED — CRITICAL
+Current issue:
+The module still risks sounding too absolute on NPSH acceptance.
+
+Required correction:
+Reframe NPSH language so it clearly states:
+- this tool calculates NPSHa screening only
+- NPSHa must be compared against vendor NPSHr plus project/company margin
+- final margin requirements are vendor/project dependent
+
+Do NOT present generic NPSHa thresholds as final acceptance criteria by themselves.
+
+--------------------------------------------------
+ADDITIONAL REQUIRED IMPROVEMENTS
+--------------------------------------------------
+
+7) SPECIFIC-SPEED INTERPRETATION DISCIPLINE — IMPORTANT
+If specific speed is still calculated and interpreted, ensure it is positioned only as preliminary screening.
+
+Required correction:
+Either:
+- soften the interpretation heavily and state the unit convention clearly, or
+- remove pump-type interpretation if the basis is not fully rigorous
+
+Do NOT overstate impeller-type inference from the current implementation.
+
+8) ASSUMPTIONS PANEL MUST BE MORE EXPLICIT
+For centrifugal branch, include:
+- current TDH basis and whether discharge pressure head is included or excluded
+- NPSHa screening only, not NPSHr
+- no vendor curve / BEP matching
+- no detailed hydraulic network model
+
+For PD branch, include:
+- required pressure basis is differential pressure across pump unless otherwise implemented
+- relief set-pressure logic basis clearly stated
+- no full PD compressor/pump mechanical sizing
+- no pulsation bottle / acceleration-head / detailed valve dynamics unless implemented
+
+9) EXPORT / REPORT DISCIPLINE
+Revise export/report wording so it reflects the corrected scope:
+- screening / preliminary only
+- NPSHa only, not NPSHr
+- centrifugal TDH basis explicitly stated
+- PD differential pressure basis explicitly stated
+- relief-pressure check scope explicitly stated
+- standards wording softened to screening guidance
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1) Preserve the current strong workflow and calculation traceability.
+
+2) If centrifugal discharge pressure head is not implemented, make the limitation visible enough that users cannot miss it.
+
+3) Rename the PD pressure input clearly to differential-pressure basis.
+
+4) Make NPSH warnings clearly advisory / vendor-verification-oriented.
+
+5) Keep velocity and power guidance useful, but present them as screening guidance.
+
+--------------------------------------------------
+CODE QUALITY REQUIREMENTS
+--------------------------------------------------
+
+- Preserve existing architecture
+- Keep solver logic in engineering library, not UI
+- Do not remove useful calculation traceability
+- Add comments where basis limitations matter
+- Improve rigor and honesty without degrading FEED usefulness
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+The revision is complete only if:
+- schema-based validation is used in the actual solve path
+- centrifugal TDH no longer silently omits destination-pressure difference without disclosure
+- PD “Discharge Pressure” is renamed to a differential-pressure basis
+- PD relief set-pressure logic is either corrected or explicitly limited
+- standards wording is softened to screening guidance
+- NPSH messaging is clearly vendor-margin-oriented
+- assumptions, warnings, results, and exports match the real implemented screening scope

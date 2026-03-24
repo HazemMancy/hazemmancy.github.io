@@ -49,6 +49,7 @@ import { PDCurveChart } from "@/components/engineering/pd-curve-chart";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { centrifugalPumpSchema, pdPumpSchema } from "@/lib/engineering/validation";
 
 const TABS = [
   { id: "project", label: "Project", icon: ClipboardList, step: 1 },
@@ -242,7 +243,7 @@ export default function PumpSizingPage() {
   const handleCalculate = () => {
     setError(null);
     try {
-      const pipingInput = {
+      const pipingBase = {
         flowRate: convertToSI("flowLiquid", parseFloat(form.flowRate), unitSystem),
         liquidDensity: parseFloat(form.liquidDensity),
         viscosity: parseFloat(form.viscosity),
@@ -258,41 +259,42 @@ export default function PumpSizingPage() {
         dischargeFittingsK: parseFloat(form.dischargeFittingsK),
         vaporPressure: convertToSI("pressureKpa", parseFloat(form.vaporPressure), unitSystem),
         atmosphericPressure: convertToSI("pressureAbs", parseFloat(form.atmosphericPressure), unitSystem),
-        suctionVesselPressure: convertToSI("pressureGauge", parseFloat(form.suctionVesselPressure), unitSystem),
+        suctionVesselPressure: convertToSI("pressureGauge", parseFloat(form.suctionVesselPressure) || 0, unitSystem),
         dischargeVesselPressure: convertToSI("pressureGauge", parseFloat(form.dischargeVesselPressure) || 0, unitSystem),
       };
 
-      for (const [key, val] of Object.entries(pipingInput)) {
-        if (isNaN(val)) throw new Error(`Invalid value for ${key}`);
-      }
-
       if (pumpType === "centrifugal") {
         const speedVal = parseFloat(form.pumpSpeed);
-        const input = {
-          ...pipingInput,
+        const rawInput = {
+          ...pipingBase,
           pumpEfficiency: parseFloat(form.pumpEfficiency),
           motorEfficiency: parseFloat(form.motorEfficiency),
           pumpSpeed: !isNaN(speedVal) && speedVal > 0 ? speedVal : undefined,
         };
-        if (isNaN(input.pumpEfficiency)) throw new Error("Invalid pump efficiency");
-        if (isNaN(input.motorEfficiency)) throw new Error("Invalid motor efficiency");
-        const res = calculatePumpSizing(input);
+        const parsed = centrifugalPumpSchema.safeParse(rawInput);
+        if (!parsed.success) {
+          const msg = parsed.error.errors[0]?.message || "Invalid input";
+          throw new Error(msg);
+        }
+        const res = calculatePumpSizing(parsed.data);
         setCentrifugalResult(res);
         setPdResult(null);
         setActiveTab("summary");
       } else {
-        const input = {
-          ...pipingInput,
+        const rawInput = {
+          ...pipingBase,
           volumetricEfficiency: parseFloat(form.volumetricEfficiency),
           mechanicalEfficiency: parseFloat(form.mechanicalEfficiency),
           motorEfficiency: parseFloat(form.motorEfficiency),
           reliefValvePressure: convertToSI("pressureGauge", parseFloat(form.reliefValvePressure) || 0, unitSystem),
           pumpDifferentialPressure: convertToSI("pressure", parseFloat(form.pumpDifferentialPressure) || 0, unitSystem),
         };
-        if (isNaN(input.volumetricEfficiency)) throw new Error("Invalid volumetric efficiency");
-        if (isNaN(input.mechanicalEfficiency)) throw new Error("Invalid mechanical efficiency");
-        if (isNaN(input.motorEfficiency)) throw new Error("Invalid motor efficiency");
-        const res = calculatePDPumpSizing(input);
+        const parsed = pdPumpSchema.safeParse(rawInput);
+        if (!parsed.success) {
+          const msg = parsed.error.errors[0]?.message || "Invalid input";
+          throw new Error(msg);
+        }
+        const res = calculatePDPumpSizing(parsed.data);
         setPdResult(res);
         setCentrifugalResult(null);
         setActiveTab("summary");
@@ -478,7 +480,7 @@ export default function PumpSizingPage() {
         { label: "Discharge Velocity", value: convertFromSI("velocity", r.dischargeVelocity, u), unit: getUnit("velocity", u) },
         { label: "Suction Reynolds", value: r.suctionReynolds, unit: "\u2014" },
         { label: "Discharge Reynolds", value: r.dischargeReynolds, unit: "\u2014" },
-        { label: "NPSHa (Available)", value: convertFromSI("head", r.npshaAvailable, u), unit: getUnit("head", u), highlight: r.npshaAvailable < 3.0 },
+        { label: "NPSHa (Available \u2014 screening; compare vs. vendor NPSHr + margin)", value: convertFromSI("head", r.npshaAvailable, u), unit: getUnit("head", u), highlight: r.npshaAvailable < 3.0 },
         { label: "Suction f (Darcy)", value: r.suctionFrictionFactor, unit: "\u2014" },
         { label: "Discharge f (Darcy)", value: r.dischargeFrictionFactor, unit: "\u2014" },
       ],
@@ -499,9 +501,10 @@ export default function PumpSizingPage() {
         "Darcy-Weisbach equation with Swamee-Jain friction factor approximation",
         "Minor losses calculated using resistance coefficient (K) method (Crane TP-410)",
         "TDH includes elevation, friction, velocity head, AND destination vessel pressure head \u2014 full Bernoulli basis",
-        "NPSHa is a suction-side screening only; NPSHr is a vendor property not computed here",
-        "No pump curve, BEP matching, or off-BEP derating performed",
-        "Motor margin is indicative driver sizing guidance \u2014 verify against project specification",
+        "NPSHa is a suction-side screening value only; NPSHr is a vendor pump curve property not computed here \u2014 always compare NPSHa against vendor NPSHr plus required margin before selection",
+        "No pump curve, BEP matching, or off-BEP performance derating performed",
+        "Motor margin percentages are indicative driver sizing guidance (API-aware, common EPC preliminary practice) \u2014 verify against project specification and selected motor standard",
+        "Velocity thresholds in advisory notes are common EPC/HI preliminary guidance values \u2014 not absolute code limits",
         "Suction/discharge vessel pressures are gauge (0 bar g = atmospheric)",
       ],
       references: [
@@ -566,8 +569,8 @@ export default function PumpSizingPage() {
         { label: "Hydraulic Power", value: convertFromSI("power", r.hydraulicPower, u), unit: getUnit("power", u) },
         { label: "Shaft Power", value: convertFromSI("power", r.shaftPower, u), unit: getUnit("power", u), highlight: true },
         { label: "Motor Power Required", value: convertFromSI("power", r.motorPower, u), unit: getUnit("power", u), highlight: true },
-        { label: "NPSHa (Available)", value: convertFromSI("head", r.npshaAvailable, u), unit: getUnit("head", u), highlight: r.npshaAvailable < 3.0 },
-        { label: "NPIPa (Available)", value: r.npipAvailable, unit: "kPa", highlight: r.npipAvailable < 30 },
+        { label: "NPSHa (Available \u2014 screening; compare vs. vendor NPIPr + margin)", value: convertFromSI("head", r.npshaAvailable, u), unit: getUnit("head", u), highlight: r.npshaAvailable < 3.0 },
+        { label: "NPIPa (Available \u2014 screening; compare vs. vendor NPIPr + margin)", value: r.npipAvailable, unit: "kPa", highlight: r.npipAvailable < 30 },
         { label: "Suction Velocity", value: convertFromSI("velocity", r.suctionVelocity, u), unit: getUnit("velocity", u) },
         { label: "Discharge Velocity", value: convertFromSI("velocity", r.dischargeVelocity, u), unit: getUnit("velocity", u) },
         { label: "Relief Valve Set Pressure", value: r.reliefValvePressure > 0 ? convertFromSI("pressureGauge", r.reliefValvePressure, u) : 0, unit: r.reliefValvePressure > 0 ? getUnit("pressureGauge", u) : "Not set" },
@@ -587,15 +590,15 @@ export default function PumpSizingPage() {
         "Acceleration head in suction piping NOT included \u2014 assess pulsation effects with vendor",
       ],
       assumptions: [
-        "HYDRAULIC / POWER SCREENING ONLY \u2014 not a substitute for full PD pump design or API 674/676 engineering",
-        "Displacement, stroke/speed selection, plunger dimensions, pulsation bottles, acceleration head NOT calculated",
-        "Steady-state, incompressible liquid flow",
-        "pumpDifferentialPressure = required pressure rise across pump (\u0394P) \u2014 NOT destination vessel pressure",
-        "Actual discharge-side pressure = suctionVesselPressure + pumpDifferentialPressure",
-        "Required flow is the actual delivered flow; theoretical (displaced) flow = actual flow / volumetric efficiency",
-        "NPSHa screening only; NPIPr is a vendor property not computed here",
-        "Relief valve mandatory for PD pump overpressure protection (API 674 / API 676)",
-        "Motor margin is indicative driver sizing guidance \u2014 verify against project specification",
+        "PRELIMINARY HYDRAULIC / POWER SCREENING ONLY \u2014 not a substitute for full PD pump mechanical design, vendor engineering, or formal API 674/676 compliance review",
+        "Displacement, stroke/speed selection, plunger/piston dimensions, pulsation bottle sizing, acceleration head NOT calculated",
+        "Steady-state, incompressible liquid flow; no transient, pulsation, or two-phase effects",
+        "Required Pump \u0394P = pressure rise across pump (bar differential) \u2014 NOT destination vessel gauge pressure; if 0, estimated from TDH as screening fallback",
+        "Actual discharge-side pressure (for relief valve screening) = suctionVesselPressure + pump \u0394P \u2014 simplified estimate only",
+        "Required (delivered) flow = actual flow input; theoretical (displaced) flow = actual flow / volumetric efficiency; slip = simplified internal leakage model",
+        "NPSHa screening only \u2014 NPIPr (required) is a vendor property not computed here; acceleration head further reduces effective suction head for reciprocating PD pumps",
+        "Relief valve check is preliminary screening (suction + pump \u0394P basis) \u2014 final relief system design requires full study per applicable standards",
+        "Motor margin percentages are indicative driver sizing guidance (common EPC preliminary practice) \u2014 verify against project specification",
       ],
       references: [
         "API 674 \u2014 Positive Displacement Pumps \u2014 Reciprocating",
@@ -868,7 +871,7 @@ export default function PumpSizingPage() {
                       </div>
                       <div>
                         <Label className="text-xs mb-1.5 block">Required Pump &Delta;P ({getUnit("pressure", unitSystem)})</Label>
-                        <Input type="number" value={form.pumpDifferentialPressure} onChange={(e) => updateField("pumpDifferentialPressure", e.target.value)} placeholder="0 = estimated from TDH" data-testid="input-discharge-pressure" />
+                        <Input type="number" value={form.pumpDifferentialPressure} onChange={(e) => updateField("pumpDifferentialPressure", e.target.value)} placeholder="0 = estimated from TDH" data-testid="input-pump-dp" />
                         <p className="text-[10px] text-muted-foreground mt-1">Pressure rise across pump only (&Delta;P), not destination vessel pressure</p>
                       </div>
                       <div>
@@ -940,9 +943,9 @@ export default function PumpSizingPage() {
                           <div className="text-[10px] text-muted-foreground">{getUnit("power", unitSystem)}</div>
                         </div>
                         <div className="p-3 border rounded-md text-center" data-testid="text-npsha">
-                          <div className="text-xs text-muted-foreground">NPSHa</div>
+                          <div className="text-xs text-muted-foreground">NPSHa (screening)</div>
                           <div className={`text-lg font-bold ${centrifugalResult.npshaAvailable < 3 ? "text-destructive" : ""}`}>{convertFromSI("head", centrifugalResult.npshaAvailable, unitSystem).toFixed(2)}</div>
-                          <div className="text-[10px] text-muted-foreground">{getUnit("head", unitSystem)}</div>
+                          <div className="text-[10px] text-muted-foreground">{getUnit("head", unitSystem)} — compare vs. vendor NPSHr</div>
                         </div>
                       </div>
                     </CardContent>
@@ -967,9 +970,9 @@ export default function PumpSizingPage() {
                           <div className="text-[10px] text-muted-foreground">{getUnit("power", unitSystem)}</div>
                         </div>
                         <div className="p-3 border rounded-md text-center" data-testid="text-npsha-pd">
-                          <div className="text-xs text-muted-foreground">NPSHa</div>
+                          <div className="text-xs text-muted-foreground">NPSHa (screening)</div>
                           <div className={`text-lg font-bold ${pdResult.npshaAvailable < 3 ? "text-destructive" : ""}`}>{convertFromSI("head", pdResult.npshaAvailable, unitSystem).toFixed(2)}</div>
-                          <div className="text-[10px] text-muted-foreground">{getUnit("head", unitSystem)}</div>
+                          <div className="text-[10px] text-muted-foreground">{getUnit("head", unitSystem)} — compare vs. vendor NPIPr</div>
                         </div>
                       </div>
                     </CardContent>
@@ -1040,7 +1043,7 @@ export default function PumpSizingPage() {
                     <ResultsPanel
                       title="NPSH & Velocities"
                       results={[
-                        { label: "NPSHa (Available)", value: convertFromSI("head", centrifugalResult.npshaAvailable, unitSystem), unit: getUnit("head", unitSystem), highlight: centrifugalResult.npshaAvailable < 3.0 },
+                        { label: "NPSHa (Available) — compare vs. vendor NPSHr + margin", value: convertFromSI("head", centrifugalResult.npshaAvailable, unitSystem), unit: getUnit("head", unitSystem), highlight: centrifugalResult.npshaAvailable < 3.0 },
                         { label: "Suction Velocity", value: convertFromSI("velocity", centrifugalResult.suctionVelocity, unitSystem), unit: getUnit("velocity", unitSystem) },
                         { label: "Discharge Velocity", value: convertFromSI("velocity", centrifugalResult.dischargeVelocity, unitSystem), unit: getUnit("velocity", unitSystem) },
                         { label: "Suction Reynolds", value: centrifugalResult.suctionReynolds, unit: "\u2014" },
@@ -1098,8 +1101,8 @@ export default function PumpSizingPage() {
                     <ResultsPanel
                       title="NPSH / NPIP & Velocities"
                       results={[
-                        { label: "NPSHa (Available)", value: convertFromSI("head", pdResult.npshaAvailable, unitSystem), unit: getUnit("head", unitSystem), highlight: pdResult.npshaAvailable < 3.0 },
-                        { label: "NPIPa (Available)", value: pdResult.npipAvailable, unit: "kPa", highlight: pdResult.npipAvailable < 30 },
+                        { label: "NPSHa (Available) — compare vs. vendor NPIPr + margin", value: convertFromSI("head", pdResult.npshaAvailable, unitSystem), unit: getUnit("head", unitSystem), highlight: pdResult.npshaAvailable < 3.0 },
+                        { label: "NPIPa (Available) — compare vs. vendor NPIPr + margin", value: pdResult.npipAvailable, unit: "kPa", highlight: pdResult.npipAvailable < 30 },
                         { label: "Suction Velocity", value: convertFromSI("velocity", pdResult.suctionVelocity, unitSystem), unit: getUnit("velocity", unitSystem) },
                         { label: "Discharge Velocity", value: convertFromSI("velocity", pdResult.dischargeVelocity, unitSystem), unit: getUnit("velocity", unitSystem) },
                         { label: "Suction Reynolds", value: pdResult.suctionReynolds, unit: "\u2014" },
@@ -1168,14 +1171,16 @@ export default function PumpSizingPage() {
                 {pumpType === "centrifugal" ? (
                   <AssumptionsPanel
                     assumptions={[
-                      "PRELIMINARY HYDRAULIC / POWER SCREENING \u2014 not a substitute for vendor pump selection or detailed hydraulic network analysis",
-                      "Steady-state, incompressible liquid flow; pipe assumed full (no two-phase flow)",
-                      "TDH = \u0394z + h_f_total + \u0394h_velocity + (P_dest \u2212 P_suction)/(\u03C1g) \u2014 full Bernoulli basis including destination pressure head",
-                      "Darcy-Weisbach friction with Swamee-Jain approximation (turbulent) or 64/Re (laminar); fittings via K-factor method (Crane TP-410)",
-                      "NPSHa from suction-side energy balance only \u2014 NPSHr is a vendor pump curve property and is NOT computed here",
-                      "No pump curve, BEP matching, or off-BEP derating is performed",
-                      "Motor margin is indicative driver sizing guidance, API-aware \u2014 verify against project specification and selected motor standard",
-                      "Specific speed Ns is an indicative screening value only \u2014 impeller type selection requires vendor confirmation",
+                      "PRELIMINARY HYDRAULIC / POWER SCREENING \u2014 not a substitute for vendor pump selection, detailed hydraulic network analysis, or formal API 610 compliance review",
+                      "Steady-state, incompressible liquid flow; pipe assumed full (no two-phase flow); no transient surge or water-hammer effects",
+                      "TDH = \u0394z + h_f_total + \u0394h_velocity + (P_dest \u2212 P_suction)/(\u03C1g) \u2014 full Bernoulli basis; both suction and discharge vessel pressures are included",
+                      "Darcy-Weisbach friction with Swamee-Jain approximation (turbulent) or 64/Re (laminar); minor losses via resistance coefficient (K) method \u2014 ref. Crane TP-410",
+                      "NPSHa computed from suction-side energy balance only \u2014 this is a screening value. NPSHr is a vendor pump curve property and is NOT computed here. Always compare NPSHa against vendor NPSHr plus required project/company margin before equipment selection",
+                      "The 3 m NPSHa advisory flag is a common preliminary screening trigger only \u2014 it is NOT a final acceptance criterion. Actual margin requirements are vendor- and project-specific",
+                      "No pump curve, BEP matching, or off-BEP performance derating performed",
+                      "Velocity thresholds in advisory notes are common EPC/HI preliminary guidance values \u2014 not absolute code limits; verify against project specification",
+                      "Motor margin percentages are indicative driver sizing guidance (API-aware, common EPC preliminary practice) \u2014 verify against project specification and selected motor standard edition",
+                      "Specific speed Ns is an indicative screening value in the stated unit convention (rpm, m\u00B3/h, m) \u2014 impeller geometry selection requires vendor engineering and curve confirmation",
                       "Suction and discharge vessel pressures are gauge (0 bar g = atmospheric)",
                     ]}
                     references={[
@@ -1189,18 +1194,18 @@ export default function PumpSizingPage() {
                 ) : (
                   <AssumptionsPanel
                     assumptions={[
-                      "HYDRAULIC / POWER SCREENING ONLY \u2014 not full PD pump sizing per API 674/676",
-                      "Displacement, stroke/speed selection, plunger dimensions, pulsation bottle sizing, and acceleration head are NOT calculated",
-                      "Steady-state, incompressible liquid flow",
-                      "pumpDifferentialPressure = required pressure rise across the pump (\u0394P in bar) \u2014 NOT the destination vessel pressure",
-                      "Actual discharge-side pressure = suctionVesselPressure + pumpDifferentialPressure",
-                      "Required (delivered) flow = actual flow; theoretical (displaced) flow = actual flow / volumetric efficiency",
-                      "Slip = theoretical flow \u2212 actual delivered flow (internal leakage increases with \u0394P)",
-                      "Hydraulic power = pump \u0394P \u00D7 actual delivered flow",
-                      "Shaft power = hydraulic power / mechanical efficiency; motor power = shaft power / motor efficiency",
-                      "NPSHa screening only; NPIPr is a vendor property; acceleration head in suction NOT included",
-                      "Relief valve check basis: actual discharge-side pressure (suction + pump \u0394P); relief valve mandatory per API 674/676",
-                      "Motor margin is indicative driver sizing guidance \u2014 verify against project specification",
+                      "PRELIMINARY HYDRAULIC / POWER SCREENING ONLY \u2014 not a substitute for full PD pump mechanical design, vendor engineering, or formal API 674/676 compliance review",
+                      "Displacement, stroke/speed combination, plunger/piston/cylinder dimensions, pulsation bottle sizing, and acceleration head are NOT calculated",
+                      "Steady-state, incompressible liquid flow; no two-phase flow, transient effects, or pulsation dynamics",
+                      "Required Pump \u0394P = required pressure rise across the pump (bar differential) \u2014 NOT a destination vessel gauge pressure; if 0 is entered, \u0394P is estimated from piping TDH as a screening fallback",
+                      "Actual discharge-side pressure (for relief valve screening) = suction vessel pressure + pump \u0394P \u2014 this is a simplified estimate; actual discharge pressure depends on system back-pressure and line losses",
+                      "Required (delivered) flow = actual flow input; theoretical (displaced) flow = actual flow / volumetric efficiency; slip = theoretical \u2212 actual (simplified internal leakage model)",
+                      "Hydraulic power = pump \u0394P \u00D7 actual delivered flow; shaft power = hydraulic power / mechanical efficiency; motor power = shaft power / motor efficiency",
+                      "NPSHa computed from suction-side energy balance \u2014 screening value only. NPIPr (required) is a vendor property and is NOT computed here. Compare NPSHa/NPIPa against vendor NPIPr plus required margin; acceleration head further reduces effective suction head for reciprocating PD pumps",
+                      "The 30 kPa NPIPa advisory flag is a common screening trigger only \u2014 not a final acceptance criterion; vendor NPIPr and project/company margin govern",
+                      "Relief valve check is a preliminary screening only (suction + pump \u0394P basis) \u2014 final relief set pressure requires full pressure relief system study per project specification and applicable standards",
+                      "Velocity threshold advisory notes are common EPC/HI preliminary guidance \u2014 not absolute limits; verify against project specification",
+                      "Motor margin percentages are indicative driver sizing guidance (common EPC preliminary practice) \u2014 verify against project specification",
                     ]}
                     references={[
                       "API 674 \u2014 Positive Displacement Pumps \u2014 Reciprocating",

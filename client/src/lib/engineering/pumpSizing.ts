@@ -202,24 +202,26 @@ export function calculatePiping(input: PipingInput): PipingResult {
   };
 }
 
-// ─── Shared velocity warnings ─────────────────────────────────────────────────
-
+// ─── Velocity screening guidance ─────────────────────────────────────────────
+// Thresholds below are common EPC / HI preliminary screening guidance.
+// They are NOT absolute limits — actual limits depend on fluid properties,
+// pipe material, pump type, and project specification. Verify with vendor data.
 function addVelocityWarnings(warnings: string[], suctionVelocity: number, dischargeVelocity: number) {
   if (suctionVelocity > 2.0) {
-    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s exceeds 2.0 m/s — elevated cavitation risk. Consider increasing suction pipe size or reducing fittings losses.`);
+    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s — above common preliminary guidance of ~2.0 m/s for liquid pump suction piping. Elevated NPSHa depletion risk; review suction pipe size and confirm NPSHa vs. vendor NPSHr margin (screening guidance — verify against project spec).`);
   } else if (suctionVelocity > 1.5) {
-    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s approaching 2.0 m/s guidance limit — verify NPSHa margin against vendor NPSHr is adequate.`);
+    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s — approaching typical 2.0 m/s preliminary guidance for suction piping. Verify NPSHa margin against vendor NPSHr is adequate (screening guidance).`);
   }
   if (suctionVelocity > 0 && suctionVelocity < 0.5) {
-    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s below 0.5 m/s — settling/deposition risk for fluids containing solids or heavy components.`);
+    warnings.push(`Suction velocity ${suctionVelocity.toFixed(2)} m/s — below 0.5 m/s; settling/deposition risk for fluids with solids or heavy entrained components (screening guidance).`);
   }
   if (dischargeVelocity > 5.0) {
-    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s exceeds 5.0 m/s — erosion risk; consider increasing discharge pipe size.`);
+    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s — above common preliminary guidance of ~5.0 m/s for discharge piping; potential erosion risk. Consider a larger pipe diameter (screening guidance — verify against project spec and material class).`);
   } else if (dischargeVelocity > 3.5) {
-    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s — verify pipe supports for hydraulic forces at elevated velocity.`);
+    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s — above typical preliminary guidance of ~3.5 m/s; verify pipe supports for hydraulic forces (screening guidance).`);
   }
   if (dischargeVelocity > 0 && dischargeVelocity < 1.0) {
-    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s below 1.0 m/s — settling/deposition risk.`);
+    warnings.push(`Discharge velocity ${dischargeVelocity.toFixed(2)} m/s — below 1.0 m/s; potential settling/deposition risk (screening guidance).`);
   }
 }
 
@@ -398,10 +400,11 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
 
   // ── SCOPE DISCLOSURE ──────────────────────────────────────────────────────
   warnings.push(
-    "PD Pump Screening: this tool performs hydraulic / power screening only. " +
-    "Displacement, stroke/speed selection, plunger dimensions, pulsation bottles, " +
+    "PD Pump Screening (preliminary only): this tool covers hydraulic / power screening. " +
+    "Displacement, stroke/speed selection, plunger/piston dimensions, pulsation bottle sizing, " +
     "and acceleration head are NOT calculated. " +
-    "Full PD pump design requires vendor quotation and API 674/676 engineering."
+    "Full PD pump design and vendor quotation are required before procurement — " +
+    "refer to applicable project specification and API 674/676 as relevant."
   );
 
   // ── NPSHa / NPIPa screening ───────────────────────────────────────────────
@@ -435,7 +438,7 @@ export function calculatePDPumpSizing(input: PDPumpSizingInput): PDPumpSizingRes
   }
 
   if (differentialPressure > 100) {
-    warnings.push(`High pump ΔP (${differentialPressure.toFixed(1)} bar) — verify pump pressure rating, shaft/packing design, and piping class per project specification and API 674/676.`);
+    warnings.push(`High pump ΔP (${differentialPressure.toFixed(1)} bar) — verify pump pressure rating, shaft/seal/packing design, and piping class against project specification and applicable standards (API 674/676 as relevant).`);
   }
   if (input.volumetricEfficiency < 80) {
     warnings.push(`Low volumetric efficiency (${input.volumetricEfficiency}%) — excessive internal leakage; verify wear rings, clearances, and pump condition.`);
@@ -565,16 +568,16 @@ function buildCentrifugalTrace(
 ): PumpCalcTrace {
   const steps: PumpCalcStep[] = [];
   const assumptions: string[] = [
-    "PRELIMINARY HYDRAULIC / POWER SCREENING — not a substitute for vendor selection or detailed hydraulic network analysis",
-    "Steady-state, incompressible liquid flow",
-    "Pipe is full (no two-phase flow)",
+    "PRELIMINARY HYDRAULIC / POWER SCREENING — not a substitute for vendor selection, detailed hydraulic network analysis, or formal API 610 compliance review",
+    "Steady-state, incompressible liquid flow; pipe assumed full (no two-phase flow or transient effects)",
     "Friction factor per Swamee-Jain (turbulent) or 64/Re (laminar) — Darcy-Weisbach",
     "Fittings losses modeled via resistance coefficient (K) method (Crane TP-410)",
-    "TDH includes elevation, friction, velocity head, AND destination pressure head — full Bernoulli basis",
-    "NPSHa calculated from suction-side energy balance — NPSHr is a vendor property and is NOT computed here",
-    "No pump curve, BEP matching, or off-BEP derating performed",
-    "Motor margin is typical driver sizing guidance — verify against project specification and selected motor standard",
-    "Specific speed Ns is an indicative screening value — impeller type selection requires vendor confirmation",
+    "TDH = Δz + hf_total + Δhv + (P_dest − P_suction)/(ρg) — full Bernoulli basis including destination vessel pressure head",
+    "NPSHa calculated from suction-side energy balance — this is a screening value; NPSHr is a vendor pump curve property and is NOT computed here. Compare NPSHa vs. vendor NPSHr + required margin before selection",
+    "Velocity thresholds in advisory notes are common EPC/HI preliminary screening guidance — not absolute limits; verify against project specification",
+    "No pump curve, BEP matching, or off-BEP performance derating performed",
+    "Motor margin percentages are indicative driver sizing guidance (API-aware, common EPC preliminary practice) — verify against project specification and selected motor standard edition",
+    "Specific speed Ns is an indicative screening value in the stated unit convention — impeller type selection requires vendor confirmation and curve review",
   ];
 
   steps.push(...buildPipingTraceSteps(input, piping, flowRate_m3s, "Suction"));
