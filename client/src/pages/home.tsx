@@ -509,7 +509,7 @@ export default function Home() {
                   <h3 className="font-semibold text-sm mb-2 leading-snug">
                     {project.client} {project.title}
                   </h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed mb-4 line-clamp-3">
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-4">
                     {project.description}
                   </p>
                   <div className="flex items-center gap-1.5">
