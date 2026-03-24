@@ -473,6 +473,7 @@ export function calculateApi2000(input: Api2000Input): Api2000Result {
   trace.push({ step: `Liquid level = ${input.liquidLevel_percent}%`, value: `H_liq = ${fmtNum(geom.height_m * input.liquidLevel_percent / 100)} m` });
   trace.push({ step: "Wetted area = \u03C0 \u00D7 D \u00D7 H_liquid", value: `${fmtNum(geom.wettedArea_m2)} m\u00B2` });
   trace.push({ step: "Vapor space", value: `${fmtNum(geom.vaporSpace_m3)} m\u00B3` });
+  trace.push({ step: "Standard reference conditions (API 2000 \u00A73.40)", value: "15\u00B0C (288.15 K), 101.325 kPa \u2014 all flows in Nm\u00B3/h" });
 
   const C_out = THERMAL_COEFF_OUT[input.productCategory];
   const C_in = THERMAL_COEFF_IN[input.productCategory];

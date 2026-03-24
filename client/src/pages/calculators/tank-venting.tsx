@@ -196,7 +196,7 @@ export default function TankVentingPage() {
   const buildExportData = (): ExportDatasheet | null => {
     if (!result) return null;
     return {
-      calculatorName: "API 2000 Tank Venting Calculator",
+      calculatorName: "API 2000 Tank Venting \u2014 Preliminary Screening Tool",
       inputs: [
         { label: "Tank Diameter", value: fmtResult(form.tankDiameter), unit: lenU },
         { label: "Tank Height", value: fmtResult(form.tankHeight), unit: lenU },
@@ -286,9 +286,11 @@ export default function TankVentingPage() {
                   <p className="text-xs font-semibold text-amber-400">Preliminary Screening Tool — Not for Final Design or Procurement</p>
                   <ul className="text-[11px] text-muted-foreground space-y-0.5 list-disc list-inside">
                     <li>Vent sizing uses an orifice-equivalent free-area method — results are equivalent open area, not OEM-rated vent capacity</li>
-                    <li>Approximate connection size is a screening reference only — not a final nozzle specification</li>
-                    <li>Emergency vent sized at the same ΔP as the normal conservation vent (conservative screening assumption — verify actual set pressure per API 2000 §6)</li>
-                    <li>Fixed Cd values assumed — final sizing requires manufacturer flow-capacity curves per API 2000 Annex B / EN ISO 28300</li>
+                    <li>Approximate equivalent connection size is a screening reference only — not a final nozzle or device specification</li>
+                    <li>Emergency vent is sized at the same &Delta;P as the normal conservation vent (conservative screening assumption — verify actual emergency vent set pressure per API 2000 &sect;6)</li>
+                    <li>Fixed Cd values are screening assumptions (PV valve Cd&nbsp;=&nbsp;0.62, emergency vent Cd&nbsp;=&nbsp;0.55) — final sizing requires OEM-rated capacity curves per API 2000 Annex B / EN ISO 28300</li>
+                    <li>All flow rates in Nm&sup3;/h at standard conditions: 15&deg;C (288.15&nbsp;K), 101.325&nbsp;kPa (API 2000 &sect;3.40)</li>
+                    <li>NOT modelled: blanketing/inerting systems, vapor recovery units, flame arrester pressure derating, detailed flashing dynamics, refrigerated/cryogenic storage, or device accumulation characteristics</li>
                   </ul>
                 </div>
               </div>
@@ -638,6 +640,7 @@ export default function TankVentingPage() {
                           </tbody>
                         </table>
                       </div>
+                      <p className="text-[10px] text-muted-foreground mt-2">All flows in Nm&sup3;/h at 15&deg;C (288.15&nbsp;K), 101.325&nbsp;kPa (API 2000 &sect;3.40)</p>
                     </CardContent>
                   </Card>
 
@@ -815,11 +818,15 @@ export default function TankVentingPage() {
                     </CardContent>
                   </Card>
 
+                  <p className="text-[10px] text-muted-foreground" data-testid="text-std-conditions">
+                    All flow rates in Nm&sup3;/h at standard conditions: 15&deg;C (288.15&nbsp;K), 101.325&nbsp;kPa (API 2000 &sect;3.40). Sizing uses orifice-equivalent free-area equation — NOT OEM-rated vent capacity.
+                  </p>
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Card className="border-amber-500/20">
                       <CardHeader className="pb-2">
-                        <h3 className="text-xs font-semibold text-amber-400">PV Valve — Pressure Side</h3>
-                        <p className="text-[10px] text-muted-foreground">Normal outbreathing · ΔP = {result.ventSizing.normalDPBasis_pressure_mbar} mbar g</p>
+                        <h3 className="text-xs font-semibold text-amber-400">PV Valve — Pressure (Normal Outbreathing)</h3>
+                        <p className="text-[10px] text-muted-foreground">Equiv. open-area estimate · &Delta;P = {result.ventSizing.normalDPBasis_pressure_mbar}&nbsp;mbar g · Cd = 0.62 (screening)</p>
                       </CardHeader>
                       <CardContent className="space-y-1.5">
                         <ResultRow label="Flow" value={fmtResult(result.normalVenting.totalOutbreathing_Nm3h)} unit="Nm\u00B3/h" />
@@ -831,8 +838,8 @@ export default function TankVentingPage() {
 
                     <Card className="border-blue-500/20">
                       <CardHeader className="pb-2">
-                        <h3 className="text-xs font-semibold text-blue-400">PV Valve — Vacuum Side</h3>
-                        <p className="text-[10px] text-muted-foreground">Normal inbreathing · ΔP = {result.ventSizing.normalDPBasis_vacuum_mbar} mbar</p>
+                        <h3 className="text-xs font-semibold text-blue-400">PV Valve — Vacuum (Normal Inbreathing)</h3>
+                        <p className="text-[10px] text-muted-foreground">Equiv. open-area estimate · &Delta;P = {result.ventSizing.normalDPBasis_vacuum_mbar}&nbsp;mbar · Cd = 0.62 (screening)</p>
                       </CardHeader>
                       <CardContent className="space-y-1.5">
                         <ResultRow label="Flow" value={fmtResult(result.normalVenting.totalInbreathing_Nm3h)} unit="Nm\u00B3/h" />
@@ -844,8 +851,8 @@ export default function TankVentingPage() {
 
                     <Card className="border-red-500/20">
                       <CardHeader className="pb-2">
-                        <h3 className="text-xs font-semibold text-red-400">Emergency Vent</h3>
-                        <p className="text-[10px] text-muted-foreground">Net of normal credit (Sec. 5.3)</p>
+                        <h3 className="text-xs font-semibold text-red-400">Emergency Vent (Equiv. Area, Screening)</h3>
+                        <p className="text-[10px] text-muted-foreground">Net of normal credit (Sec. 5.3) · &Delta;P basis = design pressure (screening — see note below) · Cd = 0.55 (screening)</p>
                       </CardHeader>
                       <CardContent className="space-y-1.5">
                         <ResultRow label="Net Flow" value={fmtResult(result.emergencyVenting.netEmergency_Nm3h)} unit="Nm\u00B3/h" />
@@ -902,6 +909,7 @@ export default function TankVentingPage() {
                   <AssumptionsPanel
                     assumptions={result.assumptions}
                     references={[
+                      "PRELIMINARY SCREENING TOOL ONLY \u2014 Results are equivalent open-area estimates, NOT final device specifications. Final sizing requires OEM-rated capacity data per API 2000 Annex B / EN ISO 28300.",
                       "API Std 2000, 7th Edition (2014): Venting Atmospheric and Low-Pressure Storage Tanks",
                       "NFPA 30: Flammable and Combustible Liquids Code",
                     ]}
