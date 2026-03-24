@@ -718,8 +718,12 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
   steps.push({ label: "P₂ downstream",   equation: "", value: input.downstreamPressure.toFixed(3), unit: "bar(a)", eqId: "RO-L-02" });
   steps.push({ label: "ΔP = P₁ − P₂",   equation: "ΔP = P₁ − P₂", value: dP_bar.toFixed(4), unit: "bar", eqId: "RO-L-03" });
   steps.push({ label: "ρ liquid",         equation: "", value: rho.toFixed(3), unit: "kg/m³", eqId: "RO-L-04" });
-  steps.push({ label: "Mass flow W",      equation: input.flowBasis === "volume" ? "W = Q × ρ" : "given", value: W_kgh.toFixed(3), unit: "kg/h", eqId: "RO-L-05" });
-  steps.push({ label: "Vol flow Q",       equation: input.flowBasis === "mass" ? "Q = W/ρ" : "given", value: Q_m3h.toFixed(4), unit: "m³/h", eqId: "RO-L-06" });
+  if (input.sizingMode !== "checkOrifice") {
+    steps.push({ label: "Mass flow W (input)", equation: input.flowBasis === "volume" ? "W = Q × ρ" : "given", value: W_kgh.toFixed(3), unit: "kg/h", eqId: "RO-L-05" });
+    steps.push({ label: "Vol flow Q (input)",  equation: input.flowBasis === "mass" ? "Q = W/ρ" : "given", value: Q_m3h.toFixed(4), unit: "m³/h", eqId: "RO-L-06" });
+  } else {
+    steps.push({ label: "d orifice (given)",   equation: "check mode — d is input, W is output", value: input.orificeDiameter.toFixed(3), unit: "mm", eqId: "RO-L-05C" });
+  }
 
   // Discharge coefficient
   if (estimateCd) { flags.push("CD_ESTIMATED"); }
@@ -768,11 +772,14 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
   } else if (input.sizingMode === "checkOrifice") {
     d_mm = input.orificeDiameter;
     if (d_mm <= 0) throw new Error("Orifice diameter must be positive in check mode");
+    let checkCdIterations = 0;
     if (estimateCd) {
       // Iterate Cd and flow together until Cd converges (eliminates stale-Re bias)
+      // Cd[i+1] = RHG( Re( W( Cd[i] ) ) ) — fixed-point iteration on Cd
       const pipeArea_m2 = PI / 4 * D_m * D_m;
       let cdIter = Cd;
       for (let ci = 0; ci < project.maxIterations; ci++) {
+        checkCdIterations = ci + 1;
         const W_iter   = liquidMassFlow(d_mm, D_mm, rho, dP_Pa, cdIter, basisMode);
         const Q_iter   = W_iter / rho / 3600; // m³/s
         const vPipe    = pipeArea_m2 > 0 ? Q_iter / pipeArea_m2 : 0;
@@ -784,9 +791,12 @@ export function calculateROLiquid(input: ROServiceInput, project: ROProject): RO
         cdIter = thick.Cd;
       }
       Cd = cdIter;
+      steps.push({ label: "Cd-flow co-iteration (check mode)", equation: "Cd[n+1] = RHG(Re(W(Cd[n]))) — fixed-point; converged |ΔCd| < 1e-6", value: `${Cd.toFixed(6)}  (${checkCdIterations} iter.)`, unit: "—", eqId: "RO-L-CDIT" });
     }
     W_kgh = liquidMassFlow(d_mm, D_mm, rho, dP_Pa, Cd, basisMode);
     Q_m3h = W_kgh / rho;
+    steps.push({ label: "W computed (check mode output)", equation: "W = Cd·E·A·√(2·ρ·ΔP)", value: W_kgh.toFixed(3), unit: "kg/h", eqId: "RO-L-CHECK-W" });
+    steps.push({ label: "Q computed (check mode output)", equation: "Q = W / ρ", value: Q_m3h.toFixed(4), unit: "m³/h", eqId: "RO-L-CHECK-Q" });
   } else {
     // predictDP
     d_mm = input.orificeDiameter;
@@ -1101,11 +1111,14 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
     pressureRatio = P2_bar / P1_bar;
     isChoked = pressureRatio <= xCrit;
     actualDP_bar = P1_bar - P2_bar;
+    let checkCdIterationsG = 0;
     if (estimateCd) {
       // Iterate Cd and flow together until Cd converges (eliminates stale-Re bias)
+      // Cd[i+1] = RHG( Re( W( Cd[i] ) ) ) — fixed-point iteration on Cd
       const pipeArea_m2 = PI / 4 * D_m * D_m;
       let cdIter = Cd;
       for (let ci = 0; ci < project.maxIterations; ci++) {
+        checkCdIterationsG = ci + 1;
         const W_iter   = gasMassFlow(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, cdIter, pressureRatio, isChoked, basisMode);
         const W_kgs_i  = W_iter / 3600;
         const vPipe    = pipeArea_m2 > 0 && rho1 > 0 ? W_kgs_i / (rho1 * pipeArea_m2) : 0;
@@ -1117,8 +1130,10 @@ export function calculateROGas(input: ROServiceInput, project: ROProject): RORes
         cdIter = thick.Cd;
       }
       Cd = cdIter;
+      steps.push({ label: "Cd-flow co-iteration (check mode)", equation: "Cd[n+1] = RHG(Re(W(Cd[n]))) — fixed-point; converged |ΔCd| < 1e-6", value: `${Cd.toFixed(6)}  (${checkCdIterationsG} iter.)`, unit: "—", eqId: "RO-G-CDIT" });
     }
     W_kgh = gasMassFlow(d_mm, D_mm, P1_Pa, T_K, MW, k, Z, Cd, pressureRatio, isChoked, basisMode);
+    steps.push({ label: "W computed (check mode output)", equation: isChoked ? "W = Cd·E·A·P₁·C(k)·√(MW/(Z·Rᵤ·T))" : "W = Cd·E·A·Y·√(2·ρ₁·ΔP)", value: W_kgh.toFixed(3), unit: "kg/h", eqId: "RO-G-CHECK-W" });
     steps.push({ label: "Flow regime", equation: isChoked ? "r ≤ r_crit → CHOKED" : "Subcritical", value: isChoked ? "CHOKED" : "SUBCRITICAL", unit: "", eqId: "RO-G-12" });
 
   } else {
@@ -1441,17 +1456,17 @@ export const FLAG_LABELS: Record<ROFlag, string> = {
   CHOKED_FLOW:               "CHOKED FLOW (SONIC GAS)",
   HIGH_NOISE_RISK:           "HIGH NOISE RISK",
   FLASHING_LIKELY:           "FLASHING LIKELY",
-  CAVITATION_INCIPIENT:      "INCIPIENT CAVITATION",
-  CAVITATION_SEVERE:         "SEVERE CAVITATION",
+  CAVITATION_INCIPIENT:      "INCIPIENT CAVITATION (approx. screening σ<2.7 — adapted criterion)",
+  CAVITATION_SEVERE:         "SEVERE CAVITATION (approx. screening σ<1.5 — adapted criterion)",
   TWO_PHASE_SUSPECTED:       "TWO-PHASE SUSPECTED UPSTREAM",
   BETA_OUT_OF_RANGE:         "β OUT OF RANGE",
-  CD_ESTIMATED:              "Cd ESTIMATED (ISO 5167-2 RHG)",
+  CD_ESTIMATED:              "Cd ESTIMATED (ISO 5167-2 RHG — iterated with flow in check mode)",
   HIGH_DP_FRACTION:          "HIGH ΔP/P₁ RATIO",
   SOLVER_ISSUE:              "SOLVER CONVERGENCE ISSUE",
   NEAR_CHOKED:               "NEAR CHOKED CONDITIONS",
   HIGH_MACH:                 "HIGH MACH NUMBER (> 0.8)",
-  HIGH_ORIFICE_VELOCITY:     "HIGH ORIFICE VELOCITY",
-  EROSIONAL_VELOCITY_EXCEEDED: "API RP 14E-INFORMED JET VELOCITY SCREENING EXCEEDED",
+  HIGH_ORIFICE_VELOCITY:     "HIGH ORIFICE JET VELOCITY (approaching screening threshold)",
+  EROSIONAL_VELOCITY_EXCEEDED: "API RP 14E-INFORMED JET VELOCITY SCREENING EXCEEDED (conservative proxy — not compliance)",
   MULTI_STAGE_RECOMMENDED:   "MULTI-STAGE REDUCTION RECOMMENDED",
   THICK_ORIFICE:             "THICK ORIFICE PLATE — Cd CORRECTED",
   LOW_REYNOLDS:              "LOW REYNOLDS NUMBER (Re < 5000)",

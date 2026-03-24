@@ -277,9 +277,9 @@ export default function RestrictionOrificePage() {
       { label: "Permanent ΔP", value: convertFromSI("pressure", result.permanentPressureLoss, unitSystem), unit: pU("pressure") },
       { label: "Perm ΔP Fraction (ISO 5167-2 Annex D)", value: result.permanentPressureLossFraction, unit: "" },
       { label: "Recovery Factor", value: result.recoveryFactor, unit: "" },
-      { label: "Orifice Velocity", value: convertFromSI("velocity", result.orificeVelocity, unitSystem), unit: pU("velocity") },
-      { label: "API 14E Erosional Velocity Ve", value: convertFromSI("velocity", result.erosionalVelocity, unitSystem), unit: pU("velocity") },
-      { label: "v_o / Ve Ratio", value: result.erosionalVelocityRatio, unit: result.erosionalVelocityRatio > 1 ? "EXCEEDED" : "OK" },
+      { label: "Orifice Jet Velocity (at bore)", value: convertFromSI("velocity", result.orificeVelocity, unitSystem), unit: pU("velocity") },
+      { label: "Ve — API RP 14E jet vel. screening proxy (C=100, conservative)", value: convertFromSI("velocity", result.erosionalVelocity, unitSystem), unit: pU("velocity") },
+      { label: "v_jet / Ve ratio (screening proxy — not compliance)", value: result.erosionalVelocityRatio, unit: result.erosionalVelocityRatio > 1 ? "SCREENING EXCEEDED" : "OK" },
       { label: "Pipe Velocity", value: convertFromSI("velocity", result.pipeVelocity, unitSystem), unit: pU("velocity") },
       { label: "Flow Coefficient K", value: result.flowCoefficient, unit: "" },
       { label: "Mass Flow", value: convertFromSI("flowMass", result.massFlow, unitSystem), unit: pU("flowMass") },
@@ -298,8 +298,8 @@ export default function RestrictionOrificePage() {
       ...(result.reynoldsNumberPipe > 0 ? [{ label: "Reynolds Re_D (pipe)", value: result.reynoldsNumberPipe, unit: "" }] : []),
       ...(result.phase === "liquid" && result.sigma < 999 ? [
         { label: "Cavitation Index σ = (P₁−Pv)/ΔP", value: result.sigma, unit: "" },
-        { label: "σᵢ Incipient Threshold (ISA-RP75.23)", value: result.sigmaIncipient, unit: "" },
-        { label: "Cavitation Status", value: result.sigma < 1.5 ? "SEVERE" : result.sigma < result.sigmaIncipient ? "INCIPIENT" : "NONE", unit: "" },
+        { label: "σᵢ = 2.7 incipient threshold (approx. screening — adapted from control-valve/hydraulic practice, not certified RO criterion)", value: result.sigmaIncipient, unit: "" },
+        { label: "Cavitation Status (approx. screening)", value: result.sigma < 1.5 ? "SEVERE (screening indicator)" : result.sigma < result.sigmaIncipient ? "INCIPIENT (screening indicator)" : "NONE INDICATED", unit: "" },
       ] : []),
     ];
 
@@ -408,7 +408,7 @@ export default function RestrictionOrificePage() {
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">Restriction Orifice Screening & Sizing</h1>
-            <p className="text-xs md:text-sm text-muted-foreground">Preliminary sizing basis — liquid & gas: choked-flow, permanent ΔP, Mach & noise screening</p>
+            <p className="text-xs md:text-sm text-muted-foreground">Restriction Orifice Screening / Preliminary Sizing Tool — liquid & gas, choked-flow, permanent ΔP, Mach & noise screening</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -419,6 +419,23 @@ export default function RestrictionOrificePage() {
           <Button size="sm" variant="ghost" onClick={handleReset} data-testid="button-reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-md border border-amber-700/50 bg-amber-950/20 p-3 text-[11px] text-amber-200/80" data-testid="banner-screening">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold text-amber-300 text-xs">Restriction Orifice Screening / Preliminary Sizing Tool — Not Final Certified RO Design</p>
+            <ul className="list-disc list-inside space-y-0.5 text-amber-200/70">
+              <li>Results are <strong>preliminary</strong> — not a substitute for a formally calibrated ISO 5167 measurement device analysis or a certified RO datasheet.</li>
+              <li>Discharge coefficient Cd uses the ISO 5167-2 Reader-Harris/Gallagher correlation (adapted, not metering-grade); in check mode, Cd and flow are iterated jointly to convergence.</li>
+              <li>Cavitation σ thresholds (σᵢ = 2.7, σch = 1.5) are <strong>approximate screening indicators</strong> adapted from control-valve/hydraulic practice — not certified RO acceptance criteria.</li>
+              <li>API RP 14E erosional velocity Ve is applied as a <strong>conservative jet-velocity screening proxy</strong> at the orifice bore — not a direct code-compliance calculation at the vena contracta.</li>
+              <li>Multi-stage gas sizing holds upstream properties constant — simplified staged pressure-drop screening, not rigorous stage-by-stage thermodynamic modeling.</li>
+              <li>All results must be verified by a qualified process engineer and confirmed against project design basis before use in detail design or procurement.</li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -864,9 +881,9 @@ export default function RestrictionOrificePage() {
                         { label: "Permanent ΔP", val: convertFromSI("pressure", result.permanentPressureLoss, unitSystem).toFixed(3), unit: pU("pressure") },
                         { label: "Perm ΔP fraction (ISO)", val: (result.permanentPressureLossFraction * 100).toFixed(1) + "%", unit: "" },
                         { label: "Recovery factor", val: (result.recoveryFactor * 100).toFixed(1) + "%", unit: "" },
-                        { label: "Orifice velocity", val: convertFromSI("velocity", result.orificeVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
-                        { label: "API RP 14E Ve (screening)", val: convertFromSI("velocity", result.erosionalVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
-                        { label: "v / Ve ratio", val: result.erosionalVelocityRatio.toFixed(3), unit: result.erosionalVelocityRatio > 1 ? "⚠ SCREENING EXCEEDED" : "✓ OK" },
+                        { label: "Orifice jet velocity (at bore)", val: convertFromSI("velocity", result.orificeVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
+                        { label: "Ve — API RP 14E jet vel. screening proxy (C=100)", val: convertFromSI("velocity", result.erosionalVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
+                        { label: "v_jet / Ve ratio (conservative proxy — not compliance)", val: result.erosionalVelocityRatio.toFixed(3), unit: result.erosionalVelocityRatio > 1 ? "⚠ SCREENING EXCEEDED" : "✓ OK" },
                         { label: "Pipe velocity", val: convertFromSI("velocity", result.pipeVelocity, unitSystem).toFixed(2), unit: pU("velocity") },
                         { label: "Flow coeff. K", val: result.flowCoefficient.toFixed(4), unit: "—" },
                         { label: "Cd effective", val: result.cdEffective.toFixed(4), unit: "—" },
@@ -902,8 +919,8 @@ export default function RestrictionOrificePage() {
                           { label: "Re (pipe, D)", val: result.reynoldsNumberPipe.toFixed(0), unit: "—" },
                         ] : []),
                         ...(result.phase === "liquid" && result.sigma < 999 ? [
-                          { label: "Cavitation index σ", val: result.sigma.toFixed(3), unit: "—" },
-                          { label: "σᵢ incipient (ISA)", val: result.sigmaIncipient.toFixed(1), unit: result.sigma < result.sigmaIncipient ? "⚠ σ < σᵢ" : "✓ σ > σᵢ" },
+                          { label: "Cavitation index σ = (P₁−Pv)/ΔP", val: result.sigma.toFixed(3), unit: "—" },
+                          { label: "σᵢ = 2.7 (approx. screening — adapted from hydraulic practice)", val: result.sigmaIncipient.toFixed(1), unit: result.sigma < result.sigmaIncipient ? "⚠ σ < σᵢ" : "✓ σ > σᵢ" },
                         ] : []),
                       ].map((item, i) => (
                         <div key={i} className="flex justify-between py-1.5 border-b border-muted/20">
