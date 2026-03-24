@@ -168,7 +168,7 @@ export default function SeparatorSizingPage() {
 
       const r = calculateSeparator(project, convertedCases, config, holdup);
       setResult(r);
-      setActiveTab("gas");
+      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);

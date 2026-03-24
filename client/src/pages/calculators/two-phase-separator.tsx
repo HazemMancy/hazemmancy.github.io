@@ -158,7 +158,7 @@ export default function TwoPhaseSeparatorPage() {
 
       const r = calculateTwoPhaseSeparator(project, convertedCases, config, holdup);
       setResult(r);
-      setActiveTab("gas");
+      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);

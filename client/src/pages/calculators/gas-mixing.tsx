@@ -166,6 +166,7 @@ export default function GasMixingPage() {
       });
       // normalizationMode is enforced inside the solver — strict throws, normalize auto-scales
       setResult(calculateGasMixing({ components: parsed, normalizationMode: project.normalizationMode }, components));
+      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);

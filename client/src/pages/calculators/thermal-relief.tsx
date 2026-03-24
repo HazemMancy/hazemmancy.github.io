@@ -229,6 +229,7 @@ export default function ThermalReliefPage() {
       setSizingResult(sr);
       const trv = selectTRV(sr.requiredOrificeArea_mm2);
       setTrvSelection(trv);
+      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sizing calculation error");
       setSizingResult(null); setTrvSelection(null);

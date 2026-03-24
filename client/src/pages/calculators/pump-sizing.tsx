@@ -279,7 +279,7 @@ export default function PumpSizingPage() {
         const res = calculatePumpSizing(input);
         setCentrifugalResult(res);
         setPdResult(null);
-        setActiveTab("hydraulics");
+        setActiveTab("summary");
       } else {
         const input = {
           ...pipingInput,
@@ -295,7 +295,7 @@ export default function PumpSizingPage() {
         const res = calculatePDPumpSizing(input);
         setPdResult(res);
         setCentrifugalResult(null);
-        setActiveTab("hydraulics");
+        setActiveTab("summary");
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");

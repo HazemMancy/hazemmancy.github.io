@@ -186,6 +186,7 @@ export default function CompressorPage() {
 
       const res = calculateCompressorSizing(input);
       setResult(res);
+      setActiveTab("summary");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);

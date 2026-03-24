@@ -172,7 +172,7 @@ export default function TankVentingPage() {
       };
       const res = calculateApi2000(input);
       setResult(res);
-      setActiveTab("scenarios");
+      setActiveTab("results");
     } catch (e: any) {
       setError(e.message || "Calculation error");
     }

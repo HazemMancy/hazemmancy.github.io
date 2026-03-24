@@ -217,6 +217,7 @@ export default function PSVSizingPage() {
 
       const orifice = selectAPI526Orifice(result.requiredArea);
       setOrificeSelection(orifice);
+      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sizing calculation error");
       setSizingResult(null);

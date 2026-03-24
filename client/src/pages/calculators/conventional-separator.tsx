@@ -153,6 +153,7 @@ export default function ConventionalSeparatorPage() {
 
       const r = calculateConventionalSeparator(project, convertedCases, config, holdup);
       setResult(r);
+      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);

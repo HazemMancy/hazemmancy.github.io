@@ -214,6 +214,7 @@ export default function ControlValvePage() {
       const vd = toSIValve();
       const result = computeMultiPointSizing(sd, vd, installation);
       setSizingResult(result);
+      setActiveTab("results");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sizing error");
       setSizingResult(null);
