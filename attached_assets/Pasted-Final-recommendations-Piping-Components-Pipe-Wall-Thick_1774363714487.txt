@@ -1,0 +1,53 @@
+Final recommendations — Piping Components & Pipe Wall Thickness
+
+Piping Components
+
+1. Add dataset provenance and edition metadata
+   - Every built-in dataset should show source standard, edition/revision, date/reference note, and coverage scope.
+
+2. Replace the current CSV parser
+   - Use a robust parser that supports quoted cells, commas inside fields, blank values, and row-level validation feedback.
+
+3. Strengthen dataset validation
+   - Validate metadata, positive dimensions, ID/OD consistency, thickness consistency, and duplicate rows/keys where practical.
+
+4. Fix row-selection stability
+   - Use stable record identity keys instead of filtered-array index for selection state.
+
+5. Fix or simplify Pipe Flexibility restraint logic
+   - Either implement genuinely different solver behavior for restraint cases or remove the restraint choice as a solver-driving input and present the method honestly as a single simplified screening model.
+
+6. Strengthen Pipe Flexibility assumptions
+   - State clearly that it is simplified thermal-growth screening only and not a substitute for Caesar II / AutoPIPE / detailed B31.3 stress analysis.
+
+7. Strengthen Safe Spans limitations
+   - Keep it as a beam-style screening tool and state clearly that final support spacing must be verified against project piping stress/support criteria.
+
+8. Keep lookup pages positioned as dimensional reference tools
+   - Do not let Pipe / Flanges / Fittings / Gaskets / Valves / Olets / Line Blanks pages imply full design verification or standards compliance selection.
+
+Pipe Wall Thickness
+
+9. Add schema-based validation in the actual solve path
+   - Validate pressure, diameter, allowances, mill tolerance, material inputs, temperature, code-specific factors, and user-defined overrides.
+
+10. Block or hide invalid joint-type choices by code branch
+   - For example, prevent B31.8 from exposing joint types that are only valid in the B31.4 basis used by the tool.
+
+11. Tighten B31.4 / B31.8 temperature-range handling
+   - Do not silently continue beyond implemented code-table temperature coverage without explicit warning, block, or override acknowledgement.
+
+12. Add stronger low-temperature discipline for B31.3
+   - If temperature is below table minimum, show an explicit warning and require MDMT / impact-testing / low-temperature qualification review.
+
+13. Make user-defined overrides more visible
+   - Clearly show when allowable stress, E, design factor, or other code-basis parameters are being overridden and that the result becomes project-specific screening only.
+
+14. Govern wall-thickness engineering data like the rest of the module
+   - Move schedule tables, allowable-stress data, SMYS data, and related standards data into controlled dataset files/objects with visible provenance metadata.
+
+15. Keep the wall thickness calculator positioned correctly
+   - It is worth keeping and is one of the stronger calculators, but it should remain framed as:
+   - Preliminary Wall Thickness / Schedule Screening Tool
+   - not final code-compliance verification,
+   - not a substitute for full project material/code review.

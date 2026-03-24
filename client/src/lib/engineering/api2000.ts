@@ -1,6 +1,35 @@
 /**
  * API 2000 — Venting of Atmospheric and Low-Pressure Storage Tanks
- * 7th Edition (2014), Comprehensive Scenario-Based Calculator
+ * 7th Edition (2014)
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * PRELIMINARY SCREENING TOOL — NOT FOR FINAL DESIGN
+ * ═══════════════════════════════════════════════════════════════════
+ *
+ * Scope: FEED-level and concept screening of normal and emergency
+ * venting requirements for atmospheric and low-pressure storage tanks.
+ *
+ * Explicit Limitations:
+ *   1. Vent device sizing uses an orifice-equivalent free-area equation.
+ *      Results are EQUIVALENT OPEN AREA estimates — NOT vendor-rated vent
+ *      capacity. Final sizing requires manufacturer flow-capacity curves
+ *      tested and certified per API 2000 Annex B / EN ISO 28300.
+ *   2. Approximate Equivalent Connection Size (NPS) is derived from the
+ *      calculated free area using nominal pipe schedules. It is NOT a final
+ *      device or nozzle specification — it is a screening reference only.
+ *   3. Emergency vent sizing uses the same differential pressure basis as
+ *      the normal conservation vent. This is a conservative screening
+ *      assumption. Actual emergency vent set pressure may differ significantly;
+ *      verify per API 2000 Section 6 and device specification.
+ *   4. Governing emergency case is selected based on applicable credits
+ *      (insulation, drainage, floating roof) — selection logic is exposed
+ *      in the calculation trace. All applicable cases are shown in the
+ *      scenario matrix.
+ *   5. Fixed Cd values are screening assumptions — not OEM-tested values.
+ *   6. NOT modelled: blanketing / inerting systems, vapor recovery units,
+ *      flame arrester pressure derating, detailed flashing dynamics,
+ *      refrigerated or cryogenic storage, device accumulation / lift
+ *      characteristics, or special storage configurations.
  *
  * ═══════════════════════════════════════════════════════════════════
  * NORMAL VENTING — Section 4
@@ -141,6 +170,14 @@ export interface NormalVentingResult {
   governingDirection: "outbreathing" | "inbreathing";
 }
 
+export interface EmergencyCaseDetail {
+  id: string;
+  label: string;
+  flow_Nm3h: number;
+  applicable: boolean;
+  notApplicableReason?: string;
+}
+
 export interface EmergencyVentingResult {
   wettedArea_m2: number;
   effectiveWettedArea_m2: number;
@@ -152,6 +189,9 @@ export interface EmergencyVentingResult {
   netEmergency_Nm3h: number;
   normalCredit_Nm3h: number;
   governingScenario: string;
+  governingCaseLabel: string;
+  appliedCreditsSummary: string[];
+  allCasesConsidered: EmergencyCaseDetail[];
 }
 
 export interface VentSizingResult {
@@ -164,9 +204,12 @@ export interface VentSizingResult {
   pressureVentDia_mm: number;
   vacuumVentDia_mm: number;
   emergencyVentDia_mm: number;
-  pressureNPS: string;
-  vacuumNPS: string;
-  emergencyNPS: string;
+  pressureApproxConnSize: string;
+  vacuumApproxConnSize: string;
+  emergencyApproxConnSize: string;
+  emergencyDPBasis_mbar: number;
+  normalDPBasis_pressure_mbar: number;
+  normalDPBasis_vacuum_mbar: number;
   governingSide: "pressure" | "vacuum";
 }
 
@@ -350,7 +393,7 @@ function calcEmergencyFlow(
 
 function sizeVentForDP(
   flowRate_Nm3h: number, dp_mbar: number, Cd: number
-): { area_mm2: number; dia_mm: number; nps: string } {
+): { area_mm2: number; dia_mm: number; approxConnSize: string } {
   const rho_air = 1.225;
   const dp_Pa = dp_mbar * 100;
 
@@ -364,20 +407,24 @@ function sizeVentForDP(
   const area_mm2 = area_m2 * 1e6;
   const dia_mm = area_mm2 > 0 ? Math.sqrt(4 * area_mm2 / Math.PI) : 0;
 
+  // Approximate connection size — derived from equivalent free area.
+  // NOT a final device specification. Final selection requires OEM-rated flow capacity data.
   const npsTable = [
-    { nps: "2\"", dia: 50 }, { nps: "3\"", dia: 75 }, { nps: "4\"", dia: 100 },
-    { nps: "6\"", dia: 150 }, { nps: "8\"", dia: 200 }, { nps: "10\"", dia: 250 },
-    { nps: "12\"", dia: 300 }, { nps: "14\"", dia: 350 }, { nps: "16\"", dia: 400 },
-    { nps: "18\"", dia: 450 }, { nps: "20\"", dia: 500 }, { nps: "24\"", dia: 600 },
-    { nps: "30\"", dia: 750 }, { nps: "36\"", dia: 900 },
+    { label: "2\" (≈ DN50)", dia: 50 }, { label: "3\" (≈ DN80)", dia: 75 },
+    { label: "4\" (≈ DN100)", dia: 100 }, { label: "6\" (≈ DN150)", dia: 150 },
+    { label: "8\" (≈ DN200)", dia: 200 }, { label: "10\" (≈ DN250)", dia: 250 },
+    { label: "12\" (≈ DN300)", dia: 300 }, { label: "14\" (≈ DN350)", dia: 350 },
+    { label: "16\" (≈ DN400)", dia: 400 }, { label: "18\" (≈ DN450)", dia: 450 },
+    { label: "20\" (≈ DN500)", dia: 500 }, { label: "24\" (≈ DN600)", dia: 600 },
+    { label: "30\" (≈ DN750)", dia: 750 }, { label: "36\" (≈ DN900)", dia: 900 },
   ];
-  let nps = "";
+  let approxConnSize = "";
   for (const entry of npsTable) {
-    if (entry.dia >= dia_mm) { nps = entry.nps; break; }
+    if (entry.dia >= dia_mm) { approxConnSize = entry.label; break; }
   }
-  if (!nps && dia_mm > 0) nps = "> 36\" (multiple vents required)";
+  if (!approxConnSize && dia_mm > 0) approxConnSize = "> 36\" — consider multiple vent devices";
 
-  return { area_mm2, dia_mm, nps };
+  return { area_mm2, dia_mm, approxConnSize };
 }
 
 /**
@@ -649,42 +696,104 @@ export function calculateApi2000(input: Api2000Input): Api2000Result {
 
   let governingEmergency_Nm3h: number;
   let governingEmergencyScenario: string;
+  let governingCaseLabel: string;
+  const appliedCreditsSummary: string[] = [];
+
+  const allCasesConsidered: EmergencyCaseDetail[] = [
+    {
+      id: "E1",
+      label: `E1: External Fire, Bare Tank (F=1.0, no drainage) \u2014 ${fmtNum(e1Applicable ? fireFlow_bare.flow_Nm3h : 0)} Nm\u00B3/h`,
+      flow_Nm3h: fireFlow_bare.flow_Nm3h,
+      applicable: e1Applicable,
+      notApplicableReason: !e1Applicable ? (isFloating ? "Floating roof \u2014 use E4" : isUnderground ? "Underground (F=0)" : "Wetted area \u2264 2.8 m\u00B2") : undefined,
+    },
+    {
+      id: "E2",
+      label: `E2: External Fire with Insulation Credit (F=${F}) \u2014 ${fmtNum(e2Applicable ? fireFlow_insulated.flow_Nm3h : 0)} Nm\u00B3/h`,
+      flow_Nm3h: fireFlow_insulated.flow_Nm3h,
+      applicable: e2Applicable,
+      notApplicableReason: !e2Applicable ? (!isInsulated ? "Tank is bare (F=1.0)" : isFloating ? "Floating roof \u2014 use E4" : isUnderground ? "Underground" : "Wetted area \u2264 2.8 m\u00B2") : undefined,
+    },
+    {
+      id: "E3",
+      label: `E3: External Fire with Drainage (F=${F}, drain=${fmtNum(drainageF)}) \u2014 ${fmtNum(e3Applicable ? fireFlow_drained.flow_Nm3h : 0)} Nm\u00B3/h`,
+      flow_Nm3h: fireFlow_drained.flow_Nm3h,
+      applicable: e3Applicable,
+      notApplicableReason: !e3Applicable ? (!input.hasDrainage ? "No drainage provisions" : isFloating ? "Floating roof \u2014 use E4" : isUnderground ? "Underground" : "Wetted area \u2264 2.8 m\u00B2") : undefined,
+    },
+    {
+      id: "E4",
+      label: `E4: Floating Roof Rim Seal Fire \u2014 ${fmtNum(e4Applicable ? floatingRoofEmergency : 0)} Nm\u00B3/h`,
+      flow_Nm3h: floatingRoofEmergency,
+      applicable: e4Applicable,
+      notApplicableReason: !e4Applicable ? "Not a floating roof tank" : undefined,
+    },
+  ];
 
   if (input.insulationType === "underground") {
     governingEmergency_Nm3h = 0;
     governingEmergencyScenario = "None (underground tank)";
+    governingCaseLabel = "Underground tank \u2014 F = 0; no fire emergency vent required (API 2000 \u00A75.2)";
+    appliedCreditsSummary.push("Underground tank: environmental factor F = 0 \u2014 no fire heat input");
   } else if (isFloating) {
     governingEmergency_Nm3h = floatingRoofEmergency;
     governingEmergencyScenario = "E4 (floating roof rim seal)";
+    governingCaseLabel = `E4 governs: Floating roof rim-seal fire. Effective area = \u03C0 \u00D7 D \u00D7 h_rim = ${fmtNum(Math.PI * geom.diameter_m * input.rimSealHeight_m)} m\u00B2`;
+    appliedCreditsSummary.push("Floating roof: only rim-seal perimeter area exposed (Section 5.4)");
+    appliedCreditsSummary.push(`Rim seal height: ${fmtNum(input.rimSealHeight_m)} m (screening input \u2014 verify with seal vendor)`);
+    if (F < 1.0) appliedCreditsSummary.push(`Insulation credit applied: F = ${F}`);
   } else if (input.hasDrainage) {
     governingEmergency_Nm3h = fireFlow_drained.flow_Nm3h;
     governingEmergencyScenario = "E3 (fire with drainage)";
+    governingCaseLabel = `E3 governs: External fire with drainage credit. Combined factor = F \u00D7 drainage = ${F} \u00D7 ${fmtNum(drainageF)} = ${fmtNum(F * drainageF)}`;
+    appliedCreditsSummary.push(`Drainage provisions applied (Section 5.2.2): drainage factor = ${fmtNum(drainageF)}`);
+    if (F < 1.0) appliedCreditsSummary.push(`Insulation credit applied: F = ${F} (${ENV_LABELS[input.insulationType]})`);
+    else appliedCreditsSummary.push("Bare tank: F = 1.0 (no insulation credit)");
+    appliedCreditsSummary.push(`Note: E3 (${fmtNum(fireFlow_drained.flow_Nm3h)} Nm\u00B3/h) \u2264 E1 (${fmtNum(fireFlow_bare.flow_Nm3h)} Nm\u00B3/h) \u2014 drainage credit reduces fire heat exposure`);
   } else if (isInsulated) {
     governingEmergency_Nm3h = fireFlow_insulated.flow_Nm3h;
     governingEmergencyScenario = "E2 (fire with insulation)";
+    governingCaseLabel = `E2 governs: External fire with insulation credit. F = ${F} (${ENV_LABELS[input.insulationType]})`;
+    appliedCreditsSummary.push(`Insulation credit applied (Section 5.2.3): F = ${F} (${ENV_LABELS[input.insulationType]})`);
+    appliedCreditsSummary.push("No drainage provisions \u2014 drainage credit not applicable");
   } else {
     governingEmergency_Nm3h = fireFlow_bare.flow_Nm3h;
     governingEmergencyScenario = "E1 (fire, bare tank)";
+    governingCaseLabel = "E1 governs: External fire, bare tank. No insulation or drainage credit applied. F = 1.0";
+    appliedCreditsSummary.push("Bare tank: F = 1.0 (no insulation credit)");
+    appliedCreditsSummary.push("No drainage provisions \u2014 full fire heat exposure");
   }
 
   const normalCredit = totalNormalOut;
   const netEmergency = Math.max(governingEmergency_Nm3h - normalCredit, 0);
 
   trace.push({ step: `Governing emergency scenario: ${governingEmergencyScenario}`, value: `${fmtNum(governingEmergency_Nm3h)} Nm\u00B3/h` });
+  trace.push({ step: "  Basis", value: governingCaseLabel });
+  appliedCreditsSummary.forEach(c => trace.push({ step: "  \u2514 Credit/Assumption", value: c }));
   trace.push({ step: "Normal outbreathing credit (Section 5.3)", value: `\u2212${fmtNum(normalCredit)} Nm\u00B3/h` });
   trace.push({ step: "Net emergency vent requirement", value: `${fmtNum(netEmergency)} Nm\u00B3/h` });
+
+  const govHeatInput_W = isFloating
+    ? calcFireHeat(effectiveWettedArea, F, drainageF)
+    : (input.hasDrainage ? fireHeat_W_drained : isInsulated ? fireHeat_W_insulated : fireHeat_W_bare);
+  const govVapRate = isFloating
+    ? (calcEmergencyFlow(govHeatInput_W, input.latentHeat_kJ_kg, input.vaporDensity_kg_m3, input.vaporMW, input.relievingTemp_C, F, effectiveWettedArea)).vap_kg_h
+    : (input.hasDrainage ? fireFlow_drained : isInsulated ? fireFlow_insulated : fireFlow_bare).vap_kg_h;
 
   const emergency: EmergencyVentingResult = {
     wettedArea_m2: geom.wettedArea_m2,
     effectiveWettedArea_m2: effectiveWettedArea,
     envFactor: F,
     drainageFactor: drainageF,
-    heatInput_kW: (isFloating ? calcFireHeat(effectiveWettedArea, F, drainageF) : (input.hasDrainage ? fireHeat_W_drained : isInsulated ? fireHeat_W_insulated : fireHeat_W_bare)) / 1000,
-    vaporizationRate_kg_h: (input.hasDrainage ? fireFlow_drained : isInsulated ? fireFlow_insulated : fireFlow_bare).vap_kg_h,
+    heatInput_kW: govHeatInput_W / 1000,
+    vaporizationRate_kg_h: govVapRate,
     emergencyVenting_Nm3h: governingEmergency_Nm3h,
     netEmergency_Nm3h: netEmergency,
     normalCredit_Nm3h: normalCredit,
     governingScenario: governingEmergencyScenario,
+    governingCaseLabel,
+    appliedCreditsSummary,
+    allCasesConsidered,
   };
 
   trace.push({ step: "\u2550\u2550\u2550 SCENARIO SUMMARY \u2550\u2550\u2550", value: "" });
@@ -721,15 +830,18 @@ export function calculateApi2000(input: Api2000Input): Api2000Result {
 
   trace.push({ step: "--- PV Valve \u2014 Normal Pressure (Outbreathing) ---", value: "" });
   trace.push({ step: `Flow = total normal outbreathing`, value: `${fmtNum(totalNormalOut)} Nm\u00B3/h` });
-  trace.push({ step: `Area (Cd=${Cd_pv}, \u0394P=${input.designPressure_mbar} mbar)`, value: `${fmtNum(pressureVent.area_mm2)} mm\u00B2 \u2192 ${pressureVent.nps}` });
+  trace.push({ step: `\u0394P basis = design pressure`, value: `${input.designPressure_mbar} mbar g` });
+  trace.push({ step: `Equiv. free area (Cd=${Cd_pv})`, value: `${fmtNum(pressureVent.area_mm2)} mm\u00B2 \u2192 approx. conn. size ${pressureVent.approxConnSize}` });
 
   trace.push({ step: "--- PV Valve \u2014 Normal Vacuum (Inbreathing) ---", value: "" });
   trace.push({ step: `Flow = total normal inbreathing`, value: `${fmtNum(totalNormalIn)} Nm\u00B3/h` });
-  trace.push({ step: `Area (Cd=${Cd_pv}, \u0394P=${input.designVacuum_mbar} mbar)`, value: `${fmtNum(vacuumVent.area_mm2)} mm\u00B2 \u2192 ${vacuumVent.nps}` });
+  trace.push({ step: `\u0394P basis = design vacuum`, value: `${input.designVacuum_mbar} mbar` });
+  trace.push({ step: `Equiv. free area (Cd=${Cd_pv})`, value: `${fmtNum(vacuumVent.area_mm2)} mm\u00B2 \u2192 approx. conn. size ${vacuumVent.approxConnSize}` });
 
   trace.push({ step: "--- Emergency Vent (net of normal credit) ---", value: "" });
   trace.push({ step: `Flow = net emergency`, value: `${fmtNum(netEmergency)} Nm\u00B3/h` });
-  trace.push({ step: `Area (Cd=${Cd_emerg}, \u0394P=${input.designPressure_mbar} mbar)`, value: `${fmtNum(emergencyVent.area_mm2)} mm\u00B2 \u2192 ${emergencyVent.nps}` });
+  trace.push({ step: `\u0394P basis = design pressure (conservative screening \u2014 verify actual emergency vent set pressure)`, value: `${input.designPressure_mbar} mbar g` });
+  trace.push({ step: `Equiv. free area (Cd=${Cd_emerg})`, value: `${fmtNum(emergencyVent.area_mm2)} mm\u00B2 \u2192 approx. conn. size ${emergencyVent.approxConnSize}` });
 
   const governingSide = pressureVent.area_mm2 >= vacuumVent.area_mm2 ? "pressure" : "vacuum";
   trace.push({ step: "PV valve governing side", value: governingSide });
@@ -744,37 +856,43 @@ export function calculateApi2000(input: Api2000Input): Api2000Result {
     pressureVentDia_mm: pressureVent.dia_mm,
     vacuumVentDia_mm: vacuumVent.dia_mm,
     emergencyVentDia_mm: emergencyVent.dia_mm,
-    pressureNPS: pressureVent.nps,
-    vacuumNPS: vacuumVent.nps,
-    emergencyNPS: emergencyVent.nps,
+    pressureApproxConnSize: pressureVent.approxConnSize,
+    vacuumApproxConnSize: vacuumVent.approxConnSize,
+    emergencyApproxConnSize: emergencyVent.approxConnSize,
+    emergencyDPBasis_mbar: input.designPressure_mbar,
+    normalDPBasis_pressure_mbar: input.designPressure_mbar,
+    normalDPBasis_vacuum_mbar: input.designVacuum_mbar,
     governingSide,
   };
 
-  assumptions.push("Non-refrigerated atmospheric storage tank per API 2000, 7th Edition");
-  assumptions.push(`Thermal breathing coefficients: C_out = ${C_out}, C_in = ${C_in} (API 2000 Table 2/3)`);
-  assumptions.push("Liquid movement: 1:1 volume displacement at atmospheric conditions (Section 4.4)");
-  assumptions.push("Fire heat input: Q = 43,200 \u00D7 F \u00D7 drainage \u00D7 A_w^0.82 W (Section 5.2, A_w > 2.8 m\u00B2)");
-  assumptions.push(`Normal venting credit applied to emergency per Section 5.3: ${fmtNum(normalCredit)} Nm\u00B3/h`);
+  assumptions.push("PRELIMINARY SCREENING TOOL ONLY \u2014 Not for final vent device specification, procurement, or regulatory compliance.");
+  assumptions.push("Non-refrigerated atmospheric storage tank per API 2000, 7th Edition (2014).");
+  assumptions.push(`Standard reference conditions: 15\u00B0C (288.15 K), 101.325 kPa for Nm\u00B3/h (API 2000 \u00A73.40). All flow quantities are in these standard conditions.`);
+  assumptions.push(`Thermal breathing coefficients: C_out = ${C_out}, C_in = ${C_in} per API 2000 Table 2/3 for selected product category.`);
+  assumptions.push("Liquid movement: 1:1 volume displacement at atmospheric conditions (Section 4.4). Flash factor applied to pump-in outbreathing (N3).");
+  assumptions.push("Fire heat input: Q = 43,200 \u00D7 F \u00D7 drainage \u00D7 A_w^0.82 W (Section 5.2). Applies for A_w > 2.8 m\u00B2 only.");
+  assumptions.push(`Governing emergency case: ${governingEmergencyScenario}. Basis: ${governingCaseLabel}`);
+  assumptions.push(`Normal outbreathing credit (Section 5.3): ${fmtNum(normalCredit)} Nm\u00B3/h deducted from gross emergency requirement.`);
   assumptions.push(
-    `Vent Cd values are preliminary equivalent free-area screening assumptions, not OEM-rated capacities: ` +
-    `PV valve Cd = ${Cd_pv}; Emergency vent Cd = ${Cd_emerg}. ` +
-    `Final sizing requires vendor-rated capacity data.`
-  );
-  assumptions.push("Standard conditions: 15\u00B0C (288.15 K), 101.325 kPa for Nm\u00B3/h (API 2000 \u00A73.40)");
-  assumptions.push(
-    "Vent device sizing uses the orifice-equivalent free-area method (A = q / (Cd \u00D7 \u221A(2\u0394P\u03C1))). " +
-    "Results indicate equivalent open-area screening only \u2014 NOT vendor-rated vent capacity. " +
-    "PV valve and emergency vent selection requires manufacturer flow-capacity curves at the rated set pressure."
+    `VENT SIZING METHODOLOGY: Orifice-equivalent free-area equation A = q / (Cd \u00D7 \u221A(2\u0394P\u03C1)). ` +
+    `Results represent EQUIVALENT OPEN AREA for screening only \u2014 NOT vendor-rated vent capacity. ` +
+    `Fixed Cd values are screening assumptions: PV valve Cd = ${Cd_pv}; Emergency vent Cd = ${Cd_emerg}. ` +
+    `Final sizing requires manufacturer flow-capacity curves tested per API 2000 Annex B / EN ISO 28300.`
   );
   assumptions.push(
-    `Emergency vent sizing uses the same differential pressure basis as the normal PV vent ` +
-    `(\u0394P = ${input.designPressure_mbar} mbar g). This is conservative preliminary screening. ` +
-    "For large emergency vents, verify the actual set pressure of the emergency device per API 2000 \u00A76."
+    `EMERGENCY VENT \u0394P BASIS: Emergency vent sized at the same \u0394P as the normal conservation vent ` +
+    `(\u0394P = ${input.designPressure_mbar} mbar g). This is a conservative FEED-level screening assumption. ` +
+    `The actual emergency vent set pressure may differ significantly. Verify per API 2000 Section 6 and device specification.`
   );
   assumptions.push(
-    "Service limitations: calculator does not model flashing dynamics beyond the simplified flash factor, " +
-    "blanketing/inerting systems, vapor recovery units, flame arrester pressure derating, " +
-    "refrigerated or cryogenic storage, or device accumulation/lift characteristics."
+    `APPROXIMATE CONNECTION SIZE: NPS equivalent derived from free area using full-bore pipe schedules. ` +
+    `This is a screening reference only \u2014 NOT a final device or nozzle specification. ` +
+    `Final nozzle sizing must account for OEM-rated Cv/flow capacity, inlet/outlet losses, and accumulation.`
+  );
+  assumptions.push(
+    "SERVICE LIMITATIONS: This tool does NOT model blanketing / inerting systems, vapor recovery units, " +
+    "flame arrester pressure derating, detailed flashing dynamics (beyond the flash factor), " +
+    "refrigerated or cryogenic storage, device accumulation / lift characteristics, or special storage configurations."
   );
 
   if (isFloating) {

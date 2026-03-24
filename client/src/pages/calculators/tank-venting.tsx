@@ -17,6 +17,7 @@ import {
   type Api2000Input, type Api2000Result, type TankType, type ProductCategory, type InsulationType,
   calculateApi2000, API_2000_TEST_CASE, PRODUCT_LABELS, INSULATION_LABELS,
 } from "@/lib/engineering/api2000";
+import { api2000InputSchema } from "@/lib/engineering/validation";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
@@ -150,7 +151,7 @@ export default function TankVentingPage() {
   const handleCalculate = () => {
     setError(null);
     try {
-      const input: Api2000Input = {
+      const rawInput = {
         tankDiameter_m: convertToSI("length", form.tankDiameter, unitSystem),
         tankHeight_m: convertToSI("length", form.tankHeight, unitSystem),
         tankType: form.tankType,
@@ -170,6 +171,13 @@ export default function TankVentingPage() {
         drainageFactor: form.drainageFactor,
         rimSealHeight_m: convertToSI("length", form.rimSealHeight, unitSystem),
       };
+      const validation = api2000InputSchema.safeParse(rawInput);
+      if (!validation.success) {
+        const messages = validation.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join("; ");
+        setError(`Input validation: ${messages}`);
+        return;
+      }
+      const input: Api2000Input = rawInput as Api2000Input;
       const res = calculateApi2000(input);
       setResult(res);
       setActiveTab("results");
@@ -218,14 +226,16 @@ export default function TankVentingPage() {
         { label: "Emergency Venting", value: fmtResult(result.emergencyVenting.emergencyVenting_Nm3h), unit: "Nm\u00B3/h", highlight: true },
         { label: "Normal Credit", value: `-${fmtResult(result.emergencyVenting.normalCredit_Nm3h)}`, unit: "Nm\u00B3/h" },
         { label: "Net Emergency", value: fmtResult(result.emergencyVenting.netEmergency_Nm3h), unit: "Nm\u00B3/h", highlight: true },
-        { label: "Pressure Vent NPS", value: result.ventSizing.pressureNPS, unit: "", highlight: true },
-        { label: "Vacuum Vent NPS", value: result.ventSizing.vacuumNPS, unit: "", highlight: true },
-        { label: "Emergency Vent NPS", value: result.ventSizing.emergencyNPS, unit: "", highlight: true },
+        { label: "Pressure Vent Approx. Conn. Size (screening)", value: result.ventSizing.pressureApproxConnSize, unit: "", highlight: true },
+        { label: "Vacuum Vent Approx. Conn. Size (screening)", value: result.ventSizing.vacuumApproxConnSize, unit: "", highlight: true },
+        { label: "Emergency Vent Approx. Conn. Size (screening)", value: result.ventSizing.emergencyApproxConnSize, unit: "", highlight: true },
+        { label: "Emergency ΔP Basis (screening)", value: `${result.ventSizing.emergencyDPBasis_mbar} mbar g (same as normal PV vent — verify actual emergency vent set pressure)`, unit: "" },
       ],
       assumptions: result.assumptions,
       warnings: result.warnings,
       references: [
-        "API Std 2000, 7th Edition (2014)",
+        "PRELIMINARY SCREENING TOOL ONLY — Results are equivalent open-area estimates, NOT final device specifications. Final sizing requires OEM-rated capacity data per API 2000 Annex B / EN ISO 28300.",
+        "API Std 2000, 7th Edition (2014): Venting Atmospheric and Low-Pressure Storage Tanks",
         "NFPA 30: Flammable and Combustible Liquids Code",
       ],
       calcSteps: result.trace.map(t => ({ label: t.step, value: t.value })),
@@ -251,6 +261,7 @@ export default function TankVentingPage() {
                 <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">
                   API 2000 Tank Venting
                 </h1>
+                <p className="text-xs text-amber-400 font-medium">Preliminary Screening Tool — Not for Final Design</p>
                 <p className="text-xs text-muted-foreground">
                   All scenarios: Normal (thermal + liquid) &amp; Emergency (fire) per API Std 2000, 7th Ed.
                 </p>
@@ -266,6 +277,23 @@ export default function TankVentingPage() {
               </Button>
             </div>
           </div>
+
+          <Card className="mb-4 border-amber-500/30 bg-amber-500/5" data-testid="card-screening-banner">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-amber-400">Preliminary Screening Tool — Not for Final Design or Procurement</p>
+                  <ul className="text-[11px] text-muted-foreground space-y-0.5 list-disc list-inside">
+                    <li>Vent sizing uses an orifice-equivalent free-area method — results are equivalent open area, not OEM-rated vent capacity</li>
+                    <li>Approximate connection size is a screening reference only — not a final nozzle specification</li>
+                    <li>Emergency vent sized at the same ΔP as the normal conservation vent (conservative screening assumption — verify actual set pressure per API 2000 §6)</li>
+                    <li>Fixed Cd values assumed — final sizing requires manufacturer flow-capacity curves per API 2000 Annex B / EN ISO 28300</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {error && (
             <Card className="mb-4 border-destructive/50">
@@ -367,6 +395,12 @@ export default function TankVentingPage() {
                         onValueChange={v => updateField("rimSealHeight", v)}
                         data-testid="input-rim-seal-height"
                       />
+                      {form.rimSealHeight <= 0 && (
+                        <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1" data-testid="text-rim-seal-warning">
+                          <AlertTriangle className="w-3 h-3" />
+                          Rim seal height = 0: emergency venting for floating roof fire (E4) cannot be calculated. Enter the height of the exposed rim seal (API 2000 Section 5.4). Verify with seal vendor.
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -678,6 +712,52 @@ export default function TankVentingPage() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  <Card className="border-amber-500/20" data-testid="card-emergency-case-matrix">
+                    <CardHeader className="pb-2">
+                      <h3 className="text-xs font-semibold flex items-center gap-1.5">
+                        <Flame className="w-3.5 h-3.5 text-amber-400" /> Emergency Case Selection Matrix
+                      </h3>
+                      <p className="text-[10px] text-muted-foreground">All applicable emergency cases evaluated — governing case highlighted</p>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="space-y-1.5">
+                        {result.emergencyVenting.allCasesConsidered.map(c => (
+                          <div
+                            key={c.id}
+                            className={`rounded p-2 text-[11px] border ${c.applicable && result.emergencyVenting.governingScenario.includes(c.id)
+                              ? "border-amber-500/40 bg-amber-500/10"
+                              : c.applicable
+                              ? "border-border/50 bg-muted/30"
+                              : "border-dashed border-border/30 bg-transparent opacity-60"
+                            }`}
+                            data-testid={`card-emergency-case-${c.id}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className={`font-mono ${c.applicable ? "text-foreground" : "text-muted-foreground"}`}>{c.label}</span>
+                              {c.applicable && result.emergencyVenting.governingScenario.includes(c.id) && (
+                                <span className="text-[10px] text-amber-400 font-semibold shrink-0">GOVERNS</span>
+                              )}
+                              {!c.applicable && (
+                                <span className="text-[10px] text-muted-foreground shrink-0">N/A</span>
+                              )}
+                            </div>
+                            {c.notApplicableReason && (
+                              <p className="text-[10px] text-muted-foreground/60 mt-0.5">{c.notApplicableReason}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t pt-2 space-y-1">
+                        <p className="text-[10px] font-medium text-muted-foreground">Applied Credits &amp; Assumptions:</p>
+                        {result.emergencyVenting.appliedCreditsSummary.map((credit, i) => (
+                          <p key={i} className="text-[11px] text-muted-foreground flex items-start gap-1">
+                            <span className="text-primary mt-0.5">›</span> {credit}
+                          </p>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               ) : (
                 <Card>
@@ -739,26 +819,26 @@ export default function TankVentingPage() {
                     <Card className="border-amber-500/20">
                       <CardHeader className="pb-2">
                         <h3 className="text-xs font-semibold text-amber-400">PV Valve — Pressure Side</h3>
-                        <p className="text-[10px] text-muted-foreground">Normal outbreathing</p>
+                        <p className="text-[10px] text-muted-foreground">Normal outbreathing · ΔP = {result.ventSizing.normalDPBasis_pressure_mbar} mbar g</p>
                       </CardHeader>
                       <CardContent className="space-y-1.5">
                         <ResultRow label="Flow" value={fmtResult(result.normalVenting.totalOutbreathing_Nm3h)} unit="Nm\u00B3/h" />
-                        <ResultRow label="Required Area" value={fmtResult(result.ventSizing.pressureVentArea_mm2)} unit="mm\u00B2" highlight testId="text-pressure-vent-area" />
+                        <ResultRow label="Equiv. Free Area" value={fmtResult(result.ventSizing.pressureVentArea_mm2)} unit="mm\u00B2" highlight testId="text-pressure-vent-area" />
                         <ResultRow label="Equiv. Diameter" value={fmtResult(result.ventSizing.pressureVentDia_mm)} unit="mm" />
-                        <ResultRow label="Suggested NPS" value={result.ventSizing.pressureNPS} unit="" highlight testId="text-pressure-nps" />
+                        <ResultRow label="Approx. Conn. Size (screening)" value={result.ventSizing.pressureApproxConnSize} unit="" highlight testId="text-pressure-nps" />
                       </CardContent>
                     </Card>
 
                     <Card className="border-blue-500/20">
                       <CardHeader className="pb-2">
                         <h3 className="text-xs font-semibold text-blue-400">PV Valve — Vacuum Side</h3>
-                        <p className="text-[10px] text-muted-foreground">Normal inbreathing</p>
+                        <p className="text-[10px] text-muted-foreground">Normal inbreathing · ΔP = {result.ventSizing.normalDPBasis_vacuum_mbar} mbar</p>
                       </CardHeader>
                       <CardContent className="space-y-1.5">
                         <ResultRow label="Flow" value={fmtResult(result.normalVenting.totalInbreathing_Nm3h)} unit="Nm\u00B3/h" />
-                        <ResultRow label="Required Area" value={fmtResult(result.ventSizing.vacuumVentArea_mm2)} unit="mm\u00B2" highlight testId="text-vacuum-vent-area" />
+                        <ResultRow label="Equiv. Free Area" value={fmtResult(result.ventSizing.vacuumVentArea_mm2)} unit="mm\u00B2" highlight testId="text-vacuum-vent-area" />
                         <ResultRow label="Equiv. Diameter" value={fmtResult(result.ventSizing.vacuumVentDia_mm)} unit="mm" />
-                        <ResultRow label="Suggested NPS" value={result.ventSizing.vacuumNPS} unit="" highlight testId="text-vacuum-nps" />
+                        <ResultRow label="Approx. Conn. Size (screening)" value={result.ventSizing.vacuumApproxConnSize} unit="" highlight testId="text-vacuum-nps" />
                       </CardContent>
                     </Card>
 
@@ -769,9 +849,15 @@ export default function TankVentingPage() {
                       </CardHeader>
                       <CardContent className="space-y-1.5">
                         <ResultRow label="Net Flow" value={fmtResult(result.emergencyVenting.netEmergency_Nm3h)} unit="Nm\u00B3/h" />
-                        <ResultRow label="Required Area" value={fmtResult(result.ventSizing.emergencyVentArea_mm2)} unit="mm\u00B2" highlight testId="text-emergency-vent-area" />
+                        <ResultRow label="Equiv. Free Area" value={fmtResult(result.ventSizing.emergencyVentArea_mm2)} unit="mm\u00B2" highlight testId="text-emergency-vent-area" />
                         <ResultRow label="Equiv. Diameter" value={fmtResult(result.ventSizing.emergencyVentDia_mm)} unit="mm" />
-                        <ResultRow label="Suggested NPS" value={result.ventSizing.emergencyNPS} unit="" highlight testId="text-emergency-nps" />
+                        <ResultRow label="Approx. Conn. Size (screening)" value={result.ventSizing.emergencyApproxConnSize} unit="" highlight testId="text-emergency-nps" />
+                        <div className="rounded bg-amber-500/5 border border-amber-500/20 p-2 mt-1.5">
+                          <p className="text-[10px] text-amber-400 font-medium">ΔP Basis (screening)</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Sized at {result.ventSizing.emergencyDPBasis_mbar} mbar g (same as normal conservation vent). This is a conservative FEED-level assumption — actual emergency vent set pressure may differ. Verify per API 2000 §6 and device specification.
+                          </p>
+                        </div>
                       </CardContent>
                     </Card>
                   </div>

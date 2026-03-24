@@ -279,6 +279,34 @@ export type ROLiquidPropsInput = z.infer<typeof roLiquidPropsSchema>;
 export type ROGasPropsInput = z.infer<typeof roGasPropsSchema>;
 export type ROServiceValidInput = z.infer<typeof roServiceInputSchema>;
 
+// ─── API 2000 Tank Venting Schemas ────────────────────────────────────────────
+
+export const api2000InputSchema = z.object({
+  tankDiameter_m: z.number().positive("Tank diameter must be positive"),
+  tankHeight_m: z.number().positive("Tank height must be positive"),
+  tankType: z.enum(["cone_roof", "dome_roof", "flat_roof", "floating_roof"]),
+  liquidLevel_percent: z.number().min(0, "Liquid level must be ≥ 0%").max(100, "Liquid level must be ≤ 100%"),
+  maxFillRate_m3_h: z.number().nonnegative("Fill rate must be ≥ 0"),
+  maxEmptyRate_m3_h: z.number().nonnegative("Empty rate must be ≥ 0"),
+  productCategory: z.enum(["hexane_and_below", "above_hexane", "non_volatile"]),
+  flashFactor: z.number().min(1.0, "Flash factor must be ≥ 1.0 (1.0 = non-volatile)"),
+  vaporMW: z.number().positive("Vapor molecular weight must be positive"),
+  relievingTemp_C: z.number(),
+  latentHeat_kJ_kg: z.number().positive("Latent heat must be positive"),
+  vaporDensity_kg_m3: z.number().positive("Vapor density must be positive"),
+  designPressure_mbar: z.number().positive("Design pressure must be positive"),
+  designVacuum_mbar: z.number().positive("Design vacuum must be positive"),
+  insulationType: z.enum(["bare", "concrete", "insulated_approved", "insulated_unapproved", "earth_covered", "underground"]),
+  hasDrainage: z.boolean(),
+  drainageFactor: z.number().min(0, "Drainage factor must be ≥ 0").max(1.0, "Drainage factor must be ≤ 1.0"),
+  rimSealHeight_m: z.number().nonnegative("Rim seal height must be ≥ 0"),
+}).refine(
+  (d) => d.tankType !== "floating_roof" || d.rimSealHeight_m > 0,
+  { message: "Rim seal height must be > 0 for floating roof emergency venting (API 2000 Section 5.4)", path: ["rimSealHeight_m"] }
+);
+
+export type Api2000ValidInput = z.infer<typeof api2000InputSchema>;
+
 // ─── Thermal Expansion Relief Schemas ─────────────────────────────────────────
 
 export const thermalEquipmentSchema = z.object({
