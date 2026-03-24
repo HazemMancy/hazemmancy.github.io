@@ -26,6 +26,9 @@ import {
   calculateThermalPiping, buildThermalFinalResult, validateInputs,
   THERMAL_RELIEF_TEST_CASE,
 } from "@/lib/engineering/thermalRelief";
+import {
+  thermalEquipmentSchema, thermalFluidSchema, thermalDeviceSizingSchema,
+} from "@/lib/engineering/validation";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import {
@@ -186,6 +189,12 @@ export default function ThermalReliefPage() {
   const handleCalcReliefRate = () => {
     try {
       setError(null);
+
+      const eqParse = thermalEquipmentSchema.safeParse(equipment);
+      if (!eqParse.success) { setError(eqParse.error.errors.map(e => e.message).join("; ")); return; }
+      const flParse = thermalFluidSchema.safeParse(fluid);
+      if (!flParse.success) { setError(flParse.error.errors.map(e => e.message).join("; ")); return; }
+
       const tempsInSI: ThermalTemperatures = {
         initial: convertToSI("temperature", temperatures.initial, unitSystem),
         final: convertToSI("temperature", temperatures.final, unitSystem),
@@ -214,6 +223,10 @@ export default function ThermalReliefPage() {
     }
     try {
       setError(null);
+
+      const dsParse = thermalDeviceSizingSchema.safeParse(deviceSizing);
+      if (!dsParse.success) { setError(dsParse.error.errors.map(e => e.message).join("; ")); return; }
+
       const tempsInSI: ThermalTemperatures = {
         initial: convertToSI("temperature", temperatures.initial, unitSystem),
         final: convertToSI("temperature", temperatures.final, unitSystem),
@@ -367,7 +380,7 @@ export default function ThermalReliefPage() {
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">Thermal Expansion Relief</h1>
-            <p className="text-xs md:text-sm text-muted-foreground">Blocked-in liquid overpressure screening — 9-step wizard</p>
+            <p className="text-xs md:text-sm text-muted-foreground">Preliminary Sizing / Screening Tool — Blocked-in Liquid Overpressure (API 521/520/526)</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -385,11 +398,18 @@ export default function ThermalReliefPage() {
         <CardContent className="p-3 flex items-start gap-3">
           <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
           <div>
-            <p className="text-xs font-semibold text-amber-500 mb-1">Screening Tool Only</p>
-            <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
-              This calculator is an engineering screening tool for preliminary thermal relief sizing.
-              It is not intended for final relief system design. Final sizing shall be validated with rigorous process simulation
-              and independent review per API 521 and applicable project specifications.
+            <p className="text-xs font-semibold text-amber-500 mb-1">Preliminary Sizing / Screening Tool Only — Not for Final Design</p>
+            <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed mb-1">
+              Indicative TRV sizing for blocked-in liquid thermal expansion per API 521 §5.14 / API 520 §5.7.2. Specific limitations:
+            </p>
+            <ul className="text-[11px] md:text-xs text-muted-foreground list-disc list-inside space-y-0.5">
+              <li><span className="font-medium">Kv not applied</span> — viscosity correction factor (API 520 §5.7.2) is omitted; viscous fluids (&gt;10 cP) may be undersized</li>
+              <li><span className="font-medium">α assumed constant</span> — thermal expansion coefficient is held fixed over the full ΔT; use representative average α if ΔT &gt; 30 °C</li>
+              <li><span className="font-medium">Governing rate is conservative</span> — when both heat-input and volume/time methods are active, the higher value governs (FEED screening approach, not a universal engineering requirement)</li>
+              <li><span className="font-medium">Outlet piping is a hydraulic estimate only</span> — no pass/fail criterion; full discharge hydraulics, flashing, and valve body losses are not modelled</li>
+            </ul>
+            <p className="text-[11px] md:text-xs text-muted-foreground mt-1">
+              Final sizing must be validated with rigorous process simulation and independent review per API 521/520 and project specifications.
             </p>
           </div>
         </CardContent>
@@ -541,10 +561,20 @@ export default function ThermalReliefPage() {
                   <NumericInput value={fluid.density} onValueChange={v => setFluid(f => ({ ...f, density: v }))} data-testid="input-density" /></div>
                 <div><Label className="text-xs mb-1.5 block">Specific Heat (kJ/(kg·K))</Label>
                   <NumericInput value={fluid.specificHeat} onValueChange={v => setFluid(f => ({ ...f, specificHeat: v }))} data-testid="input-cp" /></div>
-                <div><Label className="text-xs mb-1.5 block">Thermal Expansion Coeff. (×10⁻⁴ /°C)</Label>
-                  <NumericInput value={fluid.thermalExpansion} onValueChange={v => setFluid(f => ({ ...f, thermalExpansion: v }))} data-testid="input-alpha" /></div>
-                <div><Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
-                  <NumericInput value={fluid.viscosity} onValueChange={v => setFluid(f => ({ ...f, viscosity: v }))} data-testid="input-viscosity" /></div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Thermal Expansion Coeff. α (×10⁻⁴ /°C)</Label>
+                  <NumericInput value={fluid.thermalExpansion} onValueChange={v => setFluid(f => ({ ...f, thermalExpansion: v }))} data-testid="input-alpha" />
+                  <p className="text-[10px] text-muted-foreground mt-1">Assumed constant over ΔT — use representative average α if ΔT &gt; 30 °C</p>
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Viscosity (cP)</Label>
+                  <NumericInput value={fluid.viscosity} onValueChange={v => setFluid(f => ({ ...f, viscosity: v }))} data-testid="input-viscosity" />
+                  {fluid.viscosity > 10 && (
+                    <p className="text-[10px] text-amber-400 mt-1 font-medium" data-testid="warn-high-viscosity-fluid">
+                      Viscosity {fluid.viscosity.toFixed(1)} cP &gt; 10 cP — Kv correction (API 520 §5.7.2) is NOT applied; calculated area may be undersized
+                    </p>
+                  )}
+                </div>
                 <div><Label className="text-xs mb-1.5 block">Bulk Modulus (MPa)</Label>
                   <NumericInput value={fluid.bulkModulus} onValueChange={v => setFluid(f => ({ ...f, bulkModulus: v }))} data-testid="input-bulk-modulus" /></div>
               </div>
@@ -584,7 +614,12 @@ export default function ThermalReliefPage() {
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm">Relief Rate Calculation</h3>
-              <p className="text-xs text-muted-foreground">Calculate expansion volume and required relief rate</p>
+              <p className="text-xs text-muted-foreground">
+                Calculate expansion volume and required relief rate. When both methods are active,
+                the <span className="font-medium">governing rate = max(heat-input method, volume/time method)</span> — 
+                a conservative FEED-level screening approach (not a universal engineering requirement).
+                Both individual rates are shown for reference.
+              </p>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               <div className="grid gap-3 sm:grid-cols-2 text-xs">
@@ -672,9 +707,16 @@ export default function ThermalReliefPage() {
                 <div><Label className="text-xs mb-1.5 block">Discharge Coefficient (Kd)</Label>
                   <NumericInput value={deviceSizing.kd} onValueChange={v => setDeviceSizing(d => ({ ...d, kd: v }))} data-testid="input-kd" />
                   <p className="text-[10px] text-muted-foreground mt-1">Typical: 0.65 for liquid TRV</p></div>
-                <div><Label className="text-xs mb-1.5 block">Backpressure Correction (Kw)</Label>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Backpressure Correction (Kw)</Label>
                   <NumericInput value={deviceSizing.kw} onValueChange={v => setDeviceSizing(d => ({ ...d, kw: v }))} data-testid="input-kw" />
-                  <p className="text-[10px] text-muted-foreground mt-1">Verify per API 520 §5.7.2 — depends on device type and service conditions</p></div>
+                  <p className="text-[10px] text-muted-foreground mt-1">Project/API-basis screening input — Kw = 1.0 is NOT universally correct; verify against device type per API 520 §5.7.2 (conventional vs. balanced vs. pilot-operated)</p>
+                  {fluid.viscosity > 10 && (
+                    <p className="text-[10px] text-amber-400 mt-1 font-medium" data-testid="warn-high-viscosity-sizing">
+                      High viscosity fluid — Kv correction (API 520 §5.7.2) NOT applied; increase calculated area before finalising device selection
+                    </p>
+                  )}
+                </div>
                 <div><Label className="text-xs mb-1.5 block">Back Pressure ({pU}g)</Label>
                   <NumericInput value={deviceSizing.backPressure} onValueChange={v => setDeviceSizing(d => ({ ...d, backPressure: v }))} data-testid="input-back-p" /></div>
               </div>
@@ -790,7 +832,12 @@ export default function ThermalReliefPage() {
           <Card>
             <CardHeader className="pb-3">
               <h3 className="font-semibold text-sm">Piping Checks</h3>
-              <p className="text-xs text-muted-foreground">Inlet: 3% rule per API 520. Outlet: hydraulic estimate only — no pass/fail criterion (back pressure compliance depends on device type selection).</p>
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">Inlet:</span> 3% rule per API 520 Part II — results shown with PASS/FAIL. &nbsp;
+                <span className="font-medium">Outlet:</span> Preliminary hydraulic estimate ONLY — no pass/fail criterion.
+                Outlet back pressure compliance depends on device type selection (conventional / balanced / pilot-operated).
+                Flashing, valve body losses, header interactions, and full discharge hydraulics are NOT modelled.
+              </p>
             </CardHeader>
             <CardContent className="space-y-6 pt-0">
               <div>
@@ -924,6 +971,21 @@ export default function ThermalReliefPage() {
                     </Card>
                   )}
 
+                  {finalResult.sizingResult.highViscosityFlag && (
+                    <Card className="border-amber-500/40 bg-amber-500/10" data-testid="warn-high-viscosity-result">
+                      <CardContent className="p-3 flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-xs font-semibold text-amber-500 mb-0.5">High Viscosity — Kv Correction Not Applied</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Fluid viscosity exceeds 10 cP. The viscosity correction factor Kv (API 520 §5.7.2) is NOT applied in this calculator.
+                            The calculated required area may be undersized. Obtain Kv from the valve manufacturer and increase the required area accordingly before finalising TRV selection.
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   <WarningPanel warnings={finalResult.warnings} />
 
                   <Card>
@@ -971,7 +1033,7 @@ export default function ThermalReliefPage() {
                           <span className="font-mono">{finalResult.trvSelection.area_mm2} mm² (+{finalResult.trvSelection.margin.toFixed(1)}%)</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-muted/20">
-                          <span className="text-muted-foreground">Pressure Rise per °C (Approx.):</span>
+                          <span className="text-muted-foreground">Pressure Rise Sensitivity (dP/dT, indicative):</span>
                           <span className="font-mono">{finalResult.pressureRisePerDegC.toFixed(1)} bar/°C</span>
                         </div>
                       </div>

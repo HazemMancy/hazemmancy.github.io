@@ -1,35 +1,32 @@
 /**
- * Thermal Expansion Relief — Blocked-in Liquid (9-Tab Wizard)
+ * Thermal Expansion Relief — Preliminary Sizing / Screening Tool
  *
- * When liquid is trapped between two closed valves and heated,
- * thermal expansion causes rapid pressure rise. A thermal relief
- * valve (TRV) is required to prevent overpressure.
+ * PURPOSE: API-informed preliminary / screening sizing of Thermal Relief Valves (TRVs)
+ * for blocked-in liquid overpressure scenarios. This module is NOT a rigorous relief
+ * system design tool and SHALL NOT be used as the sole basis for final TRV specification,
+ * procurement, or code compliance.
  *
- * Required relief rate for blocked-in liquid:
- *   Q = (α × V × ΔT) / Δt
+ * Code Basis (screening reference only — not full compliance implementation):
+ * - API 521 §5.18: Thermal expansion overpressure scenario (relief loads are user-supplied)
+ * - API 520 Part I §5.7.2: Liquid relief valve sizing equation (N₁ constant, SI units)
+ * - API 526 (7th Ed.): Standard orifice designation reference only (effective area, not certified capacity)
+ * - ASME B31.3: Blocked-in liquid overpressure requirement basis
  *
- * Alternative — heat input method (API 521):
- *   Q = α × q / (ρ × Cp)
- *
- * Solar heating (API 521 default):
- *   q = 947 W/m² × A_exposed  (bare vessel/pipe)
- *   q = 315 W/m² × A_exposed  (insulated vessel/pipe)
- *
- * Required TRV orifice area (liquid, API 520):
- *   A = Q / (N₁ × Kd × Kw × Kp × √(ΔP / G))
- *
- * Correction factors:
- *   Kw — backpressure correction for balanced bellows (1.0 for conventional)
- *   Kp — overpressure correction per API 520 Fig. 31 (1.0 at 25% overpressure, ~0.6 at 10%)
- *
- * Orifice selection per API 526:
- *   Standard orifice designations D through T with effective areas.
- *
- * Reference:
- * - API 521 Section 5.18 (Thermal Expansion)
- * - API 520 Part I (Relief valve sizing)
- * - API 526: Flanged Steel Pressure-Relief Valves (standard orifice areas)
- * - ASME B31.3 (blocked-in liquid overpressure requirement)
+ * Limitations — must be understood before use:
+ * - VISCOSITY CORRECTION (Kv per API 520 §5.7.2) IS NOT APPLIED. For viscous liquids
+ *   (viscosity > 10 cP) the calculated area is likely undersized. Manufacturer capacity data
+ *   or explicit Kv correction is required for viscous-liquid service.
+ * - Thermal expansion coefficient α is assumed CONSTANT over the temperature range.
+ *   This may underestimate expansion for wide ΔT; use a representative average α if ΔT > 30 °C.
+ * - Governing relief rate = max(heat-input method, volume/time method). This is a conservative
+ *   FEED-level screening approach, not a universal engineering requirement. When only a
+ *   heat-input basis is available or intended, the heat-input rate alone may be more appropriate.
+ * - Outlet piping checks are HYDRAULIC SCREENING ESTIMATES ONLY. Flashing, back pressure
+ *   acceptability, valve body losses, and full discharge hydraulics are NOT rigorously modelled.
+ *   No pass/fail criterion is applied to the outlet.
+ * - Kd, Kw (backpressure correction), and Kp (overpressure correction) are user-supplied
+ *   screening values. Kw = 1.0 is NOT universally appropriate — it depends on device type
+ *   (balanced-bellows vs. conventional vs. pilot-operated) and must be confirmed per API 520 §5.7.2.
  */
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -122,6 +119,9 @@ export interface ThermalSizingResult {
   kd: number;
   kw: number;
   kp: number;
+  /** True when fluid viscosity > 10 cP — Kv viscosity correction (API 520 §5.7.2) is NOT applied;
+   *  the calculated area may be undersized for viscous-liquid service */
+  highViscosityFlag: boolean;
 }
 
 export interface TRVSelection {
@@ -205,17 +205,17 @@ const N1_METRIC = 0.849;
 
 export const FLAG_LABELS: Record<string, { label: string; severity: "info" | "warning" | "error" }> = {
   VERY_SMALL_EXPANSION: { label: "Very Small Expansion Volume", severity: "info" },
-  LARGE_TEMP_RISE: { label: "Large Temperature Rise", severity: "warning" },
+  LARGE_TEMP_RISE: { label: "Large Temperature Rise — Verify Average α", severity: "warning" },
   LOW_SET_PRESSURE: { label: "Low TRV Set Pressure", severity: "warning" },
   EXCEEDS_STD_ORIFICE: { label: "Exceeds Standard TRV Size", severity: "error" },
   LOW_RELIEF_RATE: { label: "Very Low Relief Rate", severity: "info" },
-  INLET_DP_FAIL: { label: "Inlet ΔP Exceeds 3%", severity: "error" },
-  OUTLET_DP_FAIL: { label: "Outlet ΔP Exceeds Limit", severity: "warning" },
+  INLET_DP_FAIL: { label: "Inlet ΔP Exceeds 3% of Set (API 520)", severity: "error" },
   HIGH_VELOCITY: { label: "High Piping Velocity", severity: "warning" },
-  HIGH_BACKPRESSURE: { label: "High Backpressure Ratio", severity: "warning" },
+  HIGH_BACKPRESSURE: { label: "High Backpressure Ratio — Verify Kw and Device Type", severity: "warning" },
+  HIGH_VISCOSITY: { label: "High Viscosity — Kv Not Applied, Area May Be Undersized", severity: "warning" },
   SET_EXCEEDS_MAWP: { label: "Set Pressure > MAWP", severity: "error" },
   NO_HEAT_SOURCE: { label: "No Heat Source Defined", severity: "warning" },
-  ALPHA_TEMP_DEPENDENT: { label: "α Varies With Temperature", severity: "info" },
+  ALPHA_TEMP_DEPENDENT: { label: "α Assumed Constant — Use Average α for Wide ΔT", severity: "info" },
 };
 
 export const TRV_SIZES: { nps: string; area: number }[] = [
@@ -373,12 +373,11 @@ export function calculateReliefRate(
 
   if (heatMethodRate > 0 && timeMethodRate > 0) {
     rate_m3h = Math.max(heatMethodRate, timeMethodRate);
-    method = heatMethodRate >= timeMethodRate ? "Heat Input Method (API 521)" : "Volume/Time Method";
-    if (heatMethodRate > 0 && timeMethodRate > 0) {
-      const ratio = Math.max(heatMethodRate, timeMethodRate) / Math.min(heatMethodRate, timeMethodRate);
-      if (ratio > 5) {
-        warnings.push(`Large difference between methods (ratio ${ratio.toFixed(1)}:1) — verify inputs`);
-      }
+    const governingLabel = heatMethodRate >= timeMethodRate ? "Heat Input Method (API 521)" : "Volume/Time Method";
+    method = `${governingLabel} [conservative screening: max of both methods]`;
+    const ratio = Math.max(heatMethodRate, timeMethodRate) / Math.min(heatMethodRate, timeMethodRate);
+    if (ratio > 5) {
+      warnings.push(`Large difference between methods (ratio ${ratio.toFixed(1)}:1) — verify inputs; consider using only the heat-input rate if the volume/time basis is not applicable`);
     }
   } else if (timeMethodRate > 0) {
     rate_m3h = timeMethodRate;
@@ -451,6 +450,7 @@ export function calculateTRVSizing(
     kd,
     kw,
     kp,
+    highViscosityFlag: fluid.viscosity > 10,
   };
 }
 
@@ -522,7 +522,13 @@ export function calculateThermalPiping(
   return { velocity, reynoldsNumber: Re, frictionFactor: f, pressureDrop_bar: dP_bar, percentOfSet: pctOfSet, pass, warnings };
 }
 
-function estimatePressureRiseRate(alpha: number, bulkModulus_MPa: number): number {
+/**
+ * Estimate pressure rise sensitivity (bar per °C) in a blocked-in liquid section.
+ * This is NOT a time-based rate — it represents how much pressure rises per unit temperature rise,
+ * based on bulk modulus (K) and thermal expansion coefficient (α): dP/dT = α × K.
+ * Assumes constant α and K over the temperature range.
+ */
+function estimatePressureRiseSensitivity(alpha: number, bulkModulus_MPa: number): number {
   if (bulkModulus_MPa <= 0) return 0;
   const K_Pa = bulkModulus_MPa * 1e6;
   return (alpha * K_Pa) / 1e5;
@@ -691,16 +697,18 @@ function buildCalcTrace(
       specific_gravity: sizingResult.specificGravity,
     },
     assumptions: [
-      "Liquid is incompressible and fully trapped between two closed valves",
-      "Thermal expansion coefficient α assumed constant over temperature range (may underestimate for wide ΔT — use average α if ΔT > 30°C)",
-      "Governing relief rate taken as max(heat input method, volume/time method) — conservative FEED screening approach per API 521",
-      `Solar heat flux per API 521: ${SOLAR_HEAT_FLUX_BARE} W/m² (bare) / ${SOLAR_HEAT_FLUX_INSULATED} W/m² (insulated)`,
-      `Discharge coefficient Kd = ${sizingResult.kd}`,
-      `Backpressure correction Kw = ${sizingResult.kw} — verify per API 520 §5.7.2; depends on device type and service conditions`,
-      `Overpressure correction Kp = ${sizingResult.kp.toFixed(3)} (at ${equipment.overpressurePercent}% overpressure)`,
-      "No allowance for pipe/vessel flexibility or thermal expansion of metal",
-      `Pressure rise rate estimated using bulk modulus K = ${fluid.bulkModulus} MPa`,
-      "Outlet piping check is a hydraulic estimate only — no pass/fail criterion applies; back pressure compliance depends on device type selection",
+      "SCREENING TOOL ONLY — Not for final TRV specification or code compliance.",
+      "Liquid is incompressible and fully trapped between two closed valves.",
+      "Thermal expansion coefficient α assumed CONSTANT over temperature range — may underestimate expansion for ΔT > 30 °C; use representative average α.",
+      "Governing relief rate = max(heat-input method, volume/time method) — conservative FEED-level screening approach, not a universal engineering requirement.",
+      `Solar heat flux per API 521: ${SOLAR_HEAT_FLUX_BARE} W/m² (bare) / ${SOLAR_HEAT_FLUX_INSULATED} W/m² (insulated).`,
+      `Discharge coefficient Kd = ${sizingResult.kd} (user-supplied screening value — confirm with vendor).`,
+      `Backpressure correction Kw = ${sizingResult.kw} — project/API-basis screening input. Kw = 1.0 is NOT universally appropriate; verify per API 520 §5.7.2 for the specific device type.`,
+      `Overpressure correction Kp = ${sizingResult.kp.toFixed(3)} at ${equipment.overpressurePercent}% overpressure (per API 520 Figure 31 approximation).`,
+      "VISCOSITY CORRECTION (Kv per API 520 §5.7.2) IS NOT APPLIED — for viscous liquids (> 10 cP) the calculated area may be undersized; manufacturer data required.",
+      "No allowance for pipe/vessel flexibility or thermal expansion of metal.",
+      `Pressure rise sensitivity (dP/dT) estimated using bulk modulus K = ${fluid.bulkModulus} MPa — assumes constant α and K; for indicative use only.`,
+      "Outlet piping check is a preliminary hydraulic estimate ONLY — no pass/fail criterion. Flashing, outlet back pressure acceptability, valve body losses, and full discharge hydraulics are NOT modelled.",
     ],
     warnings,
     flags,
@@ -733,7 +741,7 @@ export function buildThermalFinalResult(
 
   const trvSelection = selectTRV(sizingResult.requiredOrificeArea_mm2);
   const alpha = fluid.thermalExpansion * 1e-4;
-  const pressureRisePerDegC = estimatePressureRiseRate(alpha, fluid.bulkModulus);
+  const pressureRisePerDegC = estimatePressureRiseSensitivity(alpha, fluid.bulkModulus);
 
   let inletPiping: ThermalPipingResult | null = null;
   let outletPiping: ThermalPipingResult | null = null;
@@ -748,9 +756,14 @@ export function buildThermalFinalResult(
   const flags: string[] = [];
   const warnings = [...reliefRateResult.warnings];
 
-  // Item 1: Viscosity correction disclosure
   if (fluid.viscosity > 10) {
-    warnings.push(`Fluid viscosity ${fluid.viscosity.toFixed(1)} cP > 10 cP — API 520 liquid sizing equation does not apply a viscosity correction factor. For highly viscous fluids, consult manufacturer data or apply a viscosity correction if applicable.`);
+    flags.push("HIGH_VISCOSITY");
+    warnings.push(
+      `VISCOSITY LIMITATION: Fluid viscosity ${fluid.viscosity.toFixed(1)} cP exceeds 10 cP. ` +
+      `The viscosity correction factor Kv (API 520 §5.7.2) is NOT applied in this calculator. ` +
+      `The calculated required area may be undersized for this fluid. ` +
+      `Consult manufacturer rated capacity data and apply Kv correction before finalising TRV selection.`
+    );
   }
 
   if (expansionResult.expansionVolume_L < 0.01) {
@@ -859,7 +872,7 @@ export function calculateThermalRelief(input: ThermalReliefInput): ThermalRelief
   const trv = selectTRV(sizing.requiredOrificeArea_mm2);
   const alpha = input.thermalExpansion * 1e-4;
 
-  const prRate = estimatePressureRiseRate(alpha, 2200);
+  const prRate = estimatePressureRiseSensitivity(alpha, 2200);
   return {
     temperatureRise: expansion.temperatureRise,
     expansionVolume: expansion.expansionVolume_L,

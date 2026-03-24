@@ -279,6 +279,41 @@ export type ROLiquidPropsInput = z.infer<typeof roLiquidPropsSchema>;
 export type ROGasPropsInput = z.infer<typeof roGasPropsSchema>;
 export type ROServiceValidInput = z.infer<typeof roServiceInputSchema>;
 
+// ─── Thermal Expansion Relief Schemas ─────────────────────────────────────────
+
+export const thermalEquipmentSchema = z.object({
+  tag: z.string().optional(),
+  service: z.string().optional(),
+  trappedVolume: z.number().positive("Trapped volume must be positive (m³)"),
+  mawp: z.number().nonnegative("MAWP must be ≥ 0"),
+  setPressure: z.number().positive("Set pressure must be positive"),
+  overpressurePercent: z.number().min(0, "Overpressure must be ≥ 0%").max(100, "Overpressure must be ≤ 100%"),
+  normalOpPressure: z.number().nonnegative(),
+  normalOpTemp: z.number(),
+}).refine(
+  (d) => d.mawp === 0 || d.setPressure <= d.mawp,
+  { message: "Set pressure must not exceed MAWP", path: ["setPressure"] }
+);
+
+export const thermalFluidSchema = z.object({
+  name: z.string().optional(),
+  density: z.number().positive("Fluid density must be positive (kg/m³)"),
+  specificHeat: z.number().positive("Specific heat must be positive (kJ/(kg·K))"),
+  thermalExpansion: z.number().positive("Thermal expansion coefficient must be positive (×10⁻⁴ /°C)"),
+  viscosity: z.number().positive("Viscosity must be positive (cP)"),
+  bulkModulus: z.number().nonnegative("Bulk modulus must be ≥ 0 (MPa)"),
+});
+
+export const thermalDeviceSizingSchema = z.object({
+  kd: z.number().gt(0, "Kd must be > 0").lte(1.0, "Kd must be ≤ 1.0"),
+  kw: z.number().gt(0, "Kw must be > 0").lte(1.0, "Kw must be ≤ 1.0"),
+  backPressure: z.number().nonnegative("Back pressure must be ≥ 0"),
+});
+
+export type ThermalEquipmentValidInput = z.infer<typeof thermalEquipmentSchema>;
+export type ThermalFluidValidInput = z.infer<typeof thermalFluidSchema>;
+export type ThermalDeviceSizingValidInput = z.infer<typeof thermalDeviceSizingSchema>;
+
 // ─── PRD / Pressure Relief Device Sizing Schemas ──────────────────────────────
 
 export const prdSizingInputSchema = z.object({
