@@ -33,6 +33,7 @@ import {
   FileText,
   Info,
   AlertTriangle,
+  Zap,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -42,6 +43,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
 import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
+import { EosGasPropsPanel } from "@/components/EosGasPropsPanel";
+import {
+  resolveGasProps,
+  DEFAULT_MANUAL_GAS_PROPS,
+  DEFAULT_EOS_COMPOSITION,
+  type GasPropsMode,
+  type ManualGasProps,
+} from "@/lib/engineering/eosGasProps";
+import type { CompositionEntry } from "@/lib/engineering/srkEos";
 
 const FLOW_UNIT_KEYS = Object.keys(FLOW_UNITS) as FlowUnitType[];
 
@@ -99,10 +109,18 @@ function fmtResult(n: number): string {
 // ---------------------------------------------------------------------------
 
 const ASSUMPTIONS = [
-  "SCREENING UTILITY: This tool is a gas-volume conversion utility for preliminary engineering and quick unit conversions only.",
-  "It is NOT a gas property package, NOT a Z-factor calculator, and NOT a substitute for EOS/property simulation or vendor thermodynamic validation.",
+  "GAS VOLUME CONVERSION UTILITY: Converts between standard/normal/actual volumetric flow rate units for ideal and real gases.",
   "",
   "Conversion basis: V2 = V1 \u00D7 (P1/P2) \u00D7 (T2/T1) \u00D7 (Z2/Z1)  [Real gas law: PV = ZnRT]",
+  "",
+  "Z-FACTOR MODES:",
+  "  Manual: User supplies Z directly (unchanged from original screening mode).",
+  "  Peng-Robinson (PR): Z computed internally via PR EoS (1976/1978, Chueh-Prausnitz BIPs) from user-defined mole composition.",
+  "  SRK: Z computed via Soave-Redlich-Kwong EoS (1972, Graboski-Daubert α) from user-defined mole composition.",
+  "  For fixed-reference units (Nm\u00B3, Sm\u00B3, SCFM, MMSCFD), Z is always 1.0 by definition at reference conditions.",
+  "  For actual-condition units (Am\u00B3, ACFM), EOS evaluates Z at the user-supplied P and T of each side independently.",
+  "",
+  "EOS COVERAGE: 20 oil & gas species (C1–C7, N2, CO2, H2S, H2O, He, Ar, H2). BIPs: Chueh-Prausnitz (1967). Viscosity: Lee-Gonzalez-Eakin (1966). Not applicable for liquid or two-phase flow.",
   "",
   "REFERENCE CONDITIONS (fixed — unit-dependent):",
   "  Normal basis (Nm\u00B3)  : 0\u00B0C and 101.325 kPa abs (ISO 13443)",
@@ -110,16 +128,11 @@ const ASSUMPTIONS = [
   "  US standard (SCFM / MMSCFD) : 60\u00B0F (15.56\u00B0C) and 14.696 psia",
   "",
   "ACTUAL-CONDITION UNITS (Am\u00B3/h, Am\u00B3/s, ACFM):",
-  "  These are NOT fixed-reference units. They represent volume at the actual operating pressure, temperature, and Z-factor supplied by the user.",
+  "  These are NOT fixed-reference units. They represent volume at the actual operating pressure, temperature, and Z-factor.",
   "  Equivalent values for actual-condition units are only valid at the specified target conditions.",
   "",
-  "Z-FACTOR RESPONSIBILITY:",
-  "  Z-factor is user-supplied. This calculator does NOT calculate Z internally.",
-  "  Conversion accuracy depends entirely on the correctness of the supplied Z-factor.",
-  "  For high-pressure, rich, sour, or near-critical gas, Z must be obtained from an appropriate EOS (PR, SRK), simulator, or validated correlation (e.g., AGA-8).",
-  "  Using Z = 1.0 for real gas at elevated pressure introduces error.",
-  "",
   "Pressures are always absolute. Gauge pressures must be converted before entry.",
+  "For final design, validate with a full EOS/process simulator (HYSYS, ProMax, REFPROP). AGA-8 is preferred for pipeline metering.",
 ];
 
 const REFERENCES = [
@@ -128,6 +141,10 @@ const REFERENCES = [
   "GPSA Engineering Data Book, 14th Edition",
   "Perry's Chemical Engineers' Handbook, 9th Edition",
   "GPA 2172: Calculation of Gross Heating Value, Relative Density, Compressibility and Theoretical Hydrocarbon Liquid Content for Natural Gas Mixtures",
+  "Peng & Robinson (1976): Ind. Eng. Chem. Fundam. 15(1), 59\u201364",
+  "Soave (1972): Chem. Eng. Sci. 27(6), 1197\u20131203",
+  "Chueh & Prausnitz (1967): AIChE J. 13(6) \u2014 binary interaction parameters",
+  "Lee, Gonzalez & Eakin (1966): SPE-1340-PA \u2014 gas viscosity correlation",
 ];
 
 // ---------------------------------------------------------------------------
@@ -151,6 +168,14 @@ export default function GasVolumePage() {
   });
   const [result, setResult] = useState<GasVolumeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // EOS gas properties state — shared composition evaluated at each side's P/T
+  const [gasPropsMode, setGasPropsMode] = useState<GasPropsMode>("manual");
+  const [composition, setComposition] = useState<CompositionEntry[]>(DEFAULT_EOS_COMPOSITION);
+  const [eosManual, setEosManual] = useState<ManualGasProps>(DEFAULT_MANUAL_GAS_PROPS);
+  // Last computed Z values — displayed in the UI after calculation
+  const [computedZFrom, setComputedZFrom] = useState<number | null>(null);
+  const [computedZTo, setComputedZTo] = useState<number | null>(null);
 
   const handleUnitToggle = useCallback((newSystem: UnitSystem) => {
     setFrom(prev => {
@@ -200,16 +225,34 @@ export default function GasVolumePage() {
       const v = parseFloat(volume);
       const fromP_bar = displayToBar(parseFloat(from.pressure), unitSystem);
       const fromT_c   = displayToC(parseFloat(from.temperature), unitSystem);
-      const fromZ     = parseFloat(from.zFactor);
       const toP_bar   = displayToBar(parseFloat(to.pressure), unitSystem);
       const toT_c     = displayToC(parseFloat(to.temperature), unitSystem);
-      const toZ       = parseFloat(to.zFactor);
 
-      if (
-        isNaN(v) || isNaN(fromP_bar) || isNaN(fromT_c) || isNaN(fromZ) ||
-        isNaN(toP_bar) || isNaN(toT_c) || isNaN(toZ)
-      ) {
+      if (isNaN(v) || isNaN(fromP_bar) || isNaN(fromT_c) || isNaN(toP_bar) || isNaN(toT_c)) {
         throw new Error("Please fill in all fields with valid numbers");
+      }
+
+      let fromZ: number;
+      let toZ: number;
+
+      if (gasPropsMode !== "manual") {
+        // EOS mode: compute Z from composition at each side's specific P/T conditions
+        const fromProps = resolveGasProps(gasPropsMode, eosManual, composition, fromT_c, fromP_bar);
+        const toProps   = resolveGasProps(gasPropsMode, eosManual, composition, toT_c,   toP_bar);
+        // For fixed-reference units, Z=1.0 by definition; EOS Z is only meaningful for actual-condition units
+        fromZ = FLOW_UNITS[from.unit].isActual ? fromProps.Z : 1.0;
+        toZ   = FLOW_UNITS[to.unit].isActual   ? toProps.Z   : 1.0;
+        setComputedZFrom(fromProps.Z);
+        setComputedZTo(toProps.Z);
+        // Write computed values back into the form so export / display shows them
+        setFrom(prev => ({ ...prev, zFactor: fromZ.toFixed(5) }));
+        setTo(prev => ({ ...prev, zFactor: toZ.toFixed(5) }));
+      } else {
+        fromZ = parseFloat(from.zFactor);
+        toZ   = parseFloat(to.zFactor);
+        if (isNaN(fromZ) || isNaN(toZ)) throw new Error("Please fill in all Z-factor fields with valid numbers");
+        setComputedZFrom(null);
+        setComputedZTo(null);
       }
 
       const input = {
@@ -259,6 +302,11 @@ export default function GasVolumePage() {
     setResult(null);
     setError(null);
     setUnitSystem("SI");
+    setGasPropsMode("manual");
+    setComposition(DEFAULT_EOS_COMPOSITION);
+    setEosManual(DEFAULT_MANUAL_GAS_PROPS);
+    setComputedZFrom(null);
+    setComputedZTo(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -335,9 +383,11 @@ export default function GasVolumePage() {
     setSide: (s: SideForm) => void,
     onUnitChange: (u: FlowUnitType) => void,
     testIdPrefix: string,
-    showVolume: boolean
+    showVolume: boolean,
+    computedZ: number | null
   ) => {
     const isActual = FLOW_UNITS[side.unit].isActual;
+    const isEosMode = gasPropsMode !== "manual";
     return (
       <div className="space-y-3">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
@@ -400,15 +450,17 @@ export default function GasVolumePage() {
           <div className="flex items-start gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              Actual-condition unit — result is valid ONLY at the P, T, and Z entered below.
-              Z is user-supplied; this tool does not calculate Z.
+              Actual-condition unit — result is valid ONLY at the P, T, and Z at these conditions.
+              {isEosMode
+                ? " Z is computed by the selected EOS from the composition below."
+                : " Z is user-supplied; this tool does not calculate Z."}
             </p>
           </div>
         ) : (
           <div className="flex items-center gap-1.5">
             <Info className="w-3 h-3 text-muted-foreground/50 shrink-0" />
             <p className="text-xs text-muted-foreground/60">
-              Fixed-reference unit — P and T are locked to the unit definition above
+              Fixed-reference unit — P and T are locked to the unit definition (Z&nbsp;=&nbsp;1.0 by definition)
             </p>
           </div>
         )}
@@ -445,22 +497,48 @@ export default function GasVolumePage() {
           <div>
             <Label className="text-xs mb-1.5 block">
               Z-factor{" "}
-              <span className="text-muted-foreground font-normal">(user-supplied)</span>
+              <span className="text-muted-foreground font-normal">
+                {isEosMode && isActual ? (
+                  <span className="text-green-400 font-medium">(EOS computed)</span>
+                ) : isEosMode ? (
+                  <span className="text-muted-foreground/60">(= 1.0, reference)</span>
+                ) : (
+                  "(user-supplied)"
+                )}
+              </span>
             </Label>
-            <Input
-              type="number"
-              value={side.zFactor}
-              onChange={(e) => setSide({ ...side, zFactor: e.target.value })}
-              disabled={!isActual}
-              className={!isActual ? "opacity-60" : ""}
-              data-testid={`${testIdPrefix}-input-z`}
-            />
+            {isEosMode && isActual && computedZ !== null ? (
+              <div
+                className="flex items-center gap-2 h-9 px-3 rounded-md border border-green-500/40 bg-green-950/20 text-sm font-mono"
+                data-testid={`${testIdPrefix}-input-z`}
+              >
+                <Zap className="w-3 h-3 text-green-400 shrink-0" />
+                <span className="text-green-300">{computedZ.toFixed(5)}</span>
+                <span className="text-muted-foreground/50 text-[10px] ml-1">EOS</span>
+              </div>
+            ) : isEosMode && isActual ? (
+              <div
+                className="flex items-center gap-2 h-9 px-3 rounded-md border border-border/50 bg-muted/20 text-sm text-muted-foreground/60"
+                data-testid={`${testIdPrefix}-input-z`}
+              >
+                <span>Calculate to compute Z</span>
+              </div>
+            ) : (
+              <Input
+                type="number"
+                value={side.zFactor}
+                onChange={(e) => setSide({ ...side, zFactor: e.target.value })}
+                disabled={!isActual}
+                className={!isActual ? "opacity-60" : ""}
+                data-testid={`${testIdPrefix}-input-z`}
+              />
+            )}
           </div>
         </div>
 
-        {isActual && (
+        {isActual && !isEosMode && (
           <p className="text-[11px] text-muted-foreground/70">
-            For high-pressure or rich gas, obtain Z from EOS / process simulator. Do not assume Z&nbsp;=&nbsp;1.0.
+            For high-pressure or rich gas, obtain Z from EOS — switch to PR or SRK mode above to compute it automatically.
           </p>
         )}
       </div>
@@ -495,10 +573,11 @@ export default function GasVolumePage() {
       <div className="flex items-start gap-2 bg-primary/5 border border-primary/15 rounded-md px-4 py-3 mb-5 text-sm">
         <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
         <p className="text-muted-foreground">
-          <span className="font-medium text-foreground">Screening utility only.</span>{" "}
-          This tool converts gas volumes using user-supplied P, T, and Z.
-          It does not calculate Z-factors or thermodynamic properties.
-          For rigorous work, validate results with an EOS or process simulator.
+          <span className="font-medium text-foreground">Gas volume conversion utility.</span>{" "}
+          Converts between Nm³/h, Sm³/h, SCFM, MMSCFD, and actual-condition units.
+          Use <span className="font-medium text-foreground">Manual</span> mode to supply Z directly,
+          or switch to <span className="font-medium text-amber-400">Peng-Robinson</span> / <span className="font-medium text-amber-400">SRK</span> mode
+          to compute Z automatically from gas composition. For final design, validate with a process simulator.
         </p>
       </div>
 
@@ -521,13 +600,39 @@ export default function GasVolumePage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
-              {renderSide("From", from, setFrom, handleFromUnitChange, "from", true)}
+              {/* EOS Gas Properties Panel */}
+              <div className="border border-border/50 rounded-md p-3 bg-muted/10 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  Z-Factor Method
+                </p>
+                <EosGasPropsPanel
+                  mode={gasPropsMode}
+                  onModeChange={m => { setGasPropsMode(m); setComputedZFrom(null); setComputedZTo(null); }}
+                  composition={composition}
+                  onCompositionChange={setComposition}
+                  manual={eosManual}
+                  onManualChange={(field, value) => setEosManual(prev => ({ ...prev, [field]: value }))}
+                  showViscosity={false}
+                  testIdPrefix="gvol"
+                />
+                {gasPropsMode !== "manual" && (
+                  <p className="text-[11px] text-green-400/80 flex items-start gap-1">
+                    <Zap className="w-3 h-3 shrink-0 mt-0.5" />
+                    Z is computed at each side's actual P/T from the composition above. Fixed-reference units always use Z&nbsp;=&nbsp;1.0.
+                  </p>
+                )}
+              </div>
+
+              <div className="border-t border-border/30 pt-4" />
+
+              {renderSide("From", from, setFrom, handleFromUnitChange, "from", true, computedZFrom)}
 
               <div className="flex items-center justify-center py-1">
                 <ArrowDown className="w-5 h-5 text-muted-foreground" />
               </div>
 
-              {renderSide("To", to, setTo, handleToUnitChange, "to", false)}
+              {renderSide("To", to, setTo, handleToUnitChange, "to", false, computedZTo)}
 
               {error && (
                 <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md" data-testid="text-error">
