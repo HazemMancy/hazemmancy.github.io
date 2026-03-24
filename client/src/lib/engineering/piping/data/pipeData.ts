@@ -1,4 +1,13 @@
-import type { PipeRow } from "../schemas";
+import type { PipeRow, BuiltInDatasetProvenance } from "../schemas";
+
+export const PIPE_DATA_PROVENANCE: BuiltInDatasetProvenance = {
+  name: "Pipe Dimensional Data",
+  standard: "ASME B36.10M, ASME B36.19M",
+  edition: "ASME B36.10M:2018, ASME B36.19M:2018",
+  scope: "NPS ⅛\"–36\", welded and seamless wrought steel (B36.10M) and stainless steel (B36.19M). Schedules 5S–XXS as applicable per standard.",
+  disclaimer: "Dimensional data extracted from ASME B36.10M:2018 and B36.19M:2018 reference tables. For formal design use, values must be confirmed against the current edition of the applicable ASME standard. The publisher does not warrant that all schedule/NPS combinations are listed. Wall thickness values are nominal — actual purchased pipe is subject to mill tolerance per API 5L §9.10 / ASTM A106 (typically −12.5%).",
+  category: "pipe",
+};
 
 export const PIPE_DATA: PipeRow[] = [
   { nps: 0.125, dn: 6, schedule: "5S", od_mm: 10.3, wt_mm: 0.89, id_mm: 8.52, weight_kg_per_m: 0.21, material: "SS" },

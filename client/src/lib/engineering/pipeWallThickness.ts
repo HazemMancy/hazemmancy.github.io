@@ -193,6 +193,8 @@ export type PipeWTFlag =
   | "CREEP_REGIME"
   | "HIGH_TEMPERATURE"
   | "LOW_TEMPERATURE"
+  | "LOW_TEMP_CLAMPED"
+  | "TEMP_ABOVE_DERATING_TABLE"
   | "NO_SCHEDULE_FOUND"
   | "LOW_DP"
   | "HIGH_UTILISATION"
@@ -201,6 +203,7 @@ export type PipeWTFlag =
   | "MILL_TOL_DOMINANT"
   | "W_FACTOR_WARNING"
   | "MAOP_LOW_MARGIN"
+  | "USER_OVERRIDE_ACTIVE"
   | "PRELIMINARY_DATA";
 
 export interface PipeWTResult {
@@ -858,10 +861,15 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
     if (std === "B31.3") {
       if (mat.stressTable.length > 0) {
         S_eff = interpolateAllowableStress(mat.stressTable, T_des);
-        const maxT = Math.max(...mat.stressTable.map(r => r.tempC));
+        const tempsSorted = [...mat.stressTable].sort((a, b) => a.tempC - b.tempC);
+        const minT = tempsSorted[0].tempC;
+        const maxT = tempsSorted[tempsSorted.length - 1].tempC;
         if (T_des > maxT) {
           flags.push("MATERIAL_TEMP_LIMIT");
           warnings.push(`Temperature ${T_des} °C exceeds the highest listed temperature (${maxT} °C) in ASME B31.3 Table A-1 for ${mat.name}. S taken at ${maxT} °C — verify material rating.`);
+        } else if (T_des < minT) {
+          flags.push("LOW_TEMP_CLAMPED");
+          warnings.push(`Design temperature ${T_des} °C is below the lowest listed temperature (${minT} °C) in ASME B31.3 Table A-1 for ${mat.name}. Allowable stress clamped to S = ${tempsSorted[0].S_MPa} MPa at ${minT} °C (conservative). Verify MDMT and impact test requirements per ASME B31.3 §323.2.2 and Table 323.2.2A. For sub-${minT} °C service, confirm material suitability or select a low-temperature grade (e.g. ASTM A333 Gr. 6).`);
         }
       } else {
         // Pipeline grade used with B31.3 — use SMYS with 2/3 safety factor per B31.3 §302.3.2
@@ -900,7 +908,8 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   // ── Temperature derating T (B31.4/B31.8) ──
   const T_derating = tempDerating(T_des);
   if (T_des > 232 && std !== "B31.3") {
-    warnings.push(`Design temperature ${T_des} °C exceeds 232 °C — B31.4/B31.8 temperature derating table (T factor) ends at 232 °C. Consult standard for elevated temperature service.`);
+    flags.push("TEMP_ABOVE_DERATING_TABLE");
+    warnings.push(`Design temperature ${T_des} °C exceeds 232 °C — the B31.4/B31.8 temperature derating table ends at 232 °C (last tabulated T = 0.867). The table value at 232 °C has been applied; however, operating a liquid or gas pipeline above 232 °C is unusual. Verify material suitability, confirm with the applicable code, and consider switching to ASME B31.3 for plant piping above this temperature.`);
   }
 
   // ── Design Factor F (B31.4/B31.8) ──
@@ -909,6 +918,17 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
     F_eff = input.userDesignFactor ?? B318_LOCATION_CLASS[input.locationClass]?.F ?? 0.72;
   } else if (std === "B31.4") {
     F_eff = input.userDesignFactor ?? 0.72;
+  }
+
+  // ── User-Override Active ──
+  const isUserOverride = input.materialId === "user" || input.jointType === "user" || input.userDesignFactor !== null;
+  if (isUserOverride) {
+    flags.push("USER_OVERRIDE_ACTIVE");
+    const parts: string[] = [];
+    if (input.materialId === "user") parts.push(`user-defined S = ${std === "B31.3" ? input.userS_MPa : input.userSmys} MPa`);
+    if (input.jointType === "user") parts.push(`user-defined E = ${input.userE}`);
+    if (input.userDesignFactor !== null) parts.push(`user-defined F = ${input.userDesignFactor}`);
+    warnings.push(`USER OVERRIDE ACTIVE: ${parts.join(", ")}. User-supplied values bypass the built-in material database and standard lookup tables. Ensure these values are traceable to a recognised standard (ASME B31.3 Table A-1, API 5L, etc.) and documented in the design record.`);
   }
 
   // ── Mechanical Allowances c ──
@@ -1257,33 +1277,39 @@ export const PWT_TEST_CASE_B318: PipeWTInput = {
 // ─── Flag Labels ──────────────────────────────────────────────────────────────
 
 export const PWT_FLAG_LABELS: Record<PipeWTFlag, string> = {
-  THICK_WALL:           "THICK-WALL CONDITION — Lamé equation applied",
-  CREEP_REGIME:         "CREEP REGIME (T > 480 °C) — verify allowable stress",
-  HIGH_TEMPERATURE:     "HIGH TEMPERATURE — creep / oxidation assessment required",
-  LOW_TEMPERATURE:      "LOW TEMPERATURE — impact testing required",
-  NO_SCHEDULE_FOUND:    "NO STANDARD SCHEDULE SATISFIES REQUIREMENT",
-  LOW_DP:               "VERY LOW PRESSURE — structural/min-wall governs",
-  HIGH_UTILISATION:     "HIGH STRESS UTILISATION (> 90%)",
-  CORROSION_DOMINANT:   "CORROSION ALLOWANCE DOMINATES WALL THICKNESS",
-  MATERIAL_TEMP_LIMIT:  "TEMPERATURE EXCEEDS MATERIAL TABLE LISTING",
-  MILL_TOL_DOMINANT:    "MILL TOLERANCE SIGNIFICANT CONTRIBUTION",
-  W_FACTOR_WARNING:     "W FACTOR CHECK REQUIRED (T > 510 °C)",
-  MAOP_LOW_MARGIN:      "LOW MAOP MARGIN (< 5% above design pressure)",
-  PRELIMINARY_DATA:     "PRELIMINARY DATA — re-confirm before final design",
+  THICK_WALL:                  "THICK-WALL CONDITION — Lamé equation applied",
+  CREEP_REGIME:                "CREEP REGIME (T > 480 °C) — verify allowable stress",
+  HIGH_TEMPERATURE:            "HIGH TEMPERATURE — creep / oxidation assessment required",
+  LOW_TEMPERATURE:             "LOW TEMPERATURE — impact testing required",
+  LOW_TEMP_CLAMPED:            "LOW TEMP: ALLOWABLE STRESS CLAMPED TO TABLE MINIMUM — verify MDMT",
+  TEMP_ABOVE_DERATING_TABLE:   "TEMPERATURE EXCEEDS B31.4/B31.8 DERATING TABLE (max 232 °C)",
+  NO_SCHEDULE_FOUND:           "NO STANDARD SCHEDULE SATISFIES REQUIREMENT",
+  LOW_DP:                      "VERY LOW PRESSURE — structural/min-wall governs",
+  HIGH_UTILISATION:            "HIGH STRESS UTILISATION (> 90%)",
+  CORROSION_DOMINANT:          "CORROSION ALLOWANCE DOMINATES WALL THICKNESS",
+  MATERIAL_TEMP_LIMIT:         "TEMPERATURE EXCEEDS MATERIAL TABLE LISTING",
+  MILL_TOL_DOMINANT:           "MILL TOLERANCE SIGNIFICANT CONTRIBUTION",
+  W_FACTOR_WARNING:            "W FACTOR CHECK REQUIRED (T > 510 °C)",
+  MAOP_LOW_MARGIN:             "LOW MAOP MARGIN (< 5% above design pressure)",
+  USER_OVERRIDE_ACTIVE:        "USER-OVERRIDE: user-defined S / E / F bypasses standard database",
+  PRELIMINARY_DATA:            "PRELIMINARY DATA — re-confirm before final design",
 };
 
 export const PWT_FLAG_SEVERITY: Record<PipeWTFlag, "critical" | "warning" | "info"> = {
-  THICK_WALL:           "warning",
-  CREEP_REGIME:         "critical",
-  HIGH_TEMPERATURE:     "warning",
-  LOW_TEMPERATURE:      "warning",
-  NO_SCHEDULE_FOUND:    "critical",
-  LOW_DP:               "info",
-  HIGH_UTILISATION:     "warning",
-  CORROSION_DOMINANT:   "info",
-  MATERIAL_TEMP_LIMIT:  "critical",
-  MILL_TOL_DOMINANT:    "info",
-  W_FACTOR_WARNING:     "warning",
-  MAOP_LOW_MARGIN:      "warning",
-  PRELIMINARY_DATA:     "info",
+  THICK_WALL:                  "warning",
+  CREEP_REGIME:                "critical",
+  HIGH_TEMPERATURE:            "warning",
+  LOW_TEMPERATURE:             "warning",
+  LOW_TEMP_CLAMPED:            "warning",
+  TEMP_ABOVE_DERATING_TABLE:   "warning",
+  NO_SCHEDULE_FOUND:           "critical",
+  LOW_DP:                      "info",
+  HIGH_UTILISATION:            "warning",
+  CORROSION_DOMINANT:          "info",
+  MATERIAL_TEMP_LIMIT:         "critical",
+  MILL_TOL_DOMINANT:           "info",
+  W_FACTOR_WARNING:            "warning",
+  MAOP_LOW_MARGIN:             "warning",
+  USER_OVERRIDE_ACTIVE:        "warning",
+  PRELIMINARY_DATA:            "info",
 };

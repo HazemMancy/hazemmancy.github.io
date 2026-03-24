@@ -128,6 +128,29 @@ export interface DatasetMeta {
   revision_date: string;
   row_count: number;
   loaded_at: string;
+  /** Governing standard(s) — e.g. "ASME B36.10M:2018, ASME B36.19M:2018" */
+  standard?: string;
+  /** Standard edition / publication year */
+  edition?: string;
+  /** Scope / coverage note — e.g. "NPS ⅛\"–24\", welded and seamless wrought steel" */
+  scope?: string;
+  /** Engineering disclaimer for this dataset */
+  disclaimer?: string;
+  /** True for datasets shipped with this application (read-only reference data) */
+  is_builtin?: boolean;
+}
+
+/**
+ * Provenance record for a built-in reference dataset.
+ * Embed one in each data file so the UI can display governance information.
+ */
+export interface BuiltInDatasetProvenance {
+  name: string;
+  standard: string;
+  edition: string;
+  scope: string;
+  disclaimer: string;
+  category: PipingCategory;
 }
 
 export type DatasetRow = PipeRow | FlangeRow | FittingRow | GasketRow | ValveRow | LineBlankRow | OletRow;

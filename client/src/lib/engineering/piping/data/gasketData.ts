@@ -1,4 +1,13 @@
-import type { GasketRow } from "../schemas";
+import type { GasketRow, BuiltInDatasetProvenance } from "../schemas";
+
+export const GASKET_DATA_PROVENANCE: BuiltInDatasetProvenance = {
+  name: "Gasket Dimensional Data",
+  standard: "ASME B16.20, ASME B16.21",
+  edition: "ASME B16.20:2017, ASME B16.21:2016",
+  scope: "NPS ½\"–24\" raised-face (RF) and flat-face (FF) spiral-wound (SWG) and ring-type joint (RTJ) gaskets for ASME B16.5 Class 150–2500.",
+  disclaimer: "ID/OD dimensions extracted from ASME B16.20:2017 and B16.21:2016 reference tables. Gasket material, seating stress (y), and gasket factor (m) are not included and must be selected per ASME PCC-1 / ASME B16.20. For formal design, confirm gasket dimensions against the current edition of the standard and the specific flange facing dimensions.",
+  category: "gaskets",
+};
 
 export const GASKET_DATA: GasketRow[] = [
   { nps: 0.5, dn: 15, class_rating: 150, type: "SWG", id_mm: 21.4, od_mm: 34.9, thickness_mm: 4.5, material: "SS304/Graphite", standard: "ASME B16.20" },

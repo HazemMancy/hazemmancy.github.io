@@ -1,0 +1,200 @@
+SYSTEM PROMPT — REVISE EXISTING GAS VOLUME CONVERSION CALCULATOR
+
+You are updating an existing Gas Volume Conversion calculator in a Process Engineering web application. Do NOT rebuild it from scratch. Revise the current implementation so it remains a strong gas-volume conversion utility while correcting the identified validation, methodology, and result-interpretation issues.
+
+TARGET FILES
+- client/src/lib/engineering/gasVolume.ts
+- client/src/pages/calculators/gas-volume.tsx
+- client/src/lib/engineering/validation.ts
+- any related export / helper / formatting files used by this calculator
+
+PRIMARY GOAL
+Preserve the current strengths:
+- correct gas-law conversion basis
+- explicit absolute pressure and absolute temperature handling
+- explicit Z-factor treatment
+- separation of normal / standard / actual unit families
+- practical engineering unit support
+- calculation-step transparency
+
+But correct the known weaknesses so the module is clearly and credibly positioned as:
+- Gas Volume Conversion Screening Utility
+- suitable for preliminary engineering and quick conversion work
+- not a gas property package
+- not a substitute for EOS/property simulation
+- not a substitute for vendor/process-simulator thermodynamic validation
+
+NON-NEGOTIABLE POSITIONING
+This calculator must be presented as:
+- gas-volume conversion utility using user-supplied pressure, temperature, and Z where required
+- not a Z-factor calculator
+- not a full thermodynamic package
+- not a substitute for rigorous EOS/property validation
+
+Do NOT overstate rigor.
+
+--------------------------------------------------
+MANDATORY TECHNICAL CORRECTIONS
+--------------------------------------------------
+
+1) REPLACE THE STALE VALIDATION SCHEMA — CRITICAL
+Current issue:
+The validation schema does not match the actual solver input model and is not governing the real calculation path.
+
+Required correction:
+Create a schema that matches the real solver input exactly, including fields such as:
+- volume
+- fromUnit
+- toUnit
+- fromP_kPa
+- fromT_K
+- fromZ
+- toP_kPa
+- toT_K
+- toZ
+
+Validation must cover, as applicable:
+- volume > 0
+- fromUnit and toUnit valid
+- pressures > 0 where required
+- temperatures > 0 K where required
+- Z > 0 where required
+- standard/normal reference units handled consistently
+- actual-unit conversions have the necessary condition inputs
+
+Use this schema in the actual solve path, not only as passive documentation.
+
+2) FIX / RELABEL THE “ALL UNITS” OUTPUT FOR ACTUAL UNITS — CRITICAL
+Current issue:
+The “all units” table can be misleading because actual-unit equivalents are being reported using the currently selected target conditions, which may not be obvious to the user and can become conceptually misleading, especially when the selected target unit is a standard unit.
+
+Required correction:
+Implement one of the following, preferred in this order:
+
+OPTION A — PREFERRED
+Restrict the all-units output so that:
+- only the requested output unit is always shown
+- additional standard/normal equivalents may be shown
+- actual-unit equivalents are shown only when a valid explicit actual-condition basis is defined for those outputs
+
+OPTION B — ACCEPTABLE
+Keep the all-units table, but clearly relabel all actual-unit results as:
+- Equivalent at selected target conditions
+or equivalent wording
+
+Do NOT present actual-unit equivalents as universal conversions independent of the selected target pressure/temperature/Z basis.
+
+3) MAKE TARGET-CONDITION DEPENDENCE EXPLICIT — CRITICAL
+Required correction:
+In the methodology / assumptions / help text, explicitly state:
+- standard and normal units are tied to fixed reference conditions
+- actual units are condition-dependent
+- actual-unit conversions require pressure, temperature, and Z at the selected actual conditions
+- any actual-unit equivalents shown in the results are valid only at the specified target actual conditions
+
+This must be visible enough that a process engineer cannot miss it.
+
+4) STRENGTHEN Z-FACTOR RESPONSIBILITY DISCLOSURE — IMPORTANT
+Current issue:
+The calculator correctly uses user-entered Z, but the UI/assumptions should state more clearly that Z is not calculated internally.
+
+Required correction:
+Clearly state in assumptions / methodology / warnings:
+- Z-factor is user-supplied
+- the calculator does not calculate Z
+- conversion accuracy depends directly on the correctness of the supplied Z-factor
+- for high-pressure, rich, or near-critical gas, Z should be obtained from appropriate EOS/simulator/correlation
+
+Do NOT let users assume the tool internally validates Z.
+
+5) ACTUAL-UNIT TERMINOLOGY DISCIPLINE — IMPORTANT
+Required correction:
+Ensure units such as:
+- ACFM
+- Am³/h
+- Am³/s
+
+are clearly identified as:
+- actual-condition flow units
+- not fixed-reference units
+
+This distinction must be visible in labels/help text/assumptions.
+
+6) STRENGTHEN WARNING SYSTEM — IMPORTANT
+Add or improve warnings for cases such as:
+- unusually low or high Z values
+- high pressure-ratio conversions between source and target conditions
+- very low temperatures
+- actual-unit conversions requested without a clearly defined target actual-condition basis
+- large deviation from ideal-gas behavior
+
+Warnings should remain screening-oriented and informative.
+
+7) EXPORT / REPORT DISCIPLINE
+Revise export/report wording so it clearly states:
+- conversion basis used
+- source pressure / temperature / Z
+- target pressure / temperature / Z
+- standard/normal basis where applicable
+- actual-unit outputs are condition-dependent
+- Z is user-supplied and not internally predicted
+
+Do NOT let exported reports imply generic or condition-independent actual-unit conversions.
+
+--------------------------------------------------
+METHODOLOGY / ASSUMPTIONS PANEL REQUIREMENTS
+--------------------------------------------------
+
+The calculator must clearly state:
+- Gas volume conversion is based on pressure, temperature, and compressibility ratio between source and target states
+- Standard/normal units use fixed reference conditions
+- Actual units are condition-dependent
+- Z-factor is user-supplied
+- The calculator is a screening utility, not a thermodynamic property package
+
+Also explicitly state the implemented reference conditions for fixed units, such as:
+- Normal basis = 0°C and 101.325 kPa (if that is the implemented basis)
+- Standard basis = 15°C and 101.325 kPa (if that is the implemented basis)
+- US standard basis = 60°F and 14.696 psia (if that is the implemented basis)
+
+These must match the actual coded unit definitions exactly.
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1) Preserve the current strong unit-family structure and general workflow.
+
+2) Make the dependence of actual units on target conditions obvious in the UI.
+
+3) If all-units output is retained:
+- distinguish fixed-reference units from actual-condition units visually
+- label actual-condition outputs clearly
+
+4) Keep pressure inputs explicitly absolute.
+
+5) Make Z-factor responsibility visible but not intrusive.
+
+--------------------------------------------------
+CODE QUALITY REQUIREMENTS
+--------------------------------------------------
+
+- Preserve existing architecture
+- Keep solver logic in engineering library, not UI
+- Do not remove useful calculation steps or traceability
+- Add comments where actual-vs-standard basis handling is important
+- Improve rigor and interpretation discipline without overcomplicating the tool
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+The revision is complete only if:
+- the stale validation schema is replaced with one that matches the real solver input model
+- schema-based validation is used in the actual solve path
+- actual-unit outputs in the all-units table are no longer misleading
+- target-condition dependence for actual units is explicitly stated
+- Z-factor responsibility is clearly disclosed
+- actual-unit terminology is disciplined and clear
+- warnings are strengthened for condition-sensitive conversions
+- assumptions, exports, and UI labels match the real implemented conversion basis

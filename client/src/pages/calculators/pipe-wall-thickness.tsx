@@ -297,6 +297,10 @@ export default function PipeWallThicknessPage() {
       if (prev.jointType === "erw_psl2" && std !== "B31.8") {
         next.jointType = "erw";
       }
+      // FBW is not permitted for B31.8 gas transmission; reset to erw
+      if (prev.jointType === "fbw" && std === "B31.8") {
+        next.jointType = "erw";
+      }
       return next;
     });
     setResult(null);
@@ -614,8 +618,16 @@ export default function PipeWallThicknessPage() {
                     B31.4/B31.8 joint factors differ from B31.3. ERW PSL1 = 0.80 (not 0.85). See ASME B31.4 Table 403.2.1-1 / B31.8 §841.11.
                   </p>
                 )}
+                {inp.pipingStandard === "B31.8" && (
+                  <p className="text-xs text-red-400/90 bg-red-950/20 border border-red-900/40 rounded px-3 py-1.5 flex items-start gap-1.5">
+                    <TriangleAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    FBW (Furnace Butt Welded) is <strong>not permitted</strong> for gas transmission per ASME B31.8 §817.1 and has been excluded from the selector.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {Object.entries(inp.pipingStandard === "B31.3" ? QUALITY_FACTORS : QUALITY_FACTORS_PIPELINE).map(([key, q]) => (
+                  {Object.entries(inp.pipingStandard === "B31.3" ? QUALITY_FACTORS : QUALITY_FACTORS_PIPELINE)
+                    .filter(([key]) => !(inp.pipingStandard === "B31.8" && key === "fbw"))
+                    .map(([key, q]) => (
                     <button
                       key={key}
                       onClick={() => upd("jointType", key as JointTypeKey)}

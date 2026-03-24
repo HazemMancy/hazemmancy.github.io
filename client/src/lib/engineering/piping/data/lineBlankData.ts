@@ -1,4 +1,13 @@
-import type { LineBlankRow } from "../schemas";
+import type { LineBlankRow, BuiltInDatasetProvenance } from "../schemas";
+
+export const LINE_BLANK_DATA_PROVENANCE: BuiltInDatasetProvenance = {
+  name: "Line Blank (Spectacle Blind / Paddle) Dimensional Data",
+  standard: "ASME B16.48, ASME B16.5",
+  edition: "ASME B16.48:2020, ASME B16.5:2017",
+  scope: "NPS ½\"–24\" spectacle blinds, figure-8 blanks, and paddle blanks for Class 150–2500 per ASME B16.48. Outer diameter and thickness based on ASME B16.5 flange bolt-circle geometry.",
+  disclaimer: "Blank OD, ID, and thickness values are reference dimensions derived from ASME B16.48:2020 and B16.5:2017. Actual blank thickness must be calculated per ASME B16.48 Appendix I for the specific design pressure, temperature, and material. Do NOT use tabulated thickness values as the sole basis for design without verification against the code formula.",
+  category: "line-blanks",
+};
 
 export const LINE_BLANK_DATA: LineBlankRow[] = [
   { nps: 2, dn: 50, class_rating: 150, type: "SPECTACLE", od_mm: 133.4, id_mm: 52.5, thickness_mm: 4.8, handle_length_mm: 203, material: "CS A516-70", standard: "ASME B16.48" },

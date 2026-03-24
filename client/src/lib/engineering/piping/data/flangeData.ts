@@ -1,4 +1,13 @@
-import type { FlangeRow } from "../schemas";
+import type { FlangeRow, BuiltInDatasetProvenance } from "../schemas";
+
+export const FLANGE_DATA_PROVENANCE: BuiltInDatasetProvenance = {
+  name: "Flange Dimensional Data",
+  standard: "ASME B16.5, ASME B16.47",
+  edition: "ASME B16.5:2017, ASME B16.47:2017",
+  scope: "NPS ½\"–24\" Class 150–2500 per B16.5; NPS 26\"–60\" Class 75–900 per B16.47. Types: WN, SO, BL, SW, LAP, THD.",
+  disclaimer: "Dimensional data derived from ASME B16.5:2017 and B16.47:2017 reference tables. Bolt quantities, bolt circle, and thickness values are nominal. Pressure–temperature ratings are NOT included in this table and must be obtained from the applicable standard. For formal design, confirm all dimensions against the current edition of the standard.",
+  category: "flanges",
+};
 
 export const FLANGE_DATA: FlangeRow[] = [
   { nps: 0.5, dn: 15, class_rating: 150, type: "WN", od_mm: 89.0, bolt_circle_mm: 60.3, num_bolts: 4, bolt_dia_mm: 12.7, thickness_mm: 11.2, hub_length_mm: 22.4, rf_height_mm: 1.6, bore_mm: 15.8, facing: "RF", standard: "ASME B16.5" },

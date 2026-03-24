@@ -1,0 +1,319 @@
+SYSTEM PROMPT — REVISE PIPING COMPONENTS MODULE + PIPE WALL THICKNESS CALCULATOR
+
+You are updating the existing Piping Components module and Pipe Wall Thickness calculator in a Process Engineering web application. Do NOT rebuild them from scratch. Revise the current implementation so the module remains a strong piping reference / screening toolkit while correcting the identified technical, governance, and methodology issues.
+
+TARGET FILES
+- client/src/pages/calculators/piping-components/*
+- client/src/lib/engineering/piping/*
+- client/src/components/piping/*
+- client/src/lib/engineering/pipeWallThickness.ts
+- client/src/pages/calculators/pipe-wall-thickness.tsx
+- any related validation / dataset / export / helper files
+
+PRIMARY GOAL
+Preserve the current strengths:
+- piping dimensions lookup structure
+- SVG technical visuals
+- built-in + imported dataset workflow
+- Pipe Flexibility screening
+- Safe Spans screening
+- strong Pipe Wall Thickness standards structure (B31.3 / B31.4 / B31.8)
+- schedule-check and MAOP workflow
+
+But correct the identified weaknesses so the module is clearly and credibly positioned as:
+- Piping reference / screening toolkit
+- suitable for FEED / concept / preliminary design support
+- not final piping stress analysis
+- not final standards data authority unless dataset provenance is explicit
+- not final pipe-support design
+- not final flexibility/stress design
+- not final wall-thickness design verification without project/material/code review
+
+NON-NEGOTIABLE POSITIONING
+This module must be presented as:
+- dimensional lookup + screening tool
+- not a substitute for full piping stress software
+- not a substitute for project-controlled piping classes / standards databases
+- not final code compliance verification
+- not final support/flexibility/stress design authority
+
+Do NOT overstate rigor or data authority.
+
+--------------------------------------------------
+PART A — PIPING COMPONENTS MODULE CORRECTIONS
+--------------------------------------------------
+
+1) ADD DATASET GOVERNANCE / PROVENANCE METADATA — CRITICAL
+Current issue:
+Built-in dimensional datasets exist but are not strongly governed.
+
+Required correction:
+Move or refactor built-in dimensional data into controlled dataset files / dataset objects with metadata.
+
+Every built-in dataset must include, at minimum:
+- dataset name
+- category
+- governing standard / source
+- edition / revision
+- revision or issue date if known
+- coverage / scope note
+- disclaimer or notes field
+
+This must be visible in the UI through a dataset status / metadata panel or similar.
+
+Do NOT leave built-in engineering tables without visible provenance and revision information.
+
+2) REPLACE NAIVE CSV PARSER — CRITICAL
+Current issue:
+The current CSV parsing is too weak for engineering datasets.
+
+Required correction:
+Replace the simple CSV split-based parser with a robust CSV parser that supports:
+- quoted fields
+- commas inside quoted cells
+- empty values
+- header normalization
+- row-level validation feedback
+
+Imported datasets must fail gracefully and provide meaningful validation messages.
+
+Do NOT keep a fragile split-based parser for engineering data import.
+
+3) STRENGTHEN DATASET VALIDATION
+Current issue:
+Schemas validate basic row shape but not enough metadata / engineering governance.
+
+Required correction:
+Extend dataset validation to include:
+- required metadata fields
+- category-specific mandatory keys
+- positive dimension checks
+- ID < OD where applicable
+- thickness consistency where applicable
+- duplicate-key detection where possible
+- user-facing import warnings for incomplete rows
+
+Imported and built-in datasets should both follow a more disciplined schema model.
+
+4) IMPROVE ROW SELECTION STABILITY
+Current issue:
+Selection by filtered-array index is fragile after filters change.
+
+Required correction:
+Use a stable record identity key for row selection instead of relying only on filtered row index.
+
+Do NOT let selection drift silently when filters are changed.
+
+--------------------------------------------------
+PART B — PIPE FLEXIBILITY CORRECTIONS
+--------------------------------------------------
+
+5) FIX OR REMOVE MISLEADING RESTRAINT CHOICE — CRITICAL
+Current issue:
+The end-restraint choice does not materially change the calculation model, but the UI implies it does.
+
+Required correction:
+Implement one of the following, preferred in this order:
+
+OPTION A — PREFERRED
+Implement genuinely different screening logic for different restraint conditions if the chosen methodology supports it.
+
+OPTION B — ACCEPTABLE
+If meaningful differentiated restraint modeling is not implemented:
+- remove the restraint condition as an active solver input
+- present the method honestly as a single simplified flexibility screening model
+- keep any restraint notes only as interpretive warnings, not as calculation-driving options
+
+Do NOT leave a UI choice that suggests different engineering physics while using essentially the same stress result.
+
+6) STRENGTHEN PIPE FLEXIBILITY ASSUMPTIONS PANEL
+Required correction:
+Clearly state:
+- simplified thermal-growth screening method
+- not Caesar II / AutoPIPE / detailed B31.3 stress analysis
+- no full sustained/occasional/load-combination stress analysis
+- no nozzle-load verification
+- no support friction / spring / anchor stiffness modeling unless implemented
+
+Do NOT let the flexibility tool appear more rigorous than it is.
+
+--------------------------------------------------
+PART C — SAFE SPANS CORRECTIONS
+--------------------------------------------------
+
+7) STRENGTHEN SAFE SPANS LIMITATIONS DISCLOSURE — IMPORTANT
+Current issue:
+The safe-span solver is useful but still heuristic.
+
+Required correction:
+Assumptions / methodology / results must clearly state:
+- beam-style screening only
+- support coefficients are preliminary engineering assumptions
+- final support spacing must be verified against project stress/support criteria
+- no detailed support flexibility / nozzle load / dynamic vibration analysis unless implemented
+
+Keep the solver, but position it honestly as screening.
+
+--------------------------------------------------
+PART D — PIPE WALL THICKNESS CALCULATOR CORRECTIONS
+--------------------------------------------------
+
+8) ADD FORMAL VALIDATION IN ACTUAL SOLVE PATH — CRITICAL
+Current issue:
+The wall-thickness page lacks strong schema-based validation in the actual solve path.
+
+Required correction:
+Create and use schema-based validation covering, as applicable:
+- design pressure > 0
+- outer diameter > 0
+- allowances >= 0
+- mill tolerance within valid range
+- allowable stress > 0 where user-defined
+- E > 0 where user-defined
+- design factor > 0 where user-defined
+- temperature in valid engineering range
+- material selection valid
+- code-specific factor consistency valid
+- B31.8 location class valid
+- B31.4 / B31.8 joint-type validity
+
+Use schema validation in the actual solve path, not only passive documentation.
+
+9) BLOCK / HIDE INVALID JOINT-TYPE CHOICES FOR B31.8 — CRITICAL
+Current issue:
+Joint types not applicable to B31.8 can still appear/select.
+
+Required correction:
+For B31.8:
+- block or hide any joint types that are not valid for that code branch (for example FBW if it is B31.4-only in your current design basis)
+- ensure UI options and solver branch logic remain code-appropriate
+
+Do NOT allow invalid code-branch combinations silently.
+
+10) TIGHTEN TEMPERATURE-RANGE HANDLING FOR B31.4 / B31.8 — IMPORTANT
+Current issue:
+If the implemented temperature derating table ends at 232°C, the code currently continues beyond that range with a carried value.
+
+Required correction:
+For temperatures beyond implemented/covered code-table range:
+- either block calculation,
+- or require explicit user acknowledgement / override,
+- and clearly flag that the result is outside the coded table range
+
+Do NOT silently continue as if the code table remains valid.
+
+11) ADD LOW-TEMPERATURE WARNING DISCIPLINE FOR B31.3 — IMPORTANT
+Current issue:
+Allowable stress is clamped at the minimum listed table temperature without a strong user-facing warning.
+
+Required correction:
+If design temperature is below the minimum table temperature:
+- add an explicit warning
+- state that allowable stress has been conservatively clamped or table minimum applied
+- require review of MDMT / impact testing / low-temperature qualification
+
+Do NOT leave low-temperature material qualification implications silent.
+
+12) USER-DEFINED FACTOR DISCIPLINE
+If users override:
+- allowable stress
+- E
+- design factor
+- material properties
+
+Required correction:
+Show a visible note/warning:
+- user-defined override applied
+- result is project-specific screening only
+- verify against governing code, project spec, and material basis
+
+Do NOT let overrides appear like standard-table values.
+
+13) DATA GOVERNANCE FOR WALL THICKNESS DATABASES — CRITICAL
+Material tables, schedule tables, and standards data used by the wall-thickness calculator must also be governed like the rest of the Piping Components module.
+
+Required correction:
+Move/refactor these data sources into controlled dataset files/objects with metadata such as:
+- source standard
+- edition/revision
+- date/reference note
+- coverage scope
+
+This applies to items such as:
+- schedule dimensions
+- allowable stress tables
+- SMYS/SMTS data
+- API 5L / ASME / B36 references used by the solver
+
+Do NOT leave core engineering data without visible provenance.
+
+--------------------------------------------------
+METHODOLOGY / ASSUMPTIONS PANEL REQUIREMENTS
+--------------------------------------------------
+
+For piping lookup pages, include:
+- dimensional reference / lookup tool only
+- final project piping classes and controlled standards data govern actual design
+
+For Pipe Flexibility, include:
+- simplified thermal-growth screening only
+- not final piping stress analysis
+
+For Safe Spans, include:
+- beam screening only
+- support assumptions are preliminary
+
+For Pipe Wall Thickness, include:
+- code-branch-specific preliminary pressure design screening
+- final design requires full project material/code review
+- user-defined overrides reduce standard-table rigor
+- temperature applicability limits must be observed
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1) Preserve the current strong module layout and SVG visuals.
+
+2) Add visible dataset metadata/status panels for built-in and imported datasets.
+
+3) Improve import UX:
+- show row errors
+- show metadata status
+- show validation issues clearly
+
+4) If Pipe Flexibility restraint logic is not truly differentiated, do not present restraint choice as solver-driving physics.
+
+5) In Pipe Wall Thickness:
+- hide/block invalid code-specific joint options
+- make low-temperature and out-of-range-temperature warnings prominent
+- make user-defined overrides visible in results and exports
+
+--------------------------------------------------
+CODE QUALITY REQUIREMENTS
+--------------------------------------------------
+
+- Preserve existing architecture
+- Keep solver logic in engineering libraries, not UI
+- Keep SVG/drawing modules intact
+- Do not remove useful functionality; improve rigor and governance
+- Add comments where approximation boundaries and code-limit boundaries matter
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+The revision is complete only if:
+- built-in datasets have visible provenance / edition metadata
+- CSV import uses a robust parser
+- dataset validation is strengthened
+- selection no longer depends on fragile filtered-row index only
+- Pipe Flexibility no longer presents misleading restraint-driven physics
+- Safe Spans limitations are clearly disclosed
+- Pipe Wall Thickness uses schema-based validation in the actual solve path
+- invalid B31.8 joint choices are blocked/hidden
+- out-of-range B31.4/B31.8 temperature handling is explicitly controlled
+- low-temperature B31.3 cases trigger proper warning discipline
+- user-defined overrides are clearly disclosed
+- wall-thickness engineering data has visible provenance/governance
+- assumptions, warnings, exports, and UI labels match the real implemented screening scope

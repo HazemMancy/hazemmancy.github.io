@@ -1,0 +1,250 @@
+SYSTEM PROMPT — REVISE EXISTING GAS MIXING CALCULATOR
+
+You are updating an existing Gas Mixing calculator in a Process Engineering web application. Do NOT rebuild it from scratch. Revise the current implementation so it remains a strong gas-composition / blending / screening-property tool while correcting the identified technical, validation, and methodology issues.
+
+TARGET FILES
+- client/src/lib/engineering/gasMixing.ts
+- client/src/pages/calculators/gas-mixing.tsx
+- client/src/lib/engineering/validation.ts
+- any related export / helper / EOS integration files used by this calculator
+
+PRIMARY GOAL
+Preserve the current strengths:
+- composition-based gas mixing
+- multi-stream blending
+- MW / SG / gas constant outputs
+- mass-fraction conversion
+- pseudocritical-property screening
+- operating-conditions add-on (Z, density, viscosity, gamma, Cp/Cv, speed of sound, JT)
+- component presets and gas library
+
+But correct the known weaknesses so the module is clearly and credibly positioned as:
+- Gas Mixing / Gas Property Screening Tool
+- suitable for preliminary engineering calculations
+- not a full thermodynamic simulator
+- not a substitute for full EOS/property-package work
+- not a sour-gas-corrected thermodynamic design package unless explicitly implemented
+
+NON-NEGOTIABLE POSITIONING
+This calculator must be presented as:
+- composition mixing and screening-property tool
+- not final thermodynamic design authority
+- not a substitute for HYSYS / EOS package / compositional simulator
+- not a substitute for rigorous sour-gas corrected property calculations unless explicitly implemented
+
+Do NOT overstate rigor.
+
+--------------------------------------------------
+MANDATORY TECHNICAL CORRECTIONS
+--------------------------------------------------
+
+1) ENFORCE NORMALIZATION POLICY IN THE SOLVER — CRITICAL
+Current issue:
+Normalization policy (strict vs normalize) is handled only at page level, while the solver always normalizes.
+
+Required correction:
+Make normalization mode an explicit solver input / calculation policy and enforce it inside the actual calculation logic.
+
+Required behavior:
+- strict mode:
+  - reject compositions whose mole fractions do not sum to 1.0 within tolerance
+- normalize mode:
+  - normalize the composition intentionally and report that normalization occurred
+
+Do NOT let the solver silently normalize when the selected mode is strict.
+
+2) FIX MULTI-STREAM COMPOSITION HANDLING — CRITICAL
+Current issue:
+In multi-stream mixing, each stream composition can be off-sum and still be used with only a warning.
+
+Required correction:
+For each stream, implement explicit composition policy handling.
+
+Preferred implementation:
+- apply per-stream normalization policy consistent with selected mode:
+  - strict → reject invalid stream composition
+  - normalize → normalize each stream before mixing and report it
+
+At minimum:
+- do not continue with materially invalid stream compositions using warning-only logic
+
+This is mandatory for result integrity.
+
+3) HANDLE STREAM FLOW UNIT HONESTLY — CRITICAL
+Current issue:
+The multi-stream data model includes flowUnit, but the solver does not actually use it.
+
+Required correction:
+Implement one of the following, preferred in this order:
+
+OPTION A — PREFERRED
+Implement real per-stream flow-unit conversion before mixing.
+Supported units must be clearly defined and converted into a single consistent molar-flow basis before blending.
+
+OPTION B
+If unit conversion is not implemented now:
+- remove flowUnit from the active user-facing model and UI
+- clearly state that all stream flows must be entered on one consistent molar-flow basis
+
+Do NOT keep a dead engineering input that implies unsupported unit flexibility.
+
+4) STRENGTHEN APPROXIMATE PROPERTY DISCLOSURE — CRITICAL
+Current issue:
+The calculator estimates gamma, Cp/Cv, viscosity, Z, JT, and speed of sound using simplified methods, but the UI can be over-read as more rigorous than it is.
+
+Required correction:
+Methodology / assumptions / warnings must clearly state that operating-condition properties are:
+- screening / approximate only
+- not a substitute for full EOS/property-package calculations
+- not suitable for high-accuracy near-critical, sour-gas, phase-envelope, or high-precision compression/nozzle design without further verification
+
+This must be visible in:
+- assumptions panel
+- methodology text
+- export/report wording
+
+Do NOT let the calculator sound like a full thermodynamic package.
+
+5) CLARIFY GAMMA / CP-CV MIXING APPROXIMATION — IMPORTANT
+Current issue:
+Gamma mixing is handled approximately.
+
+Required correction:
+If gamma/Cp/Cv is still approximated by simple weighted treatment, explicitly state:
+- approximate caloric-property screening only
+- not a rigorous mixture caloric-property model
+- verify for compressor, nozzle, acoustic, or detailed thermodynamic work
+
+Keep the feature if useful, but disclose its limits clearly.
+
+6) SOUR-GAS PSEUDOCRITICAL DISCLOSURE — CRITICAL
+Current issue:
+The solver warns about sour gas but still reports pseudocritical properties based on uncorrected mixing unless Wichert–Aziz or equivalent is actually implemented.
+
+Required correction:
+If sour-gas correction is not implemented:
+- clearly state pseudocritical properties are uncorrected for sour gas
+- make the sour-gas warning prominent
+- state that Z-factor and reduced-property interpretation may be less reliable for sour gas
+
+Do NOT allow sour-gas cases to look fully corrected if they are not.
+
+7) EOS COVERAGE DISCLOSURE — IMPORTANT
+If PR/SRK mode is used and some components are not mapped or fully supported, disclose this clearly.
+
+Required correction:
+- report when components are outside the EOS component mapping
+- explain that EOS result confidence is reduced when fallback handling is used
+- reflect this limitation in warnings and exports
+
+Do NOT let partially mapped EOS runs appear fully rigorous.
+
+8) SEPARATE “MIXING” AND “AT CONDITIONS” METHODOLOGY CLEARLY
+The calculator currently performs both:
+- composition mixing
+- operating-condition property estimation
+
+Required correction:
+In assumptions/methodology, clearly separate:
+- composition mixing basis
+- thermodynamic property-at-conditions basis
+
+This improves engineering clarity and helps avoid overinterpretation.
+
+9) DUPLICATE COMPONENT HANDLING — IMPORTANT
+Current issue:
+Duplicate components are only warned, not resolved.
+
+Required correction:
+Implement one of the following:
+- auto-merge duplicate component names before calculation
+- reject duplicates in strict mode
+- explicitly combine duplicates and report the merge in warnings/calc steps
+
+Do NOT leave duplicate-component handling as ambiguous warning-only behavior.
+
+10) FORMAL VALIDATION IN ACTUAL SOLVE PATH — MANDATORY
+Do not rely only on page-level manual checks.
+Create and use schema-based validation in the actual solve path.
+
+Validation must cover, as applicable:
+- component MW > 0
+- mole fractions >= 0
+- composition sum policy per selected mode
+- stream flows > 0 where required
+- operating pressure > 0 where conditions are calculated
+- operating temperature within valid engineering range
+- EOS property inputs valid
+- gamma / Z / viscosity inputs valid where user-defined
+- duplicate-name handling policy
+
+Use schema validation in the real calculation path, not only passive documentation.
+
+--------------------------------------------------
+METHODOLOGY / ASSUMPTIONS PANEL REQUIREMENTS
+--------------------------------------------------
+
+For composition mixing, include:
+- mole-basis mixture MW calculation
+- mass-fraction conversion
+- SG and gas constant derivation
+- normalization policy (strict or normalize) clearly stated
+
+For multi-stream mixing, include:
+- per-stream composition quality requirements
+- stream flow basis clearly stated
+- if normalization occurs, it must be reported
+
+For operating-condition properties, include:
+- screening-level Z / density / viscosity / gamma / JT estimates only
+- not a substitute for full EOS/property-package simulation
+- sour-gas and near-critical cases require additional verification
+- EOS mapping limitations clearly stated if applicable
+
+For the whole calculator, include:
+- preliminary gas mixing / property screening tool
+- final design/thermo verification requires rigorous EOS or process simulation tools where needed
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1) Preserve the current useful workflow and presets.
+
+2) Make normalization mode visible and meaningful:
+- strict vs normalize must actually affect solver behavior
+
+3) If stream flow units are supported, make conversion explicit.
+If not, remove misleading flowUnit exposure.
+
+4) Make sour-gas warnings prominent when relevant.
+
+5) Make duplicate-component handling explicit.
+
+6) Keep the operating-conditions section useful, but clearly label it as screening-level.
+
+--------------------------------------------------
+CODE QUALITY REQUIREMENTS
+--------------------------------------------------
+
+- Preserve existing architecture
+- Keep solver logic in engineering library, not UI
+- Do not remove useful features; improve rigor and honesty
+- Add comments where approximation boundaries are important
+- Ensure exports/reports reflect normalization behavior and property-method limitations
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+The revision is complete only if:
+- normalization policy is enforced inside the solver
+- invalid multi-stream compositions are no longer processed with warning-only logic
+- flowUnit is either truly implemented or removed/de-emphasized honestly
+- approximate property methods are clearly disclosed as screening-level only
+- gamma/Cp/Cv approximation is explicitly disclosed
+- sour-gas pseudocritical limitations are prominently disclosed unless corrected methods are implemented
+- EOS component-mapping limitations are clearly reported
+- duplicate components are handled explicitly
+- schema-based validation is used in the actual solve path
+- assumptions, warnings, exports, and UI labels match the real implemented screening scope

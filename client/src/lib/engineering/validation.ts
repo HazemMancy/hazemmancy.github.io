@@ -75,10 +75,13 @@ export type CentrifugalPumpInput = z.infer<typeof centrifugalPumpSchema>;
 export type PDPumpInput = z.infer<typeof pdPumpSchema>;
 
 export const gasMixingSchema = z.object({
+  /** Normalization policy — enforced inside the solver, not just UI-side */
+  normalizationMode: z.enum(["strict", "normalize"]).default("normalize"),
   components: z.array(z.object({
-    name: z.string().min(1),
-    moleFraction: z.number().min(0).max(1),
-    molecularWeight: z.number().positive(),
+    name: z.string().min(1, "Component name is required"),
+    /** Must be >= 0. Sum policy (strict = must equal 1.0; normalize = auto-scale) is applied in solver. */
+    moleFraction: z.number().nonnegative("Mole fraction must be >= 0"),
+    molecularWeight: z.number().positive("MW must be > 0"),
   })).min(2, "At least 2 components required"),
 });
 

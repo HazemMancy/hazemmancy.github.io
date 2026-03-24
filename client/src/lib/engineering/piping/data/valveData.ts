@@ -1,4 +1,13 @@
-import type { ValveRow } from "../schemas";
+import type { ValveRow, BuiltInDatasetProvenance } from "../schemas";
+
+export const VALVE_DATA_PROVENANCE: BuiltInDatasetProvenance = {
+  name: "Valve Dimensional Data",
+  standard: "ASME B16.10, API 6D",
+  edition: "ASME B16.10:2009 (R2023), API 6D:2021",
+  scope: "NPS ½\"–24\" gate, globe, check, ball, butterfly valves for Class 150–2500. Face-to-face dimensions per ASME B16.10 (plant valves) and API 6D (pipeline valves).",
+  disclaimer: "Face-to-face and end-to-end dimensions extracted from ASME B16.10 and API 6D reference tables. Pressure–temperature ratings and Cv/Kv flow coefficients are NOT included. Valve height and weight are indicative — actual values vary by manufacturer. For formal design and procurement, confirm dimensions against the current standard edition and manufacturer's data sheet.",
+  category: "valves",
+};
 
 export const VALVE_DATA: ValveRow[] = [
   { nps: 2, dn: 50, class_rating: 150, type: "GATE", end_connection: "RF", face_to_face_mm: 178, weight_kg: 14, standard: "ASME B16.10" },

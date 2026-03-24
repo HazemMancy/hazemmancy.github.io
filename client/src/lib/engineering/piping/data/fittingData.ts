@@ -1,4 +1,13 @@
-import type { FittingRow } from "../schemas";
+import type { FittingRow, BuiltInDatasetProvenance } from "../schemas";
+
+export const FITTING_DATA_PROVENANCE: BuiltInDatasetProvenance = {
+  name: "Butt-Weld Fitting Dimensional Data",
+  standard: "ASME B16.9, ASME B16.11",
+  edition: "ASME B16.9:2018, ASME B16.11:2016",
+  scope: "NPS ½\"–48\" butt-weld fittings per B16.9 (elbows 90LR/90SR/45, tees, reducers concentric/eccentric, caps). NPS ½\"–4\" socket-weld and threaded fittings per B16.11.",
+  disclaimer: "Center-to-end and overall-length dimensions extracted from ASME B16.9:2018 and B16.11:2016 reference tables. Pressure ratings depend on material, schedule, and operating conditions and are not provided here. For formal design, confirm all dimensions against the current edition of the applicable standard.",
+  category: "fittings",
+};
 
 export const FITTING_DATA: FittingRow[] = [
   { nps: 0.5, dn: 15, type: "90LR", end_type: "BW", center_to_end_mm: 38, od_mm: 21.3, standard: "ASME B16.9" },

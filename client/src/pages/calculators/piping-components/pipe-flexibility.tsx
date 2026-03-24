@@ -107,10 +107,18 @@ export default function PipeFlexibilityPage() {
           <div className="p-3 rounded-md border border-amber-500/30 bg-amber-500/5 mb-6">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-              <p className="text-xs text-amber-400">
-                <strong>Screening tool only.</strong> Detailed flexibility/stress analysis requires Caesar II / AutoPIPE per ASME B31.3.
-                This tool uses the guided cantilever method for preliminary screening.
-              </p>
+              <div className="text-xs text-amber-400 space-y-1">
+                <p><strong>Screening tool only — guided cantilever method per ASME B31.3 Appendix / M.W. Kellogg.</strong></p>
+                <p>This tool calculates a single thermal expansion stress using the simplified guided cantilever formula and does <strong>not</strong> perform:</p>
+                <ul className="list-disc ml-4 space-y-0.5 text-amber-400/90">
+                  <li>Sustained load (deadweight + pressure) stress analysis</li>
+                  <li>Occasional load analysis (wind, seismic, PSV reaction, slug force)</li>
+                  <li>Nozzle load verification (vessel / pump / compressor connections)</li>
+                  <li>Support settlement, spring-hanger sizing, or friction effects</li>
+                  <li>Multi-branch / complex routing systems</li>
+                </ul>
+                <p>A full flexibility analysis using Caesar II, AutoPIPE, or equivalent software per ASME B31.3 Chapter II §319 is required before finalising piping layout and support design.</p>
+              </div>
             </div>
           </div>
 
@@ -150,14 +158,17 @@ export default function PipeFlexibilityPage() {
                 </div>
 
                 <div>
-                  <Label className="text-xs">End Restraint</Label>
+                  <Label className="text-xs">Boundary Context (for documentation only)</Label>
                   <Select value={fixedBothEnds ? "fixed" : "guided"} onValueChange={v => setFixedBothEnds(v === "fixed")}>
                     <SelectTrigger className="h-8 text-xs" data-testid="select-restraint"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="fixed">Fixed Both Ends</SelectItem>
-                      <SelectItem value="guided">Guided / Free</SelectItem>
+                      <SelectItem value="fixed">Both Ends Anchored</SelectItem>
+                      <SelectItem value="guided">One End Guided / Free</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    This field is for export reference only — the guided cantilever formula is applied regardless.
+                  </p>
                 </div>
 
                 <div className="flex gap-2">

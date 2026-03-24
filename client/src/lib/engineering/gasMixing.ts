@@ -59,7 +59,13 @@ export interface GasMixComponent {
 export interface GasMixStream {
   id: string;
   name: string;
+  /**
+   * Molar flow. All streams MUST be on a consistent molar basis (e.g. kmol/h).
+   * The solver does NOT perform unit conversion between streams.
+   * flowUnit is informational only — mixing is always done on the stated numeric values.
+   */
   molarFlow: number;
+  /** Informational only — solver does NOT convert units. All flows must be in the same molar unit. */
   flowUnit: string;
   components: { componentId: string; moleFraction: number }[];
 }
@@ -340,24 +346,58 @@ export function calculateGasMixing(
     if (c.moleFraction < 0) throw new Error(`Negative mole fraction for ${c.name}`);
   }
 
+  const normalizationMode = input.normalizationMode ?? "normalize";
+
+  // ─── Duplicate handling — enforced inside solver ──────────────────────────
   const names = input.components.map(c => c.name.trim().toLowerCase());
-  const duplicates = names.filter((n, i) => names.indexOf(n) !== i);
-  if (duplicates.length > 0) {
-    flags.push("DUPLICATE COMPONENTS");
-    warnings.push(`Duplicate component names detected: ${duplicates.join(", ")}`);
+  const uniqueNames = [...new Set(names)];
+  const hasDuplicates = uniqueNames.length < names.length;
+
+  let workingComponents = [...input.components];
+
+  if (hasDuplicates) {
+    if (normalizationMode === "strict") {
+      const dups = names.filter((n, i) => names.indexOf(n) !== i);
+      throw new Error(
+        `STRICT MODE: Duplicate components detected — ${[...new Set(dups)].join(", ")}. Remove duplicates or switch to Normalize mode.`
+      );
+    } else {
+      // normalize mode: auto-merge duplicates by summing mole fractions
+      const merged = new Map<string, { name: string; moleFraction: number; molecularWeight: number }>();
+      for (const c of workingComponents) {
+        const key = c.name.trim().toLowerCase();
+        const existing = merged.get(key);
+        if (existing) {
+          existing.moleFraction += c.moleFraction;
+        } else {
+          merged.set(key, { ...c });
+        }
+      }
+      workingComponents = [...merged.values()];
+      const dupNames = names.filter((n, i) => names.indexOf(n) !== i);
+      flags.push("DUPLICATES MERGED");
+      warnings.push(`Duplicate components auto-merged (mole fractions summed): ${[...new Set(dupNames)].join(", ")}`);
+    }
   }
 
-  let totalMoleFraction = input.components.reduce((sum, c) => sum + c.moleFraction, 0);
+  // ─── Normalization enforcement — inside solver ────────────────────────────
+  let totalMoleFraction = workingComponents.reduce((sum, c) => sum + c.moleFraction, 0);
   const wasNormalized = Math.abs(totalMoleFraction - 1.0) > SUM_TOLERANCE_STRICT;
   let normalizationTrace: NormalizationTrace | null = null;
 
   if (wasNormalized) {
+    if (normalizationMode === "strict") {
+      throw new Error(
+        `STRICT MODE: Mole fractions sum to ${totalMoleFraction.toFixed(6)} (must equal 1.0 ± ${SUM_TOLERANCE_STRICT}). Adjust compositions or switch to Normalize mode.`
+      );
+    }
+    // normalize mode: auto-scale
     flags.push("NORMALIZATION APPLIED");
-    warnings.push(`Mole fractions sum to ${totalMoleFraction.toFixed(6)} (not 1.0) — normalized`);
+    warnings.push(`Mole fractions sum to ${totalMoleFraction.toFixed(6)} (not 1.0) — auto-normalized for calculation`);
     normalizationTrace = {
       rawTotal: totalMoleFraction,
       normalizationFactor: totalMoleFraction > 0 ? 1 / totalMoleFraction : 0,
-      normalizedFractions: input.components.map(c => ({
+      normalizedFractions: workingComponents.map(c => ({
         name: c.name,
         raw: c.moleFraction,
         normalized: totalMoleFraction > 0 ? c.moleFraction / totalMoleFraction : 0,
@@ -365,7 +405,7 @@ export function calculateGasMixing(
     };
   }
 
-  const normalizedComponents = input.components.map(c => ({
+  const normalizedComponents = workingComponents.map(c => ({
     ...c,
     moleFraction: wasNormalized && totalMoleFraction > 0 ? c.moleFraction / totalMoleFraction : c.moleFraction,
   }));
@@ -453,11 +493,36 @@ export function calculateGasMixing(
   const co2Frac = normalizedComponents.find(c => c.name === "Carbon Dioxide")?.moleFraction ?? 0;
   if (h2sFrac > 0.0001) {
     flags.push("SOUR GAS");
-    if (h2sFrac > 0.04) warnings.push(`H₂S mole fraction ${(h2sFrac * 100).toFixed(2)}% — classified as sour gas. Apply Wichert–Aziz correction for pseudocritical properties.`);
+    warnings.push(
+      h2sFrac > 0.04
+        ? `H₂S = ${(h2sFrac * 100).toFixed(2)} mol% (> 4%) — SOUR GAS. Pseudocritical properties (Tc_pc, Pc_pc) from Kay's rule are NOT corrected here; apply the Wichert–Aziz (1972) correction before using them in EoS or Z-factor calculations.`
+        : `H₂S = ${(h2sFrac * 100).toFixed(3)} mol% detected — trace sour gas. Monitor for Wichert–Aziz applicability if H₂S rises above 4 mol%.`
+    );
   }
   if (co2Frac > 0.05) {
     flags.push("HIGH CO₂");
-    warnings.push(`CO₂ mole fraction ${(co2Frac * 100).toFixed(1)}% — significant acid gas content`);
+    warnings.push(
+      `CO₂ = ${(co2Frac * 100).toFixed(1)} mol% — significant acid gas content. Kay's rule pseudocritical properties may require Wichert–Aziz correction; verify before EoS calculations.`
+    );
+  }
+
+  // ─── Gamma / Cp / Cv approximation disclosure ──────────────────────────────
+  if (gammaMix != null) {
+    warnings.push(
+      "γ_mix (Cp/Cv) is approximated as Σ(y_i × γ_i) — linear mole-fraction mixing. " +
+      "This is an ideal-gas approximation valid at low-to-moderate pressures. " +
+      "For accurate Cp/Cv at actual conditions, use the Operating Conditions tab (EoS-based)."
+    );
+  }
+
+  // ─── Kay's rule disclosure ───────────────────────────────────────────────
+  if (TcPc != null && PcPc != null) {
+    warnings.push(
+      "Pseudocritical properties (Tc_pc, Pc_pc, ω_mix) are from Kay's linear mixing rule — a screening approximation. " +
+      "Accuracy degrades for high-inert or high-acid-gas streams. " +
+      "For sour gas (H₂S > 4 mol%) apply Wichert–Aziz correction. " +
+      "For complex mixtures use full EoS mixing rules."
+    );
   }
 
   return {
@@ -473,11 +538,17 @@ export function calculateGasMixing(
 export function calculateMultiStreamMixing(
   streams: GasMixStream[],
   allComponents: GasMixComponent[],
+  normalizationMode: "strict" | "normalize" = "normalize",
 ): MultiStreamResult {
   const warnings: string[] = [];
   const calcTrace: string[] = [];
 
   if (streams.length < 2) throw new Error("At least 2 streams required for multi-stream mixing");
+
+  calcTrace.push(
+    `Basis: molar flow mixing. All flows treated as entered (${streams[0]?.flowUnit ?? "kmol/h"}).` +
+    " No unit conversion is performed between streams — ensure all flows are in the same unit."
+  );
 
   const totalFlow = streams.reduce((s, st) => s + st.molarFlow, 0);
   if (totalFlow <= 0) throw new Error("Total molar flow must be positive");
@@ -491,18 +562,33 @@ export function calculateMultiStreamMixing(
 
   const streamResults = streams.map(stream => {
     const streamYTotal = stream.components.reduce((s, c) => s + c.moleFraction, 0);
-    if (Math.abs(streamYTotal - 1.0) > SUM_TOLERANCE_STRICT && streamYTotal > 0) {
-      warnings.push(`Stream "${stream.name}": Σy = ${streamYTotal.toFixed(6)} (not 1.0)`);
+    const streamDeviation = Math.abs(streamYTotal - 1.0);
+    if (streamDeviation > SUM_TOLERANCE_STRICT && streamYTotal > 0) {
+      if (normalizationMode === "strict") {
+        throw new Error(
+          `STRICT MODE: Stream "${stream.name}" Σy = ${streamYTotal.toFixed(6)} (must equal 1.0 ± ${SUM_TOLERANCE_STRICT}). ` +
+          "Adjust compositions or switch to Normalize mode."
+        );
+      }
+      // normalize mode: normalize stream fractions before mixing
+      warnings.push(
+        `Stream "${stream.name}": Σy = ${streamYTotal.toFixed(6)} (not 1.0) — normalized before mixing (factor = ${(1 / streamYTotal).toFixed(6)})`
+      );
     }
+
+    const normFactor = (normalizationMode === "normalize" && streamDeviation > SUM_TOLERANCE_STRICT && streamYTotal > 0)
+      ? 1 / streamYTotal
+      : 1;
 
     const composition: { name: string; yi: number }[] = [];
     for (const sc of stream.components) {
       const comp = componentMap.get(sc.componentId);
       if (comp) {
-        const ni = stream.molarFlow * sc.moleFraction;
+        const yiNorm = sc.moleFraction * normFactor;
+        const ni = stream.molarFlow * yiNorm;
         comp.ni += ni;
-        composition.push({ name: comp.name, yi: sc.moleFraction });
-        calcTrace.push(`n_${comp.name}_${stream.name} = ${stream.molarFlow.toFixed(2)} × ${sc.moleFraction.toFixed(6)} = ${ni.toFixed(4)} kmol/h`);
+        composition.push({ name: comp.name, yi: yiNorm });
+        calcTrace.push(`n_${comp.name}_${stream.name} = ${stream.molarFlow.toFixed(2)} × ${yiNorm.toFixed(6)} = ${ni.toFixed(4)} kmol/h`);
       }
     }
 
@@ -870,6 +956,7 @@ export function loadPreset(preset: PresetComposition): GasMixComponent[] {
 }
 
 export const GAS_MIXING_TEST_CASE: GasMixingInput = {
+  normalizationMode: "normalize",
   components: [
     { name: "Methane", moleFraction: 0.85, molecularWeight: 16.043 },
     { name: "Ethane", moleFraction: 0.08, molecularWeight: 30.070 },

@@ -67,11 +67,17 @@ export function calculateFlexibility(input: FlexibilityInput): FlexibilityResult
     trace.push({ step: "L_loop = √(3·E·Do·δ / S_a) (guided cantilever loop leg)", value: `${minLoopLeg.toFixed(2)} m` });
   }
 
-  if (Math.abs(deltaT) > 300) warnings.push("Large ΔT (>300°C): verify material properties at elevated temperature");
-  if (sigma > 2 * input.allowable_stress_mpa) warnings.push("Stress exceeds 2× allowable: expansion loop or bellows required");
-  if (input.fixed_both_ends) warnings.push("Both ends anchored: guided cantilever assumes lateral displacement absorption at one end. Verify boundary conditions.");
+  if (Math.abs(deltaT) > 300) warnings.push("Large ΔT (> 300 °C): verify material properties at elevated temperature — E and α may vary significantly.");
+  if (sigma > 2 * input.allowable_stress_mpa) warnings.push("Guided cantilever stress exceeds 2× allowable: an expansion loop, bellows, or change of routing is required.");
 
-  warnings.push("Screening tool only. Detailed flexibility/stress analysis requires Caesar II / AutoPIPE per ASME B31.3.");
+  // Boundary context note — interpretive only, does not alter the formula
+  if (input.fixed_both_ends) {
+    warnings.push("Boundary context: 'Both ends anchored' recorded for documentation. The guided cantilever formula (σ = 3·E·Do·δ / L²) is applied regardless of boundary context — it assumes the pipe absorbs thermal expansion at one guided end. Actual restraint conditions must be confirmed in a full stress analysis (Caesar II / AutoPIPE).");
+  } else {
+    warnings.push("Boundary context: 'One end guided / free' recorded for documentation. Same guided cantilever formula applied. Actual restraint conditions must be confirmed in a full stress analysis.");
+  }
+
+  warnings.push("SCREENING ONLY — This tool does NOT analyse: sustained loads (weight + pressure), occasional loads (wind, seismic, PSV reaction), support settlement, nozzle loads, in-plane / out-of-plane torsion, or multi-branch systems. A formal Caesar II / AutoPIPE stress analysis per ASME B31.3 Chapter II is required before finalising design.");
 
   return {
     delta_t: deltaT,

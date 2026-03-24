@@ -111,10 +111,23 @@ export default function SafeSpansPage() {
           <div className="p-3 rounded-md border border-amber-500/30 bg-amber-500/5 mb-6">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-              <p className="text-xs text-amber-400">
-                <strong>Screening tool only.</strong> Final support spacing per project piping spec / stress analysis.
-                Wind, seismic, and dynamic loads are not included in this screening.
-              </p>
+              <div className="text-xs text-amber-400 space-y-1">
+                <p><strong>Beam-span screening only — not a substitute for a formal pipe support design.</strong></p>
+                <p>This tool applies standard beam bending theory with idealised support coefficients:
+                  Simply Supported (C_stress = 8, C_defl = 76.8), Continuous (C_stress = 10),
+                  Fixed Ends (C_stress = 12, C_defl = 384). These are engineering approximations for
+                  uniform loading between two supports. Real pipe supports have intermediate flexibility
+                  and may differ significantly from these idealised conditions.</p>
+                <p>The following are <strong>NOT included</strong> in this screening:</p>
+                <ul className="list-disc ml-4 space-y-0.5 text-amber-400/90">
+                  <li>Wind, seismic, surge, or slug-flow loads</li>
+                  <li>Thermal expansion / contraction forces on supports</li>
+                  <li>Nozzle load verification at connected equipment</li>
+                  <li>Dynamic effects, acoustic / flow-induced vibration</li>
+                  <li>Support settlement or non-uniform load distribution</li>
+                </ul>
+                <p>Final support spacing must be confirmed by the project piping specification and a formal stress analysis (Caesar II / AutoPIPE / manual calculation per ASME B31.3).</p>
+              </div>
             </div>
           </div>
 

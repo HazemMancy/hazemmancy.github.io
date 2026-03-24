@@ -159,15 +159,13 @@ export default function GasMixingPage() {
   const handleCalculate = () => {
     setError(null);
     try {
-      if (project.normalizationMode === "strict" && !sumOK) {
-        throw new Error(`Strict mode: mole fractions sum to ${totalMF.toFixed(6)}, must be 1.0 ± 0.0005`);
-      }
       const parsed = components.map((c, i) => {
         if (c.molecularWeight <= 0) throw new Error(`Row ${i + 1} (${c.name || "unnamed"}): MW must be > 0`);
         if (c.moleFraction < 0) throw new Error(`Row ${i + 1}: mole fraction cannot be negative`);
         return { name: c.name || `Component ${i + 1}`, moleFraction: c.moleFraction, molecularWeight: c.molecularWeight };
       });
-      setResult(calculateGasMixing({ components: parsed }, components));
+      // normalizationMode is enforced inside the solver — strict throws, normalize auto-scales
+      setResult(calculateGasMixing({ components: parsed, normalizationMode: project.normalizationMode }, components));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Calculation error");
       setResult(null);
@@ -222,7 +220,8 @@ export default function GasMixingPage() {
     setError(null);
     try {
       if (streams.length < 2) throw new Error("At least 2 streams required");
-      setMultiResult(calculateMultiStreamMixing(streams, components));
+      // normalizationMode enforced per-stream inside the solver
+      setMultiResult(calculateMultiStreamMixing(streams, components, project.normalizationMode));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Multi-stream error");
       setMultiResult(null);
@@ -284,13 +283,16 @@ export default function GasMixingPage() {
         unit: project.mwUnits,
       })),
       methodology: [
-        "MW_mix = \u03A3(y_i \u00D7 MW_i)",
-        "w_i = (y_i \u00D7 MW_i) / MW_mix",
-        "R_mix = R_universal / MW_mix",
-        "SG = MW_mix / 28.966",
-        "\u03B3_mix \u2248 \u03A3(y_i \u00D7 \u03B3_i) \u2014 approximate",
-        "Tc_pc = \u03A3(y_i \u00D7 Tc_i) \u2014 Kay's rule",
-        "Pc_pc = \u03A3(y_i \u00D7 Pc_i) \u2014 Kay's rule",
+        "MW_mix = \u03A3(y_i \u00D7 MW_i) — mole-fraction weighted average molecular weight",
+        "w_i = (y_i \u00D7 MW_i) / MW_mix — mass fractions from molar mixing rule",
+        "R_mix = R_universal / MW_mix — specific gas constant",
+        "SG = MW_mix / 28.966 — specific gravity referenced to dry air",
+        "\u03B3_mix \u2248 \u03A3(y_i \u00D7 \u03B3_i) — APPROXIMATE: linear ideal-gas mixing; use EoS conditions tab for accuracy",
+        "Tc_pc = \u03A3(y_i \u00D7 Tc_i) — Kay's linear mixing rule (screening approximation only)",
+        "Pc_pc = \u03A3(y_i \u00D7 Pc_i) — Kay's linear mixing rule (screening approximation only)",
+        "\u03C9_mix = \u03A3(y_i \u00D7 \u03C9_i) — acentric factor linear mixing",
+        "SOUR GAS WARNING: If H\u2082S > 4 mol%, apply Wichert\u2013Aziz (1972) correction to Tc_pc and Pc_pc before EoS use",
+        "SCREENING TOOL: Results from this tab use simplified correlations; confirm with rigorous EoS for design-basis work",
       ],
       assumptions,
       references,
@@ -347,7 +349,7 @@ export default function GasMixingPage() {
           <div>
             <h1 className="text-xl md:text-2xl font-bold" data-testid="text-calc-title">Gas Mixing Calculator</h1>
             <p className="text-xs md:text-sm text-muted-foreground">
-              {Object.keys(COMMON_GASES).length} components · MW · SG · pseudocritical · multi-stream mixing
+              Screening tool · {Object.keys(COMMON_GASES).length} components · MW · SG · pseudocritical (Kay's rule) · multi-stream mixing
             </p>
           </div>
         </div>
@@ -836,15 +838,17 @@ export default function GasMixingPage() {
 
                 <AssumptionsPanel
                   assumptions={[
-                    "Ideal gas mixing assumed (Amagat's law / Dalton's law)",
-                    "MW_mix = Σ(y_i × MW_i) — mole-fraction weighted average",
+                    "SCREENING TOOL — simplified mixing correlations for preliminary work. Confirm with rigorous EoS simulation for design-basis applications.",
+                    "Ideal gas mixing assumed (Amagat's law / Dalton's law) — valid at low-to-moderate pressures",
+                    "MW_mix = Σ(y_i × MW_i) — mole-fraction weighted average molecular weight",
                     "Mass fractions: w_i = (y_i × MW_i) / MW_mix",
-                    `R_mix = R_u / MW_mix = ${R_UNIVERSAL.toFixed(5)} / MW_mix [kJ/(kg·K)]`,
-                    "Gas SG = MW_mix / 28.966 (MW of dry air)",
-                    "γ_mix ≈ Σ(y_i × γ_i) — approximate, linear mixing",
-                    "Pseudocritical: Kay's rule — Tc_pc = Σ(y_i × Tc_i), Pc_pc = Σ(y_i × Pc_i)",
-                    "ω_mix = Σ(y_i × ω_i) — acentric factor mixing",
-                    result.wasNormalized ? "Auto-normalization applied" : "Mole fractions summed to 1.0 — no normalization needed",
+                    `R_mix = R_u / MW_mix = ${R_UNIVERSAL.toFixed(5)} / MW_mix [kJ/(kg·K)] — ideal gas specific constant`,
+                    "Gas SG = MW_mix / 28.966 (MW of dry air at standard conditions)",
+                    "γ_mix ≈ Σ(y_i × γ_i) — APPROXIMATE: linear mole-fraction mixing of ideal-gas Cp/Cv ratios. Use EoS Conditions tab for pressure-corrected γ.",
+                    "Pseudocritical: Kay's linear mixing rule — Tc_pc = Σ(y_i × Tc_i), Pc_pc = Σ(y_i × Pc_i). Screening approximation only; accuracy degrades for non-hydrocarbon or sour-gas streams.",
+                    "SOUR GAS: If H₂S > 4 mol% (or CO₂ + H₂S > 5 mol%), Kay's pseudocritical properties MUST be corrected using Wichert–Aziz (1972) before use in Z-factor or EoS calculations.",
+                    "ω_mix = Σ(y_i × ω_i) — linear acentric factor mixing (ideal-gas approximation)",
+                    result.wasNormalized ? "Auto-normalization applied — raw Σy ≠ 1.0; all fractions scaled to sum to 1.0 before calculation" : "Mole fractions summed to 1.0 — no normalization applied",
                   ]}
                   references={[
                     "Perry's Chemical Engineers' Handbook, 9th Edition",
@@ -852,7 +856,7 @@ export default function GasMixingPage() {
                     "Smith, Van Ness, Abbott — Introduction to Chemical Engineering Thermodynamics",
                     "Standing & Katz (1942) — Pseudocritical property correlations",
                     "Kay, W.B. (1936) — Density of Hydrocarbon Gases and Vapors",
-                    "Wichert & Aziz (1972) — Sour gas pseudocritical correction",
+                    "Wichert & Aziz (1972) — Sour gas pseudocritical correction (corrections to Tc_pc and Pc_pc)",
                     "Poling, Prausnitz & O'Connell — Properties of Gases and Liquids, 5th Edition",
                   ]}
                 />
@@ -868,7 +872,7 @@ export default function GasMixingPage() {
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
                   <h3 className="font-semibold text-sm">Multi-Stream Mixing</h3>
-                  <p className="text-xs text-muted-foreground">Combine multiple inlet streams on a molar flow basis</p>
+                  <p className="text-xs text-muted-foreground">Combine multiple inlet streams on a molar flow basis — all flows entered in the same molar unit (e.g. kmol/h). No unit conversion is performed between streams.</p>
                 </div>
                 <Button size="sm" variant="outline" onClick={loadMultiStreamTest} data-testid="button-load-multi-test">
                   <FlaskConical className="w-3.5 h-3.5 mr-1" /> Load Test
@@ -1018,8 +1022,10 @@ export default function GasMixingPage() {
           <div className="space-y-4">
             {/* Basis note */}
             <Card className="border-amber-800/40 bg-amber-950/20">
-              <CardContent className="p-3 text-xs text-amber-200/80">
-                <span className="font-medium text-amber-200">Operating Conditions — EoS-based</span>: Computes Z, ρ, μ, Cp/Cv, γ, and speed of sound at specified T &amp; P using Peng-Robinson (recommended) or SRK EoS. Requires a calculated mixture on the Components tab. Components not in the EoS database are excluded and listed as unmapped.
+              <CardContent className="p-3 text-xs text-amber-200/80 space-y-1">
+                <p><span className="font-medium text-amber-200">Operating Conditions — EoS-based (PR / SRK)</span>: Computes Z, ρ, μ, Cp/Cv, γ, and speed of sound at specified T &amp; P.</p>
+                <p>PR and SRK are cubic EoS appropriate for O&amp;G hydrocarbon streams. <span className="font-medium text-amber-200">Pitzer correlation is a screening-only method</span> (Tr, Pr reduced-state) — suitable for quick estimates, not for design-basis calculations.</p>
+                <p>Components not mapped in the EoS parameter database are excluded and listed as unmapped. Results for partially-mapped mixtures carry additional uncertainty. Requires a calculated mixture from the Components tab.</p>
               </CardContent>
             </Card>
 

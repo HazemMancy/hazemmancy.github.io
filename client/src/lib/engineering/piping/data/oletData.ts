@@ -1,4 +1,13 @@
-import type { OletRow } from "../schemas";
+import type { OletRow, BuiltInDatasetProvenance } from "../schemas";
+
+export const OLET_DATA_PROVENANCE: BuiltInDatasetProvenance = {
+  name: "Branch Outlet (Olet) Dimensional Data",
+  standard: "MSS SP-97, ASME B16.9",
+  edition: "MSS SP-97:2012",
+  scope: "Weldolets, sockolets, threadolets, latrolets, elbolets. Run NPS ½\"–24\", Branch NPS ½\"–12\" for Class 3000–9000.",
+  disclaimer: "Olet height, bore, and base-width dimensions are indicative reference values derived from MSS SP-97:2012. Actual dimensions vary significantly by manufacturer. Branch reinforcement calculations must be performed per ASME B31.3 §304.3 or the applicable code. Tabulated olet dimensions shall NOT be used as the sole basis for branch reinforcement design without manufacturer confirmation.",
+  category: "olets",
+};
 
 export const OLET_DATA: OletRow[] = [
   { run_nps: 2, branch_nps: 0.5, type: "WELDOLET", rating: "STD/XS", height_mm: 38.1, bore_mm: 15.8, base_width_mm: 38.1, standard: "MSS SP-97" },
