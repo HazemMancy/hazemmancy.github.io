@@ -36,6 +36,36 @@ import { SiLinkedin } from "react-icons/si";
 
 const projects = [
   {
+    category: "FEED",
+    categoryColor: "text-red-400",
+    client: "PhPC",
+    location: "Port Said, Egypt",
+    title: "Atoll Crossover for Pressurizing Ha'py Subsea Pipeline",
+    description: "Pressurization study of the 30\" Ha'py subsea pipeline using Atoll gas via 10\" crossover. Developed Pressurization Philosophy and Design Basis, including MDMT assessment, AIV/FIV screening, P&IDs, and transient hydraulic simulation using Aspen HYSYS Pressurization Tool.",
+    tags: ["BOD", "Hydraulic Calculations", "AIV/FIV Analysis", "P&ID"],
+    extraTags: 1,
+  },
+  {
+    category: "FEED",
+    categoryColor: "text-red-400",
+    client: "WASCO",
+    location: "Damietta, Egypt",
+    title: "North El-Basant-1 Well Tie-in to Azhar-1 Manifold",
+    description: "Prepared Basis of Design for tie-in of North El-Basant-1 well to Azhar-1 manifold within the WASCO production system. Covered wellhead hook-up line, spill back unit, pneumatic control panel gas supply, underground pipeline, and tie-in philosophy using approved PVT and well test data.",
+    tags: ["BOD", "Process Design", "Hydraulic Design", "P&ID"],
+    extraTags: 0,
+  },
+  {
+    category: "Pre-FEED",
+    categoryColor: "text-orange-400",
+    client: "GEMSA",
+    location: "Gulf of Suez, Egypt",
+    title: "Offshore Oil Processing Platform & FSO Development",
+    description: "Pre-FEED development for a new offshore production platform with oil processing topsides and new FSO for storage and export, replacing existing aging FPSO. Scope includes preliminary sizing of separators, pumps, desalter, heater treater, tanks, chemical injection skids, and produced water treatment.",
+    tags: ["Equipment Sizing", "Oil Treating", "Produced Water Treatment"],
+    extraTags: 2,
+  },
+  {
     category: "Rehabilitation",
     categoryColor: "text-green-400",
     client: "NORPETCO",
