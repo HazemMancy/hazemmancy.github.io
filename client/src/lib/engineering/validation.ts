@@ -386,11 +386,11 @@ export const flareKOScenarioSchema = z.object({
 });
 
 export const flareKOAllowancesSchema = z.object({
-  inletZone: z.number().nonneg("Inlet zone allowance must be ≥ 0"),
-  disengagementZone: z.number().nonneg("Disengagement zone allowance must be ≥ 0"),
-  mistEliminatorZone: z.number().nonneg("Mist eliminator zone allowance must be ≥ 0"),
-  sumpZone: z.number().nonneg("Sump zone allowance must be ≥ 0"),
-  nozzleZone: z.number().nonneg("Nozzle zone allowance must be ≥ 0"),
+  inletZone: z.number().nonnegative("Inlet zone allowance must be ≥ 0"),
+  disengagementZone: z.number().nonnegative("Disengagement zone allowance must be ≥ 0"),
+  mistEliminatorZone: z.number().nonnegative("Mist eliminator zone allowance must be ≥ 0"),
+  sumpZone: z.number().nonnegative("Sump zone allowance must be ≥ 0"),
+  nozzleZone: z.number().nonnegative("Nozzle zone allowance must be ≥ 0"),
 });
 
 export const flareKOConfigSchema = z.object({
@@ -399,10 +399,10 @@ export const flareKOConfigSchema = z.object({
   kValue: z.number().positive("K-value must be > 0 (m/s)").max(0.5, "K-value > 0.5 m/s is unusually large — check input"),
   kMode: z.enum(["user", "typical"]),
   levelFraction: z.number().gt(0).lt(1, "Level fraction must be between 0 and 1 (exclusive)"),
-  maxDiameter: z.number().nonneg("Max diameter must be ≥ 0"),
-  maxLD: z.number().nonneg("Max L/D must be ≥ 0"),
+  maxDiameter: z.number().nonnegative("Max diameter must be ≥ 0"),
+  maxLD: z.number().nonnegative("Max L/D must be ≥ 0"),
   drainLineSize: z.number().positive("Drain line size must be > 0"),
-  drainRate: z.number().nonneg("Drain rate must be ≥ 0"),
+  drainRate: z.number().nonnegative("Drain rate must be ≥ 0"),
   allowances: flareKOAllowancesSchema,
   applyPressureCorrection: z.boolean(),
 });
