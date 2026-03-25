@@ -20,9 +20,11 @@ import {
   MATERIAL_DB,
   NPS_DATA,
   QUALITY_FACTORS,
+  QUALITY_FACTORS_POWER,
   QUALITY_FACTORS_PIPELINE,
   B318_LOCATION_CLASS,
   DEFAULT_PWT_INPUT,
+  PWT_TEST_CASE_B311,
   PWT_TEST_CASE_B313,
   PWT_TEST_CASE_B318,
   PWT_FLAG_LABELS,
@@ -167,7 +169,20 @@ function ScheduleTable({ checks, tReq }: { checks: PipeWTResult["scheduleChecks"
 
 function AssumptionsPanel({ inp }: { inp: PipeWTInput }) {
   const std = inp.pipingStandard;
-  const assumptions = std === "B31.3" ? [
+  const assumptions = std === "B31.1" ? [
+    { id: "A1", text: "Design equation per ASME B31.1:2022 §104.1.2(A): t = P·D / (2·(S·E + P·Y)). Note: W factor is NOT defined in B31.1 (W ≡ 1.0 implicitly). The B31.1 formula is identical to B31.3 with W removed.", ref: "ASME B31.1:2022 §104.1.2(A)" },
+    { id: "A2", text: "Allowable stress S from ASME B31.1:2022 Table A-1 (temperature-interpolated). B31.1 allowable stress basis: lesser of 1/4 × Su or 2/3 × Sy at temperature (§102.3.1(A)) — more conservative than B31.3 which uses 1/3 × Su. Values shown are representative published data; verify against your licensed copy.", ref: "ASME B31.1:2022 Table A-1 / §102.3.1(A)" },
+    { id: "A3", text: "Y coefficient from ASME B31.1:2022 Table 104.1.2(A). Values are identical to B31.3 Table 304.1.1 in current editions: Y = 0.4 for ferritic ≤ 482 °C, 0.5 at ≤ 510 °C, 0.7 at ≥ 566 °C; austenitic: Y = 0.4 ≤ 566 °C, 0.5 above.", ref: "ASME B31.1:2022 Table 104.1.2(A)" },
+    { id: "A4", text: "Longitudinal joint factor E from ASME B31.1:2022 Table 132.4: Seamless = 1.00; ERW = 0.85; DSAW/SAW = 1.00; EFW = 0.80 (B31.1 uses 0.80 for EFW vs 0.85 in B31.3); FBW = 0.60.", ref: "ASME B31.1:2022 Table 132.4" },
+    { id: "A5", text: "Thick-wall Lamé equation applied when t_p ≥ D/6 or P/(S·E) ≥ 0.385 per ASME B31.1 §104.1.2(B): t = D/2·(√((SE+P)/(SE−P)) − 1). Same criterion as B31.3 but without W factor.", ref: "ASME B31.1:2022 §104.1.2(B)" },
+    { id: "A6", text: "Total mechanical allowance c = corrosion + erosion + thread/groove depth per ASME B31.1 §104.1.1(A). Corrosion and erosion allowances must be individually justified for the specific service and design life.", ref: "ASME B31.1:2022 §104.1.1(A)" },
+    { id: "A7", text: "Mill tolerance 12.5% per ASTM A106 / A335. Required nominal = t_total / (1 − 0.125). Selected pipe must satisfy: t_nom × 0.875 ≥ t_total.", ref: "ASTM A106 / A335 (−12.5% tolerance)" },
+    { id: "A8", text: "MAOP back-calculated from selected schedule using rearranged B31.1 §104.1.2(A) at corroded end-of-life condition: P_MAOP = 2·t_eff·S·E / (D − 2·Y·t_eff). Hoop stress: σ_h = P·D / (2·t_eff) (Barlow thin-wall).", ref: "ASME B31.1:2022 §104.1.2(A)" },
+    { id: "A9", text: "Pipe schedule dimensions from ASME B36.10M:2018 (wrought steel). B31.1 power piping typically uses heavier schedules (Sch 80, Sch 120, Sch 160, XXS) for steam service.", ref: "ASME B36.10M:2018" },
+    { id: "A10", text: "This calculation addresses internal pressure design thickness only. ASME B31.1 power piping additionally requires: flexibility analysis (§119), sustained stress check (§104.8), branch reinforcement (§104.3), and pressure relief per ASME I for boilers.", ref: "ASME B31.1:2022 §104, §119" },
+    { id: "A11", text: "Post-weld heat treatment (PWHT) is mandatory for ferritic alloy steels (P11, P22, P91) and for carbon steel above the thickness and temperature thresholds of B31.1 §331.1.1. Verify PWHT conditions and hardness acceptance criteria with the applicable WPS.", ref: "ASME B31.1:2022 §331" },
+    { id: "A12", text: "SA-335 P91 (9Cr-1Mo-V): use with extreme care. Creep strength factor (CSF) requirements, PWHT at 730–760 °C, hardness 190–250 HB, and weld fabrication per EPRI guidelines are mandatory. A non-compliant weld can reduce service life by orders of magnitude.", ref: "EPRI P91 Guidelines / ASME B31.1 §331" },
+  ] : std === "B31.3" ? [
     { id: "A1", text: "Design equation per ASME B31.3:2022 §304.1.2: t = P·D / (2·(S·E·W + P·Y)). Applicable to straight pipe under internal gauge pressure, thin-wall condition (t < D/6, P/(S·E·W) < 0.385).", ref: "ASME B31.3:2022 §304.1.2" },
     { id: "A2", text: "Allowable stress S from ASME B31.3:2022 Table A-1 (temperature-interpolated). Values shown are per the tabulated specification, product form, and heat treatment condition. Linear interpolation between table entries.", ref: "ASME B31.3:2022 Table A-1" },
     { id: "A3", text: "Y coefficient from ASME B31.3:2022 Table 304.1.1. Y = 0.4 for ferritic and austenitic steel at T ≤ 482 °C. Increases to 0.5/0.6/0.7 at elevated temperatures for ferritic; 0.5 for austenitic above 566 °C.", ref: "ASME B31.3:2022 Table 304.1.1" },
@@ -200,6 +215,7 @@ function AssumptionsPanel({ inp }: { inp: PipeWTInput }) {
   ];
 
   const references = [
+    { std: "ASME B31.1:2022", title: "Power Piping — §104.1.2 Straight Pipe Pressure Design" },
     { std: "ASME B31.3:2022", title: "Process Piping — §304.1.2 Straight Pipe Pressure Design" },
     { std: "ASME B31.4:2019", title: "Pipeline Transportation Systems — §403.2.1 Pressure Design" },
     { std: "ASME B31.8:2022", title: "Gas Transmission and Distribution Piping — §841.11" },
@@ -255,7 +271,7 @@ function AssumptionsPanel({ inp }: { inp: PipeWTInput }) {
       </Card>
 
       <p className="text-xs text-muted-foreground border border-amber-800/40 bg-amber-950/20 rounded px-3 py-2">
-        <strong>Screening Tool Notice:</strong> This calculator implements the pressure design equations from ASME B31.3 §304.1.2 and ASME B31.4/B31.8 §403.2.1/§841.11. It does NOT account for sustained loads, thermal expansion stresses, bending, torsion, external pressure, seismic loads, or wind. A full piping stress analysis per ASME B31.3 Chapter II is required before finalising design. Always verify allowable stress values against the current edition of the applicable standard.
+        <strong>Screening Tool Notice:</strong> This calculator implements the pressure design equations from ASME B31.1 §104.1.2, B31.3 §304.1.2, and B31.4/B31.8 §403.2.1/§841.11. It does NOT account for sustained loads, thermal expansion stresses, bending, torsion, external pressure, seismic loads, or wind. A full piping stress analysis per ASME B31.3 Chapter II / B31.1 §119 is required before finalising design. Always verify allowable stress values against the current edition of the applicable standard.
       </p>
     </div>
   );
@@ -292,17 +308,24 @@ export default function PipeWallThicknessPage() {
   const handleStdChange = (std: PipeStandard) => {
     setInp(prev => {
       const next = { ...prev, pipingStandard: std };
-      // If switching to B31.4/B31.8 and material is a B31.3-only material, reset to API5L_X52
       const mat = MATERIAL_DB[prev.materialId];
       if (mat && !mat.compatibleStandards.includes(std)) {
-        next.materialId = std === "B31.3" ? "A106_B" : "API5L_X52";
-        next.jointType  = std === "B31.3" ? "seamless" : "erw";
+        if (std === "B31.1") {
+          next.materialId = "SA106_B";
+          next.jointType  = "seamless";
+        } else if (std === "B31.3") {
+          next.materialId = "A106_B";
+          next.jointType  = "seamless";
+        } else {
+          next.materialId = "API5L_X52";
+          next.jointType  = "erw";
+        }
       }
-      // erw_psl2 is B31.8-only; reset to erw if switching to B31.3/B31.4
+      // erw_psl2 is B31.8-only
       if (prev.jointType === "erw_psl2" && std !== "B31.8") {
         next.jointType = "erw";
       }
-      // FBW is not permitted for B31.8 gas transmission; reset to erw
+      // FBW not permitted for B31.8 gas transmission
       if (prev.jointType === "fbw" && std === "B31.8") {
         next.jointType = "erw";
       }
@@ -332,8 +355,8 @@ export default function PipeWallThicknessPage() {
     }
   };
 
-  const loadTestCase = (which: "B31.3" | "B31.8") => {
-    setInp(cloneInput(which === "B31.3" ? PWT_TEST_CASE_B313 : PWT_TEST_CASE_B318));
+  const loadTestCase = (which: "B31.1" | "B31.3" | "B31.8") => {
+    setInp(cloneInput(which === "B31.1" ? PWT_TEST_CASE_B311 : which === "B31.3" ? PWT_TEST_CASE_B313 : PWT_TEST_CASE_B318));
     setResult(null);
     setError(null);
     setTab("project");
@@ -369,7 +392,10 @@ export default function PipeWallThicknessPage() {
     const results: ExportDatasheet["results"] = [
       { label: "Allowable Stress S_eff", value: result.S_eff, unit: "MPa" },
       { label: "Quality Factor E", value: result.E_eff, unit: "—" },
-      ...(std === "B31.3" ? [
+      ...(std === "B31.1" ? [
+        { label: "Y Coefficient", value: result.Y_eff, unit: "—" },
+        { label: "W Factor (N/A — B31.1 uses W≡1.0)", value: "1.0", unit: "—" },
+      ] : std === "B31.3" ? [
         { label: "Y Coefficient", value: result.Y_eff, unit: "—" },
         { label: "W Factor", value: result.W_eff, unit: "—" },
       ] : [
@@ -422,6 +448,19 @@ export default function PipeWallThicknessPage() {
       });
     }
 
+    const assumptionsB311 = [
+      "[A1] t = P·D / (2·(S·E + P·Y)) — ASME B31.1:2022 §104.1.2(A). W factor not defined in B31.1 (W≡1.0 implicitly). Thin-wall condition: t < D/6, P/(S·E) < 0.385.",
+      "[A2] Allowable stress S from ASME B31.1:2022 Table A-1 (interpolated). Basis: lesser of 1/4·Su or 2/3·Sy at design temperature — more conservative than B31.3 (1/3·Su). Verify against your licensed copy.",
+      "[A3] Y coefficient from ASME B31.1:2022 Table 104.1.2(A): 0.4 (ferritic/austenitic ≤482°C), 0.5 (ferritic ≤510°C), 0.7 (≥566°C); austenitic 0.4–0.5.",
+      "[A4] Longitudinal joint factor E from ASME B31.1:2022 Table 132.4: Seamless=1.00; ERW=0.85; DSAW/SAW=1.00; EFW=0.80; FBW=0.60.",
+      "[A5] Thick-wall Lamé applied when t ≥ D/6 or P/(S·E) ≥ 0.385 per §104.1.2(B): t = D/2·(√((SE+P)/(SE−P))−1).",
+      "[A6] Mechanical allowance c = corrosion + erosion + thread/groove per §104.1.1(A).",
+      "[A7] Mill tolerance 12.5% per ASTM A106/A335: required nominal = t_total / 0.875.",
+      "[A8] MAOP back-calc at corroded condition: P_MAOP = 2·t_eff·S·E / (D − 2·Y·t_eff).",
+      "[A9] Schedule dims from ASME B36.10M:2018. Power piping commonly uses Sch 80/120/160/XXS for steam.",
+      "[A10] Not included: flexibility analysis (§119), sustained stress (§104.8), branch reinforcement (§104.3), external pressure. Full stress analysis required.",
+      "[A11] PWHT mandatory for alloy steels (P11, P22, P91) per §331.1.1. P91: PWHT at 730–760 °C, hardness 190–250 HB, EPRI guidelines mandatory.",
+    ];
     const assumptionsB313 = [
       "[A1] t = P·D / (2·(S·E·W + P·Y)) — ASME B31.3:2022 §304.1.2. Straight pipe, internal gauge pressure, thin-wall condition (t < D/6, P/(S·E·W) < 0.385).",
       "[A2] Allowable stress S from ASME B31.3:2022 Table A-1 (temperature-interpolated). Linear interpolation between tabulated entries.",
@@ -455,9 +494,10 @@ export default function PipeWallThicknessPage() {
       "[A7] Hydrostatic strength test ≥ 1.25× MAOP per B31.8 §841.322, held 8 hours minimum for Class 1.",
     ];
 
-    const assumptions = std === "B31.3" ? assumptionsB313 : std === "B31.4" ? assumptionsB314 : assumptionsB318;
+    const assumptions = std === "B31.1" ? assumptionsB311 : std === "B31.3" ? assumptionsB313 : std === "B31.4" ? assumptionsB314 : assumptionsB318;
 
     const references = [
+      "ASME B31.1:2022 — Power Piping: §104.1.2 Pressure Design; Table A-1 Allowable Stresses; Table 132.4 Longitudinal Joint Quality Factors",
       "ASME B31.3:2022 — Process Piping: §304.1.2 Straight Pipe Pressure Design; Table A-1 Allowable Stresses; Table A-1B Quality Factors; Table 304.1.1 Y Coefficients",
       "ASME B31.4:2019 — Pipeline Transportation Systems for Liquids: §403.2.1 Pressure Design; Table 403.2.1-1 T and E factors",
       "ASME B31.8:2022 — Gas Transmission and Distribution Piping: §841.11 Pressure Design; §841.114A Location Class Design Factors; Table 841.1.8-1 Temperature Derating",
@@ -488,8 +528,10 @@ export default function PipeWallThicknessPage() {
       calcSteps,
       additionalSections,
       methodology: [
-        `Standard: ASME ${std} — ${std === "B31.3" ? "Process Piping §304.1.2" : std === "B31.4" ? "Liquid Pipeline Transportation §403.2.1" : "Gas Transmission & Distribution §841.11"}`,
-        std === "B31.3"
+        `Standard: ASME ${std} — ${std === "B31.1" ? "Power Piping §104.1.2" : std === "B31.3" ? "Process Piping §304.1.2" : std === "B31.4" ? "Liquid Pipeline Transportation §403.2.1" : "Gas Transmission & Distribution §841.11"}`,
+        std === "B31.1"
+          ? "Design formula: t = P·D / (2·(S·E + P·Y)) — allowable-stress basis. B31.1 uses 1/4·Su or 2/3·Sy (conservative vs. B31.3). W factor not defined in B31.1."
+          : std === "B31.3"
           ? "Design formula: t = P·D / (2·(S·E·W + P·Y)) — allowable-stress basis (S from Table A-1, fraction of yield/tensile strength)"
           : "Design formula: t = P·D / (2·S·F·E·T) — SMYS-based approach; design factor F provides the safety margin",
         "Mill tolerance applied to derive required nominal wall: t_nom_req = t_total / (1 − MT/100)",
@@ -538,16 +580,17 @@ export default function PipeWallThicknessPage() {
             Pipe Wall Thickness
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            ASME B31.3 §304.1.2 · ASME B31.4 §403.2.1 · ASME B31.8 §841.11 · ASME B36.10M
+            ASME B31.1 §104.1.2 · ASME B31.3 §304.1.2 · ASME B31.4 §403.2.1 · ASME B31.8 §841.11 · ASME B36.10M
           </p>
           <p className="text-xs text-amber-500/80 mt-0.5 font-medium">Preliminary Wall Thickness &amp; Schedule Screening Tool — results require engineering review before use in design</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Select onValueChange={loadTestCase}>
-            <SelectTrigger className="w-44 h-8 text-xs" data-testid="button-load-test">
+            <SelectTrigger className="w-52 h-8 text-xs" data-testid="button-load-test">
               <SelectValue placeholder="Load test case" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="B31.1">ASME B31.1 — Main Steam (6″ SA335-P22)</SelectItem>
               <SelectItem value="B31.3">ASME B31.3 — Process Pipe (6″ A106-B)</SelectItem>
               <SelectItem value="B31.8">ASME B31.8 — Gas Pipeline (12″ X60)</SelectItem>
             </SelectContent>
@@ -608,8 +651,8 @@ export default function PipeWallThicknessPage() {
               {/* Standard Selection */}
               <div className="rounded border border-border bg-muted/10 p-4 space-y-2">
                 <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Piping Standard</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
-                  {(["B31.3", "B31.4", "B31.8"] as PipeStandard[]).map(s => (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
+                  {(["B31.1", "B31.3", "B31.4", "B31.8"] as PipeStandard[]).map(s => (
                     <button
                       key={s}
                       onClick={() => handleStdChange(s)}
@@ -622,13 +665,19 @@ export default function PipeWallThicknessPage() {
                     >
                       <div className="font-bold">{s}</div>
                       <div className="text-xs mt-0.5 opacity-80">
-                        {s === "B31.3" ? "Process Piping — §304.1.2" :
+                        {s === "B31.1" ? "Power Piping — §104.1.2" :
+                         s === "B31.3" ? "Process Piping — §304.1.2" :
                          s === "B31.4" ? "Liquid Pipelines — §403.2.1" :
                          "Gas Transmission — §841.11"}
                       </div>
                     </button>
                   ))}
                 </div>
+                {inp.pipingStandard === "B31.1" && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Design formula: <code className="text-primary">t = P·D / (2·(S·E + P·Y))</code> — ASME B31.1 Power Piping. W≡1.0 (not defined in B31.1). Allowable stress S basis: ¼·Su or ⅔·Sy (more conservative than B31.3).
+                  </p>
+                )}
                 {inp.pipingStandard === "B31.3" && (
                   <p className="text-xs text-muted-foreground mt-2">
                     Design formula: <code className="text-primary">t = P·D / (2·(S·E·W + P·Y))</code> — uses allowable stress S (fraction of yield/tensile per Table A-1), joint factor E, Y-coefficient, and W-factor.
@@ -801,14 +850,21 @@ export default function PipeWallThicknessPage() {
                 <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                   Longitudinal Joint Type
                   <span className="font-normal ml-2 text-muted-foreground/60">
-                    {inp.pipingStandard === "B31.3"
+                    {inp.pipingStandard === "B31.1"
+                      ? "(E per ASME B31.1 Table 132.4)"
+                      : inp.pipingStandard === "B31.3"
                       ? "(E per ASME B31.3 Table A-1B)"
                       : inp.pipingStandard === "B31.4"
                         ? "(E per ASME B31.4 Table 403.2.1-1)"
                         : "(E per ASME B31.8 §841.11)"}
                   </span>
                 </Label>
-                {inp.pipingStandard !== "B31.3" && (
+                {inp.pipingStandard === "B31.1" && (
+                  <p className="text-xs text-amber-400/80 bg-amber-950/20 border border-amber-900/40 rounded px-3 py-1.5">
+                    B31.1 Table 132.4: EFW = 0.80 (vs 0.85 in B31.3). ERW = 0.85 (same as B31.3). Power piping generally uses seamless for high-pressure steam service.
+                  </p>
+                )}
+                {(inp.pipingStandard === "B31.4" || inp.pipingStandard === "B31.8") && (
                   <p className="text-xs text-amber-400/80 bg-amber-950/20 border border-amber-900/40 rounded px-3 py-1.5">
                     B31.4/B31.8 joint factors differ from B31.3. ERW PSL1 = 0.80 (not 0.85). See ASME B31.4 Table 403.2.1-1 / B31.8 §841.11.
                   </p>
@@ -820,8 +876,11 @@ export default function PipeWallThicknessPage() {
                   </p>
                 )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {Object.entries(inp.pipingStandard === "B31.3" ? QUALITY_FACTORS : QUALITY_FACTORS_PIPELINE)
-                    .filter(([key]) => !(inp.pipingStandard === "B31.8" && key === "fbw"))
+                  {Object.entries(
+                    inp.pipingStandard === "B31.1" ? QUALITY_FACTORS_POWER
+                    : inp.pipingStandard === "B31.3" ? QUALITY_FACTORS
+                    : QUALITY_FACTORS_PIPELINE
+                  ).filter(([key]) => !(inp.pipingStandard === "B31.8" && key === "fbw"))
                     .map(([key, q]) => (
                     <button
                       key={key}
@@ -1133,7 +1192,8 @@ export default function PipeWallThicknessPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: "Allowable stress S", value: fmt(result.S_eff), unit: "MPa" },
-                  { label: inp.pipingStandard === "B31.3" ? "Y coefficient" : "Design factor F", value: inp.pipingStandard === "B31.3" ? fmt(result.Y_eff, 1) : fmt(result.F_eff, 2), unit: "—" },
+                  { label: (inp.pipingStandard === "B31.1" || inp.pipingStandard === "B31.3") ? "Y coefficient" : "Design factor F",
+                    value: (inp.pipingStandard === "B31.1" || inp.pipingStandard === "B31.3") ? fmt(result.Y_eff, 1) : fmt(result.F_eff, 2), unit: "—" },
                   { label: "Quality factor E", value: fmt(result.E_eff, 2), unit: "—" },
                   { label: result.selectedSchedule ? "MAOP (selected sch.)" : "MAOP (req. nom.)", value: result.selectedSchedule ? fmt(result.selectedSchedule.maop) : "—", unit: "bar(g)" },
                 ].map(c => (
@@ -1150,8 +1210,12 @@ export default function PipeWallThicknessPage() {
                 <div className="flex items-start gap-2 rounded border border-amber-600 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
                   <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0" />
                   <span>
-                    <strong>Thick-wall condition.</strong> t/D = {fmt(result.tOverD, 4)} ≥ 1/6. Lamé thick-wall equation applied (ASME B31.3 §304.1.2(c)):
-                    t = D/2 · (√((S·E·W+P)/(S·E·W−P)) − 1) = <strong>{fmt(result.t_lame)} mm</strong>.
+                    <strong>Thick-wall condition.</strong> t/D = {fmt(result.tOverD, 4)} ≥ 1/6. Lamé thick-wall equation applied (
+                    {inp.pipingStandard === "B31.1" ? "ASME B31.1 §104.1.2(B)" : "ASME B31.3 §304.1.2(c)"}):
+                    {inp.pipingStandard === "B31.1"
+                      ? " t = D/2 · (√((S·E+P)/(S·E−P)) − 1)"
+                      : " t = D/2 · (√((S·E·W+P)/(S·E·W−P)) − 1)"}
+                    {" "}= <strong>{fmt(result.t_lame)} mm</strong>.
                   </span>
                 </div>
               )}

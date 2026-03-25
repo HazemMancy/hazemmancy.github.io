@@ -125,12 +125,12 @@ export default function PipingComponentsIndex() {
                     <Badge variant="outline" className="text-[10px] shrink-0 no-default-hover-elevate no-default-active-elevate">Calculator</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">
-                    Minimum wall thickness per ASME B31.3 §304.1.2 (t = P·D / 2(S·E·W + P·Y)), B31.4 §403.2.1, and B31.8 §841.11. Includes thick-wall Lamé check, temperature-interpolated allowable stress from Table A-1, B36.10M schedule selection, MAOP back-calculation, and hoop stress utilisation. API 5L grades for pipeline service.
+                    Minimum wall thickness per ASME B31.1 §104.1.2 (Power Piping), B31.3 §304.1.2 (Process Piping), B31.4 §403.2.1, and B31.8 §841.11. Thick-wall Lamé check, temperature-interpolated allowable stress, B36.10M schedule selection, MAOP back-calculation, hoop stress utilisation. Includes power plant steam materials: SA-335 P11/P22/P91.
                   </p>
                   <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 mt-auto flex-wrap">
                     <div className="flex flex-wrap gap-1">
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">ASME B31.3</Badge>
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">B31.4 / B31.8</Badge>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">ASME B31.1</Badge>
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">B31.3 / B31.4 / B31.8</Badge>
                       <Badge variant="outline" className="text-[9px] px-1.5 py-0 no-default-hover-elevate no-default-active-elevate">ASME B36.10M</Badge>
                     </div>
                     <ArrowRight className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />

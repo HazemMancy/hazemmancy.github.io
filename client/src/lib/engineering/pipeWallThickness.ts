@@ -2,6 +2,7 @@
  * Pipe Wall Thickness Engine
  *
  * Standards:
+ *   ASME B31.1:2022  — Power Piping, §104.1.2(A) (straight pipe, internal pressure)
  *   ASME B31.3:2022  — Process Piping, §304.1.2 (straight pipe, internal pressure)
  *   ASME B31.4:2019  — Pipeline Transportation Systems for Liquids & Slurries, §403.2.1
  *   ASME B31.8:2022  — Gas Transmission & Distribution Piping, §841.11
@@ -10,7 +11,14 @@
  *   API 5L:2018       — Specification for Line Pipe (SMYS / SMUTS for pipeline grades)
  *   ASTM A106-2019    — Seamless CS pipe (Gr. A, B, C)
  *
- * KEY DESIGN EQUATION (thin-wall, all three standards use the same form):
+ * KEY DESIGN EQUATION (thin-wall):
+ *
+ *   ASME B31.1 §104.1.2(A):
+ *     t_p = P·D / (2·(S·E + P·Y))           [W is not defined in B31.1 — W ≡ 1.0]
+ *     NOTE: B31.1 allowable stress S is from B31.1 Table A-1 (basis: lesser of
+ *           1/4 Su or 2/3 Sy at temperature — more conservative than B31.3).
+ *     E — longitudinal joint factor, B31.1 Table 132.4
+ *     Y — coefficient, B31.1 Table 104.1.2(A)
  *
  *   ASME B31.3 §304.1.2:
  *     t_p = P·D / (2·(S·E·W + P·Y))
@@ -30,9 +38,9 @@
  *   SELECTED PIPE CHECK:
  *     t_selected × (1 − MT/100) ≥ t_total  →  PASS
  *
- *   MAOP FROM SELECTED SCHEDULE (B31.3 back-calculation):
+ *   MAOP FROM SELECTED SCHEDULE (B31.3 / B31.1 back-calculation):
  *     t_eff = t_selected × (1 − MT/100) − c
- *     P_MAOP = 2·t_eff·S·E·W / (D − 2·Y·t_eff)
+ *     P_MAOP = 2·t_eff·S·E·W / (D − 2·Y·t_eff)   [W = 1 for B31.1]
  *
  *   HOOP STRESS (Barlow thin-wall):
  *     σ_h = P·D / (2·t_eff)
@@ -40,15 +48,20 @@
  *
  * PARAMETERS:
  *
- *   S   — Allowable stress [MPa], from ASME B31.3 Table A-1 (temperature-interpolated)
- *           or from SMYS for B31.4/B31.8 materials
- *   E   — Quality (longitudinal joint) factor, ASME B31.3 Table A-1B:
- *           Seamless = 1.00 | ERW = 0.85 | DSAW = 1.00 | EFW = 0.85 | FBW = 0.60
- *   W   — Weld joint strength reduction factor, B31.3 Table 302.3.5:
- *           W = 1.0 for T ≤ 510 °C; flag if T > 510 °C (creep regime)
- *   Y   — Coefficient, B31.3 Table 304.1.1 (function of material type and temperature):
- *           Ferritic steel ≤ 482 °C → 0.4; ≤ 510 °C → 0.5; ≤ 538 °C → 0.6; ≥ 566 °C → 0.7
- *           Austenitic steel ≤ 566 °C → 0.4; > 566 °C → 0.5
+ *   S   — Allowable stress [MPa]:
+ *           B31.1: from B31.1 Table A-1 (1/4 Su or 2/3 Sy basis)
+ *           B31.3: from B31.3 Table A-1 (1/3 Su or 2/3 Sy basis)
+ *           B31.4/B31.8: from SMYS with design factor F
+ *   E   — Quality (longitudinal joint) factor:
+ *           B31.1 Table 132.4 / B31.3 Table A-1B:
+ *           Seamless = 1.00 | ERW = 0.85 | DSAW = 1.00 | EFW = 0.80 (B31.1) or 0.85 (B31.3) | FBW = 0.60
+ *   W   — Weld joint strength reduction factor (B31.3 only, B31.3 Table 302.3.5):
+ *           W = 1.0 for T ≤ 510 °C; flag if T > 510 °C (creep regime).
+ *           Not used in B31.1.
+ *   Y   — Coefficient:
+ *           B31.1 Table 104.1.2(A) / B31.3 Table 304.1.1 (same values in current editions):
+ *           Ferritic ≤ 482 °C → 0.4; ≤ 510 °C → 0.5; ≤ 538 °C → 0.6; ≥ 566 °C → 0.7
+ *           Austenitic ≤ 566 °C → 0.4; > 566 °C → 0.5
  *   F   — Design factor, B31.4 §403.2.1 = 0.72 (liquid); B31.8 §841.11 Table 841.114A
  *           Class 1 Div 1 = 0.80 | Class 1 Div 2 = 0.72 | Class 2 = 0.60 | Class 3 = 0.50 | Class 4 = 0.40
  *   T   — Temperature derating, B31.4 Table 403.2.1-1 / B31.8 Table 841.1.8-1:
@@ -67,6 +80,19 @@ export const QUALITY_FACTORS: Record<string, { E: number; label: string; std: st
   dsaw:     { E: 1.00, label: "Double Submerged Arc Welded (DSAW)", std: "ASME B31.3 Table A-1B" },
   efw:      { E: 0.85, label: "Electric Fusion Welded (EFW)",       std: "ASME B31.3 Table A-1B" },
   fbw:      { E: 0.60, label: "Furnace Butt Welded (FBW)",          std: "ASME B31.3 Table A-1B" },
+};
+
+/**
+ * ASME B31.1:2022 Table 132.4 — Longitudinal joint quality factor E.
+ * NOTE: B31.1 EFW factor (0.80) is slightly lower than B31.3 (0.85).
+ * Seamless, ERW, and DSAW/SAW match B31.3. FBW remains 0.60.
+ */
+export const QUALITY_FACTORS_POWER: Record<string, { E: number; label: string; std: string }> = {
+  seamless: { E: 1.00, label: "Seamless",                          std: "ASME B31.1 Table 132.4" },
+  erw:      { E: 0.85, label: "Electric Resistance Welded (ERW)",   std: "ASME B31.1 Table 132.4" },
+  dsaw:     { E: 1.00, label: "Double Submerged Arc Welded (DSAW)", std: "ASME B31.1 Table 132.4" },
+  efw:      { E: 0.80, label: "Electric Fusion Welded (EFW)",       std: "ASME B31.1 Table 132.4" },
+  fbw:      { E: 0.60, label: "Furnace Butt Welded (FBW)",          std: "ASME B31.1 Table 132.4" },
 };
 
 /**
@@ -100,7 +126,7 @@ export const B318_LOCATION_CLASS: Record<string, { F: number; label: string }> =
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type PipeStandard    = "B31.3" | "B31.4" | "B31.8";
+export type PipeStandard    = "B31.1" | "B31.3" | "B31.4" | "B31.8";
 export type MaterialType    = "ferritic" | "austenitic" | "pipeline" | "user";
 export type JointTypeKey    = "seamless" | "erw" | "erw_psl2" | "dsaw" | "efw" | "fbw" | "user";
 export type LocationClassKey = "1D1" | "1D2" | "2" | "3" | "4";
@@ -419,6 +445,215 @@ export const MATERIAL_DB: Record<string, MaterialSpec> = {
     smys: 172, smuts: 483, defaultJoint: "seamless",
     notes: "L-grade for welded service without post-weld HT. Lower allowable than TP316.",
   },
+
+  // ── ASME B31.1 Power Piping Materials (Table A-1 Allowable Stresses) ─────────
+  // Basis: lesser of 1/4 × Su or 2/3 × Sy at temperature (B31.1 §102.3.1(A)).
+  // More conservative than B31.3 (which uses 1/3 × Su).
+  // NOTE: Values are representative published data from ASME B31.1 Table A-1.
+  //       Always verify against your licensed copy of the current edition.
+
+  SA106_B: {
+    id: "SA106_B", name: "SA-106 Gr. B — Seamless CS (Power Piping)",
+    spec: "ASTM A106 / ASME B31.1 Table A-1",
+    materialType: "ferritic",
+    compatibleStandards: ["B31.1"],
+    stressTable: [
+      // S = min(1/4 × Su, 2/3 × Sy). Su = 415 MPa → 1/4 Su = 103.4 MPa at ambient.
+      // Creep-controlled above ~370 °C. Max listed temp per B31.1 Table A-1: 482 °C.
+      { tempC: -29,  S_MPa: 103.4 },
+      { tempC: 93,   S_MPa: 103.4 },
+      { tempC: 149,  S_MPa: 103.4 },
+      { tempC: 204,  S_MPa: 103.4 },
+      { tempC: 260,  S_MPa: 103.4 },
+      { tempC: 316,  S_MPa: 103.4 },
+      { tempC: 343,  S_MPa: 103.4 },
+      { tempC: 371,  S_MPa: 103.4 },
+      { tempC: 399,  S_MPa: 100.7 },
+      { tempC: 427,  S_MPa: 86.2  },
+      { tempC: 454,  S_MPa: 66.2  },
+      { tempC: 482,  S_MPa: 43.4  },
+    ],
+    smys: 241, smuts: 415, defaultJoint: "seamless",
+    notes: "ASME SA-106 Gr. B for power piping per B31.1. Same composition as ASTM A106-B but qualified to ASME SA spec. Max listed temp 482 °C.",
+  },
+
+  SA106_C: {
+    id: "SA106_C", name: "SA-106 Gr. C — Seamless CS, High-Strength (Power Piping)",
+    spec: "ASTM A106 / ASME B31.1 Table A-1",
+    materialType: "ferritic",
+    compatibleStandards: ["B31.1"],
+    stressTable: [
+      // Su = 485 MPa → 1/4 Su = 121.3 MPa. Sy = 275 MPa → 2/3 Sy = 183.3 MPa.
+      // S governed by 1/4 Su at ambient.
+      { tempC: -29,  S_MPa: 121.4 },
+      { tempC: 93,   S_MPa: 121.4 },
+      { tempC: 149,  S_MPa: 121.4 },
+      { tempC: 204,  S_MPa: 121.4 },
+      { tempC: 260,  S_MPa: 121.4 },
+      { tempC: 316,  S_MPa: 121.4 },
+      { tempC: 343,  S_MPa: 121.4 },
+      { tempC: 371,  S_MPa: 117.2 },
+      { tempC: 399,  S_MPa: 109.6 },
+      { tempC: 427,  S_MPa: 93.8  },
+      { tempC: 454,  S_MPa: 71.7  },
+      { tempC: 482,  S_MPa: 47.6  },
+    ],
+    smys: 275, smuts: 485, defaultJoint: "seamless",
+    notes: "Highest-strength A106 grade for power piping. Seamless only. Max listed temp 482 °C.",
+  },
+
+  SA335_P11: {
+    id: "SA335_P11", name: "SA-335 P11 — 1.25Cr-0.5Mo Alloy (Power Piping)",
+    spec: "ASTM A335 / ASME B31.1 Table A-1",
+    materialType: "ferritic",
+    compatibleStandards: ["B31.1"],
+    stressTable: [
+      // 1.25Cr-0.5Mo ferritic alloy; excellent creep resistance to 566 °C.
+      // Used for steam headers, reheater, superheater piping at intermediate temperatures.
+      { tempC: -29,  S_MPa: 103.4 },
+      { tempC: 93,   S_MPa: 103.4 },
+      { tempC: 149,  S_MPa: 103.4 },
+      { tempC: 204,  S_MPa: 103.4 },
+      { tempC: 260,  S_MPa: 103.4 },
+      { tempC: 316,  S_MPa: 103.4 },
+      { tempC: 371,  S_MPa: 103.4 },
+      { tempC: 399,  S_MPa: 103.4 },
+      { tempC: 427,  S_MPa: 103.4 },
+      { tempC: 454,  S_MPa: 100.0 },
+      { tempC: 482,  S_MPa: 95.1  },
+      { tempC: 510,  S_MPa: 86.2  },
+      { tempC: 538,  S_MPa: 72.4  },
+      { tempC: 566,  S_MPa: 54.5  },
+      { tempC: 593,  S_MPa: 31.0  },
+    ],
+    smys: 207, smuts: 415, defaultJoint: "seamless",
+    notes: "1.25Cr-0.5Mo ferritic alloy. Preferred for intermediate-temp steam service (400–566 °C). Requires PWHT per B31.1 §331.",
+  },
+
+  SA335_P22: {
+    id: "SA335_P22", name: "SA-335 P22 — 2.25Cr-1Mo Alloy (Power Piping)",
+    spec: "ASTM A335 / ASME B31.1 Table A-1",
+    materialType: "ferritic",
+    compatibleStandards: ["B31.1"],
+    stressTable: [
+      // 2.25Cr-1Mo ferritic alloy; superior creep resistance vs P11; used to ~649 °C.
+      // Main steam and hot reheat lines in conventional power plants.
+      { tempC: -29,  S_MPa: 103.4 },
+      { tempC: 93,   S_MPa: 103.4 },
+      { tempC: 149,  S_MPa: 103.4 },
+      { tempC: 204,  S_MPa: 103.4 },
+      { tempC: 260,  S_MPa: 103.4 },
+      { tempC: 316,  S_MPa: 103.4 },
+      { tempC: 371,  S_MPa: 103.4 },
+      { tempC: 427,  S_MPa: 103.4 },
+      { tempC: 482,  S_MPa: 103.4 },
+      { tempC: 510,  S_MPa: 103.4 },
+      { tempC: 538,  S_MPa: 100.7 },
+      { tempC: 566,  S_MPa: 89.6  },
+      { tempC: 593,  S_MPa: 72.4  },
+      { tempC: 621,  S_MPa: 48.3  },
+      { tempC: 649,  S_MPa: 22.1  },
+    ],
+    smys: 207, smuts: 415, defaultJoint: "seamless",
+    notes: "2.25Cr-1Mo ferritic alloy. Standard choice for main steam headers in conventional power plants. Requires PWHT per B31.1 §331.",
+  },
+
+  SA335_P91: {
+    id: "SA335_P91", name: "SA-335 P91 — 9Cr-1Mo-V Alloy (Power Piping)",
+    spec: "ASTM A335 / ASME B31.1 Table A-1",
+    materialType: "ferritic",
+    compatibleStandards: ["B31.1"],
+    stressTable: [
+      // 9Cr-1Mo-V martensitic alloy; highest strength B31.1 ferritic alloy;
+      // used for supercritical/ultra-supercritical steam lines (up to ~649 °C).
+      // NOTE: P91 requires very specific PWHT (730–760 °C) and hardness verification.
+      // Strength decreases rapidly if PWHT not performed correctly.
+      { tempC: -29,  S_MPa: 137.9 },
+      { tempC: 93,   S_MPa: 137.9 },
+      { tempC: 149,  S_MPa: 131.0 },
+      { tempC: 204,  S_MPa: 126.2 },
+      { tempC: 260,  S_MPa: 123.4 },
+      { tempC: 316,  S_MPa: 121.4 },
+      { tempC: 371,  S_MPa: 120.7 },
+      { tempC: 399,  S_MPa: 120.7 },
+      { tempC: 427,  S_MPa: 120.7 },
+      { tempC: 454,  S_MPa: 120.7 },
+      { tempC: 482,  S_MPa: 120.7 },
+      { tempC: 510,  S_MPa: 119.3 },
+      { tempC: 538,  S_MPa: 115.8 },
+      { tempC: 566,  S_MPa: 102.7 },
+      { tempC: 593,  S_MPa: 83.4  },
+      { tempC: 621,  S_MPa: 55.2  },
+      { tempC: 649,  S_MPa: 22.8  },
+    ],
+    smys: 415, smuts: 585, defaultJoint: "seamless",
+    notes: "9Cr-1Mo-V martensitic alloy for supercritical power piping. CRITICAL: Requires strict PWHT (730–760 °C) and hardness verification. Microstructure and strength extremely sensitive to improper heat treatment.",
+  },
+
+  SA312_TP304: {
+    id: "SA312_TP304", name: "SA-312 TP304 — Austenitic SS 18/8 (Power Piping)",
+    spec: "ASTM A312 / ASME B31.1 Table A-1",
+    materialType: "austenitic",
+    compatibleStandards: ["B31.1"],
+    stressTable: [
+      // Austenitic SS for power piping. B31.1 allowable stresses (1/4 Su basis)
+      // are lower than B31.3 (1/3 Su basis) for the same material.
+      { tempC: -196, S_MPa: 115.2 },
+      { tempC: 38,   S_MPa: 115.2 },
+      { tempC: 93,   S_MPa: 110.3 },
+      { tempC: 149,  S_MPa: 105.5 },
+      { tempC: 204,  S_MPa: 101.4 },
+      { tempC: 260,  S_MPa: 98.3  },
+      { tempC: 316,  S_MPa: 96.5  },
+      { tempC: 371,  S_MPa: 94.5  },
+      { tempC: 427,  S_MPa: 92.4  },
+      { tempC: 482,  S_MPa: 91.4  },
+      { tempC: 538,  S_MPa: 90.3  },
+      { tempC: 566,  S_MPa: 88.3  },
+      { tempC: 593,  S_MPa: 84.8  },
+      { tempC: 621,  S_MPa: 79.3  },
+      { tempC: 649,  S_MPa: 72.4  },
+      { tempC: 677,  S_MPa: 55.2  },
+      { tempC: 704,  S_MPa: 38.6  },
+      { tempC: 732,  S_MPa: 24.1  },
+      { tempC: 760,  S_MPa: 14.5  },
+    ],
+    smys: 207, smuts: 515, defaultJoint: "seamless",
+    notes: "SA-312 TP304 for power piping per B31.1. Lower allowable stress than B31.3 Table A-1 for same material (1/4 vs 1/3 of Su). Sensitisation risk > 425 °C unless stabilised grade used.",
+  },
+
+  SA312_TP316: {
+    id: "SA312_TP316", name: "SA-312 TP316 — Austenitic SS 18/8/2Mo (Power Piping)",
+    spec: "ASTM A312 / ASME B31.1 Table A-1",
+    materialType: "austenitic",
+    compatibleStandards: ["B31.1"],
+    stressTable: [
+      // Mo addition improves pitting/crevice corrosion resistance vs TP304.
+      // B31.1 stress basis: 1/4 Su.
+      { tempC: -196, S_MPa: 115.2 },
+      { tempC: 38,   S_MPa: 115.2 },
+      { tempC: 93,   S_MPa: 113.1 },
+      { tempC: 149,  S_MPa: 110.3 },
+      { tempC: 204,  S_MPa: 108.3 },
+      { tempC: 260,  S_MPa: 106.9 },
+      { tempC: 316,  S_MPa: 105.5 },
+      { tempC: 371,  S_MPa: 104.8 },
+      { tempC: 427,  S_MPa: 104.1 },
+      { tempC: 482,  S_MPa: 103.8 },
+      { tempC: 538,  S_MPa: 103.8 },
+      { tempC: 566,  S_MPa: 103.1 },
+      { tempC: 593,  S_MPa: 100.7 },
+      { tempC: 621,  S_MPa: 96.2  },
+      { tempC: 649,  S_MPa: 86.9  },
+      { tempC: 677,  S_MPa: 69.7  },
+      { tempC: 704,  S_MPa: 49.7  },
+      { tempC: 732,  S_MPa: 31.4  },
+    ],
+    smys: 207, smuts: 515, defaultJoint: "seamless",
+    notes: "SA-312 TP316 for power piping per B31.1. Mo content improves corrosion resistance. Better choice than TP304 for chloride-containing steam condensate service.",
+  },
+
+  // ── End B31.1 Materials ───────────────────────────────────────────────────────
 
   API5L_B: {
     id: "API5L_B", name: "API 5L Grade B",
@@ -826,7 +1061,8 @@ function tempDerating(tempC: number): number {
 /**
  * Main calculation function.
  * Implements:
- *   B31.3 §304.1.2: t = P·D / (2·(S·E·W + P·Y))
+ *   B31.1 §104.1.2(A): t = P·D / (2·(S·E + P·Y))   [W ≡ 1.0 in B31.1]
+ *   B31.3 §304.1.2:    t = P·D / (2·(S·E·W + P·Y))
  *   B31.4 §403.2.1 / B31.8 §841.11: t = P·D / (2·S·F·E·T)
  *
  * All inputs in SI (mm, bar, °C).
@@ -845,6 +1081,8 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   const T_des = input.designTemperature;         // [°C]
   const MT    = input.millTolerance / 100;       // fraction, e.g. 0.125
 
+  const isB31x = std === "B31.1" || std === "B31.3"; // standards using S·E·(W) formula
+
   if (D <= 0)     throw new Error("Outside diameter must be positive");
   if (P_bar < 0)  throw new Error("Design pressure must be ≥ 0");
   if (MT < 0 || MT >= 1) throw new Error("Mill tolerance must be 0–99%");
@@ -856,9 +1094,11 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   // ── Allowable Stress S ──
   let S_eff = 0;
   if (input.materialId === "user") {
-    S_eff = std === "B31.3" ? input.userS_MPa : input.userSmys;
+    S_eff = isB31x ? input.userS_MPa : input.userSmys;
   } else if (mat) {
-    if (std === "B31.3") {
+    if (isB31x) {
+      // B31.1 and B31.3 both use temperature-interpolated allowable stress table
+      const tableRef = std === "B31.1" ? "ASME B31.1 Table A-1" : "ASME B31.3 Table A-1";
       if (mat.stressTable.length > 0) {
         S_eff = interpolateAllowableStress(mat.stressTable, T_des);
         const tempsSorted = [...mat.stressTable].sort((a, b) => a.tempC - b.tempC);
@@ -866,15 +1106,18 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
         const maxT = tempsSorted[tempsSorted.length - 1].tempC;
         if (T_des > maxT) {
           flags.push("MATERIAL_TEMP_LIMIT");
-          warnings.push(`Temperature ${T_des} °C exceeds the highest listed temperature (${maxT} °C) in ASME B31.3 Table A-1 for ${mat.name}. S taken at ${maxT} °C — verify material rating.`);
+          warnings.push(`Temperature ${T_des} °C exceeds the highest listed temperature (${maxT} °C) in ${tableRef} for ${mat.name}. S taken at ${maxT} °C — verify material rating.`);
         } else if (T_des < minT) {
           flags.push("LOW_TEMP_CLAMPED");
-          warnings.push(`Design temperature ${T_des} °C is below the lowest listed temperature (${minT} °C) in ASME B31.3 Table A-1 for ${mat.name}. Allowable stress clamped to S = ${tempsSorted[0].S_MPa} MPa at ${minT} °C (conservative). Verify MDMT and impact test requirements per ASME B31.3 §323.2.2 and Table 323.2.2A. For sub-${minT} °C service, confirm material suitability or select a low-temperature grade (e.g. ASTM A333 Gr. 6).`);
+          const codeClause = std === "B31.1"
+            ? "ASME B31.1 §123.2.2"
+            : "ASME B31.3 §323.2.2 and Table 323.2.2A";
+          warnings.push(`Design temperature ${T_des} °C is below the lowest listed temperature (${minT} °C) in ${tableRef} for ${mat.name}. Allowable stress clamped to S = ${tempsSorted[0].S_MPa} MPa at ${minT} °C (conservative). Verify MDMT and impact test requirements per ${codeClause}.`);
         }
       } else {
-        // Pipeline grade used with B31.3 — use SMYS with 2/3 safety factor per B31.3 §302.3.2
+        // Pipeline grade used with B31.3 / B31.1 — estimate
         S_eff = mat.smys * (2 / 3);
-        warnings.push(`${mat.name} is a pipeline grade; allowable stress estimated as 2/3×SMYS = ${S_eff.toFixed(0)} MPa. Verify with ASME B31.3 Table A-1 for the applicable specification.`);
+        warnings.push(`${mat.name} is a pipeline grade; allowable stress estimated as 2/3×SMYS = ${S_eff.toFixed(0)} MPa. Verify with ${std === "B31.1" ? "ASME B31.1 Table A-1" : "ASME B31.3 Table A-1"} for the applicable specification.`);
       }
     } else {
       // B31.4 / B31.8 — use SMYS directly with design factor F
@@ -887,27 +1130,33 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   if (S_eff <= 0) throw new Error("Allowable stress must be positive");
 
   // ── Quality Factor E ──
+  // B31.1 uses ASME B31.1 Table 132.4 values (QUALITY_FACTORS_POWER).
   // B31.3 uses ASME B31.3 Table A-1B values (QUALITY_FACTORS).
   // B31.4/B31.8 use separate joint factor table (QUALITY_FACTORS_PIPELINE).
-  // ERW: B31.3=0.85, B31.4/B31.8 PSL1=0.80 — NOT interchangeable.
-  const qTable = (std === "B31.3") ? QUALITY_FACTORS : QUALITY_FACTORS_PIPELINE;
+  // ERW: B31.3=0.85, B31.4/B31.8 PSL1=0.80, B31.1=0.85 — NOT interchangeable.
+  const qTable = std === "B31.1" ? QUALITY_FACTORS_POWER
+               : std === "B31.3" ? QUALITY_FACTORS
+               : QUALITY_FACTORS_PIPELINE;
   const E_eff = input.jointType === "user"
     ? input.userE
     : (qTable[input.jointType]?.E ?? 1.0);
 
-  // ── Y coefficient (B31.3 only) ──
+  // ── Y coefficient (B31.1 Table 104.1.2(A) / B31.3 Table 304.1.1 — same values) ──
   const Y_eff = yCoefficient(matType, T_des);
 
-  // ── W factor (B31.3 Table 302.3.5) ──
+  // ── W factor ──
+  // B31.3 Table 302.3.5: W = 1.0 for T ≤ 510 °C; flag if T > 510 °C.
+  // B31.1: W factor is NOT defined — it does not appear in B31.1 §104.1.2(A).
+  //        W ≡ 1.0 always for B31.1. No W warning needed.
   let W_eff = 1.0;
-  if (T_des > 510) {
+  if (std === "B31.3" && T_des > 510) {
     flags.push("W_FACTOR_WARNING");
     warnings.push(`Design temperature ${T_des} °C > 510 °C — weld joint strength reduction factor W may be < 1.0 per ASME B31.3 Table 302.3.5. W = 1.0 assumed; verify for long-seam welds in creep service.`);
   }
 
   // ── Temperature derating T (B31.4/B31.8) ──
   const T_derating = tempDerating(T_des);
-  if (T_des > 232 && std !== "B31.3") {
+  if (T_des > 232 && !isB31x) {
     flags.push("TEMP_ABOVE_DERATING_TABLE");
     warnings.push(`Design temperature ${T_des} °C exceeds 232 °C — the B31.4/B31.8 temperature derating table ends at 232 °C (last tabulated T = 0.867). The table value at 232 °C has been applied; however, operating a liquid or gas pipeline above 232 °C is unusual. Verify material suitability, confirm with the applicable code, and consider switching to ASME B31.3 for plant piping above this temperature.`);
   }
@@ -925,20 +1174,28 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   if (isUserOverride) {
     flags.push("USER_OVERRIDE_ACTIVE");
     const parts: string[] = [];
-    if (input.materialId === "user") parts.push(`user-defined S = ${std === "B31.3" ? input.userS_MPa : input.userSmys} MPa`);
+    if (input.materialId === "user") parts.push(`user-defined S = ${isB31x ? input.userS_MPa : input.userSmys} MPa`);
     if (input.jointType === "user") parts.push(`user-defined E = ${input.userE}`);
     if (input.userDesignFactor !== null) parts.push(`user-defined F = ${input.userDesignFactor}`);
-    warnings.push(`USER OVERRIDE ACTIVE: ${parts.join(", ")}. User-supplied values bypass the built-in material database and standard lookup tables. Ensure these values are traceable to a recognised standard (ASME B31.3 Table A-1, API 5L, etc.) and documented in the design record.`);
+    const tableRef = std === "B31.1" ? "ASME B31.1 Table A-1" : "ASME B31.3 Table A-1, API 5L, etc.";
+    warnings.push(`USER OVERRIDE ACTIVE: ${parts.join(", ")}. User-supplied values bypass the built-in material database and standard lookup tables. Ensure these values are traceable to a recognised standard (${tableRef}) and documented in the design record.`);
   }
 
   // ── Mechanical Allowances c ──
   const c = input.corrosionAllowance + input.erosionAllowance + input.threadGrooveAllowance;
 
   // ── Header trace: inputs ──
-  steps.push({ label: "Design pressure P",    equation: "",                    value: `${P_bar.toFixed(2)} bar(g) = ${P_MPa.toFixed(4)} MPa(g)`, unit: "", ref: "ASME B31.3 §301" });
+  const pressureRef = std === "B31.1" ? "ASME B31.1 §101" : "ASME B31.3 §301";
+  const allowRef    = std === "B31.1" ? "ASME B31.1 §104.1.1" : "ASME B31.3 §304.1.1";
+  steps.push({ label: "Design pressure P",    equation: "",                    value: `${P_bar.toFixed(2)} bar(g) = ${P_MPa.toFixed(4)} MPa(g)`, unit: "", ref: pressureRef });
   steps.push({ label: "Outside diameter D",   equation: "",                    value: D.toFixed(2), unit: "mm", ref: "ASME B36.10M" });
   steps.push({ label: "Design temperature T", equation: "",                    value: T_des.toFixed(1), unit: "°C", ref: "" });
-  if (std === "B31.3") {
+  if (std === "B31.1") {
+    steps.push({ label: "Allowable stress S", equation: "Table A-1 interpolated", value: S_eff.toFixed(2), unit: "MPa", ref: "ASME B31.1 Table A-1" });
+    steps.push({ label: "Quality factor E",   equation: "",                    value: E_eff.toFixed(2), unit: "—", ref: input.jointType === "user" ? "User-defined" : (QUALITY_FACTORS_POWER[input.jointType]?.std ?? "ASME B31.1 Table 132.4") });
+    steps.push({ label: "Y coefficient",      equation: `Table 104.1.2(A) (${matType})`, value: Y_eff.toFixed(1), unit: "—", ref: "ASME B31.1 Table 104.1.2(A)" });
+    steps.push({ label: "W factor",           equation: "Not applicable (B31.1)", value: "1.0", unit: "—", ref: "ASME B31.1 §104.1.2(A)" });
+  } else if (std === "B31.3") {
     steps.push({ label: "Allowable stress S", equation: "Table A-1 interpolated", value: S_eff.toFixed(2), unit: "MPa", ref: "ASME B31.3 Table A-1" });
     steps.push({ label: "Quality factor E",   equation: "",                    value: E_eff.toFixed(2), unit: "—", ref: input.jointType === "user" ? "User-defined" : (QUALITY_FACTORS[input.jointType]?.std ?? "ASME B31.3 Table A-1B") });
     steps.push({ label: "Y coefficient",      equation: `Table 304.1.1 (${matType})`, value: Y_eff.toFixed(1), unit: "—", ref: "ASME B31.3 Table 304.1.1" });
@@ -949,7 +1206,7 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
     steps.push({ label: "Design factor F",   equation: "",                     value: F_eff.toFixed(2), unit: "—", ref: std === "B31.4" ? "ASME B31.4 §403.2.1" : "ASME B31.8 Table 841.114A" });
     steps.push({ label: "Temp derating T",   equation: "",                     value: T_derating.toFixed(3), unit: "—", ref: std === "B31.4" ? "ASME B31.4 Table 403.2.1-1" : "ASME B31.8 Table 841.1.8-1" });
   }
-  steps.push({ label: "Mech. allowance c",  equation: "c = c_corr + c_eros + c_thread", value: `${c.toFixed(2)} (${input.corrosionAllowance.toFixed(2)} + ${input.erosionAllowance.toFixed(2)} + ${input.threadGrooveAllowance.toFixed(2)})`, unit: "mm", ref: "ASME B31.3 §304.1.1" });
+  steps.push({ label: "Mech. allowance c",  equation: "c = c_corr + c_eros + c_thread", value: `${c.toFixed(2)} (${input.corrosionAllowance.toFixed(2)} + ${input.erosionAllowance.toFixed(2)} + ${input.threadGrooveAllowance.toFixed(2)})`, unit: "mm", ref: allowRef });
   steps.push({ label: "Mill tolerance MT",  equation: "",                     value: `${input.millTolerance.toFixed(1)}%`, unit: "", ref: "ASTM A106 / API 5L §9.10" });
 
   // ── Pressure design thickness ──
@@ -957,7 +1214,39 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   let t_lame     = 0;
   let isThickWall = false;
 
-  if (std === "B31.3") {
+  if (std === "B31.1") {
+    // B31.1 §104.1.2(A): t = P·D / (2·(S·E + P·Y))  [W not in B31.1, W ≡ 1.0]
+    const SE = S_eff * E_eff; // W ≡ 1.0
+    const denom = 2 * (SE + P_MPa * Y_eff);
+    if (denom <= 0) throw new Error("Denominator (2·(S·E + P·Y)) ≤ 0 — check inputs");
+    t_pressure = (P_MPa * D) / denom;
+
+    steps.push({
+      label: "t_p (thin-wall)",
+      equation: "t_p = P·D / (2·(S·E + P·Y))  [B31.1 §104.1.2(A)]",
+      value: t_pressure.toFixed(3),
+      unit: "mm",
+      ref: "ASME B31.1 §104.1.2(A)",
+    });
+
+    // B31.1 §104.1.2(B): Lamé check for thick-wall (t ≥ D/6 or P/SE ≥ 0.385)
+    const p_frac = SE > 0 ? P_MPa / SE : 0;
+    if (t_pressure >= D / 6 || p_frac >= 0.385) {
+      isThickWall = true;
+      flags.push("THICK_WALL");
+      const ratio = (SE + P_MPa) / (SE - P_MPa);
+      t_lame = (D / 2) * (Math.sqrt(Math.max(ratio, 0)) - 1);
+      steps.push({
+        label: "t_p (Lamé, thick-wall)",
+        equation: "t_p = D/2 · (√((S·E+P)/(S·E−P)) − 1)  [B31.1 §104.1.2(B)]",
+        value: t_lame.toFixed(3),
+        unit: "mm",
+        ref: "ASME B31.1 §104.1.2(B) — thick-wall regime",
+      });
+      warnings.push(`Thick-wall condition: t/D = ${(t_pressure/D).toFixed(4)} ≥ 1/6 or P/(S·E) = ${p_frac.toFixed(4)} ≥ 0.385. Lamé formula applied per ASME B31.1 §104.1.2(B).`);
+      t_pressure = t_lame;
+    }
+  } else if (std === "B31.3") {
     const denom = 2 * (S_eff * E_eff * W_eff + P_MPa * Y_eff);
     if (denom <= 0) throw new Error("Denominator (2·(S·E·W + P·Y)) ≤ 0 — check inputs");
     t_pressure = (P_MPa * D) / denom;
@@ -976,7 +1265,6 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
     if (t_pressure >= D / 6 || p_frac >= 0.385) {
       isThickWall = true;
       flags.push("THICK_WALL");
-      // Lamé equation (B31.3 Appendix reference / thick-wall cylinder theory)
       const ratio = (SEW + P_MPa) / (SEW - P_MPa);
       t_lame = (D / 2) * (Math.sqrt(Math.max(ratio, 0)) - 1);
       steps.push({
@@ -1059,10 +1347,16 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
   const scheduleChecks: ScheduleCheck[] = [];
 
   // Helper: MAOP back-calculation
+  // B31.1: P_MAOP = 2·t_eff·S·E / (D − 2·Y·t_eff)  [W ≡ 1.0]
+  // B31.3: P_MAOP = 2·t_eff·S·E·W / (D − 2·Y·t_eff)
+  // B31.4/B31.8: P_MAOP = 2·t_eff·S·F·E·T / D
   const computeMAOP = (t_nom: number): number => {
     const t_eff = t_nom * (1 - MT) - c;
     if (t_eff <= 0) return 0;
-    if (std === "B31.3") {
+    if (std === "B31.1") {
+      const SE = S_eff * E_eff; // W ≡ 1.0 for B31.1
+      return (2 * t_eff * SE) / (D - 2 * Y_eff * t_eff) * 10;
+    } else if (std === "B31.3") {
       const SEW = S_eff * E_eff * W_eff;
       return (2 * t_eff * SEW) / (D - 2 * Y_eff * t_eff) * 10; // MPa → bar
     } else {
@@ -1083,8 +1377,11 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
       const t_eff   = s.wallMm * (1 - MT) - c;
       const maop    = computeMAOP(s.wallMm);
       const hoop    = computeHoopStress(s.wallMm);
-      const SEW     = std === "B31.3" ? S_eff * E_eff * W_eff : S_eff * F_eff * E_eff * T_derating;
-      const util    = SEW > 0 ? hoop / SEW : 0;
+      // SE (or SEW) is the allowable stress basis for utilisation
+      const SE_basis = std === "B31.1" ? S_eff * E_eff
+                     : std === "B31.3" ? S_eff * E_eff * W_eff
+                     : S_eff * F_eff * E_eff * T_derating;
+      const util    = SE_basis > 0 ? hoop / SE_basis : 0;
       const passes  = s.wallMm >= t_nom_req;
       scheduleChecks.push({ schedule: s.schedule, wallMm: s.wallMm, tEffective: Math.max(t_eff, 0), maop, hoopStress: hoop, utilisation: util, passes });
     }
@@ -1114,12 +1411,14 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
     });
     steps.push({
       label: "MAOP (back-calc)",
-      equation: std === "B31.3"
+      equation: std === "B31.1"
+        ? "P_MAOP = 2·t_eff·S·E / (D − 2·Y·t_eff)  [B31.1]"
+        : std === "B31.3"
         ? "P_MAOP = 2·t_eff·S·E·W / (D − 2·Y·t_eff)"
         : "P_MAOP = 2·t_eff·S·F·E·T / D",
       value: selectedSchedule.maop.toFixed(2),
       unit: "bar(g)",
-      ref: std === "B31.3" ? "ASME B31.3 §304.1.2" : (std === "B31.4" ? "ASME B31.4 §403.2.1" : "ASME B31.8 §841.11"),
+      ref: std === "B31.1" ? "ASME B31.1 §104.1.2(A)" : std === "B31.3" ? "ASME B31.3 §304.1.2" : (std === "B31.4" ? "ASME B31.4 §403.2.1" : "ASME B31.8 §841.11"),
     });
     steps.push({
       label: "Hoop stress (Barlow)",
@@ -1130,7 +1429,7 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
     });
     steps.push({
       label: "Utilisation σ_h / S_eff",
-      equation: "η = σ_h / (S·E·W) or σ_h / (S·F·E·T)",
+      equation: std === "B31.1" ? "η = σ_h / (S·E)" : isB31x ? "η = σ_h / (S·E·W)" : "η = σ_h / (S·F·E·T)",
       value: `${(selectedSchedule.utilisation * 100).toFixed(1)}%`,
       unit: "",
       ref: "",
@@ -1166,7 +1465,20 @@ export function calculatePipeWT(input: PipeWTInput): PipeWTResult {
     recommendations.push(`Corrosion allowance of ${input.corrosionAllowance.toFixed(1)} mm implies significant corrosion rate. Verify with corrosion survey data or NACE SP0169 / NACE MR0175 assessment. Consider coating or cathodic protection to reduce required CA.`);
   }
   if (isThickWall) {
-    recommendations.push("Thick-wall pipe: verify longitudinal and circumferential stress components per ASME B31.3 Appendix D or ASME VIII Div. 1/2. Flanges, fittings, and valves must also be rated for the design pressure.");
+    const thickWallRef = std === "B31.1"
+      ? "ASME B31.1 §104.1.2(B) / ASME VIII Div. 1"
+      : "ASME B31.3 Appendix D or ASME VIII Div. 1/2";
+    recommendations.push(`Thick-wall pipe: verify longitudinal and circumferential stress components per ${thickWallRef}. Flanges, fittings, and valves must also be rated for the design pressure.`);
+  }
+  if (std === "B31.1") {
+    recommendations.push("B31.1 Power Piping: conduct flexibility analysis per ASME B31.1 §119 to verify that thermal expansion stresses are within allowable sustained + expansion stress limits (S_h + S_e ≤ f(1.25S_c + 0.25S_h)). Anchor and guide loads must be verified against equipment nozzle ratings.");
+    recommendations.push("B31.1 requires PWHT for ferritic steels above the thickness and temperature limits of §331.1.1. SA-335 P11/P22/P91 always require PWHT. Verify hardness after PWHT (generally ≤ 200–225 HB depending on alloy).");
+    if (T_des > 427) {
+      recommendations.push(`Design temperature ${T_des} °C is in the creep range for carbon/alloy steel piping. Verify that allowable stress S from B31.1 Table A-1 is creep-controlled (time-dependent) rather than yield-controlled. Confirm with material supplier for the specific heat of material used.`);
+    }
+    if (input.materialId === "SA335_P91" || (mat && mat.name.includes("P91"))) {
+      recommendations.push("SA-335 P91: this alloy is sensitive to improper welding and PWHT. Welding must follow a qualified WPS per ASME IX. PWHT must be performed at 730–760 °C; verify final hardness is 190–250 HB. Refer to EPRI guidelines for P91 fabrication and inspection.");
+    }
   }
   if (std === "B31.3" && T_des > 370) {
     recommendations.push("Temperature > 370 °C: consider creep allowance, relaxation, and flexibility analysis per ASME B31.3 Appendix X. Confirm material with ASME B31.3 Table A-1 (high-temperature section).");
@@ -1271,6 +1583,32 @@ export const PWT_TEST_CASE_B318: PipeWTInput = {
   threadGrooveAllowance: 0,
   millTolerance: 12.5,
   locationClass: "1D2",     // F = 0.72
+  userDesignFactor: null,
+};
+
+export const PWT_TEST_CASE_B311: PipeWTInput = {
+  project: {
+    name: "Main Steam Header — Power Plant", lineTag: "6\"-S-3001-B1A",
+    engineer: "", rev: "A",
+    date: new Date().toISOString().slice(0, 10),
+    dataQuality: "confirmed",
+  },
+  pipingStandard: "B31.1",
+  useNpsSel: true,
+  npsLabel: '6"',
+  outerDiameter: 168.3,
+  materialId: "SA335_P22",  // 2.25Cr-1Mo for main steam service
+  userS_MPa: 103.4, userSmys: 207,
+  userMaterialType: "ferritic",
+  jointType: "seamless",
+  userE: 1.0,
+  designPressure: 120,      // 120 bar(g) ≈ 1740 psi (typical main steam)
+  designTemperature: 540,   // 540 °C (supercritical steam reheat typical)
+  corrosionAllowance: 1.6,  // per ASME B31.1 erosion/corrosion allowance
+  erosionAllowance: 0,
+  threadGrooveAllowance: 0,
+  millTolerance: 12.5,
+  locationClass: "1D2",
   userDesignFactor: null,
 };
 

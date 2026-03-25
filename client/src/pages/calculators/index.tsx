@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Wind, Droplets, Gauge, Blend, ArrowLeftRight, ArrowRight, Calculator,
-  Waves, CircleDot, Container, Thermometer, Shield, Flame, Cog, Cylinder, CloudRain,
+  Waves, CircleDot, Container, Thermometer, Shield, Flame, Cog, Cylinder, CloudRain, Layers,
 } from "lucide-react";
 
 interface CalculatorEntry {
@@ -145,6 +145,16 @@ const calculators: CalculatorEntry[] = [
     categoryColor: "text-amber-400",
     tags: ["Centrifugal/Reciprocating", "Multi-Stage", "Intercooling"],
     standards: ["API 617", "API 618", "GPSA Sec 13"],
+  },
+  {
+    title: "Pipe Wall Thickness",
+    description: "Minimum wall thickness per ASME B31.1 §104.1.2 (Power Piping), B31.3 §304.1.2 (Process Piping), B31.4 §403.2.1, and B31.8 §841.11. Thick-wall Lamé check, B36.10M schedule selection, MAOP back-calculation, hoop stress utilisation. Includes P11/P22/P91 steam materials and full export.",
+    href: "/calculators/pipe-wall-thickness",
+    icon: Layers,
+    category: "Equipment",
+    categoryColor: "text-amber-400",
+    tags: ["B31.1 Power Piping", "B31.3 Process", "B31.4 / B31.8", "Schedule Selection"],
+    standards: ["ASME B31.1", "ASME B31.3", "ASME B31.4", "ASME B31.8", "ASME B36.10M"],
   },
   {
     title: "PRD / Flare Relief",
