@@ -236,7 +236,22 @@ export default function TankVentingPage() {
       references: [
         "PRELIMINARY SCREENING TOOL ONLY — Results are equivalent open-area estimates, NOT final device specifications. Final sizing requires OEM-rated capacity data per API 2000 Annex B / EN ISO 28300.",
         "API Std 2000, 7th Edition (2014): Venting Atmospheric and Low-Pressure Storage Tanks",
+        "API Std 2000, 7th Edition Annex B: Capacity Ratings for Pressure–Vacuum Venting Devices",
+        "EN ISO 28300:2008: Petroleum, Petrochemical and Natural Gas Industries — Venting of Atmospheric and Low-Pressure Storage Tanks",
         "NFPA 30: Flammable and Combustible Liquids Code",
+        "API RP 2003: Protection Against Ignitions Arising Out of Static, Lightning, and Stray Currents",
+      ],
+      methodology: [
+        "SCOPE: Preliminary screening tool only — all results are equivalent open-area estimates, NOT OEM-rated vent device capacities. Final sizing requires OEM-rated capacity curves per API 2000 Annex B / EN ISO 28300.",
+        "Normal thermal venting (outbreathing N1 / inbreathing N2): API 2000 §5.3.1 tables, interpolated for tank volume. Temperature differential basis: 17°C / 11°C per API 2000.",
+        "Liquid movement venting (N3 / N4): flow rate directly from user-entered fill/empty rates per API 2000 §5.3.2. Unit conversion: 1 m³/h liquid ≈ 1 m³/h vapor displacement at standard conditions.",
+        "Total normal outbreathing = max(N1, N3); total normal inbreathing = max(N2, N4) — API 2000 §5.3.3 combination rule.",
+        "Emergency fire venting (E1–E4): wetted area from tank geometry; heat input from API 2000 Table 2 / Table 3 depending on drainage provision and insulation. Emergency flow calculated using API 2000 §5.4 latent heat basis.",
+        "Vent sizing (screening): orifice-equivalent free area method using Q = Cd × A × √(2·ΔP/ρ) rearranged. Fixed Cd assumptions: PV valve Cd = 0.62, emergency vent Cd = 0.55. NOT OEM-rated capacity.",
+        "Approx. connection size is derived from the computed free area rounded up to the nearest standard NPS — for reference only. Actual device specification must come from OEM capacity curves per API 2000 Annex B.",
+        "Emergency vent sized at same ΔP as normal conservation vent (conservative screening basis — verify actual emergency vent set pressure per API 2000 §6.1.2).",
+        "All flow rates reported in Nm³/h at standard conditions: 15°C (288.15 K), 101.325 kPa per API 2000 §3.40.",
+        "NOT MODELLED: blanketing/inerting systems, vapor recovery units, flame arrester pressure derating, detailed flashing dynamics, refrigerated/cryogenic storage, BLEVE scenarios, or device accumulation characteristics.",
       ],
       calcSteps: result.trace.map(t => ({ label: t.step, value: t.value })),
     };

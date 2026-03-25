@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, Calculator, AlertTriangle, Info, CheckCircle2, XCircle, Copy, Download, BookOpen, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calculator, AlertTriangle, Info, CheckCircle2, XCircle, Copy, Download, BookOpen, TriangleAlert, FileText, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NumericInput } from "@/components/ui/numeric-input";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { exportToExcel, exportToCalcNote, exportToJSON } from "@/lib/engineering/exportUtils";
+import type { ExportDatasheet } from "@/lib/engineering/exportUtils";
 import {
   calculatePipeWT,
   MATERIAL_DB,
@@ -340,6 +345,177 @@ export default function PipeWallThicknessPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const buildExportData = (): ExportDatasheet | null => {
+    if (!result) return null;
+    const std = inp.pipingStandard;
+    const mat = MATERIAL_DB[inp.materialId];
+
+    const inputs: ExportDatasheet["inputs"] = [
+      { label: "Piping Standard", value: std },
+      { label: "Material", value: mat?.name || inp.materialId },
+      { label: "NPS / Pipe Size", value: inp.useNpsSel ? inp.npsLabel : "Custom OD" },
+      { label: "Outside Diameter D", value: inp.outerDiameter, unit: "mm" },
+      { label: "Design Pressure P", value: inp.designPressure, unit: "bar(g)" },
+      { label: "Design Temperature T", value: inp.designTemperature, unit: "°C" },
+      { label: "Joint Type", value: inp.jointType },
+      { label: "Corrosion Allowance", value: inp.corrosionAllowance, unit: "mm" },
+      { label: "Erosion Allowance", value: inp.erosionAllowance, unit: "mm" },
+      { label: "Thread / Groove Allowance", value: inp.threadGrooveAllowance, unit: "mm" },
+      { label: "Mill Tolerance", value: inp.millTolerance, unit: "%" },
+      ...(std === "B31.8" ? [{ label: "Location Class", value: inp.locationClass }] : []),
+      { label: "Data Quality", value: inp.project.dataQuality },
+    ];
+
+    const results: ExportDatasheet["results"] = [
+      { label: "Allowable Stress S_eff", value: result.S_eff, unit: "MPa" },
+      { label: "Quality Factor E", value: result.E_eff, unit: "—" },
+      ...(std === "B31.3" ? [
+        { label: "Y Coefficient", value: result.Y_eff, unit: "—" },
+        { label: "W Factor", value: result.W_eff, unit: "—" },
+      ] : [
+        { label: "Design Factor F", value: result.F_eff, unit: "—" },
+        { label: "Temperature Derating T", value: result.T_derating, unit: "—" },
+      ]),
+      { label: "Pressure Design Thickness t_p", value: result.t_pressure, unit: "mm", highlight: true },
+      { label: "Mechanical Allowance c_total", value: result.c_total, unit: "mm" },
+      { label: "Min Required Total Thickness t_req", value: result.t_required, unit: "mm", highlight: true },
+      { label: "Required Nominal Wall t_nom_req", value: result.t_nominal_required, unit: "mm", highlight: true },
+      { label: "t/D Ratio (thin-wall check)", value: result.tOverD, unit: "—" },
+      { label: "Thick-wall (Lamé) Applied", value: result.isThickWall ? "YES" : "No", unit: "" },
+      ...(result.isThickWall ? [{ label: "Lamé Thickness t_Lamé", value: result.t_lame, unit: "mm" }] : []),
+      result.selectedSchedule
+        ? { label: "Selected Schedule", value: result.selectedSchedule.schedule, unit: "", highlight: true }
+        : { label: "Selected Schedule", value: "NONE — no standard B36.10M schedule adequate", unit: "" },
+      ...(result.selectedSchedule ? [
+        { label: "Nominal Wall t_nom", value: result.selectedSchedule.wallMm, unit: "mm" },
+        { label: "Effective Wall t_eff (after MT & CA)", value: result.selectedSchedule.tEffective, unit: "mm" },
+        { label: "MAOP (end-of-life, corroded)", value: result.selectedSchedule.maop, unit: "bar" },
+        { label: "Hoop Stress σ_h", value: result.selectedSchedule.hoopStress, unit: "MPa" },
+        { label: "Utilisation (σ_h / S_eff)", value: result.selectedSchedule.utilisation * 100, unit: "%" },
+      ] : []),
+    ];
+
+    const calcSteps: ExportDatasheet["calcSteps"] = result.calcSteps.map(s => ({
+      label: s.label,
+      equation: s.equation || "",
+      value: s.value,
+      unit: s.unit || "",
+    }));
+
+    const additionalSections: ExportDatasheet["additionalSections"] = [];
+
+    if (result.scheduleChecks.length > 0) {
+      additionalSections.push({
+        title: "Schedule Check Table (ASME B36.10M)",
+        items: result.scheduleChecks.map(c => ({
+          label: `${c.schedule} — ${c.passes ? "PASS" : "FAIL"} | t_nom=${c.wallMm.toFixed(2)} mm | t_eff=${c.tEffective.toFixed(3)} mm | MAOP=${c.maop.toFixed(1)} bar | util=${(c.utilisation*100).toFixed(1)}%`,
+          value: c.passes ? "PASS" : "FAIL",
+          unit: "",
+        })),
+      });
+    }
+
+    if (result.recommendations.length > 0) {
+      additionalSections.push({
+        title: "Engineering Recommendations",
+        items: result.recommendations.map((r, i) => ({ label: `${i + 1}. ${r}`, value: "", unit: "" })),
+      });
+    }
+
+    const assumptionsB313 = [
+      "[A1] t = P·D / (2·(S·E·W + P·Y)) — ASME B31.3:2022 §304.1.2. Straight pipe, internal gauge pressure, thin-wall condition (t < D/6, P/(S·E·W) < 0.385).",
+      "[A2] Allowable stress S from ASME B31.3:2022 Table A-1 (temperature-interpolated). Linear interpolation between tabulated entries.",
+      "[A3] Y coefficient from ASME B31.3:2022 Table 304.1.1 — Y = 0.4 for ferritic/austenitic at T ≤ 482°C, increases at higher temperatures.",
+      "[A4] Quality (longitudinal joint) factor E from ASME B31.3 Table A-1B: Seamless=1.00, ERW=0.85, DSAW/SAW=1.00, EFW=0.85, FBW=0.60.",
+      "[A5] Weld joint strength reduction factor W = 1.0 assumed (valid T ≤ 510°C). For T > 510°C, verify W from ASME B31.3 Table 302.3.5.",
+      "[A6] Thick-wall Lamé applied when t ≥ D/6 or P/(S·E·W) ≥ 0.385 per §304.1.2(c): t = D/2 × (√((SEW+P)/(SEW−P)) − 1).",
+      "[A7] Total mechanical allowance c = corrosion + erosion + thread/groove per ASME B31.3 §304.1.1(a).",
+      "[A8] Mill tolerance per ASTM A106 / API 5L §9.10: standard −12.5%. Required nominal = t_total / (1 − MT/100).",
+      "[A9] MAOP back-calculated at end-of-life (corroded) condition: P_MAOP = 2·t_eff·S·E·W / (D − 2·Y·t_eff).",
+      "[A10] Hoop stress by Barlow thin-wall formula: σ_h = P·D / (2·t_eff). Conservative approximation.",
+      "[A11] Schedule dimensions from ASME B36.10M:2018 (wrought steel) / B36.19M:2018 (stainless steel).",
+      "[A12] External pressure, bending, torsion, sustained/occasional loads, and thermal expansion stresses are NOT included — full piping flexibility analysis per ASME B31.3 Chapter II required.",
+    ];
+    const assumptionsB314 = [
+      "[A1] t = P·D / (2·S·F·E·T) — ASME B31.4:2019 §403.2.1. S = SMYS from API 5L Table B.2. F = 0.72 Class 1 (liquid pipeline).",
+      "[A2] SMYS from API 5L:2018 Table B.2 (PSL2). Design factor F provides safety margin (not a stress fraction of S).",
+      "[A3] Temperature derating T from ASME B31.4 Table 403.2.1-1: 1.000 (≤121°C), 0.967 (≤149°C), 0.933 (≤177°C), 0.900 (≤204°C), 0.867 (≤232°C).",
+      "[A4] Quality factor E from ASME B31.4: Seamless=1.00, ERW=0.80 (conservative vs. B31.3's 0.85).",
+      "[A5] Mill tolerance 12.5% per API 5L §9.10: required nominal = t_total / 0.875.",
+      "[A6] MAOP back-calculated at corroded condition: P_MAOP = 2·t_eff·S·F·E·T / D.",
+      "[A7] Hydrostatic test pressure = 1.25× design pressure per ASME B31.4 §437.4.1.",
+    ];
+    const assumptionsB318 = [
+      "[A1] t = P·D / (2·S·F·E·T) — ASME B31.8:2022 §841.11. S = SMYS from API 5L Table B.2. F from location class (0.80/0.72/0.60/0.50/0.40).",
+      "[A2] SMYS from API 5L:2018 Table B.2. Location class design factor F per ASME B31.8 §841.114A Table 841.114A.",
+      "[A3] Temperature derating T from ASME B31.8 Table 841.1.8-1: 1.000 (≤121°C), 0.967 (≤149°C), 0.933 (≤177°C), 0.900 (≤204°C), 0.867 (≤232°C).",
+      "[A4] Quality factor E per B31.8 §841.11: Seamless=1.00; ERW PSL2 (type E)=1.00; ERW PSL1=0.80.",
+      "[A5] Mill tolerance 12.5% per API 5L §9.10.",
+      "[A6] MAOP back-calculated at corroded condition: P_MAOP = 2·t_eff·S·F·E·T / D.",
+      "[A7] Hydrostatic strength test ≥ 1.25× MAOP per B31.8 §841.322, held 8 hours minimum for Class 1.",
+    ];
+
+    const assumptions = std === "B31.3" ? assumptionsB313 : std === "B31.4" ? assumptionsB314 : assumptionsB318;
+
+    const references = [
+      "ASME B31.3:2022 — Process Piping: §304.1.2 Straight Pipe Pressure Design; Table A-1 Allowable Stresses; Table A-1B Quality Factors; Table 304.1.1 Y Coefficients",
+      "ASME B31.4:2019 — Pipeline Transportation Systems for Liquids: §403.2.1 Pressure Design; Table 403.2.1-1 T and E factors",
+      "ASME B31.8:2022 — Gas Transmission and Distribution Piping: §841.11 Pressure Design; §841.114A Location Class Design Factors; Table 841.1.8-1 Temperature Derating",
+      "ASME B36.10M:2018 — Welded and Seamless Wrought Steel Pipe (schedule dimensions for wrought steel)",
+      "ASME B36.19M:2018 — Stainless Steel Pipe (5S / 10S / 40S / 80S schedules)",
+      "API 5L:2018 (PSL2) — Specification for Line Pipe: Table B.2 SMYS / SMUTS; §9.10 Mill Tolerance",
+      "ASTM A106-2019 — Seamless Carbon Steel Pipe for High-Temperature Service",
+      "ASTM A333-2021 — Seamless and Welded Steel Pipe for Low-Temperature Service",
+      "ASTM A312-2022 — Seamless, Welded, and Heavily Cold Worked Austenitic Stainless Steel Pipe",
+      "ASME B16.5:2017 — Pipe Flanges and Flanged Fittings (NPS ≤ 24\", Class 150–2500)",
+      "ASME B16.47:2017 — Large Diameter Steel Flanges (NPS 26–60, Series A & B)",
+      "NACE SP0169 / ISO 15589-1 — Corrosion allowance basis and cathodic protection for pipelines",
+      "NACE MR0175 / ISO 15156 — Materials for Use in H₂S-Containing Environments (sour service)",
+    ];
+
+    return {
+      calculatorName: `Pipe Wall Thickness — ASME ${std} Pressure Design`,
+      projectInfo: [
+        { label: "Project / System", value: inp.project.name || "—" },
+        { label: "Line / Tag", value: inp.project.lineTag || "—" },
+        { label: "Engineer", value: inp.project.engineer || "—" },
+        { label: "Rev", value: inp.project.rev || "—" },
+        { label: "Date", value: inp.project.date || "—" },
+        { label: "Data Quality", value: inp.project.dataQuality === "preliminary" ? "Preliminary — for estimation only" : "Confirmed — based on verified data" },
+      ],
+      inputs,
+      results,
+      calcSteps,
+      additionalSections,
+      methodology: [
+        `Standard: ASME ${std} — ${std === "B31.3" ? "Process Piping §304.1.2" : std === "B31.4" ? "Liquid Pipeline Transportation §403.2.1" : "Gas Transmission & Distribution §841.11"}`,
+        std === "B31.3"
+          ? "Design formula: t = P·D / (2·(S·E·W + P·Y)) — allowable-stress basis (S from Table A-1, fraction of yield/tensile strength)"
+          : "Design formula: t = P·D / (2·S·F·E·T) — SMYS-based approach; design factor F provides the safety margin",
+        "Mill tolerance applied to derive required nominal wall: t_nom_req = t_total / (1 − MT/100)",
+        "Schedule selection: first ASME B36.10M standard schedule with t_nom ≥ t_nom_req is selected as governing schedule",
+        "MAOP back-calculated at corroded (end-of-life) condition: t_eff = t_nom × (1 − MT/100) − c_total. Used for MAOP margin check.",
+        "Hoop stress calculated by Barlow thin-wall formula (conservative approximation). Lamé thick-wall formula applied when t/D ≥ 1/6 or P/(S·E·W) ≥ 0.385.",
+        "NOT INCLUDED in this calculation: external pressure, bending moments, torsion, sustained loads, occasional loads, thermal expansion stresses, seismic, wind. A full piping stress analysis per ASME B31.3 Chapter II / ISO 14692 is required.",
+        "Screening tool only — results require engineering review before use in design, procurement, or construction.",
+      ],
+      assumptions,
+      references,
+      warnings: [
+        ...result.warnings,
+        ...result.flags.map(f => PWT_FLAG_LABELS[f] || f.replace(/_/g, " ")),
+      ].filter(Boolean),
+    };
+  };
+
+  const handleExport = (format: "pdf" | "excel" | "json") => {
+    const data = buildExportData();
+    if (!data) return;
+    if (format === "pdf") exportToCalcNote(data);
+    else if (format === "excel") exportToExcel(data);
+    else exportToJSON(data);
+  };
+
   const availableMaterials = Object.values(MATERIAL_DB).filter(m =>
     m.compatibleStandards.includes(inp.pipingStandard)
   );
@@ -381,6 +557,24 @@ export default function PipeWallThicknessPage() {
               <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={copyJson} data-testid="button-copy-json">
                 <Copy className="h-3 w-3" />{copied ? "Copied!" : "Copy JSON"}
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1" data-testid="button-export-dropdown">
+                    <Download className="h-3 w-3" /> Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExport("pdf")} data-testid="button-export-calc-note">
+                    <FileText className="h-4 w-4 mr-2" /> Calc Note (HTML/Print)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("excel")} data-testid="button-export-excel">
+                    <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel Datasheet
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("json")} data-testid="button-export-json">
+                    <Download className="h-4 w-4 mr-2" /> JSON Data
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
         </div>

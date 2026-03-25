@@ -264,7 +264,6 @@ export default function FlareKODrumPage() {
       inputs,
       results,
       calcSteps: calcSteps.length > 0 ? calcSteps : undefined,
-      additionalSections: additionalSections.length > 0 ? additionalSections : undefined,
       methodology: [
         "SCOPE: Flare KO Drum Preliminary Sizing / Screening Tool per API 521 Section 5.4.2. This is NOT: final vessel or internals design; a dynamic transient flare-hydraulics model; a substitute for project-specific relief/flare study or mechanical verification.",
         "Gas capacity: Souders\u2013Brown correlation v_max = K \u00D7 \u221A((\u03C1_L \u2212 \u03C1_G) / \u03C1_G). Not modelled: inlet devices, droplet-size distribution, CFD, internals efficiency, slug hydrodynamics, foam or re-entrainment. Screening basis only.",
@@ -288,6 +287,13 @@ export default function FlareKODrumPage() {
         ...result.warnings,
         ...result.flags.map(f => FLAG_LABELS[f] || f.replace(/_/g, " ")),
       ].filter(Boolean),
+      additionalSections: [
+        ...additionalSections,
+        ...(result.recommendations && result.recommendations.length > 0 ? [{
+          title: "Engineering Recommendations",
+          items: result.recommendations.map((r: string, i: number) => ({ label: `${i + 1}. ${r}`, value: "", unit: "" })),
+        }] : []),
+      ],
     };
   };
 
