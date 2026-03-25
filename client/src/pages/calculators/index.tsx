@@ -147,16 +147,6 @@ const calculators: CalculatorEntry[] = [
     standards: ["API 617", "API 618", "GPSA Sec 13"],
   },
   {
-    title: "Pipe Wall Thickness",
-    description: "Minimum wall thickness per ASME B31.1 §104.1.2 (Power Piping), B31.3 §304.1.2 (Process Piping), B31.4 §403.2.1, and B31.8 §841.11. Thick-wall Lamé check, B36.10M schedule selection, MAOP back-calculation, hoop stress utilisation. Includes P11/P22/P91 steam materials and full export.",
-    href: "/calculators/pipe-wall-thickness",
-    icon: Layers,
-    category: "Equipment",
-    categoryColor: "text-amber-400",
-    tags: ["B31.1 Power Piping", "B31.3 Process", "B31.4 / B31.8", "Schedule Selection"],
-    standards: ["ASME B31.1", "ASME B31.3", "ASME B31.4", "ASME B31.8", "ASME B36.10M"],
-  },
-  {
     title: "PRD / Flare Relief",
     description: "Comprehensive pressure relief device sizing with 9-step wizard. Scenario screening (API 521), gas/steam/liquid sizing (API 520), orifice selection (API 526), inlet/outlet piping checks, and device type recommendation.",
     href: "/calculators/psv-sizing",
@@ -185,6 +175,16 @@ const calculators: CalculatorEntry[] = [
     categoryColor: "text-red-400",
     tags: ["API 2000", "Normal/Emergency", "PV Valve Sizing"],
     standards: ["API 2000", "NFPA 30"],
+  },
+  {
+    title: "Pipe Wall Thickness",
+    description: "Minimum wall thickness per ASME B31.1 §104.1.2 (Power Piping), B31.3 §304.1.2 (Process Piping), B31.4 §403.2.1, and B31.8 §841.11. Thick-wall Lamé check, B36.10M schedule selection, MAOP back-calculation, hoop stress utilisation. Includes P11/P22/P91 steam materials and full export.",
+    href: "/calculators/pipe-wall-thickness",
+    icon: Layers,
+    category: "Equipment",
+    categoryColor: "text-amber-400",
+    tags: ["B31.1 Power Piping", "B31.3 Process", "B31.4 / B31.8", "Schedule Selection"],
+    standards: ["ASME B31.1", "ASME B31.3", "ASME B31.4", "ASME B31.8", "ASME B36.10M"],
   },
 ];
 
