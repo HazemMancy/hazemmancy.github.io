@@ -23,6 +23,7 @@ const categories = [
   { label: "Fluids", color: "text-green-400" },
   { label: "Equipment", color: "text-amber-400" },
   { label: "Relief", color: "text-red-400" },
+  { label: "Piping", color: "text-violet-400" },
 ];
 
 const calculators: CalculatorEntry[] = [
@@ -181,8 +182,8 @@ const calculators: CalculatorEntry[] = [
     description: "Minimum wall thickness per ASME B31.1 §104.1.2 (Power Piping), B31.3 §304.1.2 (Process Piping), B31.4 §403.2.1, and B31.8 §841.11. Thick-wall Lamé check, B36.10M schedule selection, MAOP back-calculation, hoop stress utilisation. Includes P11/P22/P91 steam materials and full export.",
     href: "/calculators/pipe-wall-thickness",
     icon: Layers,
-    category: "Equipment",
-    categoryColor: "text-amber-400",
+    category: "Piping",
+    categoryColor: "text-violet-400",
     tags: ["B31.1 Power Piping", "B31.3 Process", "B31.4 / B31.8", "Schedule Selection"],
     standards: ["ASME B31.1", "ASME B31.3", "ASME B31.4", "ASME B31.8", "ASME B36.10M"],
   },
@@ -216,7 +217,9 @@ export default function CalculatorsIndexPage() {
                       ? "border-green-500/30 bg-green-500/10 text-green-400"
                       : cat.label === "Equipment"
                       ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                      : "border-red-500/30 bg-red-500/10 text-red-400"
+                      : cat.label === "Relief"
+                      ? "border-red-500/30 bg-red-500/10 text-red-400"
+                      : "border-violet-500/30 bg-violet-500/10 text-violet-400"
                   }`}
                 >
                   <div className={`w-1.5 h-1.5 rounded-full ${cat.color.replace("text-", "bg-")}`} />

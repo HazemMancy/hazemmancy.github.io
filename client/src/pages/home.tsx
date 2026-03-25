@@ -29,6 +29,7 @@ import {
   Flame,
   Cog,
   CloudRain,
+  Layers,
   AlertTriangle,
   BookOpen,
 } from "lucide-react";
@@ -240,6 +241,13 @@ const calculatorCategories = [
       { title: "Separator Sizing", description: "Unified separator sizing for production, gas scrubber, inlet, slug catcher and test separators per API 12J / GPSA Sec 7", icon: Container, href: "/calculators/separator-sizing" },
       { title: "Heat Exchanger", description: "LMTD-based area estimation with F-factor correction and fouling allowance", icon: Thermometer, href: "/calculators/heat-exchanger" },
       { title: "Compressor Sizing", description: "Polytropic/isentropic compressor sizing with multi-stage and intercooling support", icon: Cog, href: "/calculators/compressor" },
+      { title: "Flare KO Drum", description: "Flare knockout drum sizing per API 521 with conservative K-factors and multi-scenario liquid accumulation checks", icon: Flame, href: "/calculators/flare-ko-drum" },
+    ],
+  },
+  {
+    label: "Piping",
+    items: [
+      { title: "Pipe Wall Thickness", description: "Minimum wall thickness per ASME B31.1/B31.3/B31.4/B31.8 with Lamé thick-wall check, schedule selection, and MAOP back-calculation", icon: Layers, href: "/calculators/pipe-wall-thickness" },
     ],
   },
   {
