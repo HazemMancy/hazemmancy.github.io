@@ -235,7 +235,7 @@
 
 <section class="section">
   <div class="container-md">
-    <div class="section-header"><p class="section-label mb-3">TOOLS</p><h2 class="section-title">Engineering Calculators</h2><p class="section-desc">7 live process engineering screening tools built on defensible screening-level calculations</p></div>
+    <div class="section-header"><p class="section-label mb-3">TOOLS</p><h2 class="section-title">Engineering Calculators</h2><p class="section-desc"><span id="liveCalcCount">11</span> live process engineering screening tools built on defensible screening-level calculations</p></div>
     <div id="calcPreviewContainer"></div>
     <div class="calc-actions">
       <a href="calculators/index.html" class="btn btn-outline"><i data-lucide="calculator" style="width:16px;height:16px"></i>View All Calculators</a>
@@ -287,6 +287,7 @@
   </div>
 </footer>
 
+<script src="calculators/catalog.js"></script>
 <script>
 const responsibilities = [
   'Process design and optimization for petroleum facilities',
@@ -393,21 +394,11 @@ const projects = [
     tags:['Storage Tank','P&ID','PVSV'], extra:1
   },
 ];
-const calcPreview = [
-  { cat:'Fluids', items:[
-    { title:'Gas Mixing', icon:'blend', standard:'Gas composition · MW · Z-factor options', status:'live', href:'calculators/gas-mixing.html' },
-    { title:'Gas Volume Conversion', icon:'arrow-left-right', standard:'Real gas · Z-factor correction', status:'live', href:'calculators/gas-volume.html' },
-  ]},
-  { cat:'Hydraulics', items:[
-    { title:'Single Phase Liquid Hydraulics', icon:'droplets', standard:'Darcy-Weisbach · fittings K-losses · service checks', status:'live', href:'calculators/liquid-hydraulics.html' },
-    { title:'Single Phase Gas Hydraulics', icon:'wind', standard:'Real-gas density · Darcy-Weisbach · fittings K-losses', status:'live', href:'calculators/gas-hydraulics.html' },
-    { title:'Mixed-Phase Line Sizing', icon:'waves', standard:'Friedel · Chisholm-Baroczy · Beggs & Brill screening', status:'live', href:'calculators/mixed-phase-hydraulics.html' },
-    { title:'Surge Pressure', icon:'activity', standard:'Joukowsky surge · wave celerity · pipe period', status:'live', href:'calculators/surge-pressure.html' },
-  ]},
-  { cat:'Equipment', items:[
-    { title:'Pump Sizing', icon:'gauge', standard:'Head · NPSHa · hydraulic & shaft power', status:'live', href:'calculators/pump-sizing.html' },
-  ]},
-];
+// Built from calculators/catalog.js so the count and preview always match the calculators page.
+const liveCalcs = (window.CALCULATORS || []).filter(c => c.status === 'live');
+const calcPreview = [...new Set(liveCalcs.map(c => c.cat))].map(cat => ({
+  cat, items: liveCalcs.filter(c => c.cat === cat).map(c => ({ ...c, href: 'calculators/' + c.href }))
+}));
 function renderResponsibilities(id) {
   const el = document.getElementById(id); if (!el) return;
   el.innerHTML = responsibilities.map(r => `<div class="resp-item"><i data-lucide="circle-check-big" style="width:16px;height:16px;color:var(--primary);margin-top:2px;flex-shrink:0"></i><p class="text-sm" style="color:var(--muted)">${r}</p></div>`).join('');
@@ -425,6 +416,7 @@ function renderSkills() {
   grid.innerHTML = skillCategories.map(cat => `<div class="card"><div class="card-body"><div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem"><div class="about-icon" style="margin-bottom:0"><i data-lucide="${cat.icon}" style="width:18px;height:18px"></i></div><h3 class="font-semi text-sm">${cat.title}</h3></div><div style="display:flex;flex-wrap:wrap;gap:.375rem">${cat.tags.map(t=>`<span class="badge badge-secondary ${cat.tagColor}">${t}</span>`).join('')}</div></div></div>`).join('');
 }
 function renderCalcPreview() {
+  const countEl = document.getElementById('liveCalcCount'); if (countEl) countEl.textContent = liveCalcs.length;
   const el = document.getElementById('calcPreviewContainer'); if (!el) return;
   el.innerHTML = calcPreview.map(cat => `<div style="margin-bottom:1.5rem"><div class="calc-cat-label"><div class="calc-cat-line"></div><h3 class="font-semi text-xs" style="letter-spacing:.05em">${cat.cat}</h3></div><div class="calc-preview-grid">${cat.items.map(c => {
     const isLive = c.status==='live';
