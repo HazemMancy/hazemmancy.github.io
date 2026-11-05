@@ -64,7 +64,7 @@
     .toolbar{padding:1.5rem 1rem;border-bottom:1px solid var(--border);background:var(--bg-card)}
     .toolbar-inner{max-width:72rem;margin:0 auto;display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between}
     .search-wrap{position:relative;flex:1;min-width:200px;max-width:400px}
-    .search-wrap i{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+    .search-wrap i,.search-wrap svg{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
     #searchInput{width:100%;padding:.5rem .75rem .5rem 2.25rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:.875rem;color:var(--foreground);outline:none;font-family:var(--font);transition:border-color .15s}
     #searchInput:focus{border-color:var(--primary)} #searchInput::placeholder{color:var(--muted)}
     .filter-tabs{display:flex;flex-wrap:wrap;gap:.375rem}
@@ -95,6 +95,14 @@
     .cat-line{width:2rem;height:2px;background:var(--primary);flex-shrink:0}
     .cat-title{font-size:.875rem;font-weight:600;letter-spacing:.05em}
     .cat-count{font-size:.75rem;color:var(--muted);background:var(--secondary-bg);padding:.1rem .5rem;border-radius:9999px}
+    /* ROADMAP */
+    .roadmap{max-width:72rem;margin:1.5rem auto 0;border-top:1px solid var(--border)}
+    .roadmap>summary{list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;padding:1.25rem 1rem .5rem;cursor:pointer;border-radius:var(--radius)}
+    .roadmap>summary::-webkit-details-marker{display:none}
+    .roadmap>summary:hover .cat-title{color:var(--primary)}
+    .roadmap-chev{transition:transform .2s;color:var(--primary)} .roadmap[open] .roadmap-chev{transform:rotate(90deg)}
+    .roadmap-hint{font-size:.75rem;color:var(--muted)}
+    .roadmap-note{font-size:.8rem;color:var(--muted);padding:1.5rem 1rem 0}
     /* EMPTY */
     #emptyState{display:none;text-align:center;padding:4rem 1rem;color:var(--muted)}
     #emptyState.show{display:block}
@@ -140,7 +148,7 @@
 <div class="page-header">
   <p class="section-label">TOOLS</p>
   <h1 class="page-title">Engineering Calculators</h1>
-  <p class="page-desc">Process engineering screening calculators currently active in the portfolio, with remaining tools shown as future development items.</p>
+  <p class="page-desc">Process engineering screening calculators. Live tools are listed first; tools still in development are in the Roadmap at the end of the page.</p>
 </div>
 
 <div class="toolbar">
@@ -195,20 +203,35 @@ function renderFilterTabs() {
   }).join('');
 }
 
+function renderGroups(list, cats) {
+  let html = '';
+  cats.forEach(cat => {
+    const items = list.filter(c => c.cat === cat);
+    if (!items.length) return;
+    html += `<div class="cat-header"><div class="cat-header-inner"><div class="cat-line"></div><h2 class="cat-title">${cat}</h2><span class="cat-count">${items.length}</span></div></div><div class="calc-grid">${items.map(renderCard).join('')}</div>`;
+  });
+  return html;
+}
+
+let roadmapOpen = false;
 function renderCalcs() {
   const container = document.getElementById('calcContainer');
   const filteredCats = activeFilter === 'All' ? [...new Set(calculators.map(c => c.cat))] : [activeFilter];
-  let visibleCount = 0;
-  let html = '';
-  filteredCats.forEach(cat => {
-    const items = calculators.filter(c => c.cat === cat && matchesSearch(c));
-    if (!items.length) return;
-    visibleCount += items.length;
-    html += `<div class="cat-header"><div class="cat-header-inner"><div class="cat-line"></div><span class="cat-title">${cat}</span><span class="cat-count">${items.length}</span></div></div><div class="calc-grid">${items.map(renderCard).join('')}</div>`;
-  });
+  const visible = calculators.filter(c => filteredCats.includes(c.cat) && matchesSearch(c));
+  const live = visible.filter(c => c.status === 'live');
+  const wip = visible.filter(c => c.status !== 'live');
+  let html = renderGroups(live, filteredCats);
+  if (!live.length && wip.length) html += '<p class="roadmap-note">No live calculators match. Matching roadmap items are listed below.</p>';
+  if (wip.length) {
+    // Open the roadmap automatically when a search only matches roadmap items.
+    const open = roadmapOpen || (!!searchQuery && !live.length);
+    html += `<details class="roadmap" id="roadmap"${open ? ' open' : ''}><summary><i data-lucide="chevron-right" class="roadmap-chev" style="width:16px;height:16px" aria-hidden="true"></i><span class="cat-title">Roadmap</span><span class="cat-count">${wip.length}</span><span class="roadmap-hint">Tools in development, not yet available</span></summary>${renderGroups(wip, filteredCats)}</details>`;
+  }
   container.innerHTML = html;
-  document.getElementById('visibleCount').textContent = visibleCount;
-  document.getElementById('emptyState').classList.toggle('show', visibleCount === 0);
+  const rd = document.getElementById('roadmap');
+  if (rd) rd.addEventListener('toggle', () => { roadmapOpen = rd.open; });
+  document.getElementById('visibleCount').textContent = visible.length;
+  document.getElementById('emptyState').classList.toggle('show', visible.length === 0);
   if (window.lucide) lucide.createIcons();
 }
 
