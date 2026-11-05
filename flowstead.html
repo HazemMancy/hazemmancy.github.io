@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowstead — Open-Source Process Simulator for Android | Hazem ElMancy</title>
+  <meta name="description" content="Flowstead is an open-source (GPL-3.0) process simulator for Android built on the DWSIM engine: steady-state and dynamic flowsheets, columns, reactors, PSV sizing and relief (API 520/521/526), line sizing (API 14E) and PDF/Excel data sheets, checked against HYSYS cases." />
+  <link rel="canonical" href="https://hazemmancy.github.io/flowstead.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Hazem ElMancy" />
+  <meta property="og:title" content="Flowstead — Open-Source Process Simulator for Android" />
+  <meta property="og:description" content="Steady-state and dynamic process simulation on Android, built on the DWSIM engine, with API 520/521/526 relief sizing and HYSYS-checked results. Created by Hazem ElMancy." />
+  <meta property="og:url" content="https://hazemmancy.github.io/flowstead.html" />
+  <meta property="og:image" content="https://hazemmancy.github.io/assets/flowstead/flowstead-featured.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="627" />
+  <meta property="og:image:alt" content="Flowstead: steady-state process simulation in your pocket, shown on two phones" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Flowstead — Open-Source Process Simulator for Android" />
+  <meta name="twitter:description" content="Steady-state and dynamic process simulation on Android, built on the DWSIM engine, with API 520/521/526 relief sizing and HYSYS-checked results." />
+  <meta name="twitter:image" content="https://hazemmancy.github.io/assets/flowstead/flowstead-featured.png" />
+  <meta name="twitter:image:alt" content="Flowstead: steady-state process simulation in your pocket, shown on two phones" />
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="apple-touch-icon" href="favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@1.56.0/dist/umd/lucide.min.js"></script>
+  <style>
+    :root{--radius:.5rem;--font:'Inter',system-ui,sans-serif;--navbar-h:3.5rem}
+    [data-theme="dark"]{--bg:hsl(222,47%,7%);--bg-card:hsl(222,41%,11%);--bg-card-hover:hsl(222,41%,13%);--border:hsl(222,30%,18%);--foreground:hsl(210,40%,98%);--muted:hsl(215,20%,55%);--primary:hsl(217,91%,60%);--primary-bg:hsl(217,91%,60%,0.1);--secondary-bg:hsl(222,41%,16%);--hero-glow:radial-gradient(ellipse 80% 60% at 50% -10%,hsl(217 91% 60%/.18),transparent)}
+    [data-theme="light"]{--bg:hsl(0,0%,100%);--bg-card:hsl(0,0%,98%);--bg-card-hover:hsl(0,0%,95%);--border:hsl(214,32%,88%);--foreground:hsl(222,47%,11%);--muted:hsl(215,16%,45%);--primary:hsl(217,91%,50%);--primary-bg:hsl(217,91%,50%,0.08);--secondary-bg:hsl(210,40%,94%);--hero-glow:radial-gradient(ellipse 80% 60% at 50% -10%,hsl(217 91% 50%/.10),transparent)}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:var(--font);background:var(--bg);color:var(--foreground);min-height:100vh;display:flex;flex-direction:column;line-height:1.6;transition:background .3s,color .3s}
+    a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer;border:none;background:none} ul{list-style:none} main{flex:1}
+    img{max-width:100%;height:auto;display:block}
+    .container-md{max-width:56rem;margin:0 auto;padding:0 1rem}
+    .text-primary{color:var(--primary)}
+    .section-label{font-size:.7rem;font-weight:600;letter-spacing:.15em;color:var(--primary);text-transform:uppercase}
+    .card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius)}
+    .card-body{padding:1.25rem} .card-body-lg{padding:1.5rem 2rem} @media(max-width:480px){.card-body-lg{padding:1.25rem}}
+    .badge{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .55rem;border-radius:9999px;font-size:.7rem;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--muted)}
+    .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1.1rem;border-radius:var(--radius);font-size:.875rem;font-weight:500;transition:opacity .15s,background .15s;cursor:pointer;border:none}
+    .btn-primary{background:var(--primary);color:#fff} .btn-primary:hover{opacity:.88}
+    .btn-outline{background:transparent;border:1px solid var(--border);color:var(--foreground)} .btn-outline:hover{background:var(--secondary-bg)}
+    #navbar{position:sticky;top:0;z-index:50;width:100%;background:var(--bg);transition:background .25s,border-color .25s}
+    #navbar.scrolled{background:color-mix(in srgb,var(--bg) 95%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+    .navbar-inner{max-width:72rem;margin:0 auto;padding:0 1rem;height:var(--navbar-h);display:flex;align-items:center;justify-content:space-between;gap:1rem}
+    .logo{display:flex;align-items:center;flex-shrink:0} .logo span{font-weight:700;font-size:1.25rem;letter-spacing:-.02em}
+    nav.desktop{display:none;align-items:center;gap:.25rem} @media(min-width:1024px){nav.desktop{display:flex}}
+    .nav-link{padding:.375rem .75rem;font-size:.7rem;font-weight:500;letter-spacing:.08em;color:var(--muted);border-radius:var(--radius);transition:color .15s,background .15s}
+    .nav-link:hover{color:var(--foreground);background:var(--secondary-bg)} .nav-link[aria-current="page"]{color:var(--foreground)}
+    .nav-link-calc{display:flex;align-items:center;gap:.4rem;padding:.375rem .75rem;font-size:.7rem;font-weight:500;letter-spacing:.08em;color:var(--primary);border-radius:var(--radius);transition:background .15s}
+    .nav-link-calc:hover{background:var(--primary-bg)}
+    .theme-toggle{width:2.25rem;height:2.25rem;display:flex;align-items:center;justify-content:center;border-radius:var(--radius);color:var(--muted);transition:background .15s,color .15s}
+    .theme-toggle:hover{background:var(--secondary-bg);color:var(--foreground)}
+    .desktop-th{display:none} @media(min-width:1024px){.desktop-th{display:flex}}
+    .mobile-controls{display:flex;align-items:center;gap:.25rem} @media(min-width:1024px){.mobile-controls{display:none}}
+    .mobile-menu{display:none;border-top:1px solid var(--border);background:var(--bg-card);padding:.75rem 1rem}
+    .mobile-menu.open{display:block} @media(min-width:1024px){.mobile-menu{display:none!important}}
+    .mobile-menu a{display:block;width:100%;padding:.5rem .75rem;font-size:.875rem;color:var(--muted);border-radius:var(--radius)}
+    .mobile-menu a:hover{background:var(--secondary-bg);color:var(--foreground)}
+    .mobile-menu .calc-link{display:flex;align-items:center;gap:.4rem;color:var(--primary);font-weight:500;margin-top:.5rem}
+    section[id]{scroll-margin-top:calc(var(--navbar-h) + 8px)}
+    .hero{position:relative;padding:4rem 1rem 3rem;text-align:center;overflow:hidden}
+    .hero-glow{position:absolute;inset:0;background:var(--hero-glow);pointer-events:none}
+    .hero-inner{position:relative;max-width:48rem;margin:0 auto}
+    .app-icon{width:4.5rem;height:4.5rem;border-radius:1.1rem;margin:0 auto 1.25rem}
+    .hero-title{font-size:clamp(2.25rem,7vw,3.75rem);font-weight:800;letter-spacing:-.03em;line-height:1.1;margin:.5rem 0 1rem}
+    .hero-sub{font-size:clamp(1rem,2.5vw,1.15rem);color:var(--muted);max-width:40rem;margin:0 auto 1.5rem;line-height:1.7}
+    .hero-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem;margin-bottom:1.25rem}
+    .meta-row{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem}
+    .section{padding:3rem 1rem}
+    .section-title{font-size:clamp(1.4rem,3.5vw,1.9rem);font-weight:700;margin:.5rem 0 1rem}
+    .prose p{color:var(--muted);font-size:.9rem;line-height:1.75} .prose p+p{margin-top:.85rem} .prose strong{color:var(--foreground)}
+    .feature-grid{display:grid;gap:1rem} @media(min-width:768px){.feature-grid{grid-template-columns:1fr 1fr}}
+    .feature-head{display:flex;align-items:center;gap:.75rem;margin-bottom:.85rem}
+    .feature-icon{width:2.25rem;height:2.25rem;border-radius:var(--radius);background:var(--primary-bg);display:flex;align-items:center;justify-content:center;color:var(--primary);flex-shrink:0}
+    .feature-list{display:flex;flex-direction:column;gap:.45rem}
+    .feature-list li{display:flex;gap:.5rem;align-items:flex-start;font-size:.85rem;color:var(--muted)}
+    .feature-list li svg,.feature-list li i{flex-shrink:0;margin-top:3px;color:var(--primary)}
+    .figure{margin-top:1.5rem} .figure img{border-radius:var(--radius);border:1px solid var(--border)}
+    .figure figcaption{font-size:.75rem;color:var(--muted);margin-top:.5rem;text-align:center}
+    .shots{display:grid;gap:.75rem;grid-template-columns:1fr 1fr} @media(min-width:768px){.shots{grid-template-columns:repeat(4,1fr)}}
+    .shot-slot{aspect-ratio:9/16;border:2px dashed var(--border);border-radius:var(--radius);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;padding:1rem;text-align:center;color:var(--muted);font-size:.8rem;background:var(--bg-card)}
+    .shot-slot strong{color:var(--foreground);font-size:.85rem}
+    .palette-img{max-height:34rem;width:auto;margin:0 auto}
+    .disclaimer{display:flex;align-items:flex-start;gap:.75rem;background:hsl(38 92% 50%/.05);border:1px solid hsl(38 92% 50%/.2);border-radius:var(--radius);padding:1rem}
+    footer{border-top:1px solid var(--border);padding:1.5rem 1rem}
+    .footer-inner{max-width:72rem;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem}
+    .footer-links{display:flex;align-items:center;gap:.75rem}
+    .footer-icon{width:2.25rem;height:2.25rem;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);transition:color .15s,border-color .15s}
+    .footer-icon:hover{color:var(--foreground);border-color:var(--foreground)}
+    .text-xs{font-size:.75rem} .text-sm{font-size:.875rem} .font-semi{font-weight:600} .font-bold{font-weight:700}
+  </style>
+  <link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to content</a>
+<header id="navbar">
+  <div class="navbar-inner">
+    <a href="index.html" class="logo" aria-label="Hazem ElMancy — home"><span class="text-primary">H</span><span>E</span></a>
+    <nav class="desktop" aria-label="Main">
+      <a href="index.html#home" class="nav-link">HOME</a>
+      <a href="index.html#about" class="nav-link">ABOUT</a>
+      <a href="index.html#experience" class="nav-link">EXPERIENCE</a>
+      <a href="index.html#projects" class="nav-link">PROJECTS</a>
+      <a href="index.html#software" class="nav-link" aria-current="page">SOFTWARE</a>
+      <a href="index.html#skills" class="nav-link">SKILLS</a>
+      <a href="index.html#contact" class="nav-link">CONTACT</a>
+      <a href="calculators/index.html" class="nav-link-calc"><i data-lucide="calculator" style="width:14px;height:14px" aria-hidden="true"></i>CALCULATORS</a>
+      <button class="theme-toggle desktop-th" onclick="toggleTheme()" aria-label="Toggle light/dark theme"><i data-lucide="moon" id="themeIconD" style="width:16px;height:16px" aria-hidden="true"></i></button>
+    </nav>
+    <div class="mobile-controls">
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle light/dark theme"><i data-lucide="moon" id="themeIconM" style="width:16px;height:16px" aria-hidden="true"></i></button>
+      <button class="theme-toggle" id="menuBtn" onclick="toggleMenu()" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu"><i data-lucide="menu" id="menuIcon" style="width:16px;height:16px" aria-hidden="true"></i></button>
+    </div>
+  </div>
+  <nav class="mobile-menu" id="mobileMenu" aria-label="Mobile">
+    <a href="index.html#home">HOME</a>
+    <a href="index.html#about">ABOUT</a>
+    <a href="index.html#experience">EXPERIENCE</a>
+    <a href="index.html#projects">PROJECTS</a>
+    <a href="index.html#software" aria-current="page">SOFTWARE</a>
+    <a href="index.html#skills">SKILLS</a>
+    <a href="index.html#contact">CONTACT</a>
+    <a href="calculators/index.html" class="calc-link"><i data-lucide="calculator" style="width:14px;height:14px" aria-hidden="true"></i>CALCULATORS</a>
+  </nav>
+</header>
+
+<main id="main">
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+    <img src="assets/flowstead/flowstead-icon.png" alt="Flowstead app icon" class="app-icon" width="72" height="72" />
+    <p class="section-label">SOFTWARE · PERSONAL PROJECT</p>
+    <h1 class="hero-title">Flowstead</h1>
+    <p class="hero-sub">An open-source <strong style="color:var(--foreground)">process simulator for Android</strong>, built on the DWSIM thermodynamic engine: steady-state and dynamic flowsheets, relief and line sizing, and engineering deliverables, on a phone.</p>
+    <div class="hero-actions">
+      <a href="https://github.com/HazemMancy/Flowstead/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary"><i data-lucide="download" style="width:16px;height:16px" aria-hidden="true"></i>Download APK</a>
+      <a href="https://github.com/HazemMancy/Flowstead" target="_blank" rel="noopener noreferrer" class="btn btn-outline"><svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>View source on GitHub</a>
+    </div>
+    <div class="meta-row">
+      <span class="badge">Android</span>
+      <span class="badge">GPL-3.0</span>
+      <span class="badge">Latest: v3.2.1</span>
+      <span class="badge">40 signed releases (Nov 2026)</span>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="container-md">
+    <figure class="figure" style="margin-top:0">
+      <img src="assets/flowstead/flowstead-featured.png" width="1200" height="627" alt="Flowstead promotional graphic: 'Steady-state process simulation, in your pocket', with two phones showing the equipment palette (heat transfer, rotating, piping, mixing, separators, columns and reactors) in light and dark themes." />
+    </figure>
+  </div>
+</section>
+
+<section class="section" id="why">
+  <div class="container-md">
+    <p class="section-label">WHY I BUILT IT</p>
+    <h2 class="section-title">A real simulation engine, in your pocket</h2>
+    <div class="card"><div class="card-body-lg prose">
+      <p>Much of process engineering is quick checking: a flash, a line, a relief case. Flowstead lets you build, solve and check a flowsheet on a phone, with every number coming from the open-source <strong>DWSIM</strong> engine rather than shortcut correlations. It runs offline, and it is open source, so anyone can read how a result was produced.</p>
+      <p><strong>My role:</strong> creator and technical owner. I defined the product, set the engineering rules it follows, verified its results against HYSYS and released it.</p>
+    </div></div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="container-md">
+    <p class="section-label">FEATURES</p>
+    <h2 class="section-title">What it does</h2>
+    <div class="feature-grid">
+      <div class="card"><div class="card-body">
+        <div class="feature-head"><div class="feature-icon"><i data-lucide="workflow" style="width:18px;height:18px" aria-hidden="true"></i></div><h3 class="font-semi text-sm">Simulation</h3></div>
+        <ul class="feature-list">
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Steady-state and dynamic flowsheets</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Distillation columns and absorbers</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Reactors</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Pipelines (Beggs &amp; Brill)</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Pump and compressor performance curves</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Phase envelopes with hydrate curves</li>
+        </ul>
+      </div></div>
+      <div class="card"><div class="card-body">
+        <div class="feature-head"><div class="feature-icon"><i data-lucide="shield-check" style="width:18px;height:18px" aria-hidden="true"></i></div><h3 class="font-semi text-sm">Safety &amp; Relief</h3></div>
+        <ul class="feature-list">
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>PSV sizing (API 520 / 526)</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Relief scenarios and depressuring (API 521: fire, blocked outlet)</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>PSV inlet-loss and back-pressure checks</li>
+        </ul>
+      </div></div>
+      <div class="card"><div class="card-body">
+        <div class="feature-head"><div class="feature-icon"><i data-lucide="ruler" style="width:18px;height:18px" aria-hidden="true"></i></div><h3 class="font-semi text-sm">Sizing</h3></div>
+        <ul class="feature-list">
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Separator and line sizing (API 14E)</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Control valve sizing</li>
+        </ul>
+      </div></div>
+      <div class="card"><div class="card-body">
+        <div class="feature-head"><div class="feature-icon"><i data-lucide="file-spreadsheet" style="width:18px;height:18px" aria-hidden="true"></i></div><h3 class="font-semi text-sm">Outputs</h3></div>
+        <ul class="feature-list">
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Equipment data sheets</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Heat and material balances</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>PFDs</li>
+          <li><i data-lucide="check" style="width:14px;height:14px" aria-hidden="true"></i>Export to PDF and Excel</li>
+        </ul>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="verification">
+  <div class="container-md">
+    <p class="section-label">VERIFICATION</p>
+    <h2 class="section-title">How results are checked</h2>
+    <div class="card"><div class="card-body-lg prose">
+      <p>Results are checked in automated tests against HYSYS cases, so a change that moves a number away from the reference fails the build before it can be released. For example, the fire-case PSV for a wet air receiver reproduces the orifice that HYSYS selects for the same case (1D2).</p>
+    </div></div>
+  </div>
+</section>
+
+<section class="section" id="screenshots">
+  <div class="container-md">
+    <p class="section-label">SCREENSHOTS</p>
+    <h2 class="section-title">Inside the app</h2>
+    <figure class="figure" style="margin-top:0;margin-bottom:1.5rem">
+      <img src="assets/flowstead/flowstead-symbols.png" width="960" height="1676" loading="lazy" class="palette-img" alt="Flowstead equipment palette in the dark theme: material and energy streams; heater, cooler, heat exchanger and air cooler; pump, compressor and expander; valve, pipe segment, orifice plate and relief valve; mixer, tee and component splitter; separator, 3-phase separator, tank, filter and cyclone; shortcut and distillation columns and absorbers; conversion, equilibrium, Gibbs, CSTR and PFR reactors; recycle, adjust, set and energy recycle." />
+      <figcaption>Equipment palette (dark theme)</figcaption>
+    </figure>
+    <!-- IMAGE SLOTS: replace each .shot-slot div with an <img> once the screenshot is available. -->
+    <div class="shots">
+      <div class="shot-slot" role="img" aria-label="Screenshot placeholder: flowsheet canvas"><i data-lucide="image" style="width:28px;height:28px" aria-hidden="true"></i><strong>Flowsheet canvas</strong><span>Screenshot coming soon</span></div>
+      <div class="shot-slot" role="img" aria-label="Screenshot placeholder: phase envelope with hydrate curve"><i data-lucide="image" style="width:28px;height:28px" aria-hidden="true"></i><strong>Phase envelope</strong><span>Screenshot coming soon</span></div>
+      <div class="shot-slot" role="img" aria-label="Screenshot placeholder: PSV sizing result"><i data-lucide="image" style="width:28px;height:28px" aria-hidden="true"></i><strong>PSV sizing result</strong><span>Screenshot coming soon</span></div>
+      <div class="shot-slot" role="img" aria-label="Screenshot placeholder: equipment data sheet PDF"><i data-lucide="image" style="width:28px;height:28px" aria-hidden="true"></i><strong>Data sheet PDF</strong><span>Screenshot coming soon</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="get">
+  <div class="container-md">
+    <div class="card"><div class="card-body-lg" style="text-align:center">
+      <h2 class="section-title" style="margin-top:0">Get Flowstead</h2>
+      <p class="text-sm" style="color:var(--muted);margin-bottom:1.25rem">Signed APKs are published on GitHub Releases. The full source code is on GitHub under the GPL-3.0 licence.</p>
+      <div class="hero-actions" style="margin-bottom:1rem">
+        <a href="https://github.com/HazemMancy/Flowstead/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary"><i data-lucide="download" style="width:16px;height:16px" aria-hidden="true"></i>Download APK</a>
+        <a href="https://github.com/HazemMancy/Flowstead" target="_blank" rel="noopener noreferrer" class="btn btn-outline"><i data-lucide="code" style="width:16px;height:16px" aria-hidden="true"></i>Source code</a>
+      </div>
+      <p class="text-xs" style="color:var(--muted)">Powered by <a href="https://dwsim.org/" target="_blank" rel="noopener noreferrer" style="text-decoration:underline">DWSIM</a> (GPL-3.0). Flowstead is not affiliated with the DWSIM project.</p>
+    </div></div>
+    <div class="disclaimer" style="margin-top:1.5rem">
+      <i data-lucide="triangle-alert" style="width:16px;height:16px;color:hsl(38,92%,50%);flex-shrink:0;margin-top:2px" aria-hidden="true"></i>
+      <p class="text-xs" style="color:var(--muted);line-height:1.7">Flowstead is an engineering screening tool for preliminary design and studies. Final design shall be validated against project specifications, licensed simulation software, and applicable international codes.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="logo"><span class="text-primary font-bold text-sm">Hazem</span><span class="font-bold text-sm">ElMancy</span></div>
+    <div class="footer-links">
+      <a href="tel:+201096597449" class="footer-icon" aria-label="Phone: +20 109 659 7449"><i data-lucide="phone" style="width:14px;height:14px" aria-hidden="true"></i></a>
+      <a href="mailto:hazemmancy@outlook.com" class="footer-icon" aria-label="Email: hazemmancy@outlook.com"><i data-lucide="mail" style="width:14px;height:14px" aria-hidden="true"></i></a>
+      <a href="https://www.linkedin.com/in/hazemmancy" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="LinkedIn profile (opens in a new tab)"><svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77Z"/></svg></a>
+      <a href="https://github.com/HazemMancy" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="GitHub profile (opens in a new tab)"><svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+    </div>
+    <p class="text-xs" style="color:var(--muted)">&copy; <span id="year"></span> Hazem ElMancy. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('theme', t); } catch (e) {}
+  const icon = t === 'dark' ? 'sun' : 'moon';
+  ['themeIconD','themeIconM'].forEach(id => { const el = document.getElementById(id); if (el) el.setAttribute('data-lucide', icon); });
+  if (window.lucide) lucide.createIcons();
+}
+function toggleTheme() { applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+let savedTheme = 'dark'; try { savedTheme = localStorage.getItem('theme') || 'dark'; } catch (e) {}
+applyTheme(savedTheme);
+window.addEventListener('scroll', () => document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20));
+let menuOpen = false;
+function setMenu(open) {
+  menuOpen = open;
+  document.getElementById('mobileMenu').classList.toggle('open', open);
+  const btn = document.getElementById('menuBtn');
+  btn.setAttribute('aria-expanded', String(open)); btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  const el = document.getElementById('menuIcon'); if (el) { el.setAttribute('data-lucide', open ? 'x' : 'menu'); if (window.lucide) lucide.createIcons(); }
+}
+function toggleMenu() { setMenu(!menuOpen); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && menuOpen) setMenu(false); });
+document.getElementById('year').textContent = new Date().getFullYear();
+if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>

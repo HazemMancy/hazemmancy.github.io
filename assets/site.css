@@ -1,0 +1,5 @@
+/* Shared accessibility helpers, loaded after each page's own styles. */
+.skip-link{position:absolute;left:.5rem;top:-3rem;z-index:100;padding:.5rem .9rem;border-radius:.5rem;background:#1d4ed8;color:#fff;font-size:.875rem;font-weight:600;transition:top .15s}
+.skip-link:focus{top:.5rem}
+:focus-visible{outline:2px solid hsl(217,91%,60%);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
