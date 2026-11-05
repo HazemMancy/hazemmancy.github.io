@@ -109,7 +109,7 @@
     .calc-card-icon{width:2.25rem;height:2.25rem;border-radius:var(--radius);background:var(--primary-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--primary)}
     .disclaimer{display:flex;align-items:flex-start;gap:.75rem;background:hsl(38 92% 50%/.05);border:1px solid hsl(38 92% 50%/.2);border-radius:var(--radius);padding:1rem;margin-top:2rem}
     .calc-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem;margin-top:2rem}
-    .contact-grid{display:grid;gap:1rem;margin-bottom:1rem} @media(min-width:768px){.contact-grid{grid-template-columns:repeat(3,1fr)}}
+    .contact-grid{display:grid;gap:1rem;margin-bottom:1rem} @media(min-width:640px){.contact-grid{grid-template-columns:repeat(2,1fr)}} @media(min-width:1024px){.contact-grid{grid-template-columns:repeat(4,1fr)}} .contact-card a{overflow-wrap:anywhere}
     .contact-card{text-align:center}
     .contact-icon{width:3rem;height:3rem;border-radius:50%;background:var(--primary-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;color:var(--primary)}
     footer{border-top:1px solid var(--border);padding:1.5rem 1rem}
@@ -200,6 +200,7 @@
     <div class="hero-location"><i data-lucide="map-pin" style="width:14px;height:14px;color:var(--primary)"></i><span>Cairo, Egypt</span><span style="color:var(--border)">|</span><span>Process Engineer</span></div>
     <div class="hero-actions">
       <a href="#projects" class="btn btn-primary">View My Projects</a>
+      <a href="cv.pdf" class="btn btn-outline" download><i data-lucide="file-down" style="width:16px;height:16px" aria-hidden="true"></i>Download CV</a>
       <a href="#contact"  class="btn btn-outline">Contact Me</a>
     </div>
   </div>
@@ -339,7 +340,13 @@
         <h3 class="font-semi text-sm mb-1">LinkedIn</h3>
         <a href="https://www.linkedin.com/in/hazemmancy" target="_blank" rel="noopener noreferrer" class="text-sm" style="color:var(--muted)">linkedin.com/in/hazemmancy</a>
       </div></div>
+      <div class="card card-hover"><div class="card-body contact-card">
+        <div class="contact-icon"><svg style="width:20px;height:20px;fill:var(--primary)" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div>
+        <h3 class="font-semi text-sm mb-1">GitHub</h3>
+        <a href="https://github.com/HazemMancy" target="_blank" rel="noopener noreferrer" class="text-sm" style="color:var(--muted)">github.com/HazemMancy</a>
+      </div></div>
     </div>
+    <div class="calc-actions" style="margin:0 0 1rem"><a href="cv.pdf" class="btn btn-primary" download><i data-lucide="file-down" style="width:16px;height:16px" aria-hidden="true"></i>Download CV (PDF)</a></div>
     <div class="card"><div class="card-body" style="text-align:center">
       <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-bottom:.25rem"><i data-lucide="map-pin" style="width:16px;height:16px;color:var(--primary)"></i><span class="font-medium text-sm">Cairo, Egypt</span></div>
       <p class="text-sm" style="color:var(--muted)">Process Engineer — Oil &amp; Gas FEED/EPC Projects</p>
@@ -354,7 +361,7 @@
     <div class="footer-links">
       <a href="tel:+201096597449" class="footer-icon"><i data-lucide="phone" style="width:14px;height:14px"></i></a>
       <a href="mailto:hazemmancy@outlook.com" class="footer-icon"><i data-lucide="mail" style="width:14px;height:14px"></i></a>
-      <a href="https://www.linkedin.com/in/hazemmancy" target="_blank" rel="noopener noreferrer" class="footer-icon"><svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77Z"/></svg></a>
+      <a href="https://www.linkedin.com/in/hazemmancy" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="LinkedIn profile (opens in a new tab)"><svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77Z"/></svg></a><a href="https://github.com/HazemMancy" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="GitHub profile (opens in a new tab)"><svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
     </div>
     <p class="text-xs" style="color:var(--muted)">&copy; <span id="year"></span> Hazem ElMancy. All rights reserved.</p>
   </div>
