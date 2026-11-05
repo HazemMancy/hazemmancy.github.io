@@ -4,14 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hazem ElMancy — Oil & Gas Process Engineer</title>
-  <meta name="description" content="Process Engineer specializing in Oil & Gas FEED and detailed design." />
+  <meta name="description" content="Hazem ElMancy, Oil &amp; Gas Process Engineer at DG Impianti Industriali: 4 years of concept, FEED and detailed engineering for onshore and offshore facilities, Aspen HYSYS Certified Expert User, and creator of the Flowstead process simulator." />
+  <link rel="canonical" href="https://hazemmancy.github.io/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Hazem ElMancy" />
+  <meta property="og:title" content="Hazem ElMancy — Oil &amp; Gas Process Engineer" />
+  <meta property="og:description" content="Hazem ElMancy, Oil &amp; Gas Process Engineer at DG Impianti Industriali: 4 years of concept, FEED and detailed engineering for onshore and offshore facilities, Aspen HYSYS Certified Expert User, and creator of the Flowstead process simulator." />
+  <meta property="og:url" content="https://hazemmancy.github.io/" />
+  <meta property="og:image" content="https://hazemmancy.github.io/assets/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Hazem ElMancy, Oil &amp; Gas Process Engineer" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Hazem ElMancy — Oil &amp; Gas Process Engineer" />
+  <meta name="twitter:description" content="Hazem ElMancy, Oil &amp; Gas Process Engineer at DG Impianti Industriali: 4 years of concept, FEED and detailed engineering for onshore and offshore facilities, Aspen HYSYS Certified Expert User, and creator of the Flowstead process simulator." />
+  <meta name="twitter:image" content="https://hazemmancy.github.io/assets/og-image.png" />
+  <meta name="twitter:image:alt" content="Hazem ElMancy, Oil &amp; Gas Process Engineer" />
   <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="shortcut icon" type="image/png" href="favicon.png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@1.56.0/dist/umd/lucide.min.js"></script>
   <style>
     :root{--radius:.5rem;--font:'Inter',system-ui,sans-serif;--navbar-h:3.5rem}
     [data-theme="dark"]{--bg:hsl(222,47%,7%);--bg-card:hsl(222,41%,11%);--bg-card-hover:hsl(222,41%,13%);--border:hsl(222,30%,18%);--foreground:hsl(210,40%,98%);--muted:hsl(215,20%,55%);--primary:hsl(217,91%,60%);--primary-bg:hsl(217,91%,60%,0.1);--secondary-bg:hsl(222,41%,16%);--hero-glow:radial-gradient(ellipse 80% 60% at 50% -10%,hsl(217 91% 60%/.18),transparent)}
@@ -76,13 +91,14 @@
     .exp-divider-line{width:1.5rem;height:2px;background:var(--primary);flex-shrink:0}
     .resp-grid{display:grid;gap:.75rem} @media(min-width:768px){.resp-grid{grid-template-columns:1fr 1fr}}
     .resp-item{display:flex;align-items:flex-start;gap:.5rem}
-    .projects-grid{display:grid;gap:1rem}
+    .projects-grid{display:grid;gap:1rem} .project-group+.project-group{margin-top:2.5rem} .project-group .calc-cat-label{flex-wrap:wrap}
     @media(min-width:768px){.projects-grid{grid-template-columns:repeat(2,1fr)}}
     @media(min-width:1024px){.projects-grid{grid-template-columns:repeat(3,1fr)}}
     .project-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.75rem}
     .project-location{display:flex;align-items:center;gap:.25rem;font-size:.75rem;color:var(--muted)}
     .tag-row{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.375rem}
     .tag-label{display:flex;align-items:center;gap:.375rem;margin-top:1rem}
+    .software-card{display:flex;flex-wrap:wrap;gap:1.25rem;align-items:flex-start} .software-icon{width:4rem;height:4rem;border-radius:1rem;flex-shrink:0}
     .competencies{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem;margin-bottom:2rem}
     .skills-grid{display:grid;gap:1rem} @media(min-width:768px){.skills-grid{grid-template-columns:1fr 1fr}}
     .calc-preview-grid{display:grid;gap:.75rem}
@@ -93,7 +109,7 @@
     .calc-card-icon{width:2.25rem;height:2.25rem;border-radius:var(--radius);background:var(--primary-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--primary)}
     .disclaimer{display:flex;align-items:flex-start;gap:.75rem;background:hsl(38 92% 50%/.05);border:1px solid hsl(38 92% 50%/.2);border-radius:var(--radius);padding:1rem;margin-top:2rem}
     .calc-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem;margin-top:2rem}
-    .contact-grid{display:grid;gap:1rem;margin-bottom:1rem} @media(min-width:768px){.contact-grid{grid-template-columns:repeat(3,1fr)}}
+    .contact-grid{display:grid;gap:1rem;margin-bottom:1rem} @media(min-width:640px){.contact-grid{grid-template-columns:repeat(2,1fr)}} @media(min-width:1024px){.contact-grid{grid-template-columns:repeat(4,1fr)}} .contact-card a{overflow-wrap:anywhere}
     .contact-card{text-align:center}
     .contact-icon{width:3rem;height:3rem;border-radius:50%;background:var(--primary-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;color:var(--primary)}
     footer{border-top:1px solid var(--border);padding:1.5rem 1rem}
@@ -109,37 +125,75 @@
     .col-red{color:hsl(0,72%,65%)} .col-orange{color:hsl(25,95%,58%)} .col-green{color:hsl(142,71%,50%)}
     .col-blue{color:hsl(217,91%,60%)} .col-yellow{color:hsl(48,96%,53%)} .col-purple{color:hsl(271,81%,70%)} .col-primary-text{color:var(--primary)}
   </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Hazem ElMancy",
+  "jobTitle": "Process Engineer",
+  "description": "Oil & Gas Process Engineer",
+  "url": "https://hazemmancy.github.io/",
+  "image": "https://hazemmancy.github.io/assets/og-image.png",
+  "email": "mailto:hazemmancy@outlook.com",
+  "worksFor": {
+    "@type": "Organization",
+    "name": "DG Impianti Industriali S.p.A."
+  },
+  "alumniOf": {
+    "@type": "CollegeOrUniversity",
+    "name": "Suez University"
+  },
+  "knowsAbout": [
+    "Process simulation",
+    "Aspen HYSYS",
+    "FEED",
+    "Detailed engineering",
+    "PSV sizing",
+    "Line sizing",
+    "Oil and gas facilities"
+  ],
+  "sameAs": [
+    "https://www.linkedin.com/in/hazemmancy/",
+    "https://github.com/HazemMancy"
+  ]
+}
+  </script>
+  <link rel="stylesheet" href="assets/site.css" />
+  <script src="assets/a11y.js" defer></script>
 </head>
 <body>
+<a href="#main" class="skip-link">Skip to content</a>
 <header id="navbar">
   <div class="navbar-inner">
-    <a href="#home" class="logo"><span class="text-primary">H</span><span>E</span></a>
-    <nav class="desktop">
+    <a href="#home" class="logo" aria-label="Hazem ElMancy — home"><span class="text-primary">H</span><span>E</span></a>
+    <nav class="desktop" aria-label="Main">
       <a href="#home"   class="nav-link">HOME</a>
       <a href="#about"  class="nav-link">ABOUT</a>
       <a href="#experience" class="nav-link">EXPERIENCE</a>
       <a href="#projects"   class="nav-link">PROJECTS</a>
+      <a href="#software"   class="nav-link">SOFTWARE</a>
       <a href="#skills"     class="nav-link">SKILLS</a>
       <a href="#contact"    class="nav-link">CONTACT</a>
       <a href="calculators/index.html" class="nav-link-calc"><i data-lucide="calculator" style="width:14px;height:14px"></i>CALCULATORS</a>
-      <button class="theme-toggle desktop-th" onclick="toggleTheme()"><i data-lucide="moon" id="themeIconD" style="width:16px;height:16px"></i></button>
+      <button class="theme-toggle desktop-th" onclick="toggleTheme()" aria-label="Toggle light/dark theme"><i data-lucide="moon" id="themeIconD" style="width:16px;height:16px"></i></button>
     </nav>
     <div class="mobile-controls">
-      <button class="theme-toggle" onclick="toggleTheme()"><i data-lucide="moon" id="themeIconM" style="width:16px;height:16px"></i></button>
-      <button class="theme-toggle" onclick="toggleMenu()"><i data-lucide="menu" id="menuIcon" style="width:16px;height:16px"></i></button>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle light/dark theme"><i data-lucide="moon" id="themeIconM" style="width:16px;height:16px"></i></button>
+      <button class="theme-toggle" onclick="toggleMenu()" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu"><i data-lucide="menu" id="menuIcon" style="width:16px;height:16px"></i></button>
     </div>
   </div>
-  <div class="mobile-menu" id="mobileMenu">
+  <nav class="mobile-menu" id="mobileMenu" aria-label="Mobile">
     <a href="#home"       onclick="closeMenu()">HOME</a>
     <a href="#about"      onclick="closeMenu()">ABOUT</a>
     <a href="#experience" onclick="closeMenu()">EXPERIENCE</a>
     <a href="#projects"   onclick="closeMenu()">PROJECTS</a>
+    <a href="#software"   onclick="closeMenu()">SOFTWARE</a>
     <a href="#skills"     onclick="closeMenu()">SKILLS</a>
     <a href="#contact"    onclick="closeMenu()">CONTACT</a>
     <a href="calculators/index.html" class="calc-link"><i data-lucide="calculator" style="width:14px;height:14px"></i>CALCULATORS</a>
-  </div>
+  </nav>
 </header>
-<main>
+<main id="main">
 <section id="home">
   <div class="hero-glow"></div><div class="hero-radial"></div>
   <div class="hero-content">
@@ -149,6 +203,7 @@
     <div class="hero-location"><i data-lucide="map-pin" style="width:14px;height:14px;color:var(--primary)"></i><span>Cairo, Egypt</span><span style="color:var(--border)">|</span><span>Process Engineer</span></div>
     <div class="hero-actions">
       <a href="#projects" class="btn btn-primary">View My Projects</a>
+      <a href="cv.pdf" class="btn btn-outline" download><i data-lucide="file-down" style="width:16px;height:16px" aria-hidden="true"></i>Download CV</a>
       <a href="#contact"  class="btn btn-outline">Contact Me</a>
     </div>
   </div>
@@ -159,7 +214,7 @@
   <div class="container-md">
     <div class="section-header"><p class="section-label mb-3">ABOUT ME</p><h2 class="section-title">Professional Summary</h2></div>
     <div class="card mb-4"><div class="card-body-lg">
-      <p class="text-sm leading-relaxed" style="color:var(--muted)">Process Engineer specializing in <strong style="color:var(--foreground)">Oil &amp; Gas FEED and detailed design</strong>, with expertise in process simulation (Aspen HYSYS, EDR, HTRI), equipment sizing, and hydraulic calculations. Proven track record in developing <span class="text-primary font-medium">PFDs, P&amp;IDs, UFDs, H&amp;MBs, BODs, C&amp;E Diagrams, Equipment Datasheets, Equipment Lists, and Studies Reports</span> for EPC projects in compliance with API &amp; ASME standards. Skilled in process philosophies and cross-disciplinary coordination, leveraging strong analytical skills to translate complex technical concepts for stakeholders.</p>
+      <p class="text-sm leading-relaxed" style="color:var(--muted)">Process Engineer with <strong style="color:var(--foreground)">4 years of experience in concept, FEED and detailed engineering</strong> for onshore and offshore oil &amp; gas facilities, including brownfield revamps, pipelines, gas lift/gas injection systems and debottlenecking studies for clients such as <strong style="color:var(--foreground)">Eni, ADNOC Offshore, PhPC, NORPETCO and Indorama</strong>. <strong style="color:var(--foreground)">Aspen HYSYS Certified Expert User</strong>, skilled in steady-state simulation, heat &amp; material balances, hydraulics and line sizing, equipment sizing, PSV/relief and blowdown assessment, and in issuing <span class="text-primary font-medium">BOD, process philosophies, PFDs, P&amp;IDs, C&amp;E diagrams and datasheets</span>. Experienced in HAZID/HAZOP support, vendor document review and multidisciplinary coordination in line with API and ASME requirements. Creator of <a href="flowstead.html" class="text-primary font-medium" style="text-decoration:underline;text-underline-offset:2px">Flowstead</a>, an open-source process simulator for Android built on the DWSIM engine.</p>
     </div></div>
     <div class="about-grid">
       <div class="card"><div class="card-body">
@@ -172,15 +227,17 @@
         <div class="about-icon"><i data-lucide="award" style="width:20px;height:20px"></i></div>
         <h3 class="font-semi text-sm mb-2">Certifications</h3>
         <ul style="display:flex;flex-direction:column;gap:.4rem">
-          <li class="text-sm" style="color:var(--muted);display:flex;align-items:flex-start;gap:.4rem"><span class="dot" style="margin-top:6px"></span>Aspen Certified Expert User in Aspen HYSYS</li>
-          <li class="text-sm" style="color:var(--muted);display:flex;align-items:flex-start;gap:.4rem"><span class="dot" style="margin-top:6px"></span>Google Data Analytics Certificate</li>
+          <li class="text-sm" style="color:var(--muted);display:flex;align-items:flex-start;gap:.4rem"><span class="dot" style="margin-top:6px"></span><span>Aspen Certified Expert User in Aspen HYSYS <span class="text-xs" style="display:block">Aspen Technology · Dec 2021 · Credential ID 43484732</span></span></li>
+          <li class="text-sm" style="color:var(--muted);display:flex;align-items:flex-start;gap:.4rem"><span class="dot" style="margin-top:6px"></span><span>Aspen HYSYS User Certification <span class="text-xs" style="display:block">Aspen Technology · Nov 2020 · Credential ID 25571209</span></span></li>
+          <li class="text-sm" style="color:var(--muted);display:flex;align-items:flex-start;gap:.4rem"><span class="dot" style="margin-top:6px"></span><span>Google Data Analytics Professional Certificate <span class="text-xs" style="display:block">Coursera · Jan – May 2022</span></span></li>
         </ul>
       </div></div>
       <div class="card"><div class="card-body">
         <div class="about-icon"><i data-lucide="briefcase" style="width:20px;height:20px"></i></div>
         <h3 class="font-semi text-sm mb-2">Current Role</h3>
-        <p class="text-sm" style="color:var(--muted);margin-bottom:.25rem">Process Engineer</p>
-        <p class="text-sm text-primary">March 2023 – Present</p>
+        <p class="text-sm" style="color:var(--muted);margin-bottom:.25rem">Process Engineer, DG Impianti Industriali S.p.A.</p>
+        <p class="text-sm text-primary">March 2026 – Present</p>
+        <p class="text-xs mt-1" style="color:var(--muted)">Previously UNEPP, March 2023 – March 2026</p>
       </div></div>
     </div>
   </div>
@@ -192,11 +249,11 @@
     <div class="space-y">
       <div class="card"><div class="card-body-lg">
         <div class="exp-header">
-          <div><h3 class="font-bold" style="font-size:1.1rem">DG Impianti Industriali S.P.A.</h3><p class="text-sm text-primary font-medium mt-1">Process Engineer</p></div>
+          <div><h3 class="font-bold" style="font-size:1.1rem">DG Impianti Industriali S.p.A.</h3><p class="text-sm text-primary font-medium mt-1">Process Engineer</p></div>
           <span class="badge" style="align-self:flex-start"><span class="dot dot-green"></span>March 2026 – Present</span>
         </div>
         <div class="mb-6"><div class="exp-divider"><div class="exp-divider-line"></div><h4 class="font-semi text-sm">Job Purpose</h4></div>
-          <p class="text-sm leading-relaxed" style="color:var(--muted)">As a Process Engineer, my primary responsibility is to contribute to the design, analysis, and optimization of processes within the petroleum industry. By leveraging my expertise in process engineering, hydraulic calculations, and equipment sizing, I ensure the efficient and safe operation of various systems.</p>
+          <p class="text-sm leading-relaxed" style="color:var(--muted)">Performing process engineering for onshore and offshore FEED and detailed engineering projects.</p>
         </div>
         <div><div class="exp-divider"><div class="exp-divider-line"></div><h4 class="font-semi text-sm">Roles &amp; Responsibilities</h4></div>
           <div class="resp-grid" id="resp-dg"></div>
@@ -204,7 +261,7 @@
       </div></div>
       <div class="card"><div class="card-body-lg">
         <div class="exp-header">
-          <div><h3 class="font-bold" style="font-size:1.1rem">United Engineers for Petroleum Projects</h3><p class="text-sm text-primary font-medium mt-1">Process Engineer</p><p class="text-xs mt-1" style="color:var(--muted)">Cairo, Egypt</p></div>
+          <div><h3 class="font-bold" style="font-size:1.1rem">United Engineers for Petroleum Projects (UNEPP Co.)</h3><p class="text-sm text-primary font-medium mt-1">Process Engineer</p><p class="text-xs mt-1" style="color:var(--muted)">Cairo, Egypt</p></div>
           <span class="badge" style="align-self:flex-start">March 2023 – March 2026</span>
         </div>
         <div class="mb-6"><div class="exp-divider"><div class="exp-divider-line"></div><h4 class="font-semi text-sm">Job Purpose</h4></div>
@@ -220,8 +277,29 @@
 
 <section id="projects" class="section">
   <div class="container">
-    <div class="section-header"><p class="section-label mb-3">PORTFOLIO</p><h2 class="section-title mb-2">Projects &amp; Achievements</h2><p class="section-desc">A showcase of petroleum engineering projects across Egypt, UAE, Iraq, Congo, and Yemen</p></div>
-    <div class="projects-grid" id="projectsGrid"></div>
+    <div class="section-header"><p class="section-label mb-3">PORTFOLIO</p><h2 class="section-title mb-2">Projects &amp; Achievements</h2><p class="section-desc">A showcase of petroleum engineering projects across Egypt, UAE, Iraq, Congo, Algeria and Yemen, grouped by employer, newest first</p></div>
+    <div id="projectsGrid"></div>
+  </div>
+</section>
+
+<section id="software" class="section">
+  <div class="container-md">
+    <div class="section-header"><p class="section-label mb-3">SOFTWARE</p><h2 class="section-title mb-2">Software &amp; Personal Projects</h2><p class="section-desc">Open-source engineering software I created and maintain</p></div>
+    <div class="card"><div class="card-body-lg">
+      <div class="software-card">
+        <img src="assets/flowstead/flowstead-icon.png" alt="Flowstead app icon" width="64" height="64" class="software-icon" />
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.35rem"><h3 class="font-bold" style="font-size:1.1rem">Flowstead</h3><span class="badge">Android</span><span class="badge">Web</span><span class="badge">GPL-3.0</span><span class="badge">2026 – Present</span></div>
+          <p class="text-sm text-primary font-medium mb-2">Open-source process simulator for Android, built on the DWSIM engine</p>
+          <p class="text-sm leading-relaxed mb-4" style="color:var(--muted)">Steady-state and dynamic flowsheets, columns, reactors, pump and compressor curves, PSV, relief and depressuring (API 520 / 521) and line sizing, tested against HYSYS cases. Creator and technical owner: I defined the product, set the engineering rules, verified results against HYSYS and released it.</p>
+          <div class="hero-actions" style="justify-content:flex-start">
+            <a href="flowstead.html" class="btn btn-primary">About Flowstead<i data-lucide="arrow-right" style="width:16px;height:16px" aria-hidden="true"></i></a>
+            <a href="https://hazemmancy.github.io/Flowstead/" class="btn btn-outline"><i data-lucide="globe" style="width:16px;height:16px" aria-hidden="true"></i>Use in your browser</a>
+            <a href="https://github.com/HazemMancy/Flowstead" target="_blank" rel="noopener noreferrer" class="btn btn-outline"><svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>Source on GitHub</a>
+          </div>
+        </div>
+      </div>
+    </div></div>
   </div>
 </section>
 
@@ -235,7 +313,7 @@
 
 <section class="section">
   <div class="container-md">
-    <div class="section-header"><p class="section-label mb-3">TOOLS</p><h2 class="section-title">Engineering Calculators</h2><p class="section-desc">7 live process engineering screening tools built on defensible screening-level calculations</p></div>
+    <div class="section-header"><p class="section-label mb-3">TOOLS</p><h2 class="section-title">Engineering Calculators</h2><p class="section-desc"><span id="liveCalcCount">11</span> live process engineering screening tools built on defensible screening-level calculations</p></div>
     <div id="calcPreviewContainer"></div>
     <div class="calc-actions">
       <a href="calculators/index.html" class="btn btn-outline"><i data-lucide="calculator" style="width:16px;height:16px"></i>View All Calculators</a>
@@ -266,7 +344,13 @@
         <h3 class="font-semi text-sm mb-1">LinkedIn</h3>
         <a href="https://www.linkedin.com/in/hazemmancy" target="_blank" rel="noopener noreferrer" class="text-sm" style="color:var(--muted)">linkedin.com/in/hazemmancy</a>
       </div></div>
+      <div class="card card-hover"><div class="card-body contact-card">
+        <div class="contact-icon"><svg style="width:20px;height:20px;fill:var(--primary)" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div>
+        <h3 class="font-semi text-sm mb-1">GitHub</h3>
+        <a href="https://github.com/HazemMancy" target="_blank" rel="noopener noreferrer" class="text-sm" style="color:var(--muted)">github.com/HazemMancy</a>
+      </div></div>
     </div>
+    <div class="calc-actions" style="margin:0 0 1rem"><a href="cv.pdf" class="btn btn-primary" download><i data-lucide="file-down" style="width:16px;height:16px" aria-hidden="true"></i>Download CV (PDF)</a></div>
     <div class="card"><div class="card-body" style="text-align:center">
       <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-bottom:.25rem"><i data-lucide="map-pin" style="width:16px;height:16px;color:var(--primary)"></i><span class="font-medium text-sm">Cairo, Egypt</span></div>
       <p class="text-sm" style="color:var(--muted)">Process Engineer — Oil &amp; Gas FEED/EPC Projects</p>
@@ -279,157 +363,189 @@
   <div class="footer-inner">
     <div class="logo"><span class="text-primary font-bold text-sm">Hazem</span><span class="font-bold text-sm">ElMancy</span></div>
     <div class="footer-links">
-      <a href="tel:+201096597449" class="footer-icon"><i data-lucide="phone" style="width:14px;height:14px"></i></a>
-      <a href="mailto:hazemmancy@outlook.com" class="footer-icon"><i data-lucide="mail" style="width:14px;height:14px"></i></a>
-      <a href="https://www.linkedin.com/in/hazemmancy" target="_blank" rel="noopener noreferrer" class="footer-icon"><svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77Z"/></svg></a>
+      <a href="tel:+201096597449" class="footer-icon" aria-label="Phone: +20 109 659 7449"><i data-lucide="phone" style="width:14px;height:14px"></i></a>
+      <a href="mailto:hazemmancy@outlook.com" class="footer-icon" aria-label="Email: hazemmancy@outlook.com"><i data-lucide="mail" style="width:14px;height:14px"></i></a>
+      <a href="https://www.linkedin.com/in/hazemmancy" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="LinkedIn profile (opens in a new tab)"><svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77Z"/></svg></a><a href="https://github.com/HazemMancy" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="GitHub profile (opens in a new tab)"><svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
     </div>
-    <p class="text-xs" style="color:var(--muted)">&copy; <span id="year"></span> Hazem ElMancy. All rights reserved.</p>
+    <p class="text-xs" style="color:var(--muted)">&copy; <span id="year">2026</span> Hazem ElMancy. All rights reserved.</p>
   </div>
 </footer>
 
+<script src="calculators/catalog.js"></script>
 <script>
-const responsibilities = [
-  'Process design and optimization for petroleum facilities',
-  'Performing hydraulic calculation & line sizing',
-  'Equipment sizing and specifications',
-  'Developing PFDs, P&IDs, UFDs, and process philosophies',
-  'Developing BOD, C&E Diagrams, and Equipment Datasheets',
-  'Preparing Equipment Lists and Studies Reports',
-  'Process simulation using Aspen HYSYS, EDR, and HTRI',
-  'Relief valve sizing and safety analysis',
-  'Cross-disciplinary coordination with engineering teams',
-  'Technical documentation and specifications preparation',
-];
-const coreCompetencies = ['FEED','EPC','Process Simulation','PFD','P&ID','UFD','Heat and Material Balance','BOD','C&E','Hydraulic Calculation','Relief Valve Sizing','Pipeline Design','Equipment Sizing','Process Philosophy','API Standards','ASME Codes','HAZOP'];
+// Content below follows the CV (source of truth). Each job has its own list.
+const responsibilities = {
+  dg: [
+    'Performing steady-state process simulations and heat & material balances (Aspen HYSYS / UniSim)',
+    'Developing and reviewing process deliverables including BOD, process descriptions, PFDs and P&IDs',
+    'Performing hydraulic calculations, line sizing and relief/blowdown assessments',
+    'Sizing equipment and preparing equipment, control valve and PSV datasheets',
+    'Coordinating with multidisciplinary teams and reviewing vendor documents',
+  ],
+  un: [
+    'Process design and steady-state simulation (Aspen HYSYS, HTRI)',
+    'Hydraulic calculations, line sizing and PSV sizing',
+    'Equipment sizing and datasheet preparation',
+    'Development of PFDs, UFDs and P&IDs',
+    'Preparation of BOD, process philosophies, C&E diagrams, line lists and equipment lists',
+  ],
+};
+const coreCompetencies = ['Process Simulation (Aspen HYSYS, UniSim)','Heat & Material Balance (H&MB)','Hydraulic Calculations & Line Sizing','Equipment Sizing & Datasheets','PSV Sizing, Relief & Blowdown (API 520 / 521 / 526)','Flare & Vent Systems','Erosional Velocity (API 14E)','Safety Analysis (API 14C)','Heat Exchanger Rating (HTRI, Aspen EDR)','PFD / UFD / P&ID Development','Basis of Design & Process Philosophies','Control & Shutdown Philosophy','Cause & Effect (C&E)','Line & Equipment Lists','HAZID / HAZOP Support','FEED, Detailed Engineering & EPC','Onshore & Offshore Facilities','Brownfield Revamps & Debottlenecking'];
 const skillCategories = [
-  { icon:'settings', title:'Process Simulation', tags:['Aspen HYSYS','Aspen EDR','HTRI'], tagColor:'col-primary-text' },
+  { icon:'settings', title:'Process Simulation', tags:['Aspen HYSYS','UniSim Design'], tagColor:'col-primary-text' },
+  { icon:'thermometer', title:'Heat Transfer', tags:['HTRI','Aspen EDR'], tagColor:'col-primary-text' },
   { icon:'monitor',  title:'Data Analytics & Programming', tags:['Python','SQL','Power BI','R','Tableau'], tagColor:'col-blue' },
-  { icon:'wrench',   title:'General Engineering', tags:['AutoCAD','MS Office'], tagColor:'col-green' },
-  { icon:'globe',    title:'Languages', tags:['Arabic (Native)','English (Full Professional)'], tagColor:'col-orange' },
+  { icon:'wrench',   title:'Drafting & Office', tags:['AutoCAD','MS Office'], tagColor:'col-green' },
+  { icon:'globe',    title:'Languages', tags:['Arabic (Native)','English (Professional working proficiency)'], tagColor:'col-orange' },
+];
+// Projects grouped by employer, newest employer first; order inside a group follows the CV.
+const projectGroups = [
+  { id:'dg', employer:'DG Impianti Industriali S.p.A.', period:'Mar 2026 – Present' },
+  { id:'un', employer:'UNEPP Co.', period:'Mar 2023 – Mar 2026' },
+  { id:'other', employer:'Additional project experience', period:'' },
 ];
 const projects = [
+  // DG Impianti Industriali S.p.A.
   {
-    category:'FEED - International', catClass:'col-red', client:'Eni Congo', location:'Congo',
-    title:'Nené WHP3 & AEP Platforms Revamping',
-    desc:'Developed FEED process deliverables for brownfield offshore platforms revamp covering flare/vent system upgrade, power generation, utilities, and safety systems. Issued BOD, P&ID updates, and provided support to HAZID/HAZOP studies.',
-    tags:['BOD','P&ID','Flare/Vent System','HAZID/HAZOP'], extra:2
+    group:'dg', category:'FEED', catClass:'col-red', client:'Eni Congo', location:'Congo',
+    title:'Nené WHP3 Well NNM-310 FEED',
+    desc:'Delivered key FEED process deliverables, including PFDs, P&IDs, steady-state Aspen HYSYS simulations, hydraulic line sizing and corrosion assessments.',
+    tags:['PFD','P&ID','Aspen HYSYS','Line Sizing','Corrosion Assessment']
   },
   {
-    category:'FEED', catClass:'col-red', client:'PhPC', location:'Port Said, Egypt',
+    group:'dg', category:'FEED', catClass:'col-red', client:'Eni Congo', location:'Congo',
+    title:'Nené WHP3 & AEP Platforms Revamping',
+    desc:'Developed FEED process deliverables for a brownfield offshore platform revamp (flare/vent system upgrade, power generation, utilities and safety systems), including BOD issue, P&ID updates and support to HAZID/HAZOP studies.',
+    tags:['BOD','P&ID','Flare/Vent System','HAZID/HAZOP']
+  },
+  {
+    group:'dg', category:'Detailed Engineering', catClass:'col-purple', client:'Ourhoud', location:'Algeria',
+    title:'Gas Supply to the CPF',
+    desc:'Detailed engineering for a new Gas Injection-to-Gas Lift interconnection enabling CPF restart using stored GI trunkline inventory. Developed BOD, process description, PFD/P&ID updates, process calculations, valve and PSV datasheets, and relief & blowdown assessment.',
+    tags:['BOD','PFD/P&ID','PSV Datasheets','Relief & Blowdown']
+  },
+  {
+    group:'dg', category:'Feasibility Study', catClass:'col-blue', client:'Ourhoud', location:'Algeria',
+    title:'Gas Lift Manifold Debottleneck Study',
+    desc:'Feasibility-stage process assessment of increased hydraulic loading, pressure drop and erosional velocity in the 10-inch and 14-inch gas lift supply lines. Supported site survey and process data validation, reconciled the HYSYS model, evaluated hydraulics/erosional velocity (API 14E) and compared modification options.',
+    tags:['Aspen HYSYS','Hydraulics','API 14E','Debottlenecking']
+  },
+  // UNEPP Co.
+  {
+    group:'un', category:'Rehabilitation', catClass:'col-green', client:'NORPETCO', location:'Egypt',
+    title:'Abrar Production Station Rehabilitation',
+    desc:'Process verification and rehabilitation studies for Abrar Production Station, the main oil facility of North Bahariya Petroleum Company. Developed the Process Simulation Report, PFD, P&IDs, UFD and Gap Analysis Report, supported by steady-state Aspen HYSYS modelling and performance assessment. Conducted site surveys and process data validation to define the rehabilitation scope across heater treaters, separators, storage tanks and shipping pumps.',
+    tags:['Aspen HYSYS','PFD','P&ID','UFD','Gap Analysis']
+  },
+  {
+    group:'un', category:'Study', catClass:'col-blue', client:'PhPC', location:'West Harbor, Egypt',
+    title:'Wet Flare KOD Level Transmitters Bottleneck Study',
+    desc:'Assessed level transmitter reliability problems on the West Harbor wet flare knock-out drum caused by wax from Atoll field production. Developed alternative solutions including transmitter relocation with bridles, radar measurement, electric heating and nozzle modifications to improve reliability and operability.',
+    tags:['Troubleshooting','Engineering Assessment','Flare KOD']
+  },
+  {
+    group:'un', category:'Concept Study', catClass:'col-yellow', client:'PhPC', location:'West Harbor, Egypt',
+    title:'New West Harbor Heat Exchanger',
+    desc:'Concept study for a new shell-and-tube heat exchanger to optimize plant energy consumption by raising the W/HC separator inlet temperature to flash more gas and improve separation. Issued the BOD, steady-state simulation (Aspen HYSYS & HTRI), PFD, heat & material balance and equipment datasheet.',
+    tags:['Aspen HYSYS','HTRI','H&MB','Heat Exchanger Design']
+  },
+  {
+    group:'un', category:'Concept Study', catClass:'col-yellow', client:'PhPC', location:'West Harbor, Egypt',
+    title:'New West Harbor Flashed Gas Compressor',
+    desc:'Concept study for a new flashed gas compressor boosting gas pressure to 90 barg. Issued the BOD, PFD, P&IDs, utilities description, line list and equipment list.',
+    tags:['BOD','PFD','P&ID','Compressor']
+  },
+  {
+    group:'un', category:'Concept Study', catClass:'col-yellow', client:'UGDC', location:'Damietta, Egypt',
+    title:'New Propane/LPG Export/Import Facility',
+    desc:'Developed the process concept for new 14-inch propane export and 12-inch LPG import lines to replace terminal operations affected by FSRU deployment at Damietta Port. Issued the process philosophy, pipeline hydraulic calculations, P&ID and control philosophy.',
+    tags:['Pipeline Hydraulics','Process Philosophy','P&ID','Control Philosophy']
+  },
+  {
+    group:'un', category:'Detailed Engineering', catClass:'col-purple', client:'GEMSA', location:'Gulf of Suez, Egypt',
+    title:'Fuel Gas for Power Generators, WARDA Platform',
+    desc:'Detailed engineering for an 18 km, 4-inch onshore/offshore fuel gas pipeline feeding new gas power generators on WARDA Platform in the Gulf of Suez. Issued the process design criteria, fuel gas line hydraulic sizing, PSV sizing, P&IDs, UFDs, shutdown and control philosophy, and equipment list.',
+    tags:['Pipeline Hydraulics','PSV Sizing','P&ID','UFD','Shutdown Philosophy']
+  },
+  {
+    group:'un', category:'FEED', catClass:'col-red', client:'ADNOC Offshore', location:'Das Island, UAE',
+    title:'Produced Water Injection Facility',
+    desc:'FEED for an additional produced water injection facility at Das Island, Abu Dhabi. Issued the BOD, PFD, P&IDs, C&E, line list and equipment list.',
+    tags:['BOD','PFD','P&ID','C&E']
+  },
+  {
+    group:'un', category:'FEED', catClass:'col-red', client:'Indorama', location:'Ain Sokhna, Egypt',
+    title:'Ammonia Pipeline',
+    desc:'FEED for a 13 km, 16-inch ammonia transfer pipeline from Ain Sokhna Port to Indorama Misr Fertilizers Plant. Issued the BOD, PFD, UFD, P&IDs, process philosophies (design, operation, isolation, shutdown and utilities), C&E, line list and equipment list.',
+    tags:['BOD','Process Philosophies','C&E','Pipeline']
+  },
+  {
+    group:'un', category:'Proposal', catClass:'col-orange', client:'PETROMASILA', location:'Yemen',
+    title:'Crude Topping Unit',
+    desc:'Developed the process proposal for a 10,000 BOPD crude distillation unit. Issued the PFD, UFD, process & utilities description report and equipment list.',
+    tags:['Distillation','PFD','UFD']
+  },
+  {
+    group:'un', category:'Detailed Engineering', catClass:'col-purple', client:'Rumaila', location:'Iraq',
+    title:'Crude Oil Tank',
+    desc:'Detailed engineering for a 25,000 m³ crude oil tank at the Rumaila degassing stations. Issued P&IDs (demolition & construction), tank datasheet, storage volume calculations, nozzle and line sizing, LDT, C&E, PVSV sizing (in-breathing & out-breathing) and blow-off hatch calculations.',
+    tags:['Storage Tank','P&ID','PVSV Sizing','Line Sizing']
+  },
+  // Not in the CV: kept from the previous site, employer to be confirmed.
+  {
+    group:'other', category:'FEED', catClass:'col-red', client:'PhPC', location:'Port Said, Egypt',
     title:"Atoll Crossover for Pressurizing Ha'py Subsea Pipeline",
     desc:"Pressurization study of the 30\" Ha'py subsea pipeline using Atoll gas via 10\" crossover. Developed Pressurization Philosophy and Design Basis, including MDMT assessment, AIV/FIV screening, P&IDs, and transient hydraulic simulation.",
-    tags:['BOD','Hydraulic Calculations','AIV/FIV Analysis','P&ID'], extra:1
+    tags:['BOD','Hydraulic Calculations','AIV/FIV Analysis','P&ID']
   },
   {
-    category:'FEED', catClass:'col-red', client:'WASCO', location:'Damietta, Egypt',
+    group:'other', category:'FEED', catClass:'col-red', client:'WASCO', location:'Damietta, Egypt',
     title:'North El-Basant-1 Well Tie-in to Azhar-1 Manifold',
     desc:'Prepared Basis of Design for tie-in of North El-Basant-1 well to Azhar-1 manifold within the WASCO production system. Covered wellhead hook-up, spill back unit, pneumatic control panel gas supply, underground pipeline, and tie-in philosophy.',
-    tags:['BOD','Process Design','Hydraulic Design','P&ID'], extra:0
+    tags:['BOD','Process Design','Hydraulic Design','P&ID']
   },
   {
-    category:'Pre-FEED', catClass:'col-orange', client:'GEMSA', location:'Gulf of Suez, Egypt',
+    group:'other', category:'Pre-FEED', catClass:'col-orange', client:'GEMSA', location:'Gulf of Suez, Egypt',
     title:'Offshore Oil Processing Platform & FSO Development',
     desc:'Pre-FEED for a new offshore production platform with oil processing topsides and new FSO for storage and export. Scope includes preliminary sizing of separators, pumps, desalter, heater treater, tanks, chemical injection skids, and produced water treatment.',
-    tags:['Equipment Sizing','Oil Treating','Produced Water Treatment'], extra:2
-  },
-  {
-    category:'Rehabilitation', catClass:'col-green', client:'NORPETCO', location:'Egypt',
-    title:'Abrar Station Rehabilitation',
-    desc:'Engineering verification and process rehabilitation studies for Abrar Production Station. Developed Process Simulation Report, PFD, P&IDs, UFD, and Gap Analysis.',
-    tags:['Aspen HYSYS','P&ID Development','PFD Design'], extra:1
-  },
-  {
-    category:'Study', catClass:'col-blue', client:'PhPC', location:'Egypt',
-    title:'KOD Level Transmitters Bottleneck Study',
-    desc:'Engineering bottleneck assessment for Wet Flare Knock-Out Drum at West Harbor Plant. Evaluated solutions including radar transmitters and electric heating.',
-    tags:['Troubleshooting','Engineering Assessment'], extra:2
-  },
-  {
-    category:'FEED', catClass:'col-red', client:'UGDC', location:'Damietta, Egypt',
-    title:'Propane/LPG Export/Import Facility',
-    desc:'Developed process concept for new 14" Propane export and 12" LPG import lines. Managed Process Philosophy, Pipeline Hydraulic Calculations, P&ID, and Control Philosophy.',
-    tags:['Pipeline Design','Hydraulic Calculations'], extra:2
-  },
-  {
-    category:'Concept Study', catClass:'col-yellow', client:'PhPC', location:'Egypt',
-    title:'West Harbor Heat Exchanger',
-    desc:'Concept Study for Shell and Tube Heat Exchanger to optimize plant energy consumption. Issued BOD, Steady State Simulation (Aspen HYSYS & HTRI), PFD, and equipment datasheets.',
-    tags:['Aspen HYSYS','HTRI','Heat Exchanger Design'], extra:1
-  },
-  {
-    category:'Detailed Engineering', catClass:'col-purple', client:'GEMSA', location:'Suez Gulf, Egypt',
-    title:'Fuel Gas Power Generators',
-    desc:'Detailed Engineering for 16 Km fuel gas pipeline feeding WARDA Platform. Issued Process Design Criteria, PSV sizing, P&IDs, UFDs, and Shutdown Philosophy.',
-    tags:['Pipeline Design','PSV Sizing','P&ID'], extra:1
-  },
-  {
-    category:'FEED - International', catClass:'col-red', client:'ADNOC OFFSHORE', location:'Das Island, Abu Dhabi',
-    title:'Produced Water Injection Facility',
-    desc:'FEED Works for additional produced water injection facility. Responsible for BOD, PFD, P&IDs, C&E, Line List, and Equipment List.',
-    tags:['FEED','BOD','C&E Diagram'], extra:2
-  },
-  {
-    category:'Concept Study', catClass:'col-yellow', client:'PhPC', location:'Egypt',
-    title:'Flashed Gas Compressor',
-    desc:'Concept Study for new flashed Gas Compressor to boost gas pressure up to 90 barg. Issued BOD, PFD, P&IDs, Utilities Description, and Equipment List.',
-    tags:['Compressor Design','High Pressure Systems'], extra:2
-  },
-  {
-    category:'FEED', catClass:'col-red', client:'Indorama', location:'Ain Sokhna, Egypt',
-    title:'Ammonia Pipeline',
-    desc:'FEED Works for 13 KM Ammonia transportation pipeline. Issued comprehensive Process Philosophies, C&E, Line List, and Equipment List.',
-    tags:['FEED','Pipeline Design','C&E Diagram'], extra:1
-  },
-  {
-    category:'Proposal - International', catClass:'col-orange', client:'PETROMASILA', location:'Yemen',
-    title:'Crude Topping Unit',
-    desc:'Proposal development for 10,000 BOPD crude distillation unit. Issued PFD, UFD, Process Description Report, and Equipment List.',
-    tags:['Distillation','PFD','UFD'], extra:1
-  },
-  {
-    category:'Detailed Engineering - International', catClass:'col-purple', client:'Rumaila', location:'Iraq',
-    title:'Crude Oil Tank',
-    desc:'Detailed Engineering of 25,000 m³ crude oil tank at Degassing Stations. Managed P&ID, tank datasheet, storage calculations, and PVSV calculations.',
-    tags:['Storage Tank','P&ID','PVSV'], extra:1
+    tags:['Equipment Sizing','Oil Treating','Produced Water Treatment']
   },
 ];
-const calcPreview = [
-  { cat:'Fluids', items:[
-    { title:'Gas Mixing', icon:'blend', standard:'Gas composition · MW · Z-factor options', status:'live', href:'calculators/gas-mixing.html' },
-    { title:'Gas Volume Conversion', icon:'arrow-left-right', standard:'Real gas · Z-factor correction', status:'live', href:'calculators/gas-volume.html' },
-  ]},
-  { cat:'Hydraulics', items:[
-    { title:'Single Phase Liquid Hydraulics', icon:'droplets', standard:'Darcy-Weisbach · fittings K-losses · service checks', status:'live', href:'calculators/liquid-hydraulics.html' },
-    { title:'Single Phase Gas Hydraulics', icon:'wind', standard:'Real-gas density · Darcy-Weisbach · fittings K-losses', status:'live', href:'calculators/gas-hydraulics.html' },
-    { title:'Mixed-Phase Line Sizing', icon:'waves', standard:'Friedel · Chisholm-Baroczy · Beggs & Brill screening', status:'live', href:'calculators/mixed-phase-hydraulics.html' },
-    { title:'Surge Pressure', icon:'activity', standard:'Joukowsky surge · wave celerity · pipe period', status:'live', href:'calculators/surge-pressure.html' },
-  ]},
-  { cat:'Equipment', items:[
-    { title:'Pump Sizing', icon:'gauge', standard:'Head · NPSHa · hydraulic & shaft power', status:'live', href:'calculators/pump-sizing.html' },
-  ]},
-];
-function renderResponsibilities(id) {
-  const el = document.getElementById(id); if (!el) return;
-  el.innerHTML = responsibilities.map(r => `<div class="resp-item"><i data-lucide="circle-check-big" style="width:16px;height:16px;color:var(--primary);margin-top:2px;flex-shrink:0"></i><p class="text-sm" style="color:var(--muted)">${r}</p></div>`).join('');
+// Built from calculators/catalog.js so the count and preview always match the calculators page.
+const liveCalcs = (window.CALCULATORS || []).filter(c => c.status === 'live');
+const calcPreview = [...new Set(liveCalcs.map(c => c.cat))].map(cat => ({
+  cat, items: liveCalcs.filter(c => c.cat === cat).map(c => ({ ...c, href: 'calculators/' + c.href }))
+}));
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function renderResponsibilities(job) {
+  const el = document.getElementById('resp-' + job); if (!el) return;
+  el.innerHTML = responsibilities[job].map(r => esc(r)).map(r => `<div class="resp-item"><i data-lucide="circle-check-big" style="width:16px;height:16px;color:var(--primary);margin-top:2px;flex-shrink:0"></i><p class="text-sm" style="color:var(--muted)">${r}</p></div>`).join('');
+}
+function projectCard(p) {
+  return `<div class="card card-hover"><div class="card-body"><div class="project-meta"><span class="badge ${p.catClass}" style="border-color:transparent">${p.category}</span><span class="project-location"><i data-lucide="map-pin" style="width:12px;height:12px" aria-hidden="true"></i>${p.location}</span></div><h4 class="font-semi text-sm leading-snug mb-2">${esc(p.client)} — ${esc(p.title)}</h4><p class="text-xxs leading-relaxed mb-3" style="color:var(--muted)">${esc(p.desc)}</p><div class="tag-label"><i data-lucide="wrench" style="width:12px;height:12px;color:var(--muted)" aria-hidden="true"></i><span class="text-xxs" style="color:var(--muted)">Skills &amp; Deliverables</span></div><div class="tag-row">${p.tags.map(t=>`<span class="badge badge-secondary">${esc(t)}</span>`).join('')}</div></div></div>`;
 }
 function renderProjects() {
-  const grid = document.getElementById('projectsGrid'); if (!grid) return;
-  grid.innerHTML = projects.map(p => `<div class="card card-hover"><div class="card-body"><div class="project-meta"><span class="badge ${p.catClass}" style="border-color:transparent">${p.category}</span><span class="project-location"><i data-lucide="map-pin" style="width:12px;height:12px"></i>${p.location}</span></div><h3 class="font-semi text-sm leading-snug mb-2">${p.client} — ${p.title}</h3><p class="text-xxs leading-relaxed mb-3" style="color:var(--muted)">${p.desc}</p><div class="tag-label"><i data-lucide="wrench" style="width:12px;height:12px;color:var(--muted)"></i><span class="text-xxs" style="color:var(--muted)">Skills &amp; Deliverables</span></div><div class="tag-row">${p.tags.map(t=>`<span class="badge badge-secondary">${t}</span>`).join('')}${p.extra>0?`<span class="badge badge-secondary text-primary">+${p.extra}</span>`:''}</div></div></div>`).join('');
+  const wrap = document.getElementById('projectsGrid'); if (!wrap) return;
+  wrap.innerHTML = projectGroups.map(g => {
+    const items = projects.filter(p => p.group === g.id); if (!items.length) return '';
+    return `<div class="project-group"><div class="calc-cat-label"><div class="calc-cat-line"></div><h3 class="font-semi text-sm">${esc(g.employer)}</h3>${g.period ? `<span class="badge">${g.period}</span>` : ''}</div><div class="projects-grid">${items.map(projectCard).join('')}</div></div>`;
+  }).join('');
 }
 function renderCoreComps() {
   const el = document.getElementById('coreComps'); if (!el) return;
-  el.innerHTML = coreCompetencies.map(c => `<span class="badge">${c}</span>`).join('');
+  el.innerHTML = coreCompetencies.map(c => `<span class="badge">${esc(c)}</span>`).join('');
 }
 function renderSkills() {
   const grid = document.getElementById('skillsGrid'); if (!grid) return;
-  grid.innerHTML = skillCategories.map(cat => `<div class="card"><div class="card-body"><div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem"><div class="about-icon" style="margin-bottom:0"><i data-lucide="${cat.icon}" style="width:18px;height:18px"></i></div><h3 class="font-semi text-sm">${cat.title}</h3></div><div style="display:flex;flex-wrap:wrap;gap:.375rem">${cat.tags.map(t=>`<span class="badge badge-secondary ${cat.tagColor}">${t}</span>`).join('')}</div></div></div>`).join('');
+  grid.innerHTML = skillCategories.map(cat => `<div class="card"><div class="card-body"><div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem"><div class="about-icon" style="margin-bottom:0"><i data-lucide="${cat.icon}" style="width:18px;height:18px"></i></div><h3 class="font-semi text-sm">${cat.title}</h3></div><div style="display:flex;flex-wrap:wrap;gap:.375rem">${cat.tags.map(t=>`<span class="badge badge-secondary ${cat.tagColor}">${esc(t)}</span>`).join('')}</div></div></div>`).join('');
 }
 function renderCalcPreview() {
+  const countEl = document.getElementById('liveCalcCount'); if (countEl) countEl.textContent = liveCalcs.length;
   const el = document.getElementById('calcPreviewContainer'); if (!el) return;
   el.innerHTML = calcPreview.map(cat => `<div style="margin-bottom:1.5rem"><div class="calc-cat-label"><div class="calc-cat-line"></div><h3 class="font-semi text-xs" style="letter-spacing:.05em">${cat.cat}</h3></div><div class="calc-preview-grid">${cat.items.map(c => {
     const isLive = c.status==='live';
     const inner = `<div class="card ${isLive?'card-hover':''}" style="${!isLive?'opacity:.7':''}"><div class="card-body"><div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem"><div class="calc-card-icon"><i data-lucide="${c.icon}" style="width:16px;height:16px"></i></div><h3 class="font-semi text-xs">${c.title}</h3></div><p class="text-xxs leading-relaxed" style="color:var(--muted)">${c.standard}</p></div></div>`;
-    return isLive ? `<a href="${c.href}" style="display:contents">${inner}</a>` : inner;
+    return isLive ? `<a href="${c.href}" class="card-link">${inner}</a>` : inner;
   }).join('')}</div></div>`).join('');
 }
 function applyTheme(t) {
@@ -456,8 +572,8 @@ function closeMenu() {
   if (el) { el.setAttribute('data-lucide', 'menu'); lucide.createIcons(); }
 }
 document.getElementById('year').textContent = new Date().getFullYear();
-renderResponsibilities('resp-dg');
-renderResponsibilities('resp-un');
+renderResponsibilities('dg');
+renderResponsibilities('un');
 renderProjects();
 renderCoreComps();
 renderSkills();

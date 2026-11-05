@@ -1,0 +1,50 @@
+/* Shared accessibility helpers, loaded after each page's own styles. */
+.skip-link{position:absolute;left:.5rem;top:-3rem;z-index:100;padding:.5rem .9rem;border-radius:.5rem;background:#1d4ed8;color:#fff;font-size:.875rem;font-weight:600;transition:top .15s}
+.skip-link:focus{top:.5rem}
+:focus-visible{outline:2px solid hsl(217,91%,60%);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* ---- Contrast (WCAG AA 4.5:1 for normal text) ----
+   Same palette, slightly adjusted lightness so muted and coloured text pass on every
+   card and input background. Button fills use a deeper blue so white text passes. */
+html[data-theme="dark"]{--muted:hsl(215,20%,65%);--primary:hsl(217,91%,66%)}
+html[data-theme="light"]{--muted:hsl(215,19%,35%);--primary:hsl(217,91%,45%)}
+html[data-theme="dark"] .btn-primary,html[data-theme="dark"] .filter-btn.active,
+html[data-theme="dark"] .unit-pill button.active,html[data-theme="dark"] .unit-toggle button.active,
+html[data-theme="dark"] .toggle-tabs .active{background:hsl(217,91%,50%)!important;border-color:hsl(217,91%,50%)!important;color:#fff!important}
+.filter-btn.active span{opacity:1!important}
+.filter-btn span{opacity:1!important}
+/* light theme: darker variants of the status / category colours */
+html[data-theme="light"] .col-red,html[data-theme="light"] .err-msg,html[data-theme="light"] #globalErrText,
+html[data-theme="light"] .res-row.hl-red .res-val,html[data-theme="light"] .box-err p,html[data-theme="light"] .s-limit,
+html[data-theme="light"] .lbadge-hi,html[data-theme="light"] .kpi-red .kpi-val{color:hsl(0,72%,40%)!important}
+html[data-theme="light"] .col-green,html[data-theme="light"] .live-badge,html[data-theme="light"] .s-ok,
+html[data-theme="light"] .res-row.hl-green .res-val,html[data-theme="light"] .hl-green .res-val,html[data-theme="light"] .tag-ok,
+html[data-theme="light"] .lbadge-ok,html[data-theme="light"] .kpi-green .kpi-val,html[data-theme="light"] .status,
+html[data-theme="light"] .tag,html[data-theme="light"] #statusBadge,html[data-theme="light"] #fromRefBadge{color:hsl(142,76%,24%)!important}
+html[data-theme="light"] .col-orange,html[data-theme="light"] .col-yellow,html[data-theme="light"] .wip-badge,
+html[data-theme="light"] .res-row.hl-amber .res-val,html[data-theme="light"] .hl-amber .res-val,html[data-theme="light"] .s-warn,
+html[data-theme="light"] .lbadge-warn,html[data-theme="light"] .kpi-amber .kpi-val,html[data-theme="light"] #toRefBadge{color:hsl(30,95%,30%)!important}
+html[data-theme="light"] .col-blue,html[data-theme="light"] .phase-badge{color:hsl(217,91%,42%)!important}
+html[data-theme="light"] .col-purple{color:hsl(271,60%,45%)!important}
+html[data-theme="light"] .live-badge span,html[data-theme="light"] .wip-badge span{background:currentColor!important}
+
+/* Keyboard focus on card links that use display:contents (no box of their own) */
+.card-link{display:block;border-radius:.5rem}
+.card-link>*{height:100%}
+.card-link:focus-visible{outline:2px solid hsl(217,91%,60%);outline-offset:3px}
+
+/* remaining page-specific colours (selectors only; no markup or logic changes) */
+html[data-theme="dark"] .mode-tab.active,html[data-theme="dark"] .mode-tabs button.active,html[data-theme="dark"] .gas-prop-btn.active,html[data-theme="dark"] .toggle-tabs button.active{background:hsl(217,91%,50%)!important;border-color:hsl(217,91%,50%)!important;color:#fff!important}
+html[data-theme="dark"] .col-blue{color:hsl(217,91%,68%)!important}
+#phasePanel [style*="217,91%,60%"]{color:var(--primary)!important}
+html[data-theme="light"] #phasePanel [style*="271,81%"]{color:hsl(271,60%,42%)!important}
+html[data-theme="light"] .kpi-green .kpi-lbl,html[data-theme="light"] .norm-ok,html[data-theme="light"] .norm-ok span{color:hsl(142,76%,24%)!important}
+html[data-theme="light"] .kpi-amber .kpi-lbl,html[data-theme="light"] .norm-warn,html[data-theme="light"] .norm-warn span{color:hsl(30,95%,30%)!important}
+html[data-theme="light"] .kpi-red .kpi-lbl{color:hsl(0,72%,40%)!important}
+html[data-theme="light"] .kpi-blue .kpi-lbl,html[data-theme="light"] .kpi-blue .kpi-val{color:hsl(217,91%,42%)!important}
+
+/* ---- Phone width: stop grid children growing past the viewport ---- */
+.calc-layout>*,.calc-grid>*{min-width:0}
+.tbl-wrap{overflow-x:auto;max-width:100%}
+@media(max-width:480px){.card-header{flex-wrap:wrap}.preset-select{max-width:100%}}
