@@ -168,10 +168,10 @@
     <a href="#home" class="logo" aria-label="Hazem ElMancy — home"><span class="text-primary">H</span><span>E</span></a>
     <nav class="desktop" aria-label="Main">
       <a href="#home"   class="nav-link">HOME</a>
+      <a href="#software"   class="nav-link">SOFTWARE</a>
       <a href="#about"  class="nav-link">ABOUT</a>
       <a href="#experience" class="nav-link">EXPERIENCE</a>
       <a href="#projects"   class="nav-link">PROJECTS</a>
-      <a href="#software"   class="nav-link">SOFTWARE</a>
       <a href="#skills"     class="nav-link">SKILLS</a>
       <a href="#contact"    class="nav-link">CONTACT</a>
       <a href="calculators/index.html" class="nav-link-calc"><i data-lucide="calculator" style="width:14px;height:14px"></i>CALCULATORS</a>
@@ -184,10 +184,10 @@
   </div>
   <nav class="mobile-menu" id="mobileMenu" aria-label="Mobile">
     <a href="#home"       onclick="closeMenu()">HOME</a>
+    <a href="#software"   onclick="closeMenu()">SOFTWARE</a>
     <a href="#about"      onclick="closeMenu()">ABOUT</a>
     <a href="#experience" onclick="closeMenu()">EXPERIENCE</a>
     <a href="#projects"   onclick="closeMenu()">PROJECTS</a>
-    <a href="#software"   onclick="closeMenu()">SOFTWARE</a>
     <a href="#skills"     onclick="closeMenu()">SKILLS</a>
     <a href="#contact"    onclick="closeMenu()">CONTACT</a>
     <a href="calculators/index.html" class="calc-link"><i data-lucide="calculator" style="width:14px;height:14px"></i>CALCULATORS</a>
@@ -207,7 +207,28 @@
       <a href="#contact"  class="btn btn-outline">Contact Me</a>
     </div>
   </div>
-  <a href="#about" class="scroll-hint"><span>Scroll</span><i data-lucide="chevron-down" class="bounce" style="width:16px;height:16px"></i></a>
+  <a href="#software" class="scroll-hint"><span>Scroll</span><i data-lucide="chevron-down" class="bounce" style="width:16px;height:16px"></i></a>
+</section>
+
+<section id="software" class="section">
+  <div class="container-md">
+    <div class="section-header"><p class="section-label mb-3">SOFTWARE</p><h2 class="section-title mb-2">Software &amp; Personal Projects</h2><p class="section-desc">Open-source engineering software I created and maintain</p></div>
+    <div class="card"><div class="card-body-lg">
+      <div class="software-card">
+        <img src="assets/flowstead/flowstead-icon.png" alt="Flowstead app icon" width="64" height="64" class="software-icon" />
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.35rem"><h3 class="font-bold" style="font-size:1.1rem">Flowstead</h3><span class="badge">Android</span><span class="badge">Web</span><span class="badge">GPL-3.0</span><span class="badge">2026 – Present</span></div>
+          <p class="text-sm text-primary font-medium mb-2">Open-source process simulator for Android and the web, built on the DWSIM engine</p>
+          <p class="text-sm leading-relaxed mb-4" style="color:var(--muted)">Steady-state and dynamic flowsheets, columns, reactors, pump and compressor curves, PSV, relief and depressuring (API 520 / 521) and line sizing, tested against HYSYS cases. Creator and technical owner: I defined the product, set the engineering rules, verified results against HYSYS and released it.</p>
+          <div class="hero-actions" style="justify-content:flex-start">
+            <a href="flowstead.html" class="btn btn-primary">About Flowstead<i data-lucide="arrow-right" style="width:16px;height:16px" aria-hidden="true"></i></a>
+            <a href="https://hazemmancy.github.io/Flowstead/" class="btn btn-outline"><i data-lucide="globe" style="width:16px;height:16px" aria-hidden="true"></i>Use in your browser</a>
+            <a href="https://github.com/HazemMancy/Flowstead" target="_blank" rel="noopener noreferrer" class="btn btn-outline"><svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>Source on GitHub</a>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
 </section>
 
 <section id="about" class="section">
@@ -279,27 +300,6 @@
   <div class="container">
     <div class="section-header"><p class="section-label mb-3">PORTFOLIO</p><h2 class="section-title mb-2">Projects &amp; Achievements</h2><p class="section-desc">A showcase of petroleum engineering projects across Egypt, UAE, Iraq, Congo, Algeria and Yemen, grouped by employer, newest first</p></div>
     <div id="projectsGrid"></div>
-  </div>
-</section>
-
-<section id="software" class="section">
-  <div class="container-md">
-    <div class="section-header"><p class="section-label mb-3">SOFTWARE</p><h2 class="section-title mb-2">Software &amp; Personal Projects</h2><p class="section-desc">Open-source engineering software I created and maintain</p></div>
-    <div class="card"><div class="card-body-lg">
-      <div class="software-card">
-        <img src="assets/flowstead/flowstead-icon.png" alt="Flowstead app icon" width="64" height="64" class="software-icon" />
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.35rem"><h3 class="font-bold" style="font-size:1.1rem">Flowstead</h3><span class="badge">Android</span><span class="badge">Web</span><span class="badge">GPL-3.0</span><span class="badge">2026 – Present</span></div>
-          <p class="text-sm text-primary font-medium mb-2">Open-source process simulator for Android, built on the DWSIM engine</p>
-          <p class="text-sm leading-relaxed mb-4" style="color:var(--muted)">Steady-state and dynamic flowsheets, columns, reactors, pump and compressor curves, PSV, relief and depressuring (API 520 / 521) and line sizing, tested against HYSYS cases. Creator and technical owner: I defined the product, set the engineering rules, verified results against HYSYS and released it.</p>
-          <div class="hero-actions" style="justify-content:flex-start">
-            <a href="flowstead.html" class="btn btn-primary">About Flowstead<i data-lucide="arrow-right" style="width:16px;height:16px" aria-hidden="true"></i></a>
-            <a href="https://hazemmancy.github.io/Flowstead/" class="btn btn-outline"><i data-lucide="globe" style="width:16px;height:16px" aria-hidden="true"></i>Use in your browser</a>
-            <a href="https://github.com/HazemMancy/Flowstead" target="_blank" rel="noopener noreferrer" class="btn btn-outline"><svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>Source on GitHub</a>
-          </div>
-        </div>
-      </div>
-    </div></div>
   </div>
 </section>
 
